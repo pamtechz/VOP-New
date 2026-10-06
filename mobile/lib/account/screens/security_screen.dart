@@ -17,7 +17,6 @@ class _SecurityScreenState extends ConsumerState<SecurityScreen> {
   final _confirmPasswordController = TextEditingController();
   bool _obscurePassword = true;
   bool _isChangingPassword = false;
-  bool _twoFactorEnabled = false;
 
   @override
   void dispose() {
@@ -148,7 +147,7 @@ class _SecurityScreenState extends ConsumerState<SecurityScreen> {
                         ),
                         validator: (v) {
                           if (v == null || v.trim().isEmpty) return 'Password is required';
-                          if (v.trim().length < 6) return 'Must be at least 6 characters';
+                          if (v.trim().length < 8) return 'Password must be at least 8 characters';
                           return null;
                         },
                       ),
@@ -197,18 +196,6 @@ class _SecurityScreenState extends ConsumerState<SecurityScreen> {
                     value: dataSaver,
                     onChanged: (val) => _toggleDataSaver(val),
                   ),
-                  const Divider(height: 1),
-                  SwitchListTile(
-                    title: const Text('Two-Factor Authentication (2FA)', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                    subtitle: const Text('Require OTP verification when logging in from unknown browsers.', style: TextStyle(fontSize: 12)),
-                    value: _twoFactorEnabled,
-                    onChanged: (val) {
-                      setState(() => _twoFactorEnabled = val);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(val ? '2FA verification activated' : '2FA disabled')),
-                      );
-                    },
-                  ),
                 ],
               ),
             ),
@@ -230,7 +217,7 @@ class _SecurityScreenState extends ConsumerState<SecurityScreen> {
                       ),
                       child: const Icon(Icons.laptop_chromebook_rounded, color: Color(0xFF10B981), size: 22),
                     ),
-                    title: const Text('Current Browser / Device', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                    title: const Text('Current Device', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                     subtitle: Text('Active now • ${user?.email ?? "Signed in"}', style: const TextStyle(fontSize: 12, color: Colors.grey)),
                     trailing: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -259,7 +246,7 @@ class _SecurityScreenState extends ConsumerState<SecurityScreen> {
             ),
             const SizedBox(height: 24),
 
-            // ── Account Lifecycle Touch ──────────────────────────────────────
+            // ── Account Lifecycle Policy ─────────────────────────────────────
             Card(
               color: scheme.surfaceContainerHighest.withValues(alpha: 0.4),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -275,7 +262,7 @@ class _SecurityScreenState extends ConsumerState<SecurityScreen> {
                         children: [
                           const Text('Account Active', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                           Text(
-                            'Your 60-day activity timer is active. Activity timestamp is kept in sync on every visit.',
+                            'Your account is in good standing under the 2 calendar month activity policy. Activity timestamp is automatically refreshed upon login and purchases.',
                             style: TextStyle(color: scheme.outline, fontSize: 11),
                           ),
                         ],

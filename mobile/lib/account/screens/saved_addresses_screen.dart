@@ -1,8 +1,6 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../auth/providers/auth_provider.dart';
 import '../../core/services/supabase_service.dart';
 
 class AddressItem {
@@ -15,7 +13,7 @@ class AddressItem {
   final String phone;
   final bool isDefault;
 
-  AddressItem({
+  const AddressItem({
     required this.id,
     required this.label,
     required this.street,
@@ -26,27 +24,18 @@ class AddressItem {
     this.isDefault = false,
   });
 
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'label': label,
-        'street': street,
-        'area': area,
-        'city': city,
-        'province': province,
-        'phone': phone,
-        'isDefault': isDefault,
-      };
-
-  factory AddressItem.fromJson(Map<String, dynamic> json) => AddressItem(
-        id: json['id'] as String? ?? UniqueKey().toString(),
-        label: json['label'] as String? ?? 'Home',
-        street: json['street'] as String? ?? '',
-        area: json['area'] as String? ?? '',
-        city: json['city'] as String? ?? 'Lusaka',
-        province: json['province'] as String? ?? 'Lusaka',
-        phone: json['phone'] as String? ?? '',
-        isDefault: json['isDefault'] as bool? ?? false,
-      );
+  factory AddressItem.fromMap(Map<String, dynamic> map) {
+    return AddressItem(
+      id: map['id'] as String,
+      label: map['label'] as String? ?? 'Home',
+      street: map['street'] as String? ?? '',
+      area: map['area'] as String? ?? '',
+      city: map['city'] as String? ?? 'Lusaka',
+      province: map['province'] as String? ?? 'Lusaka',
+      phone: map['phone'] as String? ?? '',
+      isDefault: map['is_default'] as bool? ?? false,
+    );
+  }
 }
 
 class SavedAddressesScreen extends ConsumerStatefulWidget {
@@ -59,6 +48,7 @@ class SavedAddressesScreen extends ConsumerStatefulWidget {
 class _SavedAddressesScreenState extends ConsumerState<SavedAddressesScreen> {
   List<AddressItem> _addresses = [];
   bool _isLoading = true;
+  String? _errorMessage;
 
   @override
   void initState() {
@@ -67,89 +57,177 @@ class _SavedAddressesScreenState extends ConsumerState<SavedAddressesScreen> {
   }
 
   Future<void> _loadAddresses() async {
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
     final user = Supabase.instance.client.auth.currentUser;
     if (user == null) {
-      setState(() => _isLoading = false);
+      setState(() {
+        _isLoading = false;
+        _errorMessage = 'Please sign in to view saved addresses';
+      });
       return;
     }
 
     try {
-      final profile = await SupabaseService.client
-          .from('profiles')
-          .select('city, area, province, phone, full_name, bio')
-          .eq('id', user.id)
-          .maybeSingle();
+      final res = await SupabaseService.client
+          .from('addresses')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('is_default', ascending: false)
+          .order('created_at', ascending: false);
 
-      if (profile != null) {
-        final rawBio = profile['bio'] as String?;
-        List<AddressItem> list = [];
+      final list = (res as List).map((row) => AddressItem.fromMap(row as Map<String, dynamic>)).toList();
 
-        // Check if extended address list JSON is stored in bio / metadata
-        if (rawBio != null && rawBio.startsWith('{') && rawBio.contains('"saved_addresses"')) {
-          try {
-            final parsed = jsonDecode(rawBio) as Map<String, dynamic>;
-            final rawList = parsed['saved_addresses'] as List?;
-            if (rawList != null) {
-              list = rawList.map((e) => AddressItem.fromJson(e as Map<String, dynamic>)).toList();
-            }
-          } catch (_) {}
-        }
-
-        // If no extended addresses exist yet, populate primary from profile columns
-        if (list.isEmpty) {
-          final city = profile['city'] as String? ?? 'Lusaka';
-          final area = profile['area'] as String? ?? 'Woodlands';
-          final prov = profile['province'] as String? ?? 'Lusaka';
-          final phone = profile['phone'] as String? ?? '';
-
-          list.add(AddressItem(
-            id: 'default-primary',
-            label: 'Home',
-            street: 'Plot 124, Main Road',
-            area: area,
-            city: city,
-            province: prov,
-            phone: phone,
-            isDefault: true,
-          ));
-        }
-
-        _addresses = list;
+      if (mounted) {
+        setState(() {
+          _addresses = list;
+          _isLoading = false;
+        });
       }
-    } catch (_) {} finally {
-      if (mounted) setState(() => _isLoading = false);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Failed to load addresses: $e';
+          _isLoading = false;
+        });
+      }
     }
   }
 
-  Future<void> _saveAddressesToDatabase() async {
+  Future<void> _saveAddress({
+    String? id,
+    required String label,
+    required String street,
+    required String area,
+    required String city,
+    required String province,
+    required String phone,
+    required bool isDefault,
+  }) async {
     final user = Supabase.instance.client.auth.currentUser;
     if (user == null) return;
 
-    final primary = _addresses.firstWhere((a) => a.isDefault, orElse: () => _addresses.first);
+    try {
+      // If marking as default, reset other addresses first
+      if (isDefault) {
+        await SupabaseService.client
+            .from('addresses')
+            .update({'is_default': false})
+            .eq('user_id', user.id);
+      }
+
+      if (id != null) {
+        // Update existing address
+        await SupabaseService.client.from('addresses').update({
+          'label': label,
+          'street': street,
+          'area': area,
+          'city': city,
+          'province': province,
+          'phone': phone,
+          'is_default': isDefault,
+          'updated_at': DateTime.now().toIso8601String(),
+        }).eq('id', id).eq('user_id', user.id);
+      } else {
+        // Insert new address
+        await SupabaseService.client.from('addresses').insert({
+          'user_id': user.id,
+          'label': label,
+          'street': street,
+          'area': area,
+          'city': city,
+          'province': province,
+          'phone': phone,
+          'is_default': isDefault || _addresses.isEmpty,
+        });
+      }
+
+      await _loadAddresses();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(id != null ? 'Address updated successfully' : 'Address saved successfully'),
+            backgroundColor: const Color(0xFF10B981),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to save address: $e'), backgroundColor: Colors.redAccent),
+        );
+      }
+    }
+  }
+
+  Future<void> _setDefault(AddressItem item) async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return;
 
     try {
-      final dataMap = {
-        'saved_addresses': _addresses.map((a) => a.toJson()).toList(),
-      };
+      await SupabaseService.client
+          .from('addresses')
+          .update({'is_default': false})
+          .eq('user_id', user.id);
 
-      await SupabaseService.client.from('profiles').update({
-        'city': primary.city,
-        'area': primary.area,
-        'province': primary.province,
-        'phone': primary.phone.isNotEmpty ? primary.phone : null,
-        'bio': jsonEncode(dataMap),
-      }).eq('id', user.id);
+      await SupabaseService.client
+          .from('addresses')
+          .update({'is_default': true, 'updated_at': DateTime.now().toIso8601String()})
+          .eq('id', item.id)
+          .eq('user_id', user.id);
 
-      ref.invalidate(profileProvider);
-    } catch (_) {}
+      await _loadAddresses();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${item.label} set as primary delivery address')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to update primary address: $e'), backgroundColor: Colors.redAccent),
+        );
+      }
+    }
+  }
+
+  Future<void> _deleteAddress(AddressItem item) async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return;
+
+    try {
+      await SupabaseService.client
+          .from('addresses')
+          .delete()
+          .eq('id', item.id)
+          .eq('user_id', user.id);
+
+      await _loadAddresses();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Address deleted')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to delete address: $e'), backgroundColor: Colors.redAccent),
+        );
+      }
+    }
   }
 
   void _showAddEditAddressModal([AddressItem? existing]) {
     final isEditing = existing != null;
     final labelController = TextEditingController(text: existing?.label ?? 'Home');
     final streetController = TextEditingController(text: existing?.street ?? '');
-    final areaController = TextEditingController(text: existing?.area ?? 'Woodlands');
+    final areaController = TextEditingController(text: existing?.area ?? '');
     final cityController = TextEditingController(text: existing?.city ?? 'Lusaka');
     final provinceController = TextEditingController(text: existing?.province ?? 'Lusaka');
     final phoneController = TextEditingController(text: existing?.phone ?? '');
@@ -243,7 +321,7 @@ class _SavedAddressesScreenState extends ConsumerState<SavedAddressesScreen> {
                     controller: streetController,
                     decoration: const InputDecoration(
                       labelText: 'Street Address / House No.',
-                      hintText: 'e.g. Plot 42, Great East Road',
+                      hintText: 'e.g. Plot 42, Independence Avenue',
                       border: OutlineInputBorder(),
                       prefixIcon: Icon(Icons.pin_drop_outlined),
                     ),
@@ -268,6 +346,7 @@ class _SavedAddressesScreenState extends ConsumerState<SavedAddressesScreen> {
                           controller: cityController,
                           decoration: const InputDecoration(
                             labelText: 'City / Town',
+                            hintText: 'e.g. Lusaka',
                             border: OutlineInputBorder(),
                           ),
                         ),
@@ -278,6 +357,7 @@ class _SavedAddressesScreenState extends ConsumerState<SavedAddressesScreen> {
                           controller: provinceController,
                           decoration: const InputDecoration(
                             labelText: 'Province',
+                            hintText: 'e.g. Lusaka',
                             border: OutlineInputBorder(),
                           ),
                         ),
@@ -291,7 +371,7 @@ class _SavedAddressesScreenState extends ConsumerState<SavedAddressesScreen> {
                     keyboardType: TextInputType.phone,
                     decoration: const InputDecoration(
                       labelText: 'Contact Phone Number',
-                      hintText: '+260 97...',
+                      hintText: 'e.g. +260 971 234567',
                       border: OutlineInputBorder(),
                       prefixIcon: Icon(Icons.phone_outlined),
                     ),
@@ -300,7 +380,7 @@ class _SavedAddressesScreenState extends ConsumerState<SavedAddressesScreen> {
 
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
-                    title: const Text('Set as default delivery address', style: TextStyle(fontSize: 13)),
+                    title: const Text('Set as primary delivery address', style: TextStyle(fontSize: 13)),
                     value: isDef,
                     onChanged: (val) => setModalState(() => isDef = val),
                   ),
@@ -317,74 +397,23 @@ class _SavedAddressesScreenState extends ConsumerState<SavedAddressesScreen> {
                         final prov = provinceController.text.trim();
                         final phone = phoneController.text.trim();
 
-                        if (area.isEmpty || city.isEmpty) {
+                        if (street.isEmpty || area.isEmpty || city.isEmpty) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Please provide Area and City')),
+                            const SnackBar(content: Text('Please provide Street, Area, and City')),
                           );
                           return;
                         }
 
-                        setState(() {
-                          if (isDef) {
-                            for (var a in _addresses) {
-                              a = AddressItem(
-                                id: a.id,
-                                label: a.label,
-                                street: a.street,
-                                area: a.area,
-                                city: a.city,
-                                province: a.province,
-                                phone: a.phone,
-                                isDefault: false,
-                              );
-                            }
-                            _addresses = _addresses.map((a) => AddressItem(
-                                  id: a.id,
-                                  label: a.label,
-                                  street: a.street,
-                                  area: a.area,
-                                  city: a.city,
-                                  province: a.province,
-                                  phone: a.phone,
-                                  isDefault: false,
-                                )).toList();
-                          }
-
-                          if (isEditing) {
-                            final idx = _addresses.indexWhere((a) => a.id == existing.id);
-                            if (idx != -1) {
-                              _addresses[idx] = AddressItem(
-                                id: existing.id,
-                                label: selectedType,
-                                street: street,
-                                area: area,
-                                city: city,
-                                province: prov,
-                                phone: phone,
-                                isDefault: isDef,
-                              );
-                            }
-                          } else {
-                            _addresses.add(AddressItem(
-                              id: UniqueKey().toString(),
-                              label: selectedType,
-                              street: street,
-                              area: area,
-                              city: city,
-                              province: prov,
-                              phone: phone,
-                              isDefault: isDef,
-                            ));
-                          }
-                        });
-
-                        _saveAddressesToDatabase();
                         Navigator.pop(ctx);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(isEditing ? 'Address updated' : 'New address saved!'),
-                            backgroundColor: const Color(0xFF10B981),
-                          ),
+                        _saveAddress(
+                          id: existing?.id,
+                          label: selectedType,
+                          street: street,
+                          area: area,
+                          city: city,
+                          province: prov.isNotEmpty ? prov : 'Lusaka',
+                          phone: phone,
+                          isDefault: isDef,
                         );
                       },
                       child: Text(isEditing ? 'Update Address' : 'Save Address'),
@@ -396,55 +425,6 @@ class _SavedAddressesScreenState extends ConsumerState<SavedAddressesScreen> {
           );
         },
       ),
-    );
-  }
-
-  void _setDefault(AddressItem item) {
-    setState(() {
-      _addresses = _addresses.map((a) => AddressItem(
-            id: a.id,
-            label: a.label,
-            street: a.street,
-            area: a.area,
-            city: a.city,
-            province: a.province,
-            phone: a.phone,
-            isDefault: a.id == item.id,
-          )).toList();
-    });
-    _saveAddressesToDatabase();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('${item.label} set as primary delivery address')),
-    );
-  }
-
-  void _deleteAddress(AddressItem item) {
-    if (_addresses.length <= 1) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('You must keep at least one saved address')),
-      );
-      return;
-    }
-
-    setState(() {
-      _addresses.removeWhere((a) => a.id == item.id);
-      if (item.isDefault && _addresses.isNotEmpty) {
-        final first = _addresses.first;
-        _addresses[0] = AddressItem(
-          id: first.id,
-          label: first.label,
-          street: first.street,
-          area: first.area,
-          city: first.city,
-          province: first.province,
-          phone: first.phone,
-          isDefault: true,
-        );
-      }
-    });
-    _saveAddressesToDatabase();
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Address deleted')),
     );
   }
 
@@ -466,135 +446,154 @@ class _SavedAddressesScreenState extends ConsumerState<SavedAddressesScreen> {
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : _addresses.isEmpty
+          : _errorMessage != null
               ? Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.location_off_outlined, size: 64, color: scheme.outline),
+                      Icon(Icons.error_outline, size: 48, color: scheme.error),
+                      const SizedBox(height: 12),
+                      Text(_errorMessage!, textAlign: TextAlign.center),
                       const SizedBox(height: 16),
-                      Text('No saved addresses', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 8),
-                      const Text('Add your delivery address for instant checkout', style: TextStyle(color: Colors.grey)),
-                      const SizedBox(height: 20),
-                      FilledButton.icon(
-                        icon: const Icon(Icons.add),
-                        label: const Text('Add Address'),
-                        onPressed: () => _showAddEditAddressModal(),
-                      ),
+                      FilledButton(onPressed: _loadAddresses, child: const Text('Retry')),
                     ],
                   ),
                 )
-              : ListView.separated(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: _addresses.length + 1,
-                  separatorBuilder: (_, __) => const SizedBox(height: 12),
-                  itemBuilder: (ctx, i) {
-                    if (i == _addresses.length) {
-                      return OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          minimumSize: const Size.fromHeight(48),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                        icon: const Icon(Icons.add),
-                        label: const Text('Add Another Address'),
-                        onPressed: () => _showAddEditAddressModal(),
-                      );
-                    }
-
-                    final addr = _addresses[i];
-                    return Card(
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        side: addr.isDefault
-                            ? BorderSide(color: scheme.primary, width: 1.5)
-                            : BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.3)),
-                      ),
+              : _addresses.isEmpty
+                  ? Center(
                       child: Padding(
-                        padding: const EdgeInsets.all(16),
+                        padding: const EdgeInsets.all(24.0),
                         child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Row(
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.all(6),
-                                      decoration: BoxDecoration(
-                                        color: scheme.primary.withValues(alpha: 0.1),
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: Icon(
-                                        addr.label == 'Home'
-                                            ? Icons.home_rounded
-                                            : addr.label == 'Work'
-                                                ? Icons.work_rounded
-                                                : Icons.location_on_rounded,
-                                        color: scheme.primary,
-                                        size: 18,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      addr.label,
-                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                                    ),
-                                    if (addr.isDefault) ...[
-                                      const SizedBox(width: 8),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                        decoration: BoxDecoration(
-                                          color: scheme.primary,
-                                          borderRadius: BorderRadius.circular(6),
-                                        ),
-                                        child: const Text(
-                                          'PRIMARY',
-                                          style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
-                                        ),
-                                      ),
-                                    ],
-                                  ],
-                                ),
-                                PopupMenuButton<String>(
-                                  onSelected: (val) {
-                                    if (val == 'edit') {
-                                      _showAddEditAddressModal(addr);
-                                    } else if (val == 'default') {
-                                      _setDefault(addr);
-                                    } else if (val == 'delete') {
-                                      _deleteAddress(addr);
-                                    }
-                                  },
-                                  itemBuilder: (context) => [
-                                    const PopupMenuItem(value: 'edit', child: Text('Edit')),
-                                    if (!addr.isDefault)
-                                      const PopupMenuItem(value: 'default', child: Text('Set as Primary')),
-                                    const PopupMenuItem(value: 'delete', child: Text('Delete', style: TextStyle(color: Colors.red))),
-                                  ],
-                                ),
-                              ],
+                            Icon(Icons.location_off_outlined, size: 64, color: scheme.outline),
+                            const SizedBox(height: 16),
+                            Text('No saved addresses', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                            const SizedBox(height: 8),
+                            const Text('Add your delivery address for fast and reliable checkout.', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
+                            const SizedBox(height: 20),
+                            FilledButton.icon(
+                              icon: const Icon(Icons.add),
+                              label: const Text('Add Address'),
+                              onPressed: () => _showAddEditAddressModal(),
                             ),
-                            const Divider(height: 16),
-                            if (addr.street.isNotEmpty) ...[
-                              Text(addr.street, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
-                              const SizedBox(height: 2),
-                            ],
-                            Text(
-                              '${addr.area}, ${addr.city}, ${addr.province} Province',
-                              style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 13),
-                            ),
-                            if (addr.phone.isNotEmpty) ...[
-                              const SizedBox(height: 4),
-                              Text('Phone: ${addr.phone}', style: TextStyle(color: scheme.outline, fontSize: 12)),
-                            ],
                           ],
                         ),
                       ),
-                    );
-                  },
-                ),
+                    )
+                  : RefreshIndicator(
+                      onRefresh: _loadAddresses,
+                      child: ListView.separated(
+                        padding: const EdgeInsets.all(16),
+                        itemCount: _addresses.length + 1,
+                        separatorBuilder: (_, __) => const SizedBox(height: 12),
+                        itemBuilder: (ctx, i) {
+                          if (i == _addresses.length) {
+                            return OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                minimumSize: const Size.fromHeight(48),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              ),
+                              icon: const Icon(Icons.add),
+                              label: const Text('Add Another Address'),
+                              onPressed: () => _showAddEditAddressModal(),
+                            );
+                          }
+
+                          final addr = _addresses[i];
+                          return Card(
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              side: addr.isDefault
+                                  ? BorderSide(color: scheme.primary, width: 1.5)
+                                  : BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.3)),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Container(
+                                            padding: const EdgeInsets.all(6),
+                                            decoration: BoxDecoration(
+                                              color: scheme.primary.withValues(alpha: 0.1),
+                                              borderRadius: BorderRadius.circular(8),
+                                            ),
+                                            child: Icon(
+                                              addr.label == 'Home'
+                                                  ? Icons.home_rounded
+                                                  : addr.label == 'Work'
+                                                      ? Icons.work_rounded
+                                                      : Icons.location_on_rounded,
+                                              color: scheme.primary,
+                                              size: 18,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            addr.label,
+                                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                          ),
+                                          if (addr.isDefault) ...[
+                                            const SizedBox(width: 8),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                              decoration: BoxDecoration(
+                                                color: scheme.primary,
+                                                borderRadius: BorderRadius.circular(6),
+                                              ),
+                                              child: const Text(
+                                                'PRIMARY',
+                                                style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                                              ),
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                      PopupMenuButton<String>(
+                                        onSelected: (val) {
+                                          if (val == 'edit') {
+                                            _showAddEditAddressModal(addr);
+                                          } else if (val == 'default') {
+                                            _setDefault(addr);
+                                          } else if (val == 'delete') {
+                                            _deleteAddress(addr);
+                                          }
+                                        },
+                                        itemBuilder: (context) => [
+                                          const PopupMenuItem(value: 'edit', child: Text('Edit')),
+                                          if (!addr.isDefault)
+                                            const PopupMenuItem(value: 'default', child: Text('Set as Primary')),
+                                          const PopupMenuItem(value: 'delete', child: Text('Delete', style: TextStyle(color: Colors.red))),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                  const Divider(height: 16),
+                                  if (addr.street.isNotEmpty) ...[
+                                    Text(addr.street, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                                    const SizedBox(height: 2),
+                                  ],
+                                  Text(
+                                    '${addr.area}, ${addr.city}, ${addr.province} Province',
+                                    style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 13),
+                                  ),
+                                  if (addr.phone.isNotEmpty) ...[
+                                    const SizedBox(height: 4),
+                                    Text('Phone: ${addr.phone}', style: TextStyle(color: scheme.outline, fontSize: 12)),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
     );
   }
 }

@@ -12,17 +12,9 @@ export default async function AdminSettingsPage() {
     .select('key, value, description, updated_at')
     .order('key', { ascending: true });
 
-  const { data: plansData } = await supabase
-    .from('subscription_plans')
-    .select('*')
-    .order('price_monthly', { ascending: true });
-
   return (
     <div className="p-6">
-      <SettingsClient
-        initialSettings={(settingsData ?? []) as any}
-        initialPlans={(plansData ?? []) as any}
-      />
+      <SettingsClient initialSettings={(settingsData ?? []) as any} />
     </div>
   );
 }

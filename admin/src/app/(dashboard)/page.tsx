@@ -43,64 +43,42 @@ export default async function DashboardPage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');
 
-  // ── Parallel data fetching ──────────────────────────────────────────────────
+  // ── Parallel data fetching with server-side aggregation ───────────────────────
   const [
-    { count: totalUsers },
-    { count: totalStores },
-    { count: totalProducts },
-    { count: totalOrders },
-    { data: revenueData },
-    { data: withdrawalData },
-    { data: storageData },
-    { count: activeAds },
-    { count: shortLinks },
+    metricsRes,
     { data: recentOrders },
     { data: topStores },
   ] = await Promise.all([
-    supabase.from('profiles').select('*', { count: 'exact', head: true }),
-    supabase.from('stores').select('*', { count: 'exact', head: true }).eq('status', 'active'),
-    supabase.from('products').select('*', { count: 'exact', head: true }).eq('status', 'active'),
-    supabase.from('orders').select('*', { count: 'exact', head: true }),
-    supabase.from('orders').select('total_amount').eq('payment_status', 'paid'),
-    supabase.from('payouts').select('amount').eq('status', 'pending'),
-    supabase.from('platform_settings').select('value').eq('key', 'storage_used_mb').single(),
-    supabase.from('ad_campaigns').select('*', { count: 'exact', head: true }).eq('status', 'active'),
-    supabase.from('short_links').select('*', { count: 'exact', head: true }),
+    supabase.rpc('get_admin_dashboard_metrics'),
     supabase.from('orders')
       .select('id, public_ref, buyer_name, total_amount, payment_status, created_at')
       .order('created_at', { ascending: false })
       .limit(8),
-    supabase.from('stores')
-      .select('id, name, slug, status, created_at')
-      .eq('status', 'active')
+    supabase.from('admin_store_summaries')
+      .select('id, name, slug, status, created_at, product_count, plan_name')
       .order('created_at', { ascending: false })
       .limit(6),
   ]);
 
-  const totalRevenue = (revenueData ?? []).reduce(
-    (sum, r) => sum + Number(r.total_amount ?? 0), 0
-  );
-  const pendingWithdrawals = (withdrawalData ?? []).reduce(
-    (sum, r) => sum + Number(r.amount ?? 0), 0
-  );
+  const metrics = (metricsRes.data ?? {}) as Record<string, any>;
 
   const stats: DashboardStats = {
-    totalUsers: totalUsers ?? 0,
-    activeStores: totalStores ?? 0,
-    totalProducts: totalProducts ?? 0,
-    totalOrders: totalOrders ?? 0,
-    totalRevenue,
-    pendingWithdrawals,
-    storageUsedMb: Number(storageData?.value ?? 0),
-    storageCapacityMb: 1024, // Supabase Free Tier: 1 GB
-    activeAds: activeAds ?? 0,
-    shortLinksCreated: shortLinks ?? 0,
+    totalUsers: metrics.total_users ?? 0,
+    activeStores: metrics.active_stores ?? 0,
+    totalProducts: metrics.total_products ?? 0,
+    totalOrders: metrics.total_orders ?? 0,
+    totalRevenue: Number(metrics.total_revenue ?? 0),
+    pendingWithdrawals: Number(metrics.pending_withdrawals ?? 0),
+    storageUsedMb: 0, // External cloud images (zero host storage)
+    storageCapacityMb: 1024, // Supabase Free Tier: 1 GB plan limit
+    activeAds: metrics.active_ads ?? 0,
+    shortLinksCreated: metrics.short_links_created ?? 0,
   };
 
   const orders: RecentOrder[] = (recentOrders ?? []).map((o: any) => ({
     id: o.id,
     public_ref: o.public_ref ?? o.id.slice(0, 8).toUpperCase(),
-    buyer_name: o.buyer_name ?? 'Unknown',
+    buyer_name: o.buyer_name ?? 'Buyer',
     total_amount: Number(o.total_amount ?? 0),
     status: o.payment_status ?? 'pending',
     created_at: o.created_at,
@@ -110,10 +88,10 @@ export default async function DashboardPage() {
     id: s.id,
     name: s.name,
     slug: s.slug,
-    owner_name: s.owner_name ?? '—',
-    plan: 'free',
+    owner_name: 'Store Owner',
+    plan: s.plan_name ?? 'Free Plan',
     is_active: s.status === 'active',
-    product_count: 0,
+    product_count: Number(s.product_count ?? 0),
     created_at: s.created_at,
   }));
 

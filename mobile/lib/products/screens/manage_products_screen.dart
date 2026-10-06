@@ -35,6 +35,195 @@ final sellerProductsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) 
 class ManageProductsScreen extends ConsumerWidget {
   const ManageProductsScreen({super.key});
 
+  Future<void> _editProduct(
+    BuildContext context,
+    WidgetRef ref,
+    Map<String, dynamic> product,
+  ) async {
+    final titleController = TextEditingController(text: product['title']?.toString() ?? '');
+    final priceController = TextEditingController(text: product['price']?.toString() ?? '0');
+    final inventoryRows = product['inventory'] as List? ?? const [];
+    final initialStock = inventoryRows.isNotEmpty
+        ? (inventoryRows.first['quantity']?.toString() ?? '0')
+        : '0';
+    final stockController = TextEditingController(text: initialStock);
+    String status = product['status']?.toString() ?? 'active';
+
+    final save = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) => Padding(
+          padding: EdgeInsets.fromLTRB(
+            20,
+            20,
+            20,
+            MediaQuery.of(context).viewInsets.bottom + 20,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Edit Product', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: titleController,
+                  decoration: const InputDecoration(labelText: 'Title', border: OutlineInputBorder()),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: priceController,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(labelText: 'Price', prefixText: 'K ', border: OutlineInputBorder()),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: stockController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Stock', border: OutlineInputBorder()),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  value: status,
+                  decoration: const InputDecoration(labelText: 'Status', border: OutlineInputBorder()),
+                  items: const [
+                    DropdownMenuItem(value: 'active', child: Text('Active')),
+                    DropdownMenuItem(value: 'draft', child: Text('Draft')),
+                    DropdownMenuItem(value: 'archived', child: Text('Archived')),
+                    DropdownMenuItem(value: 'out_of_stock', child: Text('Out of stock')),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) setModalState(() => status = value);
+                  },
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    child: const Text('Save Changes'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    if (save != true) return;
+
+    final title = titleController.text.trim();
+    final price = double.tryParse(priceController.text.trim());
+    final stock = int.tryParse(stockController.text.trim());
+    if (title.isEmpty || price == null || price < 0 || stock == null || stock < 0) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Enter a valid title, price, and stock quantity.')),
+        );
+      }
+      return;
+    }
+
+    try {
+      await SupabaseService.client.from('products').update({
+        'title': title,
+        'price': price,
+        'status': status,
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      }).eq('id', product['id']);
+
+      await SupabaseService.client
+          .from('inventory')
+          .update({
+            'quantity': stock,
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
+          })
+          .eq('product_id', product['id'])
+          .isFilter('variant_id', null);
+
+      ref.invalidate(sellerProductsProvider);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Product updated successfully.')),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not update product: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _deleteProduct(
+    BuildContext context,
+    WidgetRef ref,
+    Map<String, dynamic> product,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Remove product?'),
+        content: Text(
+          'Remove “${product['title'] ?? 'this product'}”? '
+          'If it has already been sold, it will be archived instead of erased so order and financial history remain intact.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    try {
+      final references = await SupabaseService.client
+          .from('order_items')
+          .select('id')
+          .eq('product_id', product['id'])
+          .limit(1);
+
+      final hasSales = (references as List).isNotEmpty;
+      if (hasSales) {
+        await SupabaseService.client
+            .from('products')
+            .update({
+              'status': 'archived',
+              'updated_at': DateTime.now().toUtc().toIso8601String(),
+            })
+            .eq('id', product['id']);
+      } else {
+        await SupabaseService.client
+            .from('products')
+            .delete()
+            .eq('id', product['id']);
+      }
+
+      ref.invalidate(sellerProductsProvider);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(hasSales
+                ? 'Product archived because it has sales history.'
+                : 'Product deleted.'),
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not remove product: $e')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
@@ -155,9 +344,34 @@ class ManageProductsScreen extends ConsumerWidget {
                         ),
                       ],
                     ),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.chevron_right),
-                      onPressed: () => context.push('/product/${p['id']}'),
+                    onTap: () => context.push('/product/${p['id']}'),
+                    trailing: PopupMenuButton<String>(
+                      tooltip: 'Product actions',
+                      onSelected: (action) {
+                        if (action == 'edit') {
+                          _editProduct(context, ref, p);
+                        } else if (action == 'delete') {
+                          _deleteProduct(context, ref, p);
+                        }
+                      },
+                      itemBuilder: (_) => const [
+                        PopupMenuItem(
+                          value: 'edit',
+                          child: ListTile(
+                            dense: true,
+                            leading: Icon(Icons.edit_outlined),
+                            title: Text('Edit'),
+                          ),
+                        ),
+                        PopupMenuItem(
+                          value: 'delete',
+                          child: ListTile(
+                            dense: true,
+                            leading: Icon(Icons.delete_outline, color: Colors.redAccent),
+                            title: Text('Delete / archive'),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 );

@@ -6,6 +6,9 @@ import '../../cart/providers/cart_provider.dart';
 
 import '../../core/widgets/app_network_image.dart';
 import '../../core/providers/currency_provider.dart';
+import '../../marketplace/services/recommendation_service.dart';
+import '../widgets/product_card.dart';
+import '../../messaging/widgets/chat_channel_selector_modal.dart';
 
 // ── Provider ─────────────────────────────────────────────────────────────────
 final productDetailProvider =
@@ -13,15 +16,26 @@ final productDetailProvider =
   final data = await SupabaseService.client
       .from('products')
       .select('''
-        id, title, description, price, compare_at_price, status, is_featured,
+        id, title, description, price, compare_at_price, status, is_featured, category_id,
         product_images(url, display_order),
         stores(id, name, slug, logo_url),
-        categories(name),
+        categories(id, name),
         inventory(quantity, reserved_quantity)
       ''')
       .eq('id', id)
       .maybeSingle();
   return data;
+});
+
+final similarProductsProvider =
+    FutureProvider.family<List<Map<String, dynamic>>, ({String? categoryId, String currentProductId})>((ref, arg) async {
+  final list = await RecommendationService.getPersonalizedFeed(
+    categoryId: arg.categoryId,
+    limit: 8,
+    maxPerStore: 1,
+    exploreRatio: 0.10,
+  );
+  return list.where((p) => p['id'] != arg.currentProductId).toList();
 });
 
 // ── Screen ───────────────────────────────────────────────────────────────────
@@ -37,6 +51,16 @@ class ProductDetailScreen extends ConsumerStatefulWidget {
 class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
   int selectedQuantity = 1;
   int _imageIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    // Real-time engagement signal for the personalized ranker
+    RecommendationService.recordInteraction(
+      eventType: 'view',
+      productId: widget.productId,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -296,8 +320,74 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                           style: TextStyle(
                               color: scheme.onSurfaceVariant, height: 1.5),
                         ),
-                        const SizedBox(height: 30),
+                        const SizedBox(height: 24),
                       ],
+
+                      // Similar Recommendations
+                      Consumer(
+                        builder: (context, ref, _) {
+                          final categoryId = product['category_id'] as String?;
+                          final similarAsync = ref.watch(
+                            similarProductsProvider((
+                              categoryId: categoryId,
+                              currentProductId: widget.productId,
+                            )),
+                          );
+
+                          return similarAsync.when(
+                            data: (similarList) {
+                              if (similarList.isEmpty) return const SizedBox.shrink();
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        'Similar Recommendations',
+                                        style: theme.textTheme.titleMedium?.copyWith(
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: scheme.primary.withValues(alpha: 0.1),
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: Text(
+                                          'Best Match',
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.bold,
+                                            color: scheme.primary,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 12),
+                                  SizedBox(
+                                    height: 290,
+                                    child: ListView.separated(
+                                      scrollDirection: Axis.horizontal,
+                                      itemCount: similarList.length,
+                                      separatorBuilder: (_, __) => const SizedBox(width: 12),
+                                      itemBuilder: (context, index) => ProductCard(
+                                        product: similarList[index],
+                                        width: 170,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 24),
+                                ],
+                              );
+                            },
+                            loading: () => const SizedBox.shrink(),
+                            error: (_, __) => const SizedBox.shrink(),
+                          );
+                        },
+                      ),
                     ],
                   ),
                 ),
@@ -326,7 +416,22 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                     icon: const Icon(Icons.chat_bubble_outline),
                     label: const Text('Chat'),
                     onPressed: storeId.isNotEmpty
-                        ? () => context.push('/chat/$storeId')
+                        ? () {
+                            final title = product['title'] as String? ?? 'Product';
+                            final price = (product['price'] as num?)?.toDouble() ?? 0.0;
+                            final storeName = store?['name'] as String? ?? 'Seller';
+                            final storePhone = store?['phone'] as String? ?? store?['contact_phone'] as String?;
+
+                            ChatChannelSelectorModal.show(
+                              context: context,
+                              storeId: storeId,
+                              storeName: storeName,
+                              storePhone: storePhone,
+                              productId: widget.productId,
+                              productTitle: title,
+                              productPrice: price,
+                            );
+                          }
                         : null,
                     style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(
@@ -344,6 +449,11 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                               final price = (product['price'] as num?)?.toDouble() ?? 0.0;
                               final title = product['title'] as String? ?? 'Product';
                               final storeName = store?['name'] as String? ?? 'Seller';
+
+                              RecommendationService.recordInteraction(
+                                eventType: 'add_to_cart',
+                                productId: widget.productId,
+                              );
 
                               ref.read(cartProvider.notifier).addItem(
                                 productId: widget.productId,

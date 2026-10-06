@@ -65,39 +65,6 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
     } catch (_) {}
   }
 
-  Future<void> _sendTestNotification() async {
-    final user = Supabase.instance.client.auth.currentUser;
-    if (user == null) return;
-
-    try {
-      await SupabaseService.client.from('notifications').insert({
-        'user_id': user.id,
-        'type': 'order',
-        'title': 'Order Dispatched #UB-9842',
-        'body': 'Your order has been verified and is on the way with Express Dispatch.',
-        'is_read': false,
-        'created_at': DateTime.now().toIso8601String(),
-      });
-
-      ref.invalidate(notificationsProvider);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Test notification created!'),
-            backgroundColor: Color(0xFF10B981),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed: $e')),
-        );
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -160,15 +127,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
                         Text('No notifications yet', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
                         const SizedBox(height: 6),
                         const Text(
-                          'Order updates, promotions, and inactivity warnings will appear here.',
+                          'Order updates, store messages, and security notices will appear here.',
                           textAlign: TextAlign.center,
                           style: TextStyle(color: Colors.grey, fontSize: 13),
-                        ),
-                        const SizedBox(height: 20),
-                        FilledButton.tonalIcon(
-                          icon: const Icon(Icons.add_alert_rounded),
-                          label: const Text('Send Test Alert'),
-                          onPressed: _sendTestNotification,
                         ),
                       ],
                     ),
@@ -266,13 +227,10 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
                   children: [
                     SwitchListTile(
                       title: const Text('Order & Delivery Updates', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                      subtitle: const Text('Live status updates on checkout, dispatch and deliveries', style: TextStyle(fontSize: 12)),
+                      subtitle: const Text('Status updates on checkout, dispatch and deliveries', style: TextStyle(fontSize: 12)),
                       value: _orderUpdates,
                       onChanged: (val) {
                         setState(() => _orderUpdates = val);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Order updates ${val ? 'enabled' : 'disabled'}'), duration: const Duration(seconds: 1)),
-                        );
                       },
                     ),
                     const Divider(height: 1),
@@ -282,50 +240,28 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
                       value: _chatAlerts,
                       onChanged: (val) {
                         setState(() => _chatAlerts = val);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Chat alerts ${val ? 'enabled' : 'disabled'}'), duration: const Duration(seconds: 1)),
-                        );
                       },
                     ),
                     const Divider(height: 1),
                     SwitchListTile(
                       title: const Text('Promotions & Discounts', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                      subtitle: const Text('Flash sales, coupon vouchers, and trending items', style: TextStyle(fontSize: 12)),
+                      subtitle: const Text('Verified merchant discounts and featured promotions', style: TextStyle(fontSize: 12)),
                       value: _promoAlerts,
                       onChanged: (val) {
                         setState(() => _promoAlerts = val);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Promotional alerts ${val ? 'enabled' : 'disabled'}'), duration: const Duration(seconds: 1)),
-                        );
                       },
                     ),
                     const Divider(height: 1),
                     SwitchListTile(
                       title: const Text('Account Lifecycle & Inactivity', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                      subtitle: const Text('60-day inactivity warnings before auto-deletion', style: TextStyle(fontSize: 12)),
+                      subtitle: const Text('Inactivity notices before automatic deletion under 2-month policy', style: TextStyle(fontSize: 12)),
                       value: _inactivityAlerts,
                       onChanged: (val) {
                         setState(() => _inactivityAlerts = val);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Lifecycle alerts ${val ? 'enabled' : 'disabled'}'), duration: const Duration(seconds: 1)),
-                        );
                       },
                     ),
                   ],
                 ),
-              ),
-              const SizedBox(height: 24),
-
-              Text('Diagnostics & Testing', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 12),
-              FilledButton.tonalIcon(
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size.fromHeight(48),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                icon: const Icon(Icons.send_rounded),
-                label: const Text('Trigger Sample Order Notification'),
-                onPressed: _sendTestNotification,
               ),
             ],
           ),

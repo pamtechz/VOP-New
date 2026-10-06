@@ -1,6 +1,7 @@
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { redirect } from 'next/navigation';
-import { Users, Mail, ShieldCheck } from 'lucide-react';
+import { revalidatePath } from 'next/cache';
+import { Users, ShieldCheck, UserCheck, ShieldAlert } from 'lucide-react';
 
 interface ProfileRow {
   id: string;
@@ -31,6 +32,21 @@ export default async function AdminUsersPage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');
 
+  async function updateUserRoleAction(formData: FormData) {
+    'use server';
+    const targetUserId = formData.get('targetUserId') as string;
+    const newRole = formData.get('newRole') as string;
+    const client = await createServerSupabaseClient();
+
+    const { error } = await client.rpc('set_platform_user_role', {
+      p_user_id: targetUserId,
+      p_role: newRole,
+    });
+    if (error) throw new Error(error.message);
+
+    revalidatePath('/users');
+  }
+
   const { data: profiles, error } = await supabase
     .from('profiles')
     .select('id, full_name, phone, role, created_at')
@@ -39,23 +55,21 @@ export default async function AdminUsersPage() {
 
   const users: ProfileRow[] = (profiles ?? []) as ProfileRow[];
 
-  // Get emails from auth — we join by id on the client side
-  // Note: non-admin Supabase clients can't list auth.users, so we show profile data
   return (
     <div className="space-y-6 p-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white flex items-center gap-2">
             <Users className="w-6 h-6 text-blue-400" />
-            User Management
+            User Access & RBAC Management
           </h1>
           <p className="text-slate-400 text-sm">
-            {users.length} registered user{users.length !== 1 ? 's' : ''} — buyers, sellers, and administrators.
+            {users.length} registered user{users.length !== 1 ? 's' : ''} — manage permissions for platform admins, catalog moderators, sellers, and buyers.
           </p>
         </div>
-        <span className="px-3 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-semibold rounded-lg flex items-center gap-1.5">
-          <ShieldCheck className="w-3.5 h-3.5" />
-          RLS ENFORCED
+        <span className="px-3 py-1 bg-purple-500/10 text-purple-400 border border-purple-500/20 text-xs font-semibold rounded-lg flex items-center gap-1.5">
+          <ShieldAlert className="w-3.5 h-3.5" />
+          RBAC ACTIVE
         </span>
       </div>
 
@@ -71,14 +85,15 @@ export default async function AdminUsersPage() {
             <tr>
               <th className="p-4">User Name</th>
               <th className="p-4">Phone</th>
-              <th className="p-4">Role</th>
+              <th className="p-4">Current Role</th>
               <th className="p-4">Joined Date</th>
+              <th className="p-4">Modify RBAC Role</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800">
             {users.length === 0 ? (
               <tr>
-                <td colSpan={4} className="p-8 text-center text-slate-500">
+                <td colSpan={5} className="p-8 text-center text-slate-500">
                   No users found. Users appear here after registration.
                 </td>
               </tr>
@@ -89,11 +104,34 @@ export default async function AdminUsersPage() {
                   <td className="p-4 text-xs text-slate-400">{u.phone ?? '—'}</td>
                   <td className="p-4">
                     <span className={`px-2.5 py-0.5 text-xs font-semibold rounded-full border ${roleBadge(u.role)}`}>
-                      {u.role}
+                      {u.role.toUpperCase()}
                     </span>
                   </td>
                   <td className="p-4 text-xs text-slate-400">
                     {new Date(u.created_at).toLocaleDateString()}
+                  </td>
+                  <td className="p-4">
+                    <form action={updateUserRoleAction} className="flex items-center gap-2">
+                      <input type="hidden" name="targetUserId" value={u.id} />
+                      <select
+                        name="newRole"
+                        defaultValue={u.role}
+                        className="px-2.5 py-1 bg-slate-950 border border-slate-800 rounded text-xs text-white focus:outline-none focus:border-purple-500"
+                      >
+                        <option value="buyer">buyer</option>
+                        <option value="seller">seller</option>
+                        <option value="support_agent">support_agent</option>
+                        <option value="finance_admin">finance_admin</option>
+                        <option value="marketplace_admin">marketplace_admin</option>
+                        <option value="super_admin">super_admin</option>
+                      </select>
+                      <button
+                        type="submit"
+                        className="px-2.5 py-1 text-xs font-bold bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 border border-purple-500/30 rounded flex items-center gap-1 transition-colors"
+                      >
+                        Save Role
+                      </button>
+                    </form>
                   </td>
                 </tr>
               ))

@@ -22,9 +22,15 @@ import '../wallet/screens/wallet_ledger_screen.dart';
 import '../account/screens/saved_addresses_screen.dart';
 import '../account/screens/notifications_screen.dart';
 import '../account/screens/security_screen.dart';
+import '../account/screens/wishlist_screen.dart';
+import '../delivery/screens/driver_console_screen.dart';
 import '../orders/screens/order_tracking_screen.dart';
 import '../messaging/screens/chat_screen.dart';
+import '../messaging/screens/chat_inbox_screen.dart';
 import '../subscriptions/screens/subscription_plans_screen.dart';
+import '../services/screens/service_listings_screen.dart';
+import '../services/screens/post_service_ad_screen.dart';
+import '../account/screens/about_us_screen.dart';
 
 final _routerKey = GlobalKey<NavigatorState>();
 
@@ -37,13 +43,35 @@ GoRouter buildAppRouter(Ref ref) {
     debugLogDiagnostics: false,
     refreshListenable: GoRouterRefreshStream(authStream),
     redirect: (context, state) {
-      final user = Supabase.instance.client.auth.currentUser;
+      User? user;
+      try {
+        user = Supabase.instance.client.auth.currentUser;
+      } catch (_) {
+        user = null;
+      }
       final isLoggedIn = user != null;
-      final isAuthRoute = state.matchedLocation == '/login' ||
-          state.matchedLocation == '/register';
+      final loc = state.matchedLocation;
 
-      if (!isLoggedIn && !isAuthRoute) return '/login';
-      if (isLoggedIn && isAuthRoute) return '/';
+      // Routes requiring authentication
+      final requiresAuth = loc.startsWith('/checkout') ||
+          loc.startsWith('/orders') ||
+          loc.startsWith('/profile') ||
+          loc.startsWith('/addresses') ||
+          loc.startsWith('/notifications') ||
+          loc.startsWith('/security') ||
+          loc.startsWith('/wallet') ||
+          loc.startsWith('/chat') ||
+          loc.startsWith('/seller') ||
+          loc.startsWith('/plans');
+
+      final isAuthRoute = loc == '/login' || loc == '/register';
+
+      if (!isLoggedIn && requiresAuth) {
+        return '/login';
+      }
+      if (isLoggedIn && isAuthRoute) {
+        return '/';
+      }
       return null;
     },
     routes: [
@@ -51,7 +79,7 @@ GoRouter buildAppRouter(Ref ref) {
       GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
       GoRoute(path: '/register', builder: (_, __) => const RegisterScreen()),
 
-      // ── Marketplace ───────────────────────────────────────────────────────
+      // ── Marketplace Public Discovery ──────────────────────────────────────
       GoRoute(path: '/', builder: (_, __) => const HomeScreen()),
       GoRoute(
         path: '/product/:productId',
@@ -72,12 +100,11 @@ GoRouter buildAppRouter(Ref ref) {
           initialQuery: state.uri.queryParameters['q'],
         ),
       ),
-
-      // ── Cart & Checkout ───────────────────────────────────────────────────
       GoRoute(path: '/cart', builder: (_, __) => const CartScreen()),
-      GoRoute(path: '/checkout', builder: (_, __) => const CheckoutScreen()),
+      GoRoute(path: '/wishlist', builder: (_, __) => const WishlistScreen()),
 
-      // ── Orders & Tracking ──────────────────────────────────────────────────
+      // ── Protected Checkout & Orders ───────────────────────────────────────
+      GoRoute(path: '/checkout', builder: (_, __) => const CheckoutScreen()),
       GoRoute(path: '/orders', builder: (_, __) => const OrdersScreen()),
       GoRoute(
         path: '/orders/:orderId',
@@ -86,42 +113,52 @@ GoRouter buildAppRouter(Ref ref) {
         ),
       ),
 
-      // ── Messaging ─────────────────────────────────────────────────────────
+      // ── Protected Messaging ───────────────────────────────────────────────
       GoRoute(
         path: '/chat/:storeId',
         builder: (_, state) => ChatScreen(
           storeId: state.pathParameters['storeId'] ?? '',
+          productId: state.uri.queryParameters['productId'],
+          orderId: state.uri.queryParameters['orderId'],
         ),
       ),
 
-      // ── Seller ────────────────────────────────────────────────────────────
+      // ── Protected Seller Centre ───────────────────────────────────────────
       GoRoute(path: '/seller', builder: (_, __) => const SellerCentreScreen()),
       GoRoute(path: '/seller/products', builder: (_, __) => const ManageProductsScreen()),
       GoRoute(path: '/seller/products/add', builder: (_, __) => const AddProductScreen()),
       GoRoute(path: '/plans', builder: (_, __) => const SubscriptionPlansScreen()),
 
-      // ── Profile & Wallet ──────────────────────────────────────────────────
+      // ── Protected User Account & Wallet ───────────────────────────────────
       GoRoute(path: '/profile', builder: (_, __) => const AccountScreen()),
       GoRoute(path: '/addresses', builder: (_, __) => const SavedAddressesScreen()),
       GoRoute(path: '/notifications', builder: (_, __) => const NotificationsScreen()),
       GoRoute(path: '/security', builder: (_, __) => const SecurityScreen()),
       GoRoute(path: '/wallet', builder: (_, __) => const WalletLedgerScreen()),
+      GoRoute(path: '/driver', builder: (_, __) => const DriverConsoleScreen()),
+      GoRoute(path: '/services', builder: (_, __) => const ServiceListingsScreen()),
+      GoRoute(path: '/services/add', builder: (_, __) => const PostServiceAdScreen()),
+      GoRoute(path: '/about', builder: (_, __) => const AboutUsScreen()),
+      GoRoute(path: '/chats', builder: (_, __) => const ChatInboxScreen()),
     ],
-    errorBuilder: (_, state) => Scaffold(
+    errorBuilder: (context, state) => Scaffold(
       appBar: AppBar(title: const Text('Page Not Found')),
       body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.error_outline, size: 64, color: Colors.amber),
-            const SizedBox(height: 16),
-            Text('Page not found: ${state.error}', textAlign: TextAlign.center),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: () => appRouter.go('/'),
-              child: const Text('Back to Home'),
-            ),
-          ],
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline, size: 64, color: Colors.amber),
+              const SizedBox(height: 16),
+              Text('Page not found: ${state.error}', textAlign: TextAlign.center),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: () => context.go('/'),
+                child: const Text('Back to Home'),
+              ),
+            ],
+          ),
         ),
       ),
     ),
@@ -137,11 +174,3 @@ class GoRouterRefreshStream extends ChangeNotifier {
 
 // Provider that exposes the router
 final routerProvider = Provider<GoRouter>((ref) => buildAppRouter(ref));
-
-// Convenience accessor
-GoRouter get appRouter => _cachedRouter!;
-GoRouter? _cachedRouter;
-
-void initRouter(Ref ref) {
-  _cachedRouter = buildAppRouter(ref);
-}

@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/services/supabase_service.dart';
 
-final subscriptionPlansProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
+final subscriptionPlansProvider =
+    FutureProvider<List<Map<String, dynamic>>>((ref) async {
   final data = await SupabaseService.client
       .from('subscription_plans')
       .select('*')
@@ -15,10 +16,12 @@ class SubscriptionPlansScreen extends ConsumerStatefulWidget {
   const SubscriptionPlansScreen({super.key});
 
   @override
-  ConsumerState<SubscriptionPlansScreen> createState() => _SubscriptionPlansScreenState();
+  ConsumerState<SubscriptionPlansScreen> createState() =>
+      _SubscriptionPlansScreenState();
 }
 
-class _SubscriptionPlansScreenState extends ConsumerState<SubscriptionPlansScreen> {
+class _SubscriptionPlansScreenState
+    extends ConsumerState<SubscriptionPlansScreen> {
   String _selectedCode = 'business';
 
   @override
@@ -43,20 +46,24 @@ class _SubscriptionPlansScreenState extends ConsumerState<SubscriptionPlansScree
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Upgrade Store Capacity', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                  Text('Upgrade Store Capacity',
+                      style: theme.textTheme.titleMedium
+                          ?.copyWith(fontWeight: FontWeight.bold)),
                   const SizedBox(height: 6),
                   const Text(
                     'Subscription limits are managed centrally in Supabase. Select a plan to scale your product catalogue.',
                     style: TextStyle(fontSize: 12, color: Colors.grey),
                   ),
                   const SizedBox(height: 20),
-
                   ...plans.map((plan) {
                     final code = plan['code'] as String? ?? '';
                     final name = plan['name'] as String? ?? 'Plan';
-                    final price = double.tryParse(plan['price_monthly']?.toString() ?? '0') ?? 0.0;
+                    final price = double.tryParse(
+                            plan['price_monthly']?.toString() ?? '0') ??
+                        0.0;
                     final maxProducts = plan['max_products'] as int? ?? 10;
-                    final maxImages = plan['max_images_per_product'] as int? ?? 3;
+                    final maxImages =
+                        plan['max_images_per_product'] as int? ?? 3;
                     final isSelected = _selectedCode == code;
 
                     return Card(
@@ -64,7 +71,9 @@ class _SubscriptionPlansScreenState extends ConsumerState<SubscriptionPlansScree
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),
                         side: BorderSide(
-                          color: isSelected ? scheme.primary : theme.dividerColor.withOpacity(0.1),
+                          color: isSelected
+                              ? scheme.primary
+                              : theme.dividerColor.withValues(alpha: 0.1),
                           width: isSelected ? 2 : 1,
                         ),
                       ),
@@ -76,27 +85,40 @@ class _SubscriptionPlansScreenState extends ConsumerState<SubscriptionPlansScree
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Text(name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                                Text(name,
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16)),
                                 Text(
-                                  price == 0 ? 'Free' : 'K${price.toStringAsFixed(0)} /mo',
-                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: scheme.primary),
+                                  price == 0
+                                      ? 'Free'
+                                      : 'K${price.toStringAsFixed(0)} /mo',
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                      color: scheme.primary),
                                 ),
                               ],
                             ),
                             const SizedBox(height: 12),
                             Row(
                               children: [
-                                const Icon(Icons.check_circle_outline, size: 16, color: Color(0xFF10B981)),
+                                const Icon(Icons.check_circle_outline,
+                                    size: 16, color: Color(0xFF10B981)),
                                 const SizedBox(width: 8),
-                                Text('Up to $maxProducts products listed', style: const TextStyle(fontSize: 13)),
+                                Text('Up to $maxProducts products listed',
+                                    style: const TextStyle(fontSize: 13)),
                               ],
                             ),
                             const SizedBox(height: 6),
                             Row(
                               children: [
-                                const Icon(Icons.check_circle_outline, size: 16, color: Color(0xFF10B981)),
+                                const Icon(Icons.check_circle_outline,
+                                    size: 16, color: Color(0xFF10B981)),
                                 const SizedBox(width: 8),
-                                Text('$maxImages images per product (WebP compressed)', style: const TextStyle(fontSize: 13)),
+                                Text(
+                                    '$maxImages images per product (WebP compressed)',
+                                    style: const TextStyle(fontSize: 13)),
                               ],
                             ),
                             const SizedBox(height: 16),
@@ -104,17 +126,25 @@ class _SubscriptionPlansScreenState extends ConsumerState<SubscriptionPlansScree
                               width: double.infinity,
                               child: ElevatedButton(
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: isSelected ? scheme.primary : scheme.surfaceVariant,
-                                  foregroundColor: isSelected ? scheme.onPrimary : scheme.onSurfaceVariant,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                  backgroundColor: isSelected
+                                      ? scheme.primary
+                                      : scheme.surfaceContainerHighest,
+                                  foregroundColor: isSelected
+                                      ? scheme.onPrimary
+                                      : scheme.onSurfaceVariant,
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8)),
                                 ),
                                 onPressed: () {
                                   setState(() => _selectedCode = code);
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text('Plan selected: $name')),
+                                    SnackBar(
+                                        content: Text('Plan selected: $name')),
                                   );
                                 },
-                                child: Text(isSelected ? 'Current Active Plan' : 'Select Plan'),
+                                child: Text(isSelected
+                                    ? 'Current Active Plan'
+                                    : 'Select Plan'),
                               ),
                             ),
                           ],

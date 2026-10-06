@@ -1,6 +1,7 @@
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { redirect } from 'next/navigation';
-import { Store, ShieldCheck } from 'lucide-react';
+import { revalidatePath } from 'next/cache';
+import { Store, ShieldCheck, CheckCircle2, Ban, Pencil } from 'lucide-react';
 
 interface StoreRow {
   id: string;
@@ -8,6 +9,10 @@ interface StoreRow {
   name: string;
   slug: string;
   status: string;
+  description: string | null;
+  province: string | null;
+  city: string | null;
+  area: string | null;
   total_sales: number;
   rating_avg: number;
   rating_count: number;
@@ -33,9 +38,48 @@ export default async function AdminStoresPage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');
 
+  async function editStoreAction(formData: FormData) {
+    'use server';
+    const client = await createServerSupabaseClient();
+    const storeId = String(formData.get('storeId') ?? '');
+    const name = String(formData.get('name') ?? '').trim();
+    const slug = String(formData.get('slug') ?? '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    if (!storeId || !name || !slug) throw new Error('Store name and slug are required.');
+
+    const { error } = await client
+      .from('stores')
+      .update({
+        name,
+        slug,
+        description: String(formData.get('description') ?? '').trim() || null,
+        province: String(formData.get('province') ?? '').trim() || null,
+        city: String(formData.get('city') ?? '').trim() || null,
+        area: String(formData.get('area') ?? '').trim() || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', storeId);
+    if (error) throw new Error(error.message);
+
+    revalidatePath('/stores');
+  }
+
+  async function updateStoreStatusAction(formData: FormData) {
+    'use server';
+    const storeId = formData.get('storeId') as string;
+    const newStatus = formData.get('newStatus') as string;
+    const client = await createServerSupabaseClient();
+
+    await client
+      .from('stores')
+      .update({ status: newStatus })
+      .eq('id', storeId);
+
+    revalidatePath('/stores');
+  }
+
   const { data: storesData, error } = await supabase
     .from('stores')
-    .select('id, public_ref, name, slug, status, total_sales, rating_avg, rating_count, created_at, profiles!stores_owner_id_fkey(full_name)')
+    .select('id, public_ref, name, slug, status, description, province, city, area, total_sales, rating_avg, rating_count, created_at, profiles!stores_owner_id_fkey(full_name)')
     .order('created_at', { ascending: false })
     .limit(50);
 
@@ -50,7 +94,7 @@ export default async function AdminStoresPage() {
             Stores & Seller Management
           </h1>
           <p className="text-slate-400 text-sm">
-            {stores.length} registered store{stores.length !== 1 ? 's' : ''} — monitor subscriptions, sales, and compliance.
+            {stores.length} registered store{stores.length !== 1 ? 's' : ''} — monitor subscriptions, sales, ratings, and active status.
           </p>
         </div>
         <span className="px-3 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-semibold rounded-lg flex items-center gap-1.5">
@@ -75,12 +119,13 @@ export default async function AdminStoresPage() {
               <th className="p-4">Total Sales</th>
               <th className="p-4">Rating</th>
               <th className="p-4">Status</th>
+              <th className="p-4">Admin Controls</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800">
             {stores.length === 0 ? (
               <tr>
-                <td colSpan={6} className="p-8 text-center text-slate-500">
+                <td colSpan={7} className="p-8 text-center text-slate-500">
                   No stores registered yet. Stores appear when sellers create them.
                 </td>
               </tr>
@@ -92,12 +137,55 @@ export default async function AdminStoresPage() {
                   <td className="p-4">{(s.profiles as any)?.full_name ?? '—'}</td>
                   <td className="p-4 font-bold text-emerald-400">K{Number(s.total_sales ?? 0).toFixed(2)}</td>
                   <td className="p-4 font-semibold text-amber-400">
-                    {s.rating_count > 0 ? `★ ${Number(s.rating_avg).toFixed(1)}` : '—'}
+                    {s.rating_count > 0 ? `★ ${Number(s.rating_avg).toFixed(1)} (${s.rating_count})` : '—'}
                   </td>
                   <td className="p-4">
                     <span className={`px-2.5 py-1 text-xs font-bold border rounded ${statusBadge(s.status)}`}>
                       {s.status.toUpperCase()}
                     </span>
+                  </td>
+                  <td className="p-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <details className="relative">
+                        <summary className="list-none cursor-pointer rounded border border-slate-700 p-1.5 text-slate-300 hover:text-purple-300" title="Edit store">
+                          <Pencil className="w-4 h-4" />
+                        </summary>
+                        <form action={editStoreAction} className="absolute right-0 z-20 mt-2 w-80 space-y-2 rounded-xl border border-slate-700 bg-slate-950 p-3 shadow-2xl">
+                          <input type="hidden" name="storeId" value={s.id} />
+                          <input name="name" required defaultValue={s.name} className="w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-white" />
+                          <input name="slug" required defaultValue={s.slug} className="w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-white" />
+                          <textarea name="description" defaultValue={s.description ?? ''} placeholder="Description" className="min-h-20 w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-white" />
+                          <div className="grid grid-cols-3 gap-2">
+                            <input name="province" defaultValue={s.province ?? ''} placeholder="Province" className="min-w-0 rounded-lg border border-slate-800 bg-slate-900 px-2 py-2 text-xs text-white" />
+                            <input name="city" defaultValue={s.city ?? ''} placeholder="City" className="min-w-0 rounded-lg border border-slate-800 bg-slate-900 px-2 py-2 text-xs text-white" />
+                            <input name="area" defaultValue={s.area ?? ''} placeholder="Area" className="min-w-0 rounded-lg border border-slate-800 bg-slate-900 px-2 py-2 text-xs text-white" />
+                          </div>
+                          <button className="w-full rounded-lg bg-purple-600 px-3 py-2 text-xs font-bold text-white hover:bg-purple-500">Save store</button>
+                        </form>
+                      </details>
+                      <form action={updateStoreStatusAction} className="flex items-center gap-2">
+                      <input type="hidden" name="storeId" value={s.id} />
+                      {s.status === 'active' ? (
+                        <button
+                          type="submit"
+                          name="newStatus"
+                          value="suspended"
+                          className="px-2.5 py-1 text-xs font-bold bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 border border-rose-500/30 rounded flex items-center gap-1 transition-colors"
+                        >
+                          <Ban className="w-3 h-3" /> Suspend Store
+                        </button>
+                      ) : (
+                        <button
+                          type="submit"
+                          name="newStatus"
+                          value="active"
+                          className="px-2.5 py-1 text-xs font-bold bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30 rounded flex items-center gap-1 transition-colors"
+                        >
+                          <CheckCircle2 className="w-3 h-3" /> Activate Store
+                        </button>
+                      )}
+                      </form>
+                    </div>
                   </td>
                 </tr>
               ))

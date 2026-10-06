@@ -6,7 +6,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-const APP_BASE_URL = Deno.env.get("APP_BASE_URL") ?? "https://marketplace.app";
+const APP_BASE_URL = Deno.env.get("APP_BASE_URL") ?? "https://pamtechz.com";
 
 serve(async (req: Request) => {
   const url = new URL(req.url);
@@ -26,8 +26,9 @@ serve(async (req: Request) => {
     .eq("is_active", true)
     .single();
 
-  if (error || !shortLink) {
-    // Graceful fallback for non-existent / expired short code
+  const isExpired = shortLink?.expires_at && new Date(shortLink.expires_at) <= new Date();
+
+  if (error || !shortLink || isExpired) {
     const notFoundHtml = `
       <!DOCTYPE html>
       <html>
@@ -57,10 +58,9 @@ serve(async (req: Request) => {
     });
   }
 
-  // Increment daily click metric asynchronously (RPC prevents DB table bloat)
+  // Increment daily click metric asynchronously
   supabase.rpc("track_short_link_click", {
     p_short_link_id: shortLink.id,
-    p_is_unique: true,
   }).catch((err) => console.error("Error logging click metric:", err));
 
   // Determine redirect URL according to destination type
@@ -74,12 +74,11 @@ serve(async (req: Request) => {
   } else if (shortLink.destination_type === "campaign") {
     destinationUrl = `${APP_BASE_URL}/campaign/${shortLink.destination_id}`;
   } else if (shortLink.destination_type === "external" && shortLink.external_url) {
-    // Validate safe URL scheme
     if (shortLink.external_url.startsWith("http://") || shortLink.external_url.startsWith("https://")) {
       destinationUrl = shortLink.external_url;
     }
   }
 
-  // 302 Temporary Redirect to target destination or deep link handler
+  // 302 Temporary Redirect to target destination
   return Response.redirect(destinationUrl, 302);
 });

@@ -6,6 +6,9 @@ import '../../core/services/supabase_service.dart';
 import '../../cart/providers/cart_provider.dart';
 import '../../core/widgets/app_network_image.dart';
 import '../../core/providers/currency_provider.dart';
+import '../../advertising/widgets/sponsored_ad_banner.dart';
+import '../../products/widgets/product_card.dart';
+import '../services/recommendation_service.dart';
 
 // ── Category Icon & Visual Style Helper ─────────────────────────────────────
 
@@ -96,48 +99,16 @@ final categoriesProvider = FutureProvider<List<Map<String, dynamic>>>((ref) asyn
 });
 
 final featuredProductsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
-  // Try querying explicit featured items first
-  var data = await SupabaseService.client
-      .from('products')
-      .select('''
-        id, title, price, compare_at_price, status, is_featured,
-        product_images(url, display_order),
-        stores(name, slug)
-      ''')
-      .eq('status', 'active')
-      .eq('is_featured', true)
-      .order('created_at', ascending: false)
-      .limit(10);
-
-  // If no featured flag is set, gracefully pull recent active products
-  if ((data as List).isEmpty) {
-    data = await SupabaseService.client
-        .from('products')
-        .select('''
-          id, title, price, compare_at_price, status, is_featured,
-          product_images(url, display_order),
-          stores(name, slug)
-        ''')
-        .eq('status', 'active')
-        .order('created_at', ascending: false)
-        .limit(10);
-  }
-
-  return List<Map<String, dynamic>>.from(data as List);
+  return RecommendationService.getPersonalizedFeed(
+    limit: 10,
+    maxPerStore: 1,
+    exploreRatio: 0.15,
+  );
 });
 
 final homeProductsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
   final selectedCatSlug = ref.watch(selectedHomeCategoryProvider);
-
-  var builder = SupabaseService.client
-      .from('products')
-      .select('''
-        id, title, price, compare_at_price, status,
-        product_images(url, display_order),
-        stores(name, slug),
-        categories(id, name, slug)
-      ''')
-      .eq('status', 'active');
+  String? categoryId;
 
   if (selectedCatSlug != null && selectedCatSlug.isNotEmpty) {
     final cat = await SupabaseService.client
@@ -145,14 +116,15 @@ final homeProductsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) as
         .select('id')
         .eq('slug', selectedCatSlug)
         .maybeSingle();
-
-    if (cat != null) {
-      builder = builder.eq('category_id', cat['id']);
-    }
+    categoryId = cat?['id'] as String?;
   }
 
-  final data = await builder.order('created_at', ascending: false).limit(30);
-  return List<Map<String, dynamic>>.from(data as List);
+  return RecommendationService.getPersonalizedFeed(
+    categoryId: categoryId,
+    limit: 50,
+    maxPerStore: 2,
+    exploreRatio: 0.20,
+  );
 });
 
 // ── Home Screen ─────────────────────────────────────────────────────────────
@@ -298,6 +270,54 @@ class HomeScreen extends ConsumerWidget {
               ),
             ),
 
+            // ── Quick Access Portals Bar ───────────────────────────────
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      _QuickPortalChip(
+                        label: 'Services & Jobs',
+                        icon: Icons.work_outline,
+                        color: const Color(0xFF0891B2),
+                        onTap: () => context.push('/services'),
+                      ),
+                      const SizedBox(width: 8),
+                      _QuickPortalChip(
+                        label: 'Seller Hub',
+                        icon: Icons.storefront_outlined,
+                        color: const Color(0xFF7C3AED),
+                        onTap: () => context.push('/seller'),
+                      ),
+                      const SizedBox(width: 8),
+                      _QuickPortalChip(
+                        label: 'Driver Console',
+                        icon: Icons.two_wheeler_outlined,
+                        color: const Color(0xFF2563EB),
+                        onTap: () => context.push('/driver'),
+                      ),
+                      const SizedBox(width: 8),
+                      _QuickPortalChip(
+                        label: 'Escrow Wallet',
+                        icon: Icons.account_balance_wallet_outlined,
+                        color: const Color(0xFF10B981),
+                        onTap: () => context.push('/wallet'),
+                      ),
+                      const SizedBox(width: 8),
+                      _QuickPortalChip(
+                        label: 'About & Terms',
+                        icon: Icons.info_outline,
+                        color: const Color(0xFFD97706),
+                        onTap: () => context.push('/about'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
             // ── Dynamic Categories with Distinct Visual Icons ─────────────
             SliverToBoxAdapter(
               child: categories.when(
@@ -332,6 +352,9 @@ class HomeScreen extends ConsumerWidget {
                   loading: () => const _SectionSkeleton(height: 250),
                   error: (e, _) => _ErrorTile(message: e.toString()),
                 ),
+              ),
+              const SliverToBoxAdapter(
+                child: SponsoredAdBanner(placement: 'home_hero'),
               ),
             ],
 
@@ -548,13 +571,13 @@ class _HorizontalProductList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => SizedBox(
-    height: 270,
+    height: 290,
     child: ListView.separated(
       scrollDirection: Axis.horizontal,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       itemCount: products.length,
       separatorBuilder: (_, __) => const SizedBox(width: 12),
-      itemBuilder: (ctx, i) => _ProductCard(product: products[i], width: 170),
+      itemBuilder: (ctx, i) => ProductCard(product: products[i], width: 170),
     ),
   );
 }
@@ -568,185 +591,15 @@ class _ProductGrid extends StatelessWidget {
     padding: const EdgeInsets.symmetric(horizontal: 16),
     sliver: SliverGrid(
       delegate: SliverChildBuilderDelegate(
-        (ctx, i) => _ProductCard(product: products[i]),
+        (ctx, i) => ProductCard(product: products[i]),
         childCount: products.length,
       ),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
         crossAxisSpacing: 12,
         mainAxisSpacing: 12,
-        childAspectRatio: 0.62,
+        childAspectRatio: 0.54,
       ),
-    ),
-  );
-}
-
-class _ProductCard extends ConsumerWidget {
-  final Map<String, dynamic> product;
-  final double? width;
-
-  const _ProductCard({required this.product, this.width});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final scheme = Theme.of(context).colorScheme;
-    final images = (product['product_images'] as List? ?? [])
-      ..sort((a, b) =>
-          ((a['display_order'] as int?) ?? 0)
-              .compareTo((b['display_order'] as int?) ?? 0));
-    final imageUrl = images.isNotEmpty ? images.first['url'] as String? : null;
-    final title = product['title'] as String? ?? '';
-    final price = (product['price'] as num?)?.toDouble() ?? 0.0;
-    final compareAt = (product['compare_at_price'] as num?)?.toDouble();
-    final store = product['stores'] as Map<String, dynamic>?;
-    final storeName = store?['name'] as String? ?? '';
-    final productId = product['id'] as String? ?? '';
-    final currency = ref.watch(currencyProvider).valueOrNull ?? const CurrencyConfig();
-
-    return GestureDetector(
-      onTap: () => context.push('/product/$productId'),
-      child: Container(
-        width: width,
-        decoration: BoxDecoration(
-          color: scheme.surfaceContainerHighest.withValues(alpha: 0.35),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.3)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Image
-            ClipRRect(
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-              child: AspectRatio(
-                aspectRatio: 1.05,
-                child: AppNetworkImage(
-                  imageUrlOrCode: imageUrl,
-                  fit: BoxFit.cover,
-                  errorWidget: _imagePlaceholder(scheme),
-                ),
-              ),
-            ),
-            // Info
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.all(10),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (storeName.isNotEmpty) ...[
-                          Text(
-                            storeName,
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: scheme.outline,
-                              fontWeight: FontWeight.w500,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 2),
-                        ],
-                        Text(
-                          title,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 12,
-                            height: 1.2,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                currency.format(price),
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 13,
-                                  color: scheme.primary,
-                                ),
-                              ),
-                              if (compareAt != null && compareAt > price)
-                                Text(
-                                  currency.format(compareAt),
-                                  style: TextStyle(
-                                    decoration: TextDecoration.lineThrough,
-                                    fontSize: 10,
-                                    color: scheme.outline,
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                        InkWell(
-                          onTap: () {
-                            ref.read(cartProvider.notifier).addItem(
-                                  productId: productId,
-                                  title: title,
-                                  price: price,
-                                  imageUrl: imageUrl,
-                                  storeId: store?['id'] as String? ?? 'store',
-                                  storeName: storeName.isNotEmpty ? storeName : 'Store',
-                                );
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('$title added to cart!'),
-                                duration: const Duration(seconds: 1),
-                                behavior: SnackBarBehavior.floating,
-                                backgroundColor: const Color(0xFF10B981),
-                              ),
-                            );
-                          },
-                          borderRadius: BorderRadius.circular(20),
-                          child: Container(
-                            padding: const EdgeInsets.all(7),
-                            decoration: BoxDecoration(
-                              color: scheme.primary,
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(
-                              Icons.add_shopping_cart_rounded,
-                              size: 14,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _imagePlaceholder(ColorScheme scheme) => Container(
-    color: scheme.surfaceContainerHighest,
-    child: Center(
-      child: Icon(Icons.shopping_bag_outlined, size: 36, color: scheme.outline),
     ),
   );
 }
@@ -797,3 +650,37 @@ class _ErrorTile extends StatelessWidget {
     ),
   );
 }
+
+class _QuickPortalChip extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _QuickPortalChip({
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ActionChip(
+      avatar: Icon(icon, size: 16, color: color),
+      label: Text(
+        label,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.bold,
+          color: color,
+        ),
+      ),
+      backgroundColor: color.withOpacity(0.1),
+      side: BorderSide(color: color.withOpacity(0.25)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      onPressed: onTap,
+    );
+  }
+}
+

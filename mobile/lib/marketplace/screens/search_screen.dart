@@ -1,17 +1,27 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/services/supabase_service.dart';
 import '../../core/widgets/app_network_image.dart';
 import '../../core/providers/currency_provider.dart';
+import '../../advertising/widgets/sponsored_ad_banner.dart';
+import '../services/recommendation_service.dart';
 
 // ── Search & Filter State ───────────────────────────────────────────────────
 
 class SearchFilter {
   final String query;
   final String? categorySlug;
+  final int page;
+  final int pageSize;
 
-  const SearchFilter({this.query = '', this.categorySlug});
+  const SearchFilter({
+    this.query = '',
+    this.categorySlug,
+    this.page = 0,
+    this.pageSize = 20,
+  });
 
   @override
   bool operator ==(Object other) =>
@@ -19,10 +29,13 @@ class SearchFilter {
       other is SearchFilter &&
           runtimeType == other.runtimeType &&
           query == other.query &&
-          categorySlug == other.categorySlug;
+          categorySlug == other.categorySlug &&
+          page == other.page &&
+          pageSize == other.pageSize;
 
   @override
-  int get hashCode => query.hashCode ^ categorySlug.hashCode;
+  int get hashCode =>
+      query.hashCode ^ categorySlug.hashCode ^ page.hashCode ^ pageSize.hashCode;
 }
 
 // ── Providers ───────────────────────────────────────────────────────────────
@@ -45,35 +58,33 @@ final searchResultsProvider =
     return [];
   }
 
-  var builder = SupabaseService.client
-      .from('products')
-      .select('''
-        id, title, price, compare_at_price, status,
-        product_images(url, display_order),
-        stores(name, slug),
-        categories(id, name, slug)
-      ''')
-      .eq('status', 'active');
+  // Record user search intent for recommendation ranker
+  if (query.isNotEmpty) {
+    RecommendationService.recordInteraction(
+      eventType: 'search',
+      searchTerm: query,
+    );
+  }
 
+  String? catId;
   if (catSlug != null && catSlug.isNotEmpty) {
-    // Lookup category id first
     final cat = await SupabaseService.client
         .from('categories')
         .select('id')
         .eq('slug', catSlug)
         .maybeSingle();
-
-    if (cat != null) {
-      builder = builder.eq('category_id', cat['id']);
-    }
+    catId = cat?['id'] as String?;
   }
 
-  if (query.isNotEmpty) {
-    builder = builder.ilike('title', '%$query%');
-  }
-
-  final data = await builder.order('created_at', ascending: false).limit(40);
-  return List<Map<String, dynamic>>.from(data as List);
+  final offset = filter.page * filter.pageSize;
+  return RecommendationService.getPersonalizedFeed(
+    categoryId: catId,
+    search: query.isNotEmpty ? query : null,
+    limit: filter.pageSize,
+    offset: offset,
+    maxPerStore: 3,
+    exploreRatio: 0.10,
+  );
 });
 
 // ── Screen ───────────────────────────────────────────────────────────────────
@@ -94,24 +105,57 @@ class SearchScreen extends ConsumerStatefulWidget {
 
 class _SearchScreenState extends ConsumerState<SearchScreen> {
   late final TextEditingController _searchController;
+  Timer? _debounceTimer;
   String? _selectedCategorySlug;
+  String _debouncedQuery = '';
+  int _page = 0;
 
   @override
   void initState() {
     super.initState();
     _searchController = TextEditingController(text: widget.initialQuery ?? '');
+    _debouncedQuery = widget.initialQuery ?? '';
     _selectedCategorySlug = widget.initialCategory;
   }
 
   @override
+  void didUpdateWidget(SearchScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.initialQuery != oldWidget.initialQuery && widget.initialQuery != null) {
+      _searchController.text = widget.initialQuery!;
+      _debouncedQuery = widget.initialQuery!;
+      _page = 0;
+    }
+    if (widget.initialCategory != oldWidget.initialCategory && widget.initialCategory != null) {
+      _selectedCategorySlug = widget.initialCategory;
+      _page = 0;
+    }
+  }
+
+  @override
   void dispose() {
+    _debounceTimer?.cancel();
     _searchController.dispose();
     super.dispose();
   }
 
+  void _onSearchChanged(String val) {
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 350), () {
+      if (mounted) {
+        setState(() {
+          _debouncedQuery = val.trim();
+          _page = 0;
+        });
+      }
+    });
+  }
+
   SearchFilter get _currentFilter => SearchFilter(
-        query: _searchController.text.trim(),
+        query: _debouncedQuery,
         categorySlug: _selectedCategorySlug,
+        page: _page,
+        pageSize: 20,
       );
 
   @override
@@ -131,21 +175,22 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           controller: _searchController,
           autofocus: widget.initialQuery == null && widget.initialCategory == null,
           decoration: const InputDecoration(
-            hintText: 'Search products, electronics, cars...',
+            hintText: 'Search products, tech, fashion...',
             border: InputBorder.none,
           ),
-          onChanged: (val) {
-            setState(() {});
-          },
+          onChanged: _onSearchChanged,
         ),
         actions: [
           if (_searchController.text.isNotEmpty || _selectedCategorySlug != null)
             IconButton(
               icon: const Icon(Icons.clear),
               onPressed: () {
+                _debounceTimer?.cancel();
                 setState(() {
                   _searchController.clear();
+                  _debouncedQuery = '';
                   _selectedCategorySlug = null;
+                  _page = 0;
                 });
               },
             ),
@@ -173,7 +218,10 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                         selected: isSelected,
                         onSelected: (selected) {
                           if (selected) {
-                            setState(() => _selectedCategorySlug = null);
+                            setState(() {
+                              _selectedCategorySlug = null;
+                              _page = 0;
+                            });
                           }
                         },
                       );
@@ -189,6 +237,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                       onSelected: (selected) {
                         setState(() {
                           _selectedCategorySlug = selected ? slug : null;
+                          _page = 0;
                         });
                       },
                     );
@@ -245,10 +294,18 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
                       return ListView.builder(
                         padding: const EdgeInsets.all(12),
-                        itemCount: products.length,
+                        itemCount: products.length + 1,
                         itemBuilder: (ctx, i) {
-                          final p = products[i];
-                          final images = (p['product_images'] as List? ?? [])
+                          if (i == 0) {
+                            return const SponsoredAdBanner(
+                              placement: 'explore_inline',
+                              padding: EdgeInsets.only(bottom: 12),
+                            );
+                          }
+
+                          final p = products[i - 1];
+                          final rawImages = p['images'] ?? p['product_images'];
+                          final images = (rawImages as List? ?? [])
                             ..sort((a, b) =>
                                 ((a['display_order'] as int?) ?? 0)
                                     .compareTo((b['display_order'] as int?) ?? 0));
@@ -256,7 +313,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                               ? images.first['url'] as String?
                               : null;
                           final storeName =
-                              (p['stores'] as Map?)?['name'] as String? ?? '';
+                              (p['stores'] as Map?)?['name'] as String? ?? p['store_name'] as String? ?? '';
+                          final badgeLabel = p['badge_label'] as String?;
                           final price = (p['price'] as num?)?.toDouble() ?? 0.0;
                           final compareAt = (p['compare_at_price'] as num?)?.toDouble();
 
@@ -281,11 +339,47 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                                   child: Icon(Icons.shopping_bag_outlined, color: scheme.outline),
                                 ),
                               ),
-                              title: Text(
-                                p['title'] as String? ?? '',
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                              title: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      p['title'] as String? ?? '',
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                    ),
+                                  ),
+                                  if (badgeLabel != null && badgeLabel.isNotEmpty) ...[
+                                    const SizedBox(width: 6),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: badgeLabel == 'Best Match'
+                                            ? const Color(0xFF2563EB).withValues(alpha: 0.15)
+                                            : badgeLabel == 'Fresh Drop'
+                                                ? const Color(0xFF059669).withValues(alpha: 0.15)
+                                                : badgeLabel == 'Top Rated Seller'
+                                                    ? const Color(0xFFD97706).withValues(alpha: 0.15)
+                                                    : scheme.primaryContainer.withValues(alpha: 0.5),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Text(
+                                        badgeLabel,
+                                        style: TextStyle(
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.bold,
+                                          color: badgeLabel == 'Best Match'
+                                              ? const Color(0xFF2563EB)
+                                              : badgeLabel == 'Fresh Drop'
+                                                  ? const Color(0xFF059669)
+                                                  : badgeLabel == 'Top Rated Seller'
+                                                      ? const Color(0xFFD97706)
+                                                      : scheme.primary,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ],
                               ),
                               subtitle: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -321,7 +415,15 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                                 ],
                               ),
                               trailing: const Icon(Icons.chevron_right),
-                              onTap: () => context.push('/product/${p['id']}'),
+                              onTap: () {
+                                RecommendationService.recordInteraction(
+                                  eventType: 'click',
+                                  productId: p['id'] as String?,
+                                  categoryId: p['category_id'] as String?,
+                                  storeId: p['store_id'] as String?,
+                                );
+                                context.push('/product/${p['id']}');
+                              },
                             ),
                           );
                         },
@@ -346,6 +448,11 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          const SponsoredAdBanner(
+            placement: 'explore_inline',
+            padding: EdgeInsets.only(bottom: 20),
+          ),
+
           Center(
             child: Column(
               children: [
@@ -389,6 +496,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                     onPressed: () {
                       setState(() {
                         _selectedCategorySlug = slug;
+                        _page = 0;
                       });
                     },
                   );

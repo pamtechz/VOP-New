@@ -116,7 +116,7 @@ class _ProductImagePickerState extends ConsumerState<ProductImagePicker> {
                         SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            'User-Owned Media: Use your own free Cloudinary or Google Drive account. Zero platform hosting fees!',
+                            'Enter direct image CDN link or web address for optimal display.',
                             style: TextStyle(fontSize: 11, color: Color(0xFF047857), fontWeight: FontWeight.w600),
                           ),
                         ),
@@ -124,7 +124,7 @@ class _ProductImagePickerState extends ConsumerState<ProductImagePicker> {
                     ),
                   ),
                   const Text(
-                    'Paste an image link from your Cloudinary or Google Drive:',
+                    'Paste an image URL for your product listing:',
                     style: TextStyle(fontSize: 12, color: Colors.grey),
                   ),
                   const SizedBox(height: 12),
@@ -133,8 +133,8 @@ class _ProductImagePickerState extends ConsumerState<ProductImagePicker> {
                     autofocus: true,
                     keyboardType: TextInputType.url,
                     decoration: const InputDecoration(
-                      labelText: 'Cloudinary / Google Drive URL',
-                      hintText: 'https://res.cloudinary.com/... or Google Drive link',
+                      labelText: 'Product Image URL',
+                      hintText: 'https://images.example.com/item.jpg',
                       border: OutlineInputBorder(),
                       prefixIcon: Icon(Icons.link),
                     ),
@@ -147,55 +147,6 @@ class _ProductImagePickerState extends ConsumerState<ProductImagePicker> {
                   ),
                   const SizedBox(height: 12),
 
-                  // Quick presets / provider helpers
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: [
-                      ActionChip(
-                        avatar: const Icon(Icons.cloud_done, size: 14, color: Colors.blue),
-                        label: const Text('Cloudinary', style: TextStyle(fontSize: 11)),
-                        onPressed: () {
-                          _showGuideDialog(
-                            context,
-                            'Cloudinary Guide',
-                            '1. Visit console.cloudinary.com/app\n'
-                            '2. Upload your product photo into your Media Library\n'
-                            '3. Click "Copy URL" on the image\n'
-                            '4. Paste the URL here.',
-                          );
-                        },
-                      ),
-                      ActionChip(
-                        avatar: const Icon(Icons.drive_folder_upload, size: 14, color: Color(0xFF10B981)),
-                        label: const Text('Google Drive', style: TextStyle(fontSize: 11)),
-                        onPressed: () {
-                          _showGuideDialog(
-                            context,
-                            'Google Drive Guide',
-                            '1. Upload your photo to Google Drive\n'
-                            '2. Right click file -> Share -> Change to "Anyone with the link"\n'
-                            '3. Copy the link and paste it here.\n'
-                            '4. Our system converts it automatically into a direct product image!',
-                          );
-                        },
-                      ),
-                      ActionChip(
-                        avatar: const Icon(Icons.folder_shared, size: 14, color: Colors.cyan),
-                        label: const Text('Dropbox', style: TextStyle(fontSize: 11)),
-                        onPressed: () {
-                          _showGuideDialog(
-                            context,
-                            'Dropbox Guide',
-                            '1. Upload your image to Dropbox\n'
-                            '2. Click "Share" -> "Create Link" -> "Copy link"\n'
-                            '3. Paste it here.\n'
-                            '4. The system automatically routes raw streaming direct to your product.',
-                          );
-                        },
-                      ),
-                    ],
-                  ),
                   const SizedBox(height: 14),
 
                   // Live Preview Box
@@ -243,19 +194,6 @@ class _ProductImagePickerState extends ConsumerState<ProductImagePicker> {
     );
   }
 
-  void _showGuideDialog(BuildContext context, String title, String body) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-        content: Text(body, style: const TextStyle(fontSize: 13, height: 1.5)),
-        actions: [
-          FilledButton(onPressed: () => Navigator.pop(ctx), child: const Text('Got It')),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -269,7 +207,7 @@ class _ProductImagePickerState extends ConsumerState<ProductImagePicker> {
         Row(
           children: [
             Text(
-              'Product Images (Cloudinary & Google Drive)',
+              'Product Images & Media Gallery',
               style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
             ),
             const Spacer(),
@@ -298,7 +236,7 @@ class _ProductImagePickerState extends ConsumerState<ProductImagePicker> {
         ),
         const SizedBox(height: 6),
         const Text(
-          'Attach image links hosted on Cloudinary or Google Drive. Images are optimized and rendered dynamically.',
+          'Attach high-resolution product image links. CDN media and WebP images are optimized and rendered dynamically.',
           style: TextStyle(fontSize: 12, color: Colors.grey),
         ),
         const SizedBox(height: 10),

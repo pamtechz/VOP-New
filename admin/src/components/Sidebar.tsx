@@ -19,44 +19,86 @@ import {
   Wallet,
   Tag,
   ChevronRight,
+  Truck,
+  Scale,
+  Ticket,
+  BarChart3,
+  MessageSquare,
+  ShieldCheck,
+  Building2,
+  Globe,
+  LifeBuoy,
+  FileText,
+  Briefcase,
 } from 'lucide-react';
 
 const menuGroups = [
   {
-    title: 'OVERVIEW',
+    title: '1. COMMAND CENTER',
     items: [
-      { label: 'Dashboard', href: '/', icon: LayoutDashboard },
+      { label: 'Executive Dashboard', href: '/', icon: LayoutDashboard },
     ],
   },
   {
-    title: 'MARKETPLACE',
+    title: '2. COMMERCE & ORDERS',
     items: [
-      { label: 'Products', href: '/products', icon: ShoppingBag },
-      { label: 'Categories', href: '/categories', icon: Tag },
-      { label: 'Stores & Sellers', href: '/stores', icon: Store },
+      { label: 'Multi-Vendor Orders', href: '/orders', icon: ShoppingBag },
     ],
   },
   {
-    title: 'COMMERCE',
+    title: '3. CATALOG & TAXONOMY',
     items: [
-      { label: 'Orders', href: '/orders', icon: ShoppingBag },
-      { label: 'Payout Requests', href: '/payouts', icon: Wallet },
-      { label: 'Users', href: '/users', icon: Users },
+      { label: 'Products & Moderation', href: '/products', icon: ShoppingBag },
+      { label: 'Category & Attribute Builder', href: '/categories', icon: Tag },
+      { label: 'Services & Job Ads', href: '/services', icon: Briefcase },
     ],
   },
   {
-    title: 'GROWTH',
+    title: '4. VENDOR GOVERNANCE',
     items: [
+      { label: 'Sellers & Storefronts', href: '/stores', icon: Store },
+      { label: 'Vendor Subscriptions', href: '/subscriptions', icon: CreditCard },
+    ],
+  },
+  {
+    title: '5. CUSTOMERS & RBAC',
+    items: [
+      { label: 'User Profiles & RBAC', href: '/users', icon: Users },
+    ],
+  },
+  {
+    title: '6. FULFILLMENT & LOGISTICS',
+    items: [
+      { label: 'Deliveries & Driver Fleet', href: '/deliveries', icon: Truck },
+    ],
+  },
+  {
+    title: '7. FINANCE & LEDGER',
+    items: [
+      { label: 'Payout Requests & Ledger', href: '/payouts', icon: Wallet },
+    ],
+  },
+  {
+    title: '8. TRUST & SAFETY',
+    items: [
+      { label: 'Disputes & Escrow', href: '/disputes', icon: Scale },
+    ],
+  },
+  {
+    title: '9. MARKETING & MERCHANDISING',
+    items: [
+      { label: 'Platform Coupons', href: '/promotions', icon: Ticket },
       { label: 'Ad Campaigns', href: '/advertising', icon: Megaphone },
       { label: 'Short Links', href: '/short-links', icon: LinkIcon },
     ],
   },
   {
-    title: 'SYSTEM',
+    title: '10. SYSTEM & PLATFORM',
     items: [
+      { label: 'Platform Policies', href: '/policies', icon: FileText },
       { label: 'Account Lifecycle', href: '/lifecycle', icon: ShieldAlert },
       { label: 'Usage & Capacity', href: '/usage', icon: Activity },
-      { label: 'Settings', href: '/settings', icon: Settings },
+      { label: 'Settings & Controls', href: '/settings', icon: Settings },
     ],
   },
 ];
@@ -86,7 +128,7 @@ export default function Sidebar() {
           </div>
           <div>
             <p className="font-bold text-sm text-white tracking-wide">MARKETPLACE</p>
-            <p className="text-[10px] text-slate-500 font-medium">Admin Portal</p>
+            <p className="text-[10px] text-slate-500 font-medium">Admin OS</p>
           </div>
         </div>
       </div>
@@ -125,15 +167,9 @@ export default function Sidebar() {
 
       {/* Footer */}
       <div className="px-3 py-3 border-t border-slate-800 space-y-1">
-        <div className="px-3 py-2">
-          <div className="flex items-center justify-between text-[11px] text-slate-500 mb-1.5">
-            <span>Free Tier</span>
-            <span className="text-emerald-400 font-semibold">ACTIVE</span>
-          </div>
-          <div className="h-1 bg-slate-800 rounded-full overflow-hidden">
-            <div className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-full" style={{ width: '12%' }} />
-          </div>
-          <p className="text-[10px] text-slate-600 mt-1">~120 MB / 1 GB used</p>
+        <div className="px-3 py-2 flex items-center gap-2 text-xs text-slate-400">
+          <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span className="font-semibold text-slate-200">High-Performance Marketplace</span>
         </div>
         <button
           onClick={handleSignOut}
