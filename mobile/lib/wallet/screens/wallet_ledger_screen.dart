@@ -304,21 +304,28 @@ class _WalletLedgerScreenState extends ConsumerState<WalletLedgerScreen> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('Available for Payout', style: TextStyle(color: scheme.onPrimaryContainer.withOpacity(0.8), fontSize: 12)),
-                                const SizedBox(height: 4),
-                                Text(
-                                  currency.format(available),
-                                  style: TextStyle(
-                                    fontSize: 26,
-                                    fontWeight: FontWeight.bold,
-                                    color: scheme.onPrimaryContainer,
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('Available for Payout', style: TextStyle(color: scheme.onPrimaryContainer.withValues(alpha: 0.8), fontSize: 12)),
+                                  const SizedBox(height: 4),
+                                  FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      currency.format(available),
+                                      style: TextStyle(
+                                        fontSize: 26,
+                                        fontWeight: FontWeight.bold,
+                                        color: scheme.onPrimaryContainer,
+                                      ),
+                                    ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
+                            const SizedBox(width: 12),
                             ElevatedButton(
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: scheme.primary,
@@ -337,13 +344,23 @@ class _WalletLedgerScreenState extends ConsumerState<WalletLedgerScreen> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Row(
-                              children: [
-                                const Icon(Icons.hourglass_empty, size: 16, color: Colors.amber),
-                                const SizedBox(width: 6),
-                                Text('Pending Clearance: ${currency.format(pending)}', style: const TextStyle(fontSize: 12)),
-                              ],
+                            Expanded(
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.hourglass_empty, size: 16, color: Colors.amber),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      'Pending Clearance: ${currency.format(pending)}',
+                                      style: const TextStyle(fontSize: 12),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
+                            const SizedBox(width: 8),
                             const Text('T+2 Settlement Engine', style: TextStyle(fontSize: 11, color: Colors.grey)),
                           ],
                         ),
