@@ -20,6 +20,8 @@ import {
   Tag,
   ChevronRight,
   Truck,
+  Scale,
+  Ticket,
 } from 'lucide-react';
 
 const menuGroups = [
@@ -32,9 +34,10 @@ const menuGroups = [
   {
     title: 'MARKETPLACE',
     items: [
-      { label: 'Products', href: '/products', icon: ShoppingBag },
-      { label: 'Categories', href: '/categories', icon: Tag },
+      { label: 'Products & Moderation', href: '/products', icon: ShoppingBag },
+      { label: 'Categories Builder', href: '/categories', icon: Tag },
       { label: 'Stores & Sellers', href: '/stores', icon: Store },
+      { label: 'Vendor Subscriptions', href: '/subscriptions', icon: CreditCard },
     ],
   },
   {
@@ -42,13 +45,15 @@ const menuGroups = [
     items: [
       { label: 'Orders', href: '/orders', icon: ShoppingBag },
       { label: 'Deliveries & Logistics', href: '/deliveries', icon: Truck },
+      { label: 'Disputes & Trust', href: '/disputes', icon: Scale },
       { label: 'Payout Requests', href: '/payouts', icon: Wallet },
-      { label: 'Users', href: '/users', icon: Users },
+      { label: 'Users & RBAC', href: '/users', icon: Users },
     ],
   },
   {
-    title: 'GROWTH',
+    title: 'GROWTH & PROMOTIONS',
     items: [
+      { label: 'Platform Coupons', href: '/promotions', icon: Ticket },
       { label: 'Ad Campaigns', href: '/advertising', icon: Megaphone },
       { label: 'Short Links', href: '/short-links', icon: LinkIcon },
     ],
