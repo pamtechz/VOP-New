@@ -149,7 +149,7 @@ function LoginForm() {
       {/* Security Notice */}
       <p className="text-center text-xs text-slate-500 mt-6 flex items-center justify-center gap-1.5">
         <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-        <span>Saving you With Love & Secury</span>
+        <span>Secured with Enterprise End-to-End Encryption</span>
       </p>
     </div>
   );

@@ -42,6 +42,21 @@ export default async function AdminPoliciesPage() {
 
   const defaultPolicies = [
     {
+      key: 'about_us',
+      title: 'About Pamtechz Marketplace & Platform Mission',
+      content: 'Pamtechz Marketplace is an enterprise-grade multi-vendor platform empowering local merchants, buyers, and independent couriers. Our mission is to connect local commerce with verified escrow safety, multi-modal delivery networks, and transparent merchant tools.',
+    },
+    {
+      key: 'terms_of_service',
+      title: 'Terms of Service & User Conduct',
+      content: 'By accessing or operating a store on Pamtechz Marketplace, users agree to uphold fair trading standards, accurate product representations, prompt fulfillment, and respectful communication. Prohibited items, fraudulent listings, or unauthorized access will result in immediate account suspension.',
+    },
+    {
+      key: 'privacy_policy',
+      title: 'Privacy Policy & Data Security Guarantee',
+      content: 'We respect user data privacy. Personal information, order histories, and payment credentials are encrypted using industry-standard protocols. Location data collected for delivery routing is strictly used for order fulfillment and anti-robbery emergency SOS safety.',
+    },
+    {
       key: 'delivery_logistics',
       title: 'Local Delivery & Multi-Modal Logistics Policy',
       content: 'Local fulfillment supports Bicycles (eco short-haul), Motorbikes (express), Vehicles & Vans (cargo), Heavy Freight Trucks, and Verified Delivery Companies. Handshake PINs (4-digit pickup PIN & 4-digit buyer delivery OTP) are required for all dispatches.',

@@ -29,6 +29,7 @@ import '../messaging/screens/chat_screen.dart';
 import '../subscriptions/screens/subscription_plans_screen.dart';
 import '../services/screens/service_listings_screen.dart';
 import '../services/screens/post_service_ad_screen.dart';
+import '../account/screens/about_us_screen.dart';
 
 final _routerKey = GlobalKey<NavigatorState>();
 
@@ -136,6 +137,7 @@ GoRouter buildAppRouter(Ref ref) {
       GoRoute(path: '/driver', builder: (_, __) => const DriverConsoleScreen()),
       GoRoute(path: '/services', builder: (_, __) => const ServiceListingsScreen()),
       GoRoute(path: '/services/add', builder: (_, __) => const PostServiceAdScreen()),
+      GoRoute(path: '/about', builder: (_, __) => const AboutUsScreen()),
     ],
     errorBuilder: (context, state) => Scaffold(
       appBar: AppBar(title: const Text('Page Not Found')),

@@ -263,6 +263,13 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => context.push('/security'),
                 ),
+                ListTile(
+                  leading: Icon(Icons.info_outline, color: scheme.primary),
+                  title: const Text('About Us & Platform Policies'),
+                  subtitle: const Text('Admin-managed policies & terms', style: TextStyle(fontSize: 11)),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => context.push('/about'),
+                ),
 
                 const Divider(height: 24),
 
