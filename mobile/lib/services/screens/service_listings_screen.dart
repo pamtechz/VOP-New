@@ -33,24 +33,13 @@ class _ServiceListingsScreenState extends ConsumerState<ServiceListingsScreen> {
   Future<void> _fetchListings() async {
     setState(() => _isLoading = true);
     try {
-<<<<<<< HEAD
-      // 1. Purge expired listings past interview date
-      await Supabase.instance.client.rpc('purge_expired_service_listings');
-
-      // 2. Fetch active listings
-=======
       // Fetch active, non-expired listings. Expiry cleanup is a server-only job.
->>>>>>> 1babfb190376a67ce2ed11a361066ca33f8142da
       var query = Supabase.instance.client
           .from('service_listings')
           .select('*')
           .eq('is_active', true)
-<<<<<<< HEAD
-          .gte('interview_date', DateTime.now().toIso8601String());
-=======
           .gte('interview_date', DateTime.now().toIso8601String())
           .gte('expires_at', DateTime.now().toIso8601String());
->>>>>>> 1babfb190376a67ce2ed11a361066ca33f8142da
 
       if (_selectedCategory != 'all') {
         query = query.eq('category', _selectedCategory);
@@ -72,8 +61,6 @@ class _ServiceListingsScreenState extends ConsumerState<ServiceListingsScreen> {
     }
   }
 
-<<<<<<< HEAD
-=======
   Future<void> _deleteOwnListing(Map<String, dynamic> item) async {
     final user = Supabase.instance.client.auth.currentUser;
     if (user == null || item['user_id'] != user.id) return;
@@ -115,15 +102,11 @@ class _ServiceListingsScreenState extends ConsumerState<ServiceListingsScreen> {
     }
   }
 
->>>>>>> 1babfb190376a67ce2ed11a361066ca33f8142da
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-<<<<<<< HEAD
-=======
     final currentUserId = Supabase.instance.client.auth.currentUser?.id;
->>>>>>> 1babfb190376a67ce2ed11a361066ca33f8142da
 
     return Scaffold(
       appBar: AppBar(
@@ -244,11 +227,6 @@ class _ServiceListingsScreenState extends ConsumerState<ServiceListingsScreen> {
                                       ],
                                     ),
                                     const SizedBox(height: 10),
-<<<<<<< HEAD
-                                    Text(
-                                      item['title'] as String? ?? 'Untitled Listing',
-                                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-=======
                                     Row(
                                       children: [
                                         Expanded(
@@ -277,7 +255,6 @@ class _ServiceListingsScreenState extends ConsumerState<ServiceListingsScreen> {
                                             ],
                                           ),
                                       ],
->>>>>>> 1babfb190376a67ce2ed11a361066ca33f8142da
                                     ),
                                     const SizedBox(height: 6),
                                     Text(

@@ -20,11 +20,7 @@ dependencies:
   uuid: ^4.5.1
   cupertino_icons: ^1.0.8
   crypto: ^3.0.6
-<<<<<<< HEAD
-  url_launcher: ^6.3.1
-=======
   url_launcher: ^6.3.3
->>>>>>> 1babfb190376a67ce2ed11a361066ca33f8142da
 
 dev_dependencies:
   flutter_test:

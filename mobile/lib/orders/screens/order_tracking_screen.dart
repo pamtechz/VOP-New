@@ -35,8 +35,6 @@ class OrderTrackingScreen extends ConsumerWidget {
   final String orderId;
   const OrderTrackingScreen({super.key, required this.orderId});
 
-<<<<<<< HEAD
-=======
   Future<void> _callCourier(BuildContext context, String? phone) async {
     final normalized = phone?.replaceAll(RegExp(r'[^0-9+]'), '') ?? '';
     if (normalized.isEmpty) {
@@ -56,7 +54,6 @@ class OrderTrackingScreen extends ConsumerWidget {
     }
   }
 
->>>>>>> 1babfb190376a67ce2ed11a361066ca33f8142da
   void _showReviewDialog(
     BuildContext context,
     WidgetRef ref, {
@@ -397,8 +394,6 @@ class OrderTrackingScreen extends ConsumerWidget {
                               ),
                             ],
                           ),
-<<<<<<< HEAD
-=======
                           const SizedBox(height: 12),
                           SizedBox(
                             width: double.infinity,
@@ -411,7 +406,6 @@ class OrderTrackingScreen extends ConsumerWidget {
                               label: const Text('Call Courier'),
                             ),
                           ),
->>>>>>> 1babfb190376a67ce2ed11a361066ca33f8142da
                         ],
                       ),
                     ),

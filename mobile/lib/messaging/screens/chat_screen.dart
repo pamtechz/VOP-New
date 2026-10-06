@@ -29,10 +29,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   Map<String, dynamic>? _attachedProduct;
   bool _isLoading = true;
   bool _isSending = false;
-<<<<<<< HEAD
-=======
   int _editWindowMinutes = 15;
->>>>>>> 1babfb190376a67ce2ed11a361066ca33f8142da
   RealtimeChannel? _realtimeChannel;
 
   @override
@@ -49,8 +46,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     }
 
     try {
-<<<<<<< HEAD
-=======
       final editSetting = await SupabaseService.client
           .from('platform_settings')
           .select('value')
@@ -59,7 +54,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       _editWindowMinutes =
           int.tryParse(editSetting?['value']?.toString() ?? '') ?? 15;
 
->>>>>>> 1babfb190376a67ce2ed11a361066ca33f8142da
       // 1. Fetch store name for app bar
       final store = await SupabaseService.client
           .from('stores')
@@ -138,8 +132,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             _scrollToBottom();
           }
         },
-<<<<<<< HEAD
-=======
         onUpdatedMessage: (msg) {
           if (!mounted) return;
           final msgId = msg['id'];
@@ -150,7 +142,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             });
           }
         },
->>>>>>> 1babfb190376a67ce2ed11a361066ca33f8142da
       );
     } catch (e) {
       if (mounted) {
@@ -182,13 +173,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     super.dispose();
   }
 
-<<<<<<< HEAD
-  Future<void> _editMessage(Map<String, dynamic> msg) async {
-    final msgId = msg['id'] as String;
-    final currentContent = msg['content'] as String? ?? '';
-    final controller = TextEditingController(text: currentContent);
-
-=======
   bool _canEditMessage(Map<String, dynamic> msg, String? userId) {
     if (userId == null || msg['sender_id'] != userId) return false;
     final rawCreatedAt = msg['created_at']?.toString();
@@ -204,7 +188,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final currentContent = msg['content'] as String? ?? '';
     final controller = TextEditingController(text: currentContent);
 
->>>>>>> 1babfb190376a67ce2ed11a361066ca33f8142da
     final updatedText = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -225,11 +208,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       try {
         await SupabaseService.client
             .from('messages')
-<<<<<<< HEAD
-            .update({'content': updatedText, 'is_edited': true})
-=======
             .update({'content': updatedText})
->>>>>>> 1babfb190376a67ce2ed11a361066ca33f8142da
             .eq('id', msgId);
 
         if (mounted) {
@@ -408,19 +387,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                                 : '';
 
                             final isEdited = msg['is_edited'] == true;
-<<<<<<< HEAD
-=======
                             final canEdit = _canEditMessage(msg, currentUser?.id);
->>>>>>> 1babfb190376a67ce2ed11a361066ca33f8142da
 
                             return Align(
                               alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
                               child: GestureDetector(
-<<<<<<< HEAD
-                                onLongPress: isMe ? () => _editMessage(msg) : null,
-=======
                                 onLongPress: canEdit ? () => _editMessage(msg) : null,
->>>>>>> 1babfb190376a67ce2ed11a361066ca33f8142da
                                 child: Container(
                                   margin: const EdgeInsets.symmetric(vertical: 4),
                                   constraints: BoxConstraints(
