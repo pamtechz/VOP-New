@@ -59,6 +59,10 @@ USING (
     )
 );
 
+-- Ensure backward schema compatibility for messages table
+ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS skip_broadcast BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS attachment_url_type TEXT DEFAULT 'none';
+
 -- Function to purge/deactivate expired listings past their interview date
 CREATE OR REPLACE FUNCTION public.purge_expired_service_listings()
 RETURNS INTEGER

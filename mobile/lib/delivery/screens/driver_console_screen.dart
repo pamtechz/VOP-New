@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/services/supabase_service.dart';
 import '../../core/providers/currency_provider.dart';
 
+import '../widgets/prominent_location_disclosure_modal.dart';
+
 final activeDriverJobsProvider =
     FutureProvider<List<Map<String, dynamic>>>((ref) async {
   final user = SupabaseService.client.auth.currentUser;
@@ -232,7 +234,32 @@ class _DriverConsoleScreenState extends ConsumerState<DriverConsoleScreen> {
                           : scheme.outline)),
               Switch(
                 value: _isOnline,
-                onChanged: (val) => setState(() => _isOnline = val),
+                onChanged: (val) {
+                  if (val) {
+                    ProminentLocationDisclosureModal.show(
+                      context: context,
+                      onAccept: () {
+                        setState(() => _isOnline = true);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Location tracking active for live courier dispatch & SOS.'),
+                            backgroundColor: Color(0xFF10B981),
+                          ),
+                        );
+                      },
+                      onDeny: () {
+                        setState(() => _isOnline = false);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Background location denied. Operating in manual offline mode.'),
+                          ),
+                        );
+                      },
+                    );
+                  } else {
+                    setState(() => _isOnline = false);
+                  }
+                },
               ),
             ],
           ),
