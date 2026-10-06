@@ -60,7 +60,7 @@ async function organizationAction<T=Record<string,unknown>>(action:string,data:R
 function clearInviteFromAddress(){
   const url=new URL(window.location.href);
   url.searchParams.delete('invite');
-  window.history.replaceState({},'',url.pathname+(url.searchParams.size?'?'+url.searchParams.toString():'')+url.hash);
+  window.history.replaceState(window.history.state,'',url.pathname+(url.searchParams.size?'?'+url.searchParams.toString():'')+url.hash);
 }
 
 export default function InboxPage({
