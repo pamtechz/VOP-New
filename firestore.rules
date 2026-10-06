@@ -851,6 +851,12 @@ service cloud.firestore {
     match /passkeyCredentials/{credentialId} {
       allow read, write: if false;
     }
+    match /passkeyChallenges/{challengeId} {
+      allow read, write: if false;
+    }
+    match /authRateLimits/{bucketId} {
+      allow read, write: if false;
+    }
 
     // Operational health, backup runs and alert deduplication are server-only.
     // Even Super Admin browser sessions consume these records through the
