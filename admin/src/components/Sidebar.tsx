@@ -22,36 +22,67 @@ import {
   Truck,
   Scale,
   Ticket,
+  BarChart3,
+  MessageSquare,
+  ShieldCheck,
+  Building2,
+  Globe,
+  LifeBuoy,
 } from 'lucide-react';
 
 const menuGroups = [
   {
-    title: 'OVERVIEW',
+    title: '1. COMMAND CENTER',
     items: [
-      { label: 'Dashboard', href: '/', icon: LayoutDashboard },
+      { label: 'Executive Dashboard', href: '/', icon: LayoutDashboard },
     ],
   },
   {
-    title: 'MARKETPLACE',
+    title: '2. COMMERCE & ORDERS',
+    items: [
+      { label: 'Multi-Vendor Orders', href: '/orders', icon: ShoppingBag },
+    ],
+  },
+  {
+    title: '3. CATALOG & TAXONOMY',
     items: [
       { label: 'Products & Moderation', href: '/products', icon: ShoppingBag },
-      { label: 'Categories Builder', href: '/categories', icon: Tag },
-      { label: 'Stores & Sellers', href: '/stores', icon: Store },
+      { label: 'Category & Attribute Builder', href: '/categories', icon: Tag },
+    ],
+  },
+  {
+    title: '4. VENDOR GOVERNANCE',
+    items: [
+      { label: 'Sellers & Storefronts', href: '/stores', icon: Store },
       { label: 'Vendor Subscriptions', href: '/subscriptions', icon: CreditCard },
     ],
   },
   {
-    title: 'COMMERCE & LOGISTICS',
+    title: '5. CUSTOMERS & RBAC',
     items: [
-      { label: 'Orders', href: '/orders', icon: ShoppingBag },
-      { label: 'Deliveries & Logistics', href: '/deliveries', icon: Truck },
-      { label: 'Disputes & Trust', href: '/disputes', icon: Scale },
-      { label: 'Payout Requests', href: '/payouts', icon: Wallet },
-      { label: 'Users & RBAC', href: '/users', icon: Users },
+      { label: 'User Profiles & RBAC', href: '/users', icon: Users },
     ],
   },
   {
-    title: 'GROWTH & PROMOTIONS',
+    title: '6. FULFILLMENT & LOGISTICS',
+    items: [
+      { label: 'Deliveries & Driver Fleet', href: '/deliveries', icon: Truck },
+    ],
+  },
+  {
+    title: '7. FINANCE & LEDGER',
+    items: [
+      { label: 'Payout Requests & Ledger', href: '/payouts', icon: Wallet },
+    ],
+  },
+  {
+    title: '8. TRUST & SAFETY',
+    items: [
+      { label: 'Disputes & Escrow', href: '/disputes', icon: Scale },
+    ],
+  },
+  {
+    title: '9. MARKETING & MERCHANDISING',
     items: [
       { label: 'Platform Coupons', href: '/promotions', icon: Ticket },
       { label: 'Ad Campaigns', href: '/advertising', icon: Megaphone },
@@ -59,11 +90,11 @@ const menuGroups = [
     ],
   },
   {
-    title: 'SYSTEM',
+    title: '10. SYSTEM & PLATFORM',
     items: [
       { label: 'Account Lifecycle', href: '/lifecycle', icon: ShieldAlert },
       { label: 'Usage & Capacity', href: '/usage', icon: Activity },
-      { label: 'Settings', href: '/settings', icon: Settings },
+      { label: 'Settings & Controls', href: '/settings', icon: Settings },
     ],
   },
 ];
