@@ -7,7 +7,7 @@ import {
 import { getStoredGuides, getStoredSettings } from '../../services/storage';
 import { getTranslation, getUiLocale } from '../../services/i18n';
 import { calculateCurriculumProgress } from '../../services/progress';
-import { lessonIsComplete, lessonScoreForDisplay } from '../../services/lessonProgress';
+import { isLessonUnlocked, lessonIsComplete, lessonScoreForDisplay } from '../../services/lessonProgress';
 import './guide-sections.css';
 
 interface DiscoverGuideViewProps {
@@ -192,6 +192,7 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
 
           {studyLessons.flatMap((lesson,lessonIndex)=>{
             const completed=lessonIsComplete(guide,lesson,currentUser,threshold);
+            const unlocked=isLessonUnlocked(guide,lessonIndex,currentUser,threshold,studyLessons);
             const pages=lesson.contentPages||[];
             if(guide.learnerEntryMode==='sections'&&lesson.chapters?.length){
               const chapters=lesson.chapters;
@@ -210,13 +211,16 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
                   ?attachedAssessments(lesson,'chapter',chapter.id):[];
                 const lessonTests=chapterIndex===chapters.length-1&&sectionIndex===chapter.sections.length-1
                   ?attachedAssessments(lesson,'lesson'):[];
-                return <article className={'vop-section-study-card '+(completed?'completed':'')} key={lesson.id+':'+section.id}>
-                  <button type="button" className="vop-section-study-main" onClick={()=>onSelectLesson(lesson,actualIndex)}>
-                    <span className="vop-section-study-marker">{completed?<CheckCircle2 size={24}/>:sectionNumber}</span>
+                return <article className={'vop-section-study-card '+(completed?'completed':!unlocked?'locked':'')} key={lesson.id+':'+section.id}>
+                  <button type="button" className="vop-section-study-main"
+                    disabled={!unlocked}
+                    onClick={()=>unlocked&&onSelectLesson(lesson,actualIndex)}
+                    aria-disabled={!unlocked}>
+                    <span className="vop-section-study-marker">{completed?<CheckCircle2 size={24}/>:!unlocked?<Lock size={20}/>:sectionNumber}</span>
                     <span className="vop-section-study-copy">
-                      <small>{t('guide.section','Section')} {sectionNumber}</small>
+                      <small>{t('guide.section','Section')} {sectionNumber}{!unlocked?' · '+t('guide.locked','Locked'):''}</small>
                       <strong>{section.title}</strong>
-                      <em>{chapter.title}{lesson.title?' · '+lesson.title:''}</em>
+                      <em>{!unlocked?t('guide.complete_prev_unlock','Complete previous lesson to unlock'):(chapter.title+(lesson.title?' · '+lesson.title:''))}</em>
                     </span>
                     <ChevronRight size={19}/>
                   </button>
@@ -226,23 +230,26 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
                       pages:sectionPages.length===1?t('guide.page_singular','page'):t('guide.page_plural','pages'),
                     })}</span>
                     <span><Clock size={14}/>{t('guide.read_minutes','~{minutes} min read',{minutes:readMinutes(sectionPages,fallbackMinutes)})}</span>
-                    <div className="vop-section-study-tests">
+                    {unlocked&&<div className="vop-section-study-tests">
                       {sectionTests.map(item=>inlineAssessment(item,t('guide.take_test','Take test')))}
                       {chapterTests.map(item=>inlineAssessment(item,t('guide.chapter_test','Chapter test')))}
                       {lessonTests.map(item=>inlineAssessment(item,t('guide.lesson_test','Lesson test')))}
-                    </div>
+                    </div>}
                   </div>
                 </article>;
               }));
             }
             const lessonTests=attachedAssessments(lesson,'lesson');
-            return [<article className={'vop-section-study-card vop-lesson-study-card '+(completed?'completed':'')} key={lesson.id}>
-              <button type="button" className="vop-section-study-main" onClick={()=>onSelectLesson(lesson)}>
-                <span className="vop-section-study-marker">{completed?<CheckCircle2 size={24}/>:lessonIndex+1}</span>
+            return [<article className={'vop-section-study-card vop-lesson-study-card '+(completed?'completed':!unlocked?'locked':'')} key={lesson.id}>
+              <button type="button" className="vop-section-study-main"
+                disabled={!unlocked}
+                onClick={()=>unlocked&&onSelectLesson(lesson)}
+                aria-disabled={!unlocked}>
+                <span className="vop-section-study-marker">{completed?<CheckCircle2 size={24}/>:!unlocked?<Lock size={22}/>:lessonIndex+1}</span>
                 <span className="vop-section-study-copy">
-                  <small>{t('guide.lesson','Lesson')} {lesson.lessonNumber}</small>
+                  <small>{t('guide.lesson','Lesson')} {lesson.lessonNumber}{!unlocked?' · '+t('guide.locked','Locked'):''}</small>
                   <strong>{lesson.title}</strong>
-                  {lesson.description&&<em>{lesson.description}</em>}
+                  <em>{!unlocked?t('guide.complete_prev_unlock','Complete previous lesson to unlock'):(lesson.description||'')}</em>
                 </span>
                 <ChevronRight size={19}/>
               </button>
@@ -252,9 +259,9 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
                   pages:pages.length===1?t('guide.page_singular','page'):t('guide.page_plural','pages'),
                 })}</span>
                 <span><Clock size={14}/>{t('guide.read_minutes','~{minutes} min read',{minutes:readMinutes(pages,lesson.estimatedMinutes||15)})}</span>
-                <div className="vop-section-study-tests">
+                {unlocked&&<div className="vop-section-study-tests">
                   {lessonTests.map(item=>inlineAssessment(item,t('guide.take_test','Take test')))}
-                </div>
+                </div>}
               </div>
             </article>];
           })}

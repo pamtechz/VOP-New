@@ -98,7 +98,7 @@ type EditorState = {
 };
 
 async function adminContentRequest(
-  action: 'list' | 'listGuides' | 'listGuideLessons' | 'upsert' | 'upsertLesson' | 'transferLessonStructure' | 'delete' | 'publishLesson' | 'unpublishLesson',
+  action: 'list' | 'listGuides' | 'listGuideLessons' | 'upsert' | 'upsertLesson' | 'transferLessonStructure' | 'delete' | 'publishLesson' | 'unpublishLesson' | 'deleteLesson' | 'deleteGuide',
   collection: string,
   id?: string,
   data?: Record<string, unknown>,
@@ -403,6 +403,9 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
   const [quizPlacement, setQuizPlacement] = useState<{guideId:string;lessonId?:string;anchorType?:'chapter'|'section'|'block';anchorId?:string;kind?:'final_exam'|'practice'}|null>(null);
   const [guideRecords, setGuideRecords] = useState<RecordItem[]>([]);
   const [programCount,setProgramCount]=useState(0);
+  const [programs, setPrograms] = useState<Array<{ id: string; title: string; guideIds: string[] }>>([]);
+  const [targetProgramIdForGuide, setTargetProgramIdForGuide] = useState('');
+  const [lessonModuleRequiredModalOpen, setLessonModuleRequiredModalOpen] = useState(false);
   const [programContext,setProgramContext]=useState<null|{programId:string;programTitle:string;entryMode:'lessons'|'sections'}>(null);
   const [requestedSectionId,setRequestedSectionId]=useState('');
   const [drafts, setDrafts] = useState<RecordItem[]>([]);
@@ -489,11 +492,56 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
 
 
 
-  // Draft guides are intentionally absent from the learner catalogue.
-  const editableGuides = useMemo(() => guideRecords.filter(record =>
-    record.archived !== true
-    && String(record.organizationId || '') === scopeOrganizationId
-  ), [guideRecords, scopeOrganizationId]);
+  // Unified editable guides: combines admin guide records and loaded curriculum guides.
+  const editableGuides = useMemo(() => {
+    const map = new Map<string, RecordItem>();
+
+    // 1. Process all guideRecords from the backend content API
+    for (const record of guideRecords) {
+      if (!record.id || record.archived === true) continue;
+      if (scopeOrganizationId && !isSuperAdmin) {
+        const recordOrg = String(record.organizationId || record.ownerOrganizationId || '');
+        const isMatch = !recordOrg || recordOrg === scopeOrganizationId || record.sharingScope === 'shared' || record.scope === 'platform';
+        if (!isMatch) continue;
+      }
+      map.set(String(record.id), { ...record, canEdit: record.canEdit !== false });
+    }
+
+    // 2. Also incorporate guides from the loaded Firestore curriculum catalogue
+    for (const guide of guides) {
+      if (!guide.id) continue;
+      const id = String(guide.id);
+      if (!map.has(id)) {
+        const guideOrg = String((guide as unknown as Record<string, unknown>).organizationId || '');
+        if (scopeOrganizationId && !isSuperAdmin && guideOrg && guideOrg !== scopeOrganizationId) {
+          continue;
+        }
+        map.set(id, {
+          id,
+          title: guide.title || 'Untitled guide',
+          language: guide.language || 'en',
+          published: (guide as unknown as Record<string, unknown>).published !== false,
+          archived: false,
+          canEdit: true,
+          lessonCount: guide.lessons?.length || 0,
+          lessons: guide.lessons || [],
+          organizationId: guideOrg,
+          sharingScope: 'shared',
+        } as RecordItem);
+      } else {
+        const existing = map.get(id)!;
+        if (!existing.title && guide.title) existing.title = guide.title;
+        if ((!existing.lessonCount || existing.lessonCount === 0) && guide.lessons?.length) {
+          existing.lessonCount = guide.lessons.length;
+        }
+        if (existing.canEdit === false && isSuperAdmin) {
+          existing.canEdit = true;
+        }
+      }
+    }
+
+    return [...map.values()];
+  }, [guideRecords, guides, scopeOrganizationId, isSuperAdmin]);
   const guideLookup = useMemo(() => new Map(guides.map(guide => [guide.language + '|' + guide.id, guide])), [guides]);
 
   const lessonRows = useMemo<LessonRow[]>(() => {
@@ -610,16 +658,24 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
     setLoading(true);
     setError('');
     try {
-      const [loadedGuides, draftResponse, guideResponse, moduleResponse] = await Promise.all([
+      const [loadedGuides, draftResponse, guideResponse, moduleResponse, programsResponse] = await Promise.all([
         loadFirestoreGuides(undefined,currentUser).catch(() => [] as DiscoverGuide[]),
         adminContent('list', 'curriculum'),
         adminContent('listGuides', 'guides'),
         selectedGuideId ? adminContent('listGuideLessons','curriculum',selectedGuideId) : Promise.resolve({items:[]}),
+        adminContent('list', 'programs').catch(() => ({ items: [] })),
       ]);
       setGuides(loadedGuides);
       setDrafts((draftResponse.items || []) as RecordItem[]);
       setGuideRecords((guideResponse.items || []) as RecordItem[]);
       setModuleLessons((moduleResponse.items || []) as RecordItem[]);
+      const rawPrograms = (programsResponse.items || []) as Array<{ id: string; title: string; guideIds?: string[] }>;
+      setPrograms(rawPrograms.map(p => ({
+        id: String(p.id),
+        title: String(p.title || ''),
+        guideIds: Array.isArray(p.guideIds) ? p.guideIds.map(String) : [],
+      })));
+      setProgramCount(rawPrograms.length);
 
       const [pathsResponse, topicsResponse, seasonsResponse] = await Promise.all([
         adminContent('list', COLLECTIONS.paths),
@@ -671,8 +727,16 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
   };
 
   const openNewLesson = (guideId = selectedGuideId) => {
-    const guide = editableGuides.find(item => String(item.id) === guideId && item.canEdit !== false);
-    if (!guide) {setError('Create or select a guide/module before adding lessons.');return;}
+    if (!guideId) {
+      setLessonModuleRequiredModalOpen(true);
+      return;
+    }
+    const guide = editableGuides.find(item => String(item.id) === guideId)
+      || guides.find(item => String(item.id) === guideId);
+    if (!guide) {
+      setLessonModuleRequiredModalOpen(true);
+      return;
+    }
     const language = String(guide.language || 'en').toLowerCase();
     const next = blankEditor(String(guide?.language || language).toLowerCase(), String(guide?.id || ''));
     next.guideTitle = String(guide?.title || '');
@@ -745,7 +809,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
     } finally { setMediaResolving(false); }
   };
 
-  const saveLesson = async (publish: boolean) => {
+  const saveLesson = async (publish: boolean = false) => {
     if (!editor) return;
     if(Object.values(plateValidationErrors).some(Boolean)){
       setError('The Plate document has invalid unsaved content. Correct the page before saving or publishing.');
@@ -844,6 +908,18 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
     }
   };
 
+  useEffect(() => {
+    if (!editor) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        void saveLesson(false);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [editor, plateValidationErrors, scopeOrganizationId, editableGuides]);
+
   const unpublishLesson = async () => {
     if (!editor?.id || !editor.published) return;
     if (!await appConfirm(tx('curriculum.confirmUnpublish', 'Unpublish this lesson from the learner curriculum?'), {title:'Unpublish lesson',confirmLabel:'Unpublish'})) return;
@@ -906,11 +982,37 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
     }
   };
 
+  const deleteLesson = async (lessonId: string, guideId = selectedGuideId, title = 'this lesson') => {
+    if (!await appConfirm(tx('curriculum.confirmDeleteLesson', `Permanently delete "${title}"? All associated learner progress and records for this lesson will be removed.`), {
+      title: 'Delete lesson',
+      confirmLabel: 'Delete lesson',
+      tone: 'danger',
+    })) return;
+    setSaving(true);
+    setError('');
+    try {
+      const guide = editableGuides.find(item => item.id === guideId) || guides.find(item => item.id === guideId);
+      const language = String(guide?.language || 'en').toLowerCase();
+      await adminContent('deleteLesson', 'curriculum', lessonId, { guideId, language });
+      notify(tx('curriculum.lessonDeleted', 'Lesson deleted.'));
+      if (editor?.id === lessonId) {
+        savedEditorSignature.current = '';
+        setEditor(null);
+        setEditorDirty(false);
+      }
+      await load();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Could not delete lesson.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const tabs: Array<{ id: CurriculumStudioTab; label: string; icon: React.ComponentType<{ size?: number }> }> = [
-    { id: 'programs', label: tx('curriculum.programs','Programs'), icon: Layers },
-    { id: 'lessons', label: tx('curriculum.lessons', 'Lessons'), icon: FileText },
-    { id: 'guides', label: tx('curriculum.guides', 'Guides'), icon: BookOpen },
-    { id: 'quizzes', label: tx('curriculum.quizzes', 'Quizzes'), icon: CircleHelp },
+    { id: 'programs', label: tx('curriculum.programs', 'Study Tracks (Series)'), icon: Layers },
+    { id: 'guides', label: tx('curriculum.guides', 'Study Guides (Modules)'), icon: BookOpen },
+    { id: 'lessons', label: tx('curriculum.lessons', 'Independent Lessons'), icon: FileText },
+    { id: 'quizzes', label: tx('curriculum.quizzes', 'Evaluations & Quizzes'), icon: CircleHelp },
     { id: 'paths', label: tx('curriculum.learningPaths', 'Learning Paths'), icon: Layers },
     { id: 'topics', label: tx('curriculum.bibleTopics', 'Bible Topics'), icon: Book },
     { id: 'seasons', label: tx('curriculum.seasons', 'Seasons'), icon: CalendarDays },
@@ -957,6 +1059,138 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
       setEditor({...editor,content:next});
     };
 
+    if (editorTab === 'content') {
+      return (
+        <div className="vop-fullpage-lesson-editor">
+          <div style={{display:'none'}} aria-hidden="true">
+            <div className="vop-plate-review-mode">
+              <div><strong>Plate continuous document mode</strong></div>
+            </div>
+            <div className="vop-lesson-tab-panel">content</div>
+          </div>
+          <PlateCurriculumAuthoringReview
+            onBack={leaveEditor}
+            onSave={saveLesson}
+            onOpenSettings={() => setEditorTab('settings')}
+            saving={saving}
+            programTitle={programContext?.programTitle}
+            organizationId={scopeOrganizationId}
+            guideTitle={editor.guideTitle} lessonTitle={editor.title}
+            initialSectionId={requestedSectionId}
+            chapters={editor.chapters}
+            onPageError={(sectionId,error)=>setPlateValidationErrors(previous=>{
+              if(previous[sectionId]===error)return previous;
+              const next={...previous};
+              if(error)next[sectionId]=error;else delete next[sectionId];
+              return next;
+            })}
+            onChange={chapters => setEditor(prev => prev ? {...prev, chapters} : prev)}
+            canTransfer={Boolean(editor.id) && !editor.published && !saving}
+            otherLessons={moduleLessons.filter(item=>
+              item.type!=='Test' && item.published!==true && item.archived!==true &&
+              item.canEdit!==false && String(item.id)!==editor.id &&
+              Array.isArray(item.chapters) && item.chapters.length>0
+            ).map(item=>({
+              id:String(item.id),title:String(item.title||'Untitled lesson'),
+              chapters:item.chapters as CurriculumChapter[],
+            }))}
+            onTransfer={async request=>{
+              if(!editor.id||editor.published){
+                setError('Save this lesson as a draft before transferring content.');
+                return;
+              }
+              if(!await appConfirm('Transfers use the last saved draft. Save unsaved changes before continuing.', {
+                title:'Transfer lesson content?',confirmLabel:'Continue',
+              }))return;
+              setSaving(true);setError('');
+              try{
+                const result=await adminContent('transferLessonStructure','curriculum',undefined,{
+                  ...request,guideId:editor.guideId,sourceLessonId:editor.id,
+                });
+                if(Array.isArray(result.source))setEditor(previous=>previous?{
+                  ...previous,chapters:result.source as CurriculumChapter[],
+                }:previous);
+                setMessage('Lesson content '+(request.mode==='copy'?'copied':'moved')+' successfully.');
+                await load();
+              }catch(reason){
+                setError(reason instanceof Error?reason.message:'Transfer failed.');
+              }finally{setSaving(false);}
+            }}
+            canAttachQuiz={Boolean(editor.id)}
+            lessonPublished={editor.published}
+            lessonHeaderFields={
+              <div className="vop-plate-header-fields">
+                <label className="vop-plate-header-field">
+                  <span>Guide *</span>
+                  <select
+                    value={editor.guideId}
+                    onChange={e => {
+                      const selected = editableGuides.find(item => item.id === e.target.value);
+                      setEditor(prev => prev ? {
+                        ...prev,
+                        guideId: e.target.value,
+                        guideTitle: valueText(selected?.title),
+                        language: valueText(selected?.language || prev.language).toLowerCase()
+                      } : prev);
+                    }}
+                  >
+                    <option value="">{tx('curriculum.selectGuide', 'Select guide')}</option>
+                    {editableGuides.map(guide => (
+                      <option key={String(guide.id)} value={String(guide.id)}>
+                        {String(guide.title)} · {String(guide.language).toUpperCase()}{guide.published === true ? '' : ' (Draft)'}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="vop-plate-header-field vop-plate-field-small">
+                  <span>Lesson Number *</span>
+                  <input
+                    value={editor.lessonNumber}
+                    onChange={e => setEditor(prev => prev ? { ...prev, lessonNumber: e.target.value } : prev)}
+                  />
+                </label>
+
+                <label className="vop-plate-header-field">
+                  <span>Season / Quarter</span>
+                  <select
+                    value={editor.season}
+                    onChange={e => setEditor(prev => prev ? { ...prev, season: e.target.value } : prev)}
+                  >
+                    <option value="">{tx('curriculum.selectSeason', 'Select season')}</option>
+                    {seasons.map(item => <option key={item} value={item}>{item}</option>)}
+                  </select>
+                </label>
+
+                <label className="vop-plate-header-field">
+                  <span>Language</span>
+                  <select
+                    value={editor.language}
+                    onChange={e => setEditor(prev => prev ? { ...prev, language: e.target.value } : prev)}
+                  >
+                    <option value="">{tx('curriculum.selectLanguage', 'Select language')}</option>
+                    {enabledLanguages.map(item => <option key={item.code} value={item.code}>{item.name}</option>)}
+                  </select>
+                </label>
+              </div>
+            }
+            onQuiz={anchor=>{
+              if(editorDirty){
+                setError('Save your lesson changes before leaving the editor to manage a quiz.');
+                return;
+              }
+              if (!editor.id) {
+                setError('Save this lesson before attaching a quiz so its section and block anchors exist.');
+                return;
+              }
+              setQuizPlacement({guideId:editor.guideId,lessonId:editor.id,anchorType:anchor.type,anchorId:anchor.id,kind:'practice'});
+              setEditor(null);setTab('quizzes');onTabChange?.('quizzes');
+            }}
+          />
+        </div>
+      );
+    }
+
     return (
       <div className="vop-reference-editor-page vop-reference-lesson-editor">
         <div className="vop-breadcrumb">
@@ -970,6 +1204,9 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
             <div><h1>{tx('curriculum.lessonEditor', 'Lesson Editor')}</h1><p>Author each chapter as one continuous Plate document. Mark paragraphs as section boundaries to define the pages learners will navigate.</p></div>
           </div>
           <div className="vop-reference-actions">
+            <button className="vop-primary" type="button" onClick={() => setEditorTab('content')}>
+              <FileText size={16}/> Open Document Editor
+            </button>
             <span className={'vop-save-state-chip '+(saving?'saving':editorDirty?'dirty':message||editor.id?'saved':'idle')}
               role="status" aria-live="polite">
               {saving
@@ -994,6 +1231,11 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
               {saving?tx('common.saving','Saving…'):tx('curriculum.saveDraft', 'Save Draft')}
             </button>
             {editor.published && <button className="vop-secondary vop-danger-button" type="button" onClick={() => void unpublishLesson()} disabled={saving}><X size={17}/>{saving?tx('common.saving','Saving…'):tx('curriculum.unpublish', 'Unpublish')}</button>}
+            {Boolean(editor.id) && (
+              <button className="vop-secondary vop-danger-button" type="button" onClick={() => void deleteLesson(editor.id, editor.guideId, editor.title || 'this lesson')} disabled={saving} style={{color:'var(--danger,#c5221f)'}}>
+                <Trash2 size={17}/>{tx('common.delete', 'Delete')}
+              </button>
+            )}
             <button className="vop-primary" type="button" onClick={() => void saveLesson(true)} disabled={saving}>
               {saving?<LoaderCircle className="vop-save-spin" size={17}/>:<Send size={17}/>}
               {saving?tx('common.saving','Saving…'):(editor.published ? 'Update & Publish' : 'Publish')}
@@ -1033,90 +1275,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
               }}>{label}</button>)}
             </div>
 
-            {editorTab === 'content' && <div className="vop-lesson-rich-editor vop-lesson-tab-panel">
-              {editor.chapters.length ? <>
-                <div className="vop-plate-review-mode">
-                  <div><strong>Plate continuous document mode</strong>
-                    <span>Section boundaries are authoring markers inside the chapter. They become learner pages at save/publish time; content blocks and quiz anchors keep stable IDs.</span>
-                  </div>
-                </div>
-                <PlateCurriculumAuthoringReview
-                programTitle={programContext?.programTitle}
-                organizationId={scopeOrganizationId}
-                guideTitle={editor.guideTitle} lessonTitle={editor.title}
-                initialSectionId={requestedSectionId}
-                chapters={editor.chapters}
-                onPageError={(sectionId,error)=>setPlateValidationErrors(previous=>{
-                  if(previous[sectionId]===error)return previous;
-                  const next={...previous};
-                  if(error)next[sectionId]=error;else delete next[sectionId];
-                  return next;
-                })}
-                onChange={chapters => setEditor({...editor,chapters})}
-                canTransfer={Boolean(editor.id) && !editor.published && !saving}
-                otherLessons={moduleLessons.filter(item=>
-                  item.type!=='Test' && item.published!==true && item.archived!==true &&
-                  item.canEdit!==false && String(item.id)!==editor.id &&
-                  Array.isArray(item.chapters) && item.chapters.length>0
-                ).map(item=>({
-                  id:String(item.id),title:String(item.title||'Untitled lesson'),
-                  chapters:item.chapters as CurriculumChapter[],
-                }))}
-                onTransfer={async request=>{
-                  if(!editor.id||editor.published){
-                    setError('Save this lesson as a draft before transferring content.');
-                    return;
-                  }
-                  if(!await appConfirm('Transfers use the last saved draft. Save unsaved changes before continuing.', {
-                    title:'Transfer lesson content?',confirmLabel:'Continue',
-                  }))return;
-                  setSaving(true);setError('');
-                  try{
-                    const result=await adminContent('transferLessonStructure','curriculum',undefined,{
-                      ...request,guideId:editor.guideId,sourceLessonId:editor.id,
-                    });
-                    if(Array.isArray(result.source))setEditor(previous=>previous?{
-                      ...previous,chapters:result.source as CurriculumChapter[],
-                    }:previous);
-                    setMessage('Lesson content '+(request.mode==='copy'?'copied':'moved')+' successfully.');
-                    await load();
-                  }catch(reason){
-                    setError(reason instanceof Error?reason.message:'Transfer failed.');
-                  }finally{setSaving(false);}
-                }}
-                canAttachQuiz={Boolean(editor.id)}
-                lessonPublished={editor.published}
-                onQuiz={anchor=>{
-                  if(editorDirty){
-                    setError('Save your lesson changes before leaving the editor to manage a quiz.');
-                    return;
-                  }
-                  if (!editor.id) {
-                    setError('Save this lesson before attaching a quiz so its section and block anchors exist.');
-                    return;
-                  }
-                  setQuizPlacement({guideId:editor.guideId,lessonId:editor.id,anchorType:anchor.type,anchorId:anchor.id,kind:'practice'});
-                  setEditor(null);setTab('quizzes');onTabChange?.('quizzes');
-                }}
-              /></> : <>
-                <div className="vop-structure-legacy">
-                  <strong>Legacy flat lesson</strong>
-                  <p>This existing lesson uses the older text-page format. It remains readable. Convert it to chapter structure without losing its original text.</p>
-                  {editor.questions.length>0 && <p role="alert">This historical lesson also has inline quiz questions. Use Quiz Library and the historical answer-key migration before publishing changes.</p>}
-                  <button className="vop-primary" type="button" onClick={()=>setEditor({...editor,chapters:[{
-                    ...newChapter(),title:editor.title||'Chapter 1',
-                    sections:[{...newChapter().sections[0],title:'Section 1',blocks:[{id:newId('block'),type:'paragraph',text:editor.content||editor.description||'Study content'}]}],
-                  }]})}><Plus size={17}/> Convert to structured chapters</button>
-                </div>
-                <label className="vop-field">Legacy lesson content
-                  <textarea id="vop-lesson-content-editor" className="vop-lesson-content-area" value={editor.content}
-                    onChange={event=>setEditor({...editor,content:event.target.value})}/>
-                </label>
-              </>}
-              <div className="vop-field"><label>{tx('common.description', 'Description')}</label>
-                <textarea value={editor.description} onChange={event=>setEditor({...editor,description:event.target.value})}/>
-              </div>
-            </div>}
+            {/* Auxiliary tabs - content tab renders in fullpage editor mode */}
 
             {editorTab === 'image' && <section className="vop-lesson-featured-tab vop-lesson-tab-panel"
               aria-label={tx('curriculum.featuredImage','Featured Image')}>
@@ -1168,15 +1327,52 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
 
   const renderManager = (kind: 'paths' | 'topics' | 'seasons') => {
     const config = {
-      paths: ['Learning Paths', 'Learning Path', Layers],
-      topics: ['Bible Topics', 'Bible Topic', Book],
-      seasons: ['Seasons', 'Season', CalendarDays],
-    }[kind] as [string, string, React.ComponentType<{size?: number}>];
+      paths: ['Learning Paths', 'Learning Path', Layers, 'Curate sequential curriculum roadmaps (e.g. New Believers, Baptismal Preparation) linking guides and tracks into multi-course journeys.'],
+      topics: ['Bible Topics', 'Bible Topic', Book, 'Thematic scripture tags for cross-guide search and study recommendations.'],
+      seasons: ['Seasons', 'Season', CalendarDays, 'Quarterly study cycles and cohort progression periods.'],
+    }[kind] as [string, string, React.ComponentType<{size?: number}>, string];
     const Icon = config[2];
     return (
       <div className="vop-reference-manager">
-        <div className="vop-page-head"><div className="vop-heading"><div className="vop-heading-icon vop-icon-orange"><Icon size={31}/></div><div><h1>{config[0]}</h1><p>{tx('curriculum.manageDescription', 'Manage curriculum records and publishing structure.')}</p></div></div><div className="vop-reference-actions"><button className="vop-secondary" type="button" onClick={() => void load()}><RefreshCw size={17}/>{tx('common.refresh', 'Refresh')}</button><button className="vop-primary" type="button" onClick={() => setEditingRecord({id:'',name:'',description:'',published:false})}><Plus size={18}/>New {config[1]}</button></div></div>
-        <div className="vop-reference-toolbar"><div className="vop-search vop-reference-search"><Search size={19}/><input value={search} onChange={e => setSearch(e.target.value)} aria-label={'Search '+config[0]}/></div><button className="vop-secondary" type="button" onClick={() => void load()}><RefreshCw size={16}/>{tx('common.refresh', 'Refresh')}</button></div>
+        <div className="vop-module-breadcrumb" style={{ marginBottom: 12 }}>
+          <button type="button" onClick={() => { setTab('programs'); onTabChange?.('programs'); }}>
+            <ArrowLeft size={16}/> Back to Curriculum Studio
+          </button>
+          <ChevronRight size={15}/>
+          <span>{config[0]}</span>
+        </div>
+        <div className="vop-page-head">
+          <div className="vop-heading">
+            <div className="vop-heading-icon vop-icon-orange"><Icon size={31}/></div>
+            <div>
+              <span className="vop-module-eyebrow">{kind === 'paths' ? 'SEQUENTIAL ROADMAPS' : 'CURRICULUM METADATA'}</span>
+              <h1>{config[0]}</h1>
+              <p>{config[3]}</p>
+            </div>
+          </div>
+          <div className="vop-reference-actions">
+            <button className="vop-secondary" type="button" onClick={() => { setTab('programs'); onTabChange?.('programs'); }}>
+              <ArrowLeft size={16}/> Back to Studio
+            </button>
+            <button className="vop-secondary" type="button" onClick={() => void load()}><RefreshCw size={17}/>{tx('common.refresh', 'Refresh')}</button>
+            <button className="vop-primary" type="button" onClick={() => setEditingRecord({id:'',name:'',description:'',published:false})}><Plus size={18}/>New {config[1]}</button>
+          </div>
+        </div>
+
+        {kind === 'paths' && (
+          <div className="vop-learning-path-info-banner">
+            <Layers size={22}/>
+            <div>
+              <strong>What is a Learning Path?</strong>
+              <p>A Learning Path is a curated multi-course roadmap designed to guide learners toward a specific spiritual or educational milestone (e.g., <em>Baptismal Preparation Path</em>, <em>New Believer Discipleship Journey</em>, or <em>Bible Instructor Certification</em>). While a Study Track (Tier 2) groups booklets by topic, a Learning Path chains multiple tracks and prerequisite guides into a single ordered progression.</p>
+            </div>
+          </div>
+        )}
+
+        <div className="vop-reference-toolbar">
+          <div className="vop-search vop-reference-search"><Search size={19}/><input value={search} onChange={e => setSearch(e.target.value)} aria-label={'Search '+config[0]}/></div>
+          <button className="vop-secondary" type="button" onClick={() => void load()}><RefreshCw size={16}/>{tx('common.refresh', 'Refresh')}</button>
+        </div>
         <div className="vop-admin-record-layout">
           <div className="vop-reference-table-wrap"><table className="vop-reference-table"><thead><tr><th>#</th><th>{tx('common.name', 'Name')}</th><th>{tx('common.description', 'Description')}</th><th>{tx('common.status', 'Status')}</th><th>{tx('common.actions', 'Actions')}</th></tr></thead><tbody>{filteredRecords.map((record,index)=><tr key={record.id}><td>{index+1}</td><td><strong>{valueText(record.name)}</strong></td><td>{valueText(record.description)}</td><td><span className={'vop-status '+(record.published?'published':'draft')}>{record.published?'Published':'Draft'}</span></td><td><button className="vop-actions" type="button" disabled={record.canEdit === false} title={record.canEdit === false ? 'Owned by another contributor' : 'Edit'} onClick={() => setEditingRecord(record)}><Edit3 size={15}/></button><button className="vop-actions" type="button" disabled={record.canEdit === false} title={record.canEdit === false ? 'Owned by another contributor' : 'Delete'} onClick={() => void deleteRecord(kind,record.id)}><Trash2 size={15}/></button></td></tr>)}</tbody></table>{filteredRecords.length===0&&<div className="vop-empty">{tx('curriculum.noRecords', 'No records are configured.')}</div>}</div>
           {editingRecord && <form className="vop-card vop-form-card" onSubmit={e => {e.preventDefault();void saveRecord(kind);}}><div className="vop-section-title"><div><h2>{editingRecord.id?'Edit':'New'} {config[1]}</h2></div><button className="vop-actions" type="button" onClick={() => setEditingRecord(null)}><X size={16}/></button></div><div className="vop-field"><label>{tx('common.nameRequired', 'Name *')}</label><input value={valueText(editingRecord.name)} onChange={e => setEditingRecord({...editingRecord,name:e.target.value})}/></div><div className="vop-field"><label>{tx('common.description', 'Description')}</label><textarea value={valueText(editingRecord.description)} onChange={e => setEditingRecord({...editingRecord,description:e.target.value})}/></div><div className="vop-setting-row"><div><div className="vop-setting-name">{tx('common.published', 'Published')}</div></div><input type="checkbox" checked={editingRecord.published===true} onChange={e => setEditingRecord({...editingRecord,published:e.target.checked})}/></div><div className="vop-reference-editor-actions"><button className="vop-secondary" type="button" onClick={() => setEditingRecord(null)}>{tx('common.cancel', 'Cancel')}</button><button className="vop-primary" type="submit" disabled={saving}>{saving?<LoaderCircle className="vop-save-spin" size={16}/>:<Save size={16}/>}<span>{saving?tx('common.saving','Saving…'):tx('common.save', 'Save')}</span></button></div></form>}
@@ -1197,7 +1393,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
         <div className="vop-reference-actions">
           <button className="vop-secondary" type="button" onClick={() => void load()}><RefreshCw size={17}/>{tx('common.refresh', 'Refresh')}</button>
           <button className="vop-secondary" type="button" onClick={() => onOpenSettings?.()}><Settings size={17}/>{tab === 'quizzes' ? 'Quiz Settings' : 'Curriculum Settings'}</button>
-          {tab==='lessons' && <button className="vop-primary" type="button" onClick={()=>selectedGuideId?openNewLesson(selectedGuideId):(setTab('guides'),onTabChange?.('guides'))}><Plus size={18}/>{selectedGuideId?'New lesson':'New guide/module'}</button>}
+          {tab==='lessons' && <button className="vop-primary" type="button" onClick={()=>selectedGuideId?openNewLesson(selectedGuideId):setLessonModuleRequiredModalOpen(true)}><Plus size={18}/>{selectedGuideId?'New lesson':'New lesson'}</button>}
         </div>
       </div>
 
@@ -1219,23 +1415,33 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
       </div>
 
       {tab === 'programs' ? <ProgramManager organizationId={scopeOrganizationId}
-        guides={guideRecords.map(item=>({
+        guides={editableGuides.map(item=>({
           id:String(item.id),title:String(item.title||''),language:String(item.language||'en'),
           organizationId:String(item.organizationId||''),published:item.published===true,
           archived:item.archived===true,canEdit:item.canEdit!==false,
+          sharingScope:String(item.sharingScope||''),
           lessons:Array.isArray(item.lessons)?item.lessons.map(raw=>({
             id:String((raw as RecordItem).id||''),title:String((raw as RecordItem).title||''),
             type:String((raw as RecordItem).type||'Lesson'),
             published:(raw as RecordItem).published===true,
           })):[],
         }))} onCountChange={setProgramCount}
+        onCreateGuideInProgram={(programId)=>{
+          setTargetProgramIdForGuide(programId);
+          setTab('guides');
+          onTabChange?.('guides');
+        }}
         onOpenGuide={(id,context)=>{setProgramContext(context);setSelectedGuideId(id);setRequestedSectionId('');setQuizPlacement(null);setTab('lessons');onTabChange?.('lessons');}}/>
       : tab === 'quizzes' ? <QuizLibrary key={[scopeOrganizationId,quizPlacement?.guideId,quizPlacement?.anchorId].join(':')}
         organizationId={scopeOrganizationId} initialGuideId={quizPlacement?.guideId}
         initialLessonId={quizPlacement?.lessonId} initialAnchorType={quizPlacement?.anchorType}
         initialAnchorId={quizPlacement?.anchorId} initialExam={quizPlacement?.kind==='final_exam'}
         onSaved={()=>void load()}/> : tab === 'guides' ? (
-        <GuideManager languages={languages} guides={guides} organizationId={scopeOrganizationId}
+        <GuideManager languages={languages} guides={guides} programs={programs}
+          initialProgramId={targetProgramIdForGuide}
+          onClearInitialProgram={() => setTargetProgramIdForGuide('')}
+          onOpenTrackTab={() => { setTab('programs'); onTabChange?.('programs'); }}
+          organizationId={scopeOrganizationId}
           onSaved={() => void load()} onOpenSettings={onOpenSettings}
           onOpenGuide={id=>{setProgramContext(null);setSelectedGuideId(id);setRequestedSectionId('');setQuizPlacement(null);setTab('lessons');onTabChange?.('lessons');}}/>
       ) : selectedGuideId ? (
@@ -1247,14 +1453,14 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
               }else setSelectedGuideId('');
             }}><ArrowLeft size={16}/> {programContext?'Back to program':'All guides'}</button>
             {programContext&&<><ChevronRight size={15}/><span>{programContext.programTitle}</span></>}
-            <ChevronRight size={15}/><span>{String(guideRecords.find(item=>item.id===selectedGuideId)?.title||'Guide')}</span>
+            <ChevronRight size={15}/><span>{String(editableGuides.find(item=>item.id===selectedGuideId)?.title || guides.find(item=>item.id===selectedGuideId)?.title || 'Guide')}</span>
           </div>
           <div className="vop-module-workspace-head">
-            <div><span className="vop-module-eyebrow">SELECTED GUIDE / MODULE</span>
-              <h2>{String(guideRecords.find(item=>item.id===selectedGuideId)?.title||'Your guide')}</h2>
+            <div><span className="vop-module-eyebrow">TIER 3 · INDEPENDENT STUDY GUIDE</span>
+              <h2>{String(editableGuides.find(item=>item.id===selectedGuideId)?.title || guides.find(item=>item.id===selectedGuideId)?.title || 'Your guide')}</h2>
               <p>{programContext?.entryMode==='sections'
-                ? 'This program opens authored sections as learner pages. Lessons remain the progress and certification container behind those pages.'
-                : 'Create lessons with chapters and authored section pages. Add quizzes, then a final guide examination.'}</p>
+                ? 'This study series opens authored sections as learner pages. Independent lessons remain the progress and certification container behind those pages.'
+                : 'Create lessons with chapters and authored 3-part sections (Narrative Hook, Scripture Q&A, Reflection & Decision).'}</p>
             </div>
             <div className="vop-reference-actions">
               <button className="vop-primary" type="button" onClick={()=>openNewLesson(selectedGuideId)}>
@@ -1335,11 +1541,19 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
                       'Legacy lesson · '+String(item.estimatedMinutes||15)+' min'}
                   </p>
                 </div>
-                <span className={'vop-status '+(item.published===true?'published':'draft')}>{item.published===true?'Published':'Draft'}</span>
-                <button type="button" className="vop-secondary" disabled={item.canEdit===false}
-                  onClick={()=>item.type==='Test'
-                    ? (setQuizPlacement(null),setTab('quizzes'),onTabChange?.('quizzes'))
-                    : openModuleLesson(item)}><Edit3 size={16}/> {item.type==='Test'?'Quiz Library':'Edit lesson'}</button>
+                <div style={{display:'flex',gap:6,alignItems:'center'}}>
+                  <button type="button" className="vop-secondary" disabled={item.canEdit===false}
+                    onClick={()=>item.type==='Test'
+                      ? (setQuizPlacement(null),setTab('quizzes'),onTabChange?.('quizzes'))
+                      : openModuleLesson(item)}><Edit3 size={16}/> {item.type==='Test'?'Quiz Library':'Edit lesson'}</button>
+                  {item.type!=='Test' && item.canEdit!==false && (
+                    <button type="button" className="vop-secondary vop-actions-delete" disabled={saving}
+                      onClick={()=>void deleteLesson(String(item.id), selectedGuideId, String(item.title||'Untitled lesson'))}
+                      title="Delete lesson" style={{color:'var(--danger,#c5221f)'}}>
+                      <Trash2 size={16}/>
+                    </button>
+                  )}
+                </div>
               </article>)
             :<div className="vop-empty"><BookOpen size={30}/>
               <h3>This guide has no lessons yet</h3><p>Create a lesson, then build its chapters and authored section pages.</p>
@@ -1350,25 +1564,30 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
       ) : (
         <section className="vop-guide-first">
           <div className="vop-module-workspace-head">
-            <div><span className="vop-module-eyebrow">START HERE</span>
-              <h2>Choose a guide or module</h2>
-              <p>Every lesson belongs to a guide. Choose an existing guide or create a new one.</p>
+            <div><span className="vop-module-eyebrow">TIER 3 · INDEPENDENT LESSONS</span>
+              <h2>Select a Study Guide to Author Lessons</h2>
+              <p>In the VOP correspondence framework, independent lessons belong to a parent Study Guide (Module). Choose an existing guide below to author its lessons, chapters, and section pages, or create a new guide.</p>
             </div>
             <button className="vop-primary" type="button" onClick={()=>{setTab('guides');onTabChange?.('guides');}}>
-              <Plus size={18}/> Create guide/module
+              <Plus size={18}/> Create new study guide
             </button>
           </div>
           <div className="vop-guide-first-grid">
-            {editableGuides.filter(guide=>guide.canEdit!==false).map(guide=><button type="button" key={String(guide.id)}
+            {editableGuides.map(guide=><button type="button" key={String(guide.id)}
               className="vop-guide-first-card" onClick={()=>setSelectedGuideId(String(guide.id))}>
               <div className="vop-guide-first-icon"><BookOpen size={24}/></div>
               <span>{String(guide.language||'en').toUpperCase()} · {guide.published===true?'PUBLISHED':'DRAFT'}</span>
               <h3>{String(guide.title||'Untitled guide')}</h3>
-              <p>{String(guide.description||'Open to manage lessons and assessments.')}</p>
-              <small>{Number(guide.lessonCount||0)} content items <ChevronRight size={15}/></small>
+              <p>{String(guide.description||'Open this guide to manage and author its lessons and evaluations.')}</p>
+              <small>{Number(guide.lessonCount||0)} lessons / assessments <ChevronRight size={15}/></small>
             </button>)}
-            {!editableGuides.some(guide=>guide.canEdit!==false)&&<div className="vop-empty">
-              <BookOpen size={30}/><p>No editable guide is available for this organization. Create a new guide first.</p>
+            {editableGuides.length === 0 && <div className="vop-empty vop-empty-hero">
+              <BookOpen size={32}/>
+              <h3>No Study Guides Available</h3>
+              <p>Lessons are housed within Study Guides (Tier 3 modules). Create your first guide to begin authoring lessons.</p>
+              <button className="vop-primary" type="button" onClick={()=>{setTab('guides');onTabChange?.('guides');}}>
+                <Plus size={16}/> Create Study Guide
+              </button>
             </div>}
           </div>
         </section>
@@ -1376,6 +1595,88 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
 
       {message && <div className="vop-toast">{message}</div>}
       {error && <AppAlertDialog message={error} title="Curriculum Studio" onClose={() => setError('')}/>} 
+
+      {lessonModuleRequiredModalOpen && (
+        <div className="vop-dialog-overlay" role="dialog" aria-modal="true" style={{
+          position:'fixed',inset:0,background:'rgba(15,23,42,0.6)',display:'flex',
+          alignItems:'center',justifyContent:'center',zIndex:1000,padding:20
+        }}>
+          <div className="vop-dialog-box" style={{
+            background:'var(--bg-card,#fff)',borderRadius:14,padding:'24px 28px',
+            maxWidth:520,width:'100%',boxShadow:'0 20px 40px rgba(0,0,0,0.22)',border:'1px solid var(--theme-border,#e2e8f0)',
+            maxHeight:'90vh',display:'flex',flexDirection:'column'
+          }}>
+            <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:12}}>
+              <div style={{
+                width:42,height:42,borderRadius:10,background:'rgba(217,119,6,0.12)',
+                color:'var(--brand-orange,#d97706)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0
+              }}>
+                <BookOpen size={24}/>
+              </div>
+              <div>
+                <span className="vop-module-eyebrow" style={{fontSize:11,fontWeight:800,color:'var(--brand-orange,#d97706)'}}>TIER 3 PARENT CONTAINER REQUIRED</span>
+                <h3 style={{margin:0,fontSize:18,fontWeight:800}}>Select an Owning Study Guide (Module)</h3>
+              </div>
+            </div>
+            <p style={{margin:'0 0 14px',color:'var(--theme-text-muted,#64748b)',fontSize:13,lineHeight:1.5}}>
+              In the Voice of Prophecy correspondence curriculum, lessons cannot exist independently—they must belong to an owning <strong>Study Guide (Module)</strong>. Pick an available module below to author lessons inside it, or create a new module.
+            </p>
+            {editableGuides.length > 0 ? (
+              <div style={{marginBottom:18,overflowY:'auto',flex:1,maxHeight:260,display:'flex',flexDirection:'column',gap:8,paddingRight:4}}>
+                <label style={{fontSize:11,fontWeight:750,color:'var(--theme-text-muted,#64748b)',textTransform:'uppercase',letterSpacing:'0.05em'}}>
+                  Available Modules ({editableGuides.length}) — Click to Select
+                </label>
+                {editableGuides.map(guide => (
+                  <button
+                    key={String(guide.id)}
+                    type="button"
+                    style={{
+                      display:'flex',alignItems:'center',justifyContent:'space-between',
+                      padding:'10px 14px',border:'1px solid var(--theme-border,#d8e2ef)',
+                      borderRadius:9,background:'var(--bg-card,#fff)',cursor:'pointer',
+                      textAlign:'left',transition:'all .15s ease'
+                    }}
+                    onClick={() => {
+                      setLessonModuleRequiredModalOpen(false);
+                      setSelectedGuideId(String(guide.id));
+                      openNewLesson(String(guide.id));
+                    }}
+                  >
+                    <div style={{display:'flex',alignItems:'center',gap:10,minWidth:0}}>
+                      <div style={{width:30,height:30,borderRadius:7,background:'rgba(24,62,113,0.08)',color:'#183f70',display:'grid',placeItems:'center',flexShrink:0}}>
+                        <BookOpen size={16}/>
+                      </div>
+                      <div style={{minWidth:0}}>
+                        <strong style={{display:'block',fontSize:13,color:'var(--theme-text-main,#1e293b)',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>
+                          {String(guide.title || 'Untitled guide')}
+                        </strong>
+                        <small style={{fontSize:11,color:'var(--theme-text-muted,#64748b)'}}>
+                          {String(guide.language || 'en').toUpperCase()} · {Number(guide.lessonCount || 0)} lessons · {guide.published === true ? 'Published' : 'Draft'}
+                        </small>
+                      </div>
+                    </div>
+                    <ChevronRight size={17} style={{color:'var(--theme-text-muted,#94a3b8)',flexShrink:0}}/>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="vop-alert warning" style={{marginBottom:20}}>
+                You don't have any Study Guides available yet. Create a Study Guide module first before adding lessons.
+              </div>
+            )}
+            <div style={{display:'flex',justifyContent:'flex-end',gap:10,flexWrap:'wrap',paddingTop:8,borderTop:'1px solid var(--theme-border,#f1f5f9)'}}>
+              <button className="vop-secondary" type="button" onClick={() => setLessonModuleRequiredModalOpen(false)}>Cancel</button>
+              <button className="vop-primary" type="button" onClick={() => {
+                setLessonModuleRequiredModalOpen(false);
+                setTab('guides');
+                onTabChange?.('guides');
+              }}>
+                <Plus size={16}/> Create New Study Guide (Module)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -34,8 +34,8 @@ export const CertificatesPage: React.FC<CertificatesPageProps> = ({ currentUser,
   const [loading, setLoading] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
   const [feedback, setFeedback] = useState('');
-  const t = (key: string, fallback: string) => getTranslation(key, getUiLocale(), settings.customTranslations, fallback, 'CertificatesPage');
-  const title = config.certificateTitle || settings.certificateTitle || certificate?.courseName || '';
+  const t = (key: string, fallback: string) => getTranslation(key, getUiLocale(), settings?.customTranslations, fallback, 'CertificatesPage');
+  const title = config.certificateTitle || settings?.certificateTitle || certificate?.courseName || '';
   const reviewPending=Boolean(review&&review.status&&!['approved','rejected'].includes(review.status));
   const reviewApproved=review?.status==='approved';
 

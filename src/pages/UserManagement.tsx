@@ -24,6 +24,7 @@ type ManagedUser = {
   roleLabel: string;
   roleColor: 'admin' | 'teacher' | 'mentor' | 'learner' | 'guest';
   userType: 'super_admin' | 'admin' | 'teacher' | 'mentor' | 'learner' | 'guest';
+  accountType?: 'personal' | 'organization';
   disabled: boolean;
   status: 'Active' | 'Inactive';
   emailVerified: boolean;
@@ -109,6 +110,7 @@ export default function UserManagement({ onBack, scope }: Props) {
   const [statusFilter, setStatusFilter] = useState('all');
   const [conferenceFilter, setConferenceFilter] = useState('all');
   const [districtFilter, setDistrictFilter] = useState('all');
+  const [accountTypeFilter, setAccountTypeFilter] = useState<'all' | 'personal' | 'organization'>('all');
   const [page, setPage] = useState(1);
   const [viewMode,setViewMode]=useState<AdminViewMode>('table');
   const [selected, setSelected] = useState<ManagedUser | null>(null);
@@ -177,7 +179,7 @@ export default function UserManagement({ onBack, scope }: Props) {
       setEditor(current => current ? { ...current, organizationId: scope.organizationId || current.organizationId } : current);
     }
   }, [scope?.organizationId, scope?.isSuperAdmin]);
-  useEffect(() => { setPage(1); }, [search, roleFilter, statusFilter, conferenceFilter, districtFilter]);
+  useEffect(() => { setPage(1); }, [search, roleFilter, statusFilter, conferenceFilter, districtFilter, accountTypeFilter]);
 
   const roles = useMemo(() => Array.from(new Set(users.map(user => user.roleLabel).filter(Boolean))).sort(), [users]);
   const conferences = useMemo(() => Array.from(new Map(users.filter(user => user.conferenceId).map(user => [user.conferenceId, user.conferenceName || user.conferenceId || ''])).entries()).map(([id, name]) => ({ id: id || '', name: name || id || '' })).sort((a,b) => a.name.localeCompare(b.name)), [users]);
@@ -201,7 +203,10 @@ export default function UserManagement({ onBack, scope }: Props) {
         && (roleFilter === 'all' || user.roleLabel === roleFilter)
         && (statusFilter === 'all' || user.status.toLowerCase() === statusFilter)
         && (conferenceFilter === 'all' || user.conferenceId === conferenceFilter)
-        && (districtFilter === 'all' || user.districtId === districtFilter);
+        && (districtFilter === 'all' || user.districtId === districtFilter)
+        && (accountTypeFilter === 'all'
+            || (accountTypeFilter === 'organization' && (user.accountType === 'organization' || Boolean(user.organizationId)))
+            || (accountTypeFilter === 'personal' && (user.accountType === 'personal' || (!user.accountType && !user.organizationId))));
     });
   }, [users, search, roleFilter, statusFilter, conferenceFilter, districtFilter]);
 
@@ -330,6 +335,36 @@ export default function UserManagement({ onBack, scope }: Props) {
     }
   };
 
+  const deleteSelectedUsers = async () => {
+    if (selectedRows.size === 0) return;
+    const targetUsers = users.filter(u => selectedRows.has(u.uid));
+    const currentUid = auth?.currentUser?.uid;
+    if (currentUid && targetUsers.some(u => u.uid === currentUid)) {
+      setError('You cannot delete your own signed-in administrator account.');
+      return;
+    }
+    if (!await appConfirm(`Permanently delete ${targetUsers.length} selected user account${targetUsers.length === 1 ? '' : 's'}?`, {
+      title: 'Delete selected users', confirmLabel: 'Delete users', tone: 'danger',
+    })) return;
+    setSaving(true);
+    setError('');
+    let deletedCount = 0;
+    try {
+      for (const u of targetUsers) {
+        await userApi('delete', { uid: u.uid });
+        deletedCount++;
+      }
+      flash(`${deletedCount} user account${deletedCount === 1 ? '' : 's'} deleted.`);
+      setSelectedRows(new Set());
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not delete selected users.');
+      await load();
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const exportUsers = () => {
     const headers = ['User Code', 'Name', 'Email', 'Role', 'Organization', 'Status', 'Conference', 'District', 'Last Login'];
     const rows = filtered.map(user => [user.userCode, user.displayName, user.email, user.roleLabel, user.organizationName || '', user.status, user.conferenceName || '', user.districtName || '', user.lastLogin || '']);
@@ -424,7 +459,12 @@ export default function UserManagement({ onBack, scope }: Props) {
             <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}><option value="all">{t('common.all_statuses','All Statuses')}</option><option value="active">{t('common.active','Active')}</option><option value="inactive">{t('common.inactive','Inactive')}</option></select>
             <select value={conferenceFilter} onChange={e => setConferenceFilter(e.target.value)}><option value="all">{t('common.all_conferences','All Conferences')}</option>{conferences.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
             <select value={districtFilter} onChange={e => setDistrictFilter(e.target.value)}><option value="all">{t('common.all_districts','All Districts')}</option>{districts.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
-            <button className="vop-secondary vop-user-filter" type="button" onClick={()=>{setSearch('');setRoleFilter('all');setStatusFilter('all');setConferenceFilter('all');setDistrictFilter('all')}}><Filter size={17}/>Clear filters</button>
+            <select value={accountTypeFilter} onChange={e => setAccountTypeFilter(e.target.value as 'all' | 'personal' | 'organization')}>
+              <option value="all">All Account Types</option>
+              <option value="personal">Personal Accounts</option>
+              <option value="organization">Organisation Accounts</option>
+            </select>
+            <button className="vop-secondary vop-user-filter" type="button" onClick={()=>{setSearch('');setRoleFilter('all');setStatusFilter('all');setConferenceFilter('all');setDistrictFilter('all');setAccountTypeFilter('all')}}><Filter size={17}/>Clear filters</button>
           </div>
 
           <div className="vop-user-view-row">
@@ -438,12 +478,13 @@ export default function UserManagement({ onBack, scope }: Props) {
               <table className="vop-user-table">
                 <thead><tr>
                   <th><input type="checkbox" checked={pageRows.length > 0 && pageRows.every(user => selectedRows.has(user.uid))} onChange={toggleAll}/></th>
-                  <th>{t('common.user','User')}</th><th>{t('common.role','Role')}</th><th>Assignment / Scope</th><th>{t('common.status','Status')}</th><th>{t('admin.last_login','Last Login')}</th><th>{t('common.actions','Actions')}</th>
+                  <th>{t('common.user','User')}</th><th>{t('common.role','Role')}</th><th>Account Type</th><th>Assignment / Scope</th><th>{t('common.status','Status')}</th><th>{t('admin.last_login','Last Login')}</th><th>{t('common.actions','Actions')}</th>
                 </tr></thead>
                 <tbody>{pageRows.map(user => <tr key={user.uid}>
                   <td><input type="checkbox" checked={selectedRows.has(user.uid)} onChange={() => toggleRow(user.uid)}/></td>
                   <td><div className="vop-user-cell"><Avatar user={user}/><div><strong>{user.displayName}</strong><span>{user.email || 'No email recorded'}</span><small>{user.userCode}</small></div></div></td>
                   <td><span className={'vop-user-role-pill ' + user.roleColor}>{user.roleLabel}</span></td>
+                  <td><span className={'vop-chip ' + (user.accountType === 'organization' || user.organizationId ? 'vop-account-type-org' : 'vop-account-type-personal')}>{user.accountType === 'organization' || user.organizationId ? 'Organisation' : 'Personal'}</span></td>
                   <td><div className="vop-user-scope-cell"><strong>{user.organizationName || user.conferenceName || user.districtName || user.unionName || 'Platform / not assigned'}</strong><span>{user.organizationName ? [user.conferenceName,user.districtName].filter(Boolean).join(' · ') || 'Organisation scope' : user.adminNodeType && user.adminNodeId ? user.adminNodeType.replace(/^./,value=>value.toUpperCase()) + ' administrator' : 'No tenant assignment'}</span></div></td>
                   <td><span className={'vop-user-status ' + (user.disabled ? 'inactive' : 'active')}>{user.disabled ? t('common.inactive','Inactive') : t('common.active','Active')}</span></td>
                   <td className="vop-user-last-login">{formatLastLogin(user.lastLogin)}</td>
@@ -465,7 +506,11 @@ export default function UserManagement({ onBack, scope }: Props) {
                   <div className="vop-user-cell"><Avatar user={user}/><div><strong>{user.displayName}</strong><span>{user.email||'No email recorded'}</span><small>{user.userCode}</small></div></div>
                   <input type="checkbox" aria-label={'Select '+user.displayName} checked={selectedRows.has(user.uid)} onChange={()=>toggleRow(user.uid)}/>
                 </div>
-                <div className="vop-user-card-pills"><span className={'vop-user-role-pill '+user.roleColor}>{user.roleLabel}</span><span className={'vop-user-status '+(user.disabled?'inactive':'active')}>{user.disabled?t('common.inactive','Inactive'):t('common.active','Active')}</span></div>
+                <div className="vop-user-card-pills">
+                  <span className={'vop-user-role-pill '+user.roleColor}>{user.roleLabel}</span>
+                  <span className={'vop-chip ' + (user.accountType === 'organization' || user.organizationId ? 'vop-account-type-org' : 'vop-account-type-personal')}>{user.accountType === 'organization' || user.organizationId ? 'Organisation Account' : 'Personal Account'}</span>
+                  <span className={'vop-user-status '+(user.disabled?'inactive':'active')}>{user.disabled?t('common.inactive','Inactive'):t('common.active','Active')}</span>
+                </div>
                 <div className="vop-admin-record-card-meta">
                   <div><small>Assignment / scope</small><strong>{user.organizationName||user.conferenceName||user.districtName||user.unionName||'Platform / not assigned'}</strong></div>
                   <div><small>Last login</small><strong>{formatLastLogin(user.lastLogin)}</strong></div>
@@ -500,6 +545,11 @@ export default function UserManagement({ onBack, scope }: Props) {
               const user=users.find(item=>selectedRows.has(item.uid));
               if(user)void resetPassword(user);
             }}><KeyRound size={15}/>{t('admin.reset_password','Reset Password')}</button>
+            {selectedRows.size > 0 && (
+              <button type="button" className="vop-structure-delete" onClick={() => void deleteSelectedUsers()} style={{color:'var(--danger,#c5221f)',fontWeight:700}}>
+                <Trash2 size={15}/>Delete Selected Users ({selectedRows.size})
+              </button>
+            )}
             <button type="button" onClick={openCreate}><UserPlus size={15}/>{t('admin.send_invitation','Create / Invite User')}</button>
           </section>
           <section className="vop-user-side-card">
@@ -523,6 +573,7 @@ export default function UserManagement({ onBack, scope }: Props) {
           <div className="vop-user-profile-summary"><Avatar user={selected} large/><div><h3>{selected.displayName}</h3><span>{selected.email}</span><div className="vop-user-modal-pills"><span className={'vop-user-role-pill ' + selected.roleColor}>{selected.roleLabel}</span><span className={'vop-user-status ' + (selected.disabled ? 'inactive' : 'active')}>{selected.disabled ? 'Inactive' : 'Active'}</span></div></div></div>
           <div className="vop-user-detail-grid">
             <div><small>User ID</small><strong>{selected.userCode}</strong></div><div><small>Last Login</small><strong>{formatLastLogin(selected.lastLogin)}</strong></div>
+            <div><small>Account Type</small><strong><span className={'vop-chip ' + (selected.accountType === 'organization' || selected.organizationId ? 'vop-account-type-org' : 'vop-account-type-personal')}>{selected.accountType === 'organization' || selected.organizationId ? 'Organisation Account' : 'Personal Account'}</span></strong></div>
             <div><small>WhatsApp</small><strong>{selected.whatsappNumber || selected.phoneNumber || 'Not configured'}</strong></div>
             <div><small>Organization</small><strong>{selected.organizationName || 'Not assigned'}</strong></div><div><small>Conference</small><strong>{selected.conferenceName || 'Not assigned'}</strong></div><div><small>District</small><strong>{selected.districtName || 'Not assigned'}</strong></div>
             <div><small>Union</small><strong>{selected.unionName || 'Not assigned'}</strong></div><div><small>Email Verified</small><strong>{selected.emailVerified ? 'Verified' : 'Not verified'}</strong></div>
@@ -550,6 +601,29 @@ export default function UserManagement({ onBack, scope }: Props) {
               <label><span>Hierarchy level *</span><select value={editor.adminNodeType} onChange={e=>setEditor({...editor,adminNodeType:e.target.value as EditorState['adminNodeType'],adminNodeId:''})}><option value="">Select level</option><option value="union">Union</option><option value="conference">Conference</option><option value="district">District</option><option value="church">Church</option></select></label>
               <label><span>Hierarchy assignment *</span><select value={editor.adminNodeId} disabled={!editor.adminNodeType||hierarchyLoading} onChange={e=>setEditor({...editor,adminNodeId:e.target.value})}><option value="">{hierarchyLoading?'Loading hierarchy…':'Select assignment'}</option>{editor.adminNodeType&&hierarchyNodes[editor.adminNodeType].map(item=><option key={item.id} value={item.id}>{item.name}{item.code?' · '+item.code:''}</option>)}</select><small>This creates the corresponding union_admin, conference_admin, district_admin or church_admin role.</small></label>
             </>}
+            <div className="vop-account-type-notice" style={{gridColumn:'1/-1',padding:'11px 14px',borderRadius:9,background:(editor.assignmentMode==='organization'&&editor.organizationId)?'#eff6ff':'#f8fafc',border:'1px solid '+((editor.assignmentMode==='organization'&&editor.organizationId)?'#bfdbfe':'#e2e8f0'),display:'flex',gap:10,alignItems:'flex-start'}}>
+              {(editor.assignmentMode==='organization'&&editor.organizationId)?(
+                <>
+                  <ShieldCheck size={18} style={{color:'#2563eb',marginTop:2,flexShrink:0}}/>
+                  <div>
+                    <strong style={{color:'#1e40af',fontSize:12.5}}>Assumes Organisation Account Type</strong>
+                    <p style={{margin:'2px 0 0',color:'#3b5b88',fontSize:11.5,lineHeight:1.4}}>
+                      A personal account can manage an organisation account. Immediately an account has been assigned to an organisation, it assumes the <strong>Organisation Account</strong> type.
+                    </p>
+                  </div>
+                </>
+              ):(
+                <>
+                  <Users size={18} style={{color:'#64748b',marginTop:2,flexShrink:0}}/>
+                  <div>
+                    <strong style={{color:'#334155',fontSize:12.5}}>Personal Account</strong>
+                    <p style={{margin:'2px 0 0',color:'#64748b',fontSize:11.5,lineHeight:1.4}}>
+                      Personal accounts are separate from organisation accounts. Once this account is assigned to an organisation, it will automatically assume the Organisation Account type.
+                    </p>
+                  </div>
+                </>
+              )}
+            </div>
             {!editor.uid && <label><span>Password <small>(optional)</small></span><input type="password" value={editor.password} onChange={e => setEditor({...editor,password:e.target.value})} placeholder="Leave blank to use reset link"/></label>}
           </div>
           {resetLink && <div className="vop-reset-link"><strong>Invitation / password reset link</strong><input readOnly value={resetLink}/><button type="button" onClick={() => void copyResetLink()}>Copy</button></div>}

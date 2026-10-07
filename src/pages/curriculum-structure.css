@@ -365,3 +365,23 @@
   .vop-lesson-settings-panel .vop-setting-row select{width:100%}
   .vop-save-state-chip{order:-1}
 }
+
+.vop-learning-path-info-banner{
+  display:flex;align-items:flex-start;gap:14px;padding:16px 18px;margin-bottom:16px;
+  border-radius:12px;background:var(--theme-surface-soft,#eef6ff);border:1px solid var(--theme-border-subtle,#d4e6fc);
+  color:var(--theme-text,#19456f);font-size:12px;line-height:1.55;
+}
+.vop-learning-path-info-banner svg{color:var(--brand-primary,#0e559d);flex-shrink:0;margin-top:2px}
+.vop-learning-path-info-banner strong{display:block;font-size:13px;color:var(--theme-title,#0e3265);margin-bottom:3px}
+.vop-learning-path-info-banner p{margin:0}
+
+.vop-empty-hero{
+  grid-column:1/-1;
+  display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px;
+  padding:44px 20px;border:1px dashed var(--theme-border,#d3e1ee);border-radius:15px;
+  background:var(--theme-surface-subtle,#f9fbff);color:var(--theme-muted,#607894);
+}
+.vop-empty-hero h3{margin:4px 0 0;font-size:18px;color:var(--theme-title,#11396b);font-weight:800}
+.vop-empty-hero p{margin:0;font-size:12px;max-width:480px;line-height:1.5}
+.vop-empty-hero button{margin-top:6px}
+

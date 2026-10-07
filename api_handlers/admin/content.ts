@@ -123,7 +123,7 @@ export default async function handler(req: Request, res: Response) {
       throw new Error('Only VOP Super Admin may change system languages and translations. Submit a translation proposal instead.');
     }
     const permissionResource = resourceForCollection(collection);
-    const permissionAction = action === 'list' || action === 'listGuides' || action === 'listGuideLessons' ? 'view' : action === 'delete' ? 'delete' : action === 'publishLesson' || action === 'unpublishLesson' ? 'publish' : action === 'forkGuide' || action === 'forkLesson' ? 'create' : action === 'proposeTranslation' ? 'create' : action === 'reviewTranslationProposal' ? 'approve' : '';
+    const permissionAction = action === 'list' || action === 'listGuides' || action === 'listGuideLessons' ? 'view' : action === 'delete' || action === 'deleteLesson' || action === 'deleteGuide' ? 'delete' : action === 'publishLesson' || action === 'unpublishLesson' ? 'publish' : action === 'forkGuide' || action === 'forkLesson' ? 'create' : action === 'proposeTranslation' ? 'create' : action === 'reviewTranslationProposal' ? 'approve' : '';
     if (permissionResource && permissionAction) await requirePermission(ctx, permissionResource, permissionAction);
     const hierarchyOrganizationId = ctx.tenantType === 'hierarchy' && requestedOrganizationId && await organizationInHierarchyScope(ctx, requestedOrganizationId) ? requestedOrganizationId : '';
     const effectiveOrganizationId = ctx.organizationId || hierarchyOrganizationId;
@@ -410,6 +410,29 @@ export default async function handler(req: Request, res: Response) {
       assertMutableTenantResource(ctx.isSuperAdmin, current.data(), 'archive');
       await ref.set({ published: false, archived: true, updatedAt: FieldValue.serverTimestamp(), updatedBy: ctx.auth.uid }, { merge: true });
       return res.status(200).json({ ok: true });
+    }
+
+    if (action === 'deleteGuide') {
+      if (collection !== 'guides') throw new Error('Guide deletion requires the guides collection.');
+      const lang = String((body.data as Record<string, unknown> | undefined)?.language || '').trim().toLowerCase();
+      const requestedId = String((body.data as Record<string, unknown> | undefined)?.id || body.id || '').trim();
+      if (!requestedId && !lang) throw new Error('A valid guide ID or language is required.');
+      const ref = ctx.db.doc(`guides/${requestedId ? safeId(requestedId) : guideId(effectiveOrganizationId, lang)}`);
+      const current = await ref.get();
+      if (!current.exists) return res.status(200).json({ ok: true, deleted: true, id: ref.id });
+      if (!(ctx.tenantType === 'hierarchy' ? await canManageOrganizationContent(ctx, current.data()) : canEditCanonicalContent(ctx, current.data()))) {
+        throw new Error('Only an authorized tenant administrator or VOP Super Admin can delete this guide.');
+      }
+      assertMutableTenantResource(ctx.isSuperAdmin, current.data(), 'delete');
+      const lessons = await ref.collection('lessons').get();
+      if (!lessons.empty) {
+        const batch = ctx.db.batch();
+        lessons.docs.forEach(doc => batch.delete(doc.ref));
+        await batch.commit().catch(() => undefined);
+      }
+      await ref.delete();
+      await writeTenantAudit(ctx, 'guide.delete', ref.path, current.data(), undefined);
+      return res.status(200).json({ ok: true, deleted: true, id: ref.id });
     }
 
     if (action === 'forkGuide') {
@@ -717,6 +740,28 @@ export default async function handler(req: Request, res: Response) {
         updatedBy: ctx.auth.uid,
       }, { merge: true });
       return res.status(200).json({ ok: true, item: { id: lessonId, published: true } });
+    }
+
+    if (action === 'deleteLesson') {
+      if (collection !== 'curriculum') throw new Error('Lesson deletion requires the curriculum collection.');
+      if (!effectiveOrganizationId && !ctx.isSuperAdmin) throw new Error('Select an organization within your authorized scope before deleting lessons.');
+      const data = body.data && typeof body.data === 'object' ? body.data as Record<string, unknown> : {};
+      const lessonId = safeId(data.lessonId || body.id);
+      const requestedGuideId = safeId(data.guideId);
+      if (!requestedGuideId) throw new Error('A valid guide ID is required to locate the lesson.');
+      const guide = await ctx.db.doc(`guides/${requestedGuideId}`).get();
+      if (!guide.exists) throw new Error('The parent guide was not found.');
+      if (!(ctx.tenantType === 'hierarchy' ? await canManageOrganizationContent(ctx, guide.data()) : canEditCanonicalContent(ctx, guide.data()))) {
+        throw new Error('Only an authorized contributor or VOP Super Admin can delete lessons from this guide.');
+      }
+      assertMutableTenantResource(ctx.isSuperAdmin, guide.data(), 'edit');
+      const ref = guide.ref.collection('lessons').doc(lessonId);
+      const current = await ref.get();
+      if (!current.exists) return res.status(200).json({ ok: true, id: lessonId, deleted: true });
+      assertMutableTenantResource(ctx.isSuperAdmin, current.data(), 'delete');
+      await ref.delete();
+      await writeTenantAudit(ctx, 'lesson.delete', ref.path, current.data(), undefined);
+      return res.status(200).json({ ok: true, id: lessonId, deleted: true });
     }
 
     if ((collection === 'settings' || collection === 'curriculumSettings' || collection === 'certificationConfig') && action === 'upsert') {
@@ -1031,6 +1076,22 @@ export default async function handler(req: Request, res: Response) {
           canEdit: ctx.isSuperAdmin || (canEditCanonicalContent(ctx, d.data()) && !platformStewardedResource(d.data())),
           scope: 'organization',
         })));
+        if (collection === 'certificationConfig' && items.length === 0) {
+          const [cfgSnap, sysSnap] = await Promise.all([
+            ctx.db.collection('certificationConfig').doc('certification').get(),
+            ctx.db.doc('system/certification').get(),
+          ]);
+          const fallbackSnap = cfgSnap.exists ? cfgSnap : sysSnap.exists ? sysSnap : null;
+          if (fallbackSnap?.exists) {
+            items.push({
+              id: 'certification',
+              ...fallbackSnap.data(),
+              canEdit: false,
+              scope: 'platform',
+              inherited: true,
+            });
+          }
+        }
         return res.status(200).json({ ok: true, items });
       }
     }

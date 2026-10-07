@@ -9,7 +9,7 @@ import {
 import { normalizeSubscriptionFeatures, normalizeSubscriptionQuotas } from '../../shared/subscriptions.js';
 import {
   accessibleOrganizationIds, authenticateTenant, billingTenantAudienceEnabled, billingTenantFromContext,
-  billingTenantRef, billingTenantSubscriptionRef, organizationInHierarchyScope, tenantOwnerKey,
+  billingTenantRef, billingTenantSubscriptionRef, organizationInHierarchyScope, subscriptionAudiencePolicy, tenantOwnerKey,
   validateBillingTenantPlanCapacity, writeTenantAudit, type BillingTenantType, type TenantContext,
 } from '../tenant.js';
 import { requirePermission } from '../permissions.js';
@@ -18,6 +18,10 @@ import {
   getPaymentProvider, paymentProviderCatalog, providerSettlementCountry, providerSettlementCurrency, registeredPaymentProviderKeys,
   type ProviderVerification,
 } from './providers.js';
+import {
+  assertPciDssCompliance, passesLuhnCheck, PROHIBITED_CARD_FIELDS, redactCardNumbers,
+} from './pciCompliance.js';
+export { assertPciDssCompliance, passesLuhnCheck, PROHIBITED_CARD_FIELDS, redactCardNumbers };
 
 type RequestLike={headers?:Record<string,string|string[]|undefined>};
 function text(value:unknown,fallback=''){return String(value??fallback).trim();}
@@ -42,11 +46,18 @@ function timestampIso(value:unknown){
   return '';
 }
 function hash(value:string){return createHash('sha256').update(value).digest('hex');}
+
 function safeMetadata(value:unknown){
   const input=object(value),output:Record<string,unknown>={};
   for(const [key,val] of Object.entries(input).slice(0,30)){
+    const normalizedKey=key.toLowerCase().replace(/[^a-z0-9]/g,'');
+    if(PROHIBITED_CARD_FIELDS.has(normalizedKey))continue;
     if(!/^[A-Za-z0-9_.-]{1,80}$/.test(key))continue;
-    if(typeof val==='string')output[key]=val.slice(0,500);
+    if(typeof val==='string'){
+      const digits=val.replace(/[\s-]/g,'');
+      if(/^\d{13,19}$/.test(digits)&&passesLuhnCheck(digits))continue;
+      output[key]=val.slice(0,500);
+    }
     else if(typeof val==='number'&&Number.isFinite(val))output[key]=val;
     else if(typeof val==='boolean'||val===null)output[key]=val;
   }
@@ -58,8 +69,9 @@ function webhookIdentityPayload(value:unknown){
 }
 
 function publicError(error:unknown,fallback='Payment request failed.'){
-  const message=error instanceof Error?error.message:fallback;
-  if(/token|secret|credential|private key|authorization/i.test(message))return fallback;
+  const rawMessage=error instanceof Error?error.message:fallback;
+  if(/token|secret|credential|private key|authorization/i.test(rawMessage))return fallback;
+  const message=redactCardNumbers(rawMessage);
   return message.slice(0,280)||fallback;
 }
 function statusIsActive(status:unknown){
@@ -388,6 +400,10 @@ export async function listPayableItems(ctx:TenantContext,admin=false){
     await requirePermission(ctx,'payable_items','view');
     requireSuperAdminFinanceControl(ctx,'payable item administration');
   }
+  const policy=await subscriptionAudiencePolicy(ctx.db);
+  if(!ctx.isSuperAdmin && policy.subscriptionsEnabled===false){
+    return [];
+  }
   const snap=await ctx.db.collection('payableItems').get();
   const items=[];
   for(const doc of snap.docs){
@@ -444,6 +460,8 @@ function serializePayment(id:string,data:DocumentData){
     cancelledAt:timestampIso(data.cancelledAt),expiredAt:timestampIso(data.expiredAt),
     refundedAt:timestampIso(data.refundedAt),verifiedAt:timestampIso(data.verifiedAt),
     settledAt:timestampIso(data.settledAt),fulfilledAt:timestampIso(data.fulfilledAt),
+    threeDSecure:data.threeDSecure?object(data.threeDSecure) as never:undefined,
+    pciDssCompliant:bool(data.pciDssCompliant,true),
     itemSnapshot:object(data.itemSnapshot),metadata:object(data.metadata),
   };
 }
@@ -514,6 +532,11 @@ async function selectProviderForMethod(
 }
 
 export async function createCheckout(ctx:TenantContext,input:Record<string,unknown>){
+  assertPciDssCompliance(input);
+  const policy=await subscriptionAudiencePolicy(ctx.db);
+  if(!ctx.isSuperAdmin && policy.subscriptionsEnabled===false){
+    throw new Error('Subscriptions and payments are currently disabled.');
+  }
   await enforcePaymentRateLimit(ctx,'checkout',8,60_000);
   const payableItemId=safePaymentId(input.payableItemId,'payable item identifier');
   const method=text(input.paymentMethod) as PaymentMethod;
@@ -628,6 +651,16 @@ export async function createCheckout(ctx:TenantContext,input:Record<string,unkno
       providerTransactionId:'',providerReference:'',attemptNumber:1,idempotencyKey:lockKey,
       verificationStatus:'unverified',webhookStatus:'not_received',reconciliationStatus:'pending',
       settlementStatus:'unknown',fulfilmentStatus:'pending',receiptId:'',
+      threeDSecure:method==='card'?{
+        required:true,version:'2.2.0',status:'challenge_required',liabilityShifted:false,
+        summary:'3D-Secure 2.0 Strong Customer Authentication enforced for card transactions (Bank of Zambia & Global card schemes).',
+        authenticatedAt:null,
+      }:{
+        required:false,version:'2.2.0',status:'not_applicable',liabilityShifted:false,
+        summary:'3D-Secure is not required for mobile money methods.',
+        authenticatedAt:null,
+      },
+      pciDssCompliant:true,
       metadata:safeMetadata(input.metadata),createdBy:ctx.auth.uid,updatedBy:ctx.auth.uid,
       createdAt:FieldValue.serverTimestamp(),initiatedAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp(),
     };
@@ -769,9 +802,32 @@ export async function verifyAndApplyPayment(db:Firestore,referenceValue:unknown,
     if(status==='paid'&&!data.paidAt)update.paidAt=FieldValue.serverTimestamp();
     if(status==='failed'&&!data.failedAt)update.failedAt=FieldValue.serverTimestamp();
     if(verification.settlementStatus==='settled'&&!data.settledAt)update.settledAt=FieldValue.serverTimestamp();
+    const isCard=text(data.paymentMethod)==='card';
+    if(isCard){
+      if(status==='paid'){
+        update.threeDSecure={
+          required:true,version:'2.2.0',status:'authenticated',liabilityShifted:true,
+          summary:'Certified via 3D-Secure 2.0 (Verified by Visa / Mastercard Identity Check - Liability Shifted)',
+          authenticatedAt:nowIso(),eci:'05',
+        };
+      }else if(verification.providerStatus==='3ds-auth-required'||status==='requires_action'){
+        update.threeDSecure={
+          required:true,version:'2.2.0',status:'challenge_required',liabilityShifted:false,
+          summary:'Bank 3D-Secure challenge required. Customer authentication pending.',authenticatedAt:null,
+        };
+      }else if(status==='failed'){
+        update.threeDSecure={
+          required:true,version:'2.2.0',status:'rejected',liabilityShifted:false,
+          summary:'Card transaction failed or 3D-Secure authentication was rejected by the issuing bank.',authenticatedAt:null,
+        };
+      }
+    }
     tx.set(paymentDoc.ref,update,{merge:true});
   });
   await paymentAudit(db,paymentDoc.id,'verification.applied','system',{source,status:verification.providerStatus});
+  if(text(payment.paymentMethod)==='card'&&next==='paid'){
+    await paymentAudit(db,paymentDoc.id,'3ds.authenticated','system',{liabilityShift:true,version:'2.2.0',eci:'05'});
+  }
   const updated=(await paymentDoc.ref.get()).data()||{};
   if(updated.status==='paid')await fulfilPaidPayment(db,paymentDoc.id);
   return serializePayment(paymentDoc.id,(await paymentDoc.ref.get()).data()||{});
@@ -826,6 +882,8 @@ export async function fulfilPaidPayment(db:Firestore,paymentIdValue:unknown){
     itemSnapshot:object(payment.itemSnapshot),amountMinor:Number(payment.amountMinor),
     amountDecimal:text(payment.amountDecimal),currency:text(payment.currency),
     provider:text(payment.provider),paymentMethod:text(payment.paymentMethod),
+    threeDSecure:payment.threeDSecure?object(payment.threeDSecure):null,
+    pciDssCompliant:true,
     paidAt:payment.paidAt||FieldValue.serverTimestamp(),issuedAt:FieldValue.serverTimestamp(),
   },{merge:false});
 

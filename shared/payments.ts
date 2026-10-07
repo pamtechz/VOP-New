@@ -145,9 +145,26 @@ export interface PaymentTransaction {
   settledAt?:unknown;
   fulfilledAt?:unknown;
   updatedAt?:unknown;
+  threeDSecure?:ThreeDSecureVerification;
+  pciDssCompliant?:boolean;
   metadata?:Record<string,unknown>;
   createdBy:string;
   updatedBy:string;
+}
+
+export interface ThreeDSecureVerification {
+  required:boolean;
+  version:string;
+  status:'not_applicable'|'challenge_required'|'authenticated'|'rejected'|'frictionless';
+  liabilityShifted:boolean;
+  acsUrl?:string;
+  summary:string;
+  authenticatedAt?:string|null;
+  eci?:string;
+}
+
+export function isThreeDSecureValidated(payment:{threeDSecure?:ThreeDSecureVerification}):boolean {
+  return payment?.threeDSecure?.status==='authenticated'&&payment?.threeDSecure?.liabilityShifted===true;
 }
 
 const ZERO_DECIMAL = new Set(['BIF','CLP','DJF','GNF','JPY','KMF','KRW','PYG','RWF','UGX','VND','VUV','XAF','XOF','XPF']);

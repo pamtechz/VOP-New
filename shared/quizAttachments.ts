@@ -2,7 +2,7 @@
  * One quiz belongs to exactly one guide or to a specific lesson inside a guide.
  * Reused by API writes and regression tests. Never trust client-supplied answer keys.
  */
-export type QuizAttachmentType = 'guide' | 'lesson' | 'chapter' | 'section' | 'block';
+export type QuizAttachmentType = 'guide' | 'lesson' | 'chapter' | 'section' | 'block' | 'program' | 'all';
 export type QuizQuestion = {
   key: string;
   question: string;
@@ -32,7 +32,7 @@ export function normalizeQuizQuestions(value: unknown, quizId: string): QuizQues
   });
 }
 export function quizLessonNumber(attachmentType: QuizAttachmentType, parentLessonNumber?: string): string {
-  return attachmentType === 'guide' ? '999999' : `${parentLessonNumber || '0'}.quiz`;
+  return (attachmentType === 'guide' || attachmentType === 'program' || attachmentType === 'all') ? '999999' : `${parentLessonNumber || '0'}.quiz`;
 }
 
 /** Public payload is deliberately incapable of carrying answer keys or explanations.

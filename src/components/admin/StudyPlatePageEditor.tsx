@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { Value } from 'platejs';
-import { Plate, PlateContent, PlateElement, createPlatePlugin, usePlateEditor, type PlateElementProps } from 'platejs/react';
+import { Plate, PlateContent, PlateElement, createPlatePlugin, usePlateEditor, useEditorRef, type PlateElementProps } from 'platejs/react';
 import {
   BoldPlugin, ItalicPlugin, UnderlinePlugin, StrikethroughPlugin, CodePlugin,
   H1Plugin, H2Plugin, H3Plugin, BlockquotePlugin,
@@ -14,7 +14,7 @@ import {
 import {
   Bold, Italic, Underline, Strikethrough, List, ListOrdered, Link2, ImagePlus,
   MoreVertical, Quote, Scissors, FilePlus2, Type, AlertCircle, Undo2, Redo2,
-  Code2, ChevronDown, Film, LoaderCircle, FileQuestion, Layers3,
+  Code2, ChevronDown, Edit3, Film, LoaderCircle, FileQuestion, Layers3,
 } from 'lucide-react';
 import {
   createStudyPlateSectionMarker,
@@ -69,11 +69,51 @@ const StudyAudioPlugin=createPlatePlugin({
 
 function SectionPageElement({element,children,...props}:PlateElementProps){
   const marker=element as unknown as StudyPlateSectionMarker;
+  const editor=useEditorRef();
+  const [title,setTitle]=useState(marker.title);
+
+  useEffect(()=>{
+    setTitle(marker.title);
+  },[marker.title]);
+
+  const commitTitle=(newTitle:string)=>{
+    const trimmed=newTitle.trim().slice(0,240);
+    const resolved=trimmed||'Untitled section';
+    setTitle(resolved);
+    try{
+      const path=editor.api.findPath(element);
+      if(path){
+        editor.tf.setNodes({title:resolved},{at:path});
+      }
+    }catch{
+      // Element might have moved or unmounted
+    }
+  };
+
   return <PlateElement as="div" element={element} {...props}
     className="vop-plate-section-marker" data-vop-section-id={marker.id}>
     <span contentEditable={false} className="vop-plate-section-marker-copy">
-      <span><Layers3 size={13}/> SECTION / LEARNER PAGE</span>
-      <strong>{marker.title}</strong>
+      <span className="vop-plate-section-marker-tag"><Layers3 size={13}/> SECTION / LEARNER PAGE</span>
+      <div className="vop-plate-section-marker-title-row">
+        <input
+          type="text"
+          className="vop-plate-section-marker-title-input"
+          value={title}
+          placeholder="Rename section / learner page…"
+          aria-label="Section title"
+          title="Click to rename this section"
+          onChange={e=>setTitle(e.target.value)}
+          onBlur={e=>commitTitle(e.target.value)}
+          onKeyDown={e=>{
+            if(e.key==='Enter'){
+              e.preventDefault();
+              commitTitle((e.target as HTMLInputElement).value);
+              (e.target as HTMLInputElement).blur();
+            }
+          }}
+        />
+        <Edit3 size={14} className="vop-plate-section-marker-edit-icon" aria-hidden="true"/>
+      </div>
       <small>Everything below belongs to this page until the next section boundary.</small>
     </span>
     <span className="vop-plate-section-marker-void">{children}</span>

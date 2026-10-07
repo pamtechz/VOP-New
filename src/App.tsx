@@ -787,7 +787,6 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
     setStudyError('');
     setIsMenuOpen(false);
     if(route==='payments'&&!hasAdminPortalAccess(currentUser)){
-      setStudyNotice('Payments are currently available only inside authorized organization and administration workspaces.');
       setCurrentRoute('home');
       rememberLocation({route:'home'},true);
       return;
@@ -896,7 +895,7 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
 
           {currentRoute === 'certificates' && <CertificatesPage currentUser={currentUser} settings={settings} activeLanguage={activeLanguage} onBack={goBack} />}
           {currentRoute === 'certificate-verification' && <CertificateVerificationPage onBack={goBack} />}
-          {currentRoute === 'admin' && hasAdminPortalAccess(currentUser) && <AdminPage currentUser={currentUser} activeLanguage={activeLanguage} onBack={goBack}
+          {currentRoute === 'admin' && hasAdminPortalAccess(currentUser) && <AdminPage currentUser={currentUser} settings={settings} activeLanguage={activeLanguage} onBack={goBack}
               onNavigate={navigate} uiLocale={uiLocale}
               sidebarCollapsed={sidebarCollapsed} onToggleSidebar={toggleDesktopSidebar}
               onAccountChanged={async()=>{

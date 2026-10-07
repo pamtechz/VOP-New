@@ -1,5 +1,5 @@
 import React,{useEffect,useMemo,useState} from 'react';
-import {ArrowDown,ArrowLeft,ArrowUp,BookOpen,Check,ChevronRight,
+import {Archive,ArrowDown,ArrowLeft,ArrowUp,BookOpen,Check,ChevronRight,
   Edit3,FolderOpen,Globe2,Plus,RefreshCw,Save,Search,ShieldCheck,Trash2,X} from 'lucide-react';
 import {auth} from '../lib/firebase';
 import type {CurriculumProgramDraft} from '../../shared/programModel';
@@ -10,6 +10,7 @@ import { ShimmerCards } from '../components/layout/Shimmer';
 type Guide={
   id:string;title:string;language:string;organizationId?:string;
   published?:boolean;archived?:boolean;canEdit?:boolean;
+  sharingScope?:string;
   lessons?:Array<{id:string;title:string;type:string;published?:boolean}>;
 };
 type Program=CurriculumProgramDraft&{
@@ -19,6 +20,7 @@ type Props={
   organizationId:string;
   guides:Guide[];
   onOpenGuide:(id:string,context:{programId:string;programTitle:string;entryMode:'lessons'|'sections'})=>void;
+  onCreateGuideInProgram?:(programId:string)=>void;
   onCountChange?:(count:number)=>void;
 };
 const blank=(organizationId:string):CurriculumProgramDraft=>({
@@ -29,7 +31,7 @@ const blank=(organizationId:string):CurriculumProgramDraft=>({
   published:false,archived:false,
 });
 async function programApi(action:'list'|'upsert'|'delete',
-  organizationId:string,id?:string,data?:CurriculumProgramDraft):Promise<{items?:Program[];item?:Program}>{
+  organizationId:string,id?:string,data?:CurriculumProgramDraft|Record<string,unknown>):Promise<{items?:Program[];item?:Program}>{
   if(!auth?.currentUser)throw new Error('Sign in again to manage programs.');
   const token=await auth.currentUser.getIdToken();
   const response=await fetch('/api/admin/content',{
@@ -46,7 +48,7 @@ async function programApi(action:'list'|'upsert'|'delete',
 
 /** First-class program catalogue; guide/lesson content is not duplicated. */
 export default function ProgramManager({
-  organizationId,guides,onOpenGuide,onCountChange,
+  organizationId,guides,onOpenGuide,onCreateGuideInProgram,onCountChange,
 }:Props){
   const [programs,setPrograms]=useState<Program[]>([]);
   const [loading,setLoading]=useState(true);
@@ -58,9 +60,12 @@ export default function ProgramManager({
   const [editing,setEditing]=useState<(CurriculumProgramDraft&{id:string})|null>(null);
   const [guideQuery,setGuideQuery]=useState('');
   const [showArchived,setShowArchived]=useState(false);
-  const availableGuides=useMemo(()=>guides.filter(guide=>
-    String(guide.organizationId||'')===organizationId&&
-    guide.archived!==true&&guide.canEdit!==false),[guides,organizationId]);
+  const availableGuides=useMemo(()=>guides.filter(guide=>{
+    if (guide.archived===true) return false;
+    if (!organizationId) return true;
+    const org = String(guide.organizationId || '');
+    return !org || org === organizationId || guide.sharingScope === 'shared';
+  }),[guides,organizationId]);
   const load=async()=>{
     setLoading(true);setError('');
     try{
@@ -104,6 +109,18 @@ export default function ProgramManager({
     }catch(reason){setError(reason instanceof Error?reason.message:'Archive failed.');}
     finally{setSaving(false);}
   };
+  const deletePermanently=async(program:Program)=>{
+    if(!program.canEdit||saving)return;
+    if(!await appConfirm(`Permanently delete the program "${program.title}"? Existing guides and lessons will remain intact, but this program catalogue entry will be permanently deleted.`, {
+      title:'Delete program permanently',confirmLabel:'Delete permanently',tone:'danger',
+    }))return;
+    setSaving(true);setError('');
+    try{
+      await programApi('delete',organizationId,program.id,{permanent:true});
+      setSelectedId('');await load();setNotice('Program deleted permanently.');
+    }catch(reason){setError(reason instanceof Error?reason.message:'Permanent deletion failed.');}
+    finally{setSaving(false);}
+  };
   const restore=async(program:Program)=>{
     if(!program.canEdit||!program.archived||saving)return;
     setSaving(true);setError('');
@@ -143,43 +160,58 @@ export default function ProgramManager({
   };
   return <section className="vop-program-manager" aria-label="Programs and courses">
     <header className="vop-program-top">
-      <div><span>CURRICULUM STRUCTURE</span><h2>Courses & programs</h2>
-        <p>Organize existing guides into a program, then choose how learners enter its lessons or pages.</p></div>
+      <div>
+        <span className="vop-program-eyebrow">TIER 2 · SPECIFIC TRACKS (STUDY COURSES / GUIDES SERIES)</span>
+        <h2>Study Tracks & Series</h2>
+        <p>Group your curriculum into themed correspondence series (e.g., Discover Guides, Focus on Prophecy). You can create tracks immediately without any modules attached, and connect study guides whenever ready.</p>
+      </div>
       <div className="vop-program-actions">
         <button type="button" className="vop-secondary" onClick={()=>void load()} disabled={loading}>
           <RefreshCw size={16}/> Refresh</button>
         <button type="button" className="vop-primary"
           onClick={()=>{setEditing({...blank(organizationId),id:''});setSelectedId('');setGuideQuery('');}}>
-          <Plus size={16}/> New program</button>
+          <Plus size={16}/> New Study Track</button>
       </div>
     </header>
     {error&&<div className="vop-alert error" role="alert">{error}</div>}
     {notice&&<div className="vop-alert success" role="status">{notice}</div>}
     <div className="vop-program-toolbar">
-      <label><Search size={16}/><input type="search" placeholder="Search courses and guides…"
+      <label><Search size={16}/><input type="search" placeholder="Search study tracks and courses…"
         value={query} onChange={event=>setQuery(event.target.value)} aria-label="Search courses"/></label>
       <label className="vop-program-archived"><input type="checkbox" checked={showArchived}
         onChange={event=>setShowArchived(event.target.checked)}/> Include archived</label>
-      <span>{visible.length} program{visible.length===1?'':'s'}</span>
+      <span className="vop-program-count-badge">{visible.length} track{visible.length===1?'':'s'}</span>
     </div>
     {editing?<div className="vop-program-editor">
-      <div className="vop-program-editor-head"><h3>{editing.id?'Edit program':'Create program'}</h3>
+      <div className="vop-program-editor-head">
+        <div>
+          <span className="vop-program-eyebrow">TIER 2 CONFIGURATION</span>
+          <h3>{editing.id?'Edit Study Track (Series)':'Create Study Track (Series)'}</h3>
+        </div>
         <button type="button" className="vop-actions" aria-label="Close program editor"
-          onClick={()=>setEditing(null)}><X size={17}/></button></div>
+          onClick={()=>setEditing(null)}><X size={17}/></button>
+      </div>
+      <div className="vop-program-editor-banner">
+        <FolderOpen size={18}/>
+        <div>
+          <strong>Modular Architecture:</strong>
+          <span> You can create and save this Study Track now without any modules attached. You can author and link Study Guides (Modules) later at any time.</span>
+        </div>
+      </div>
       <div className="vop-program-fields">
-        <label>Program name *<input maxLength={160} value={editing.title}
+        <label>Study Track Name *<input maxLength={160} value={editing.title} placeholder="e.g. Discover Guides, Focus on Prophecy"
           onChange={event=>setEditing({...editing,title:event.target.value})} required/></label>
-        <label>Learner navigation
+        <label>Learner Navigation
           <select value={editing.entryMode} onChange={event=>setEditing({
             ...editing,entryMode:event.target.value as 'lessons'|'sections',
           })}>
-            <option value="lessons">Open lessons, then pages</option>
-            <option value="sections">Open sections/pages directly</option>
+            <option value="lessons">Open lessons, then pages (Standard)</option>
+            <option value="sections">Open sections/pages directly (Sequential)</option>
           </select>
         </label>
-        <label className="vop-program-wide">Description<textarea rows={3} maxLength={5000}
+        <label className="vop-program-wide">Description<textarea rows={3} maxLength={5000} placeholder="Describe the focus and audience of this study course/series…"
           value={editing.description} onChange={event=>setEditing({...editing,description:event.target.value})}/></label>
-        <label className="vop-program-wide">Featured image URL
+        <label className="vop-program-wide">Featured Cover Image URL
           <input type="url" placeholder="https://..." value={editing.coverImageUrl}
             onChange={event=>setEditing({...editing,coverImageUrl:event.target.value})}/></label>
         <label className="vop-program-publish"><input type="checkbox" checked={editing.certificateEligible}
@@ -190,13 +222,12 @@ export default function ProgramManager({
           onChange={event=>setEditing({...editing,certificateTypeName:event.target.value})} placeholder="Program Completion Certificate"/></label></>}
       </div>
       <fieldset className="vop-program-guides">
-        <legend>Guide / module order</legend>
-        <p>Only guides owned within this selected tenant can be assigned.
-          Shared guides must be copied into your organization before reuse.</p>
+        <legend>Attached Study Guides / Modules (Optional)</legend>
+        <p>Select existing study guides to include in this track series, or save now and attach guides later. Only guides within this organization or platform scope can be assigned.</p>
         <label className="vop-program-guide-filter"><Search size={14}/>
           <input type="search" value={guideQuery}
             onChange={event=>setGuideQuery(event.target.value)}
-            placeholder="Find an eligible guide…" aria-label="Find an eligible guide"/></label>
+            placeholder="Search available guides to attach…" aria-label="Find an eligible guide"/></label>
         <div className="vop-program-guide-options">
           {availableGuides.filter(guide=>guide.title.toLowerCase().includes(guideQuery.toLowerCase()))
             .map(guide=><label key={guide.id}>
@@ -208,8 +239,11 @@ export default function ProgramManager({
                 }:current)}/>
               <BookOpen size={15}/><span>{guide.title}</span><small>{guide.published?'Published':'Draft'}</small>
             </label>)}
-          {!availableGuides.length&&<p>No editable guides are available for this organization.</p>}
+          {!availableGuides.length&&<p className="vop-program-guides-none">No existing guides in this organization yet. You can create this track now and attach guides once created.</p>}
         </div>
+        {editing.guideIds.length===0?<div className="vop-program-empty-guide-note">
+          <span>0 guides currently attached. You can save this track without any guides and attach them later.</span>
+        </div>:null}
         <ol className="vop-program-guide-order">
           {editing.guideIds.map((id,index)=><li key={id}>
             <span>{index+1}. {guides.find(guide=>guide.id===id)?.title||'Guide unavailable'}</span>
@@ -236,38 +270,71 @@ export default function ProgramManager({
           onChange={event=>setEditing({...editing,published:event.target.checked})}/> Published</label>
         <button type="button" className="vop-secondary" onClick={()=>setEditing(null)}>Cancel</button>
         <button type="button" className="vop-primary" disabled={saving||!editing.title.trim()}
-          onClick={()=>void save()}><Save size={16}/>{saving?'Saving…':'Save program'}</button>
+          onClick={()=>void save()}><Save size={16}/>{saving?'Saving…':editing.id?'Save Track':'Create Track'}</button>
       </div>
     </div>:selected?<div className="vop-program-detail">
       <header>
         <button type="button" className="vop-secondary" onClick={()=>setSelectedId('')}>
-          <ArrowLeft size={15}/> All programs</button>
-        <span>{selected.archived?'Archived':selected.published?'Published':'Draft'} · {selected.entryMode==='sections'?'Section navigation':'Lesson navigation'}</span>
+          <ArrowLeft size={15}/> All study tracks</button>
+        <span className="vop-program-detail-status">{selected.archived?'Archived':selected.published?'Published':'Draft'} · {selected.entryMode==='sections'?'Section navigation':'Lesson navigation'}</span>
       </header>
-      <h3>{selected.title}</h3><p>{selected.description||'No description provided.'}</p>
+      <div className="vop-program-detail-hero">
+        <span className="vop-program-eyebrow">TIER 2 · SPECIFIC TRACK</span>
+        <h3>{selected.title}</h3>
+        <p>{selected.description||'No description provided for this study track.'}</p>
+      </div>
       <div className="vop-program-detail-actions">
-        {selected.canEdit&&<button className="vop-secondary" type="button" onClick={startEdit(selected)}>
-          <Edit3 size={15}/> Edit program</button>}
+        {selected.canEdit&&<button className="vop-primary" type="button" onClick={startEdit(selected)}>
+          <Edit3 size={15}/> Edit track</button>}
         {selected.canEdit&&!selected.archived&&<button className="vop-secondary" type="button"
-          onClick={()=>void archive(selected)}><Trash2 size={15}/> Archive</button>}
+          onClick={()=>void archive(selected)}><Archive size={15}/> Archive</button>}
+        {selected.canEdit&&<button className="vop-secondary vop-danger-button" type="button"
+          onClick={()=>void deletePermanently(selected)} style={{color:'var(--danger,#c5221f)'}}>
+          <Trash2 size={15}/> Delete permanently</button>}
         {selected.canEdit&&selected.archived&&<button className="vop-secondary" type="button"
           onClick={()=>void restore(selected)}><RefreshCw size={15}/> Restore as draft</button>}
         {!selected.canEdit&&<span><ShieldCheck size={15}/> Shared program · read only</span>}
       </div>
-      <h4>Guides & modules</h4>
-      {selected.guideIds.length?<div className="vop-program-module-list">
-        {selected.guideIds.map((id,index)=>{
-          const guide=guides.find(item=>item.id===id);
-          return guide?<button type="button" key={id}
-            onClick={()=>onOpenGuide(id,{programId:selected.id,programTitle:selected.title,entryMode:selected.entryMode})}>
-            <span className="vop-program-seq">{index+1}</span>
-            <span><strong>{guide.title}</strong>
-              <small>{guide.lessons?.length||0} lessons / assessments · {guide.language.toUpperCase()}</small></span>
-            <ChevronRight size={17}/>
-          </button>:<div key={id} className="vop-program-unavailable">
-            {index+1}. Unavailable guide (outside your current access scope)</div>;
-        })}
-      </div>:<p className="vop-program-empty">Add guides to begin authoring this course.</p>}
+      <div className="vop-program-modules-section">
+        <div className="vop-program-modules-head" style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',flexWrap:'wrap',gap:12}}>
+          <div>
+            <h4>Attached Study Guides & Modules ({selected.guideIds.length})</h4>
+            <p>Learners will study these booklets sequentially in this series.</p>
+          </div>
+          {selected.canEdit && onCreateGuideInProgram && (
+            <button className="vop-primary" type="button" onClick={() => onCreateGuideInProgram(selected.id)}>
+              <Plus size={15}/> Create Guide in this Track
+            </button>
+          )}
+        </div>
+        {selected.guideIds.length?<div className="vop-program-module-list">
+          {selected.guideIds.map((id,index)=>{
+            const guide=guides.find(item=>item.id===id);
+            return guide?<button type="button" key={id}
+              onClick={()=>onOpenGuide(id,{programId:selected.id,programTitle:selected.title,entryMode:selected.entryMode})}>
+              <span className="vop-program-seq">{index+1}</span>
+              <span><strong>{guide.title}</strong>
+                <small>{guide.lessons?.length||0} lessons / assessments · {guide.language.toUpperCase()}</small></span>
+              <ChevronRight size={17}/>
+            </button>:<div key={id} className="vop-program-unavailable">
+              {index+1}. Unavailable guide (outside your current access scope)</div>;
+          })}
+        </div>:<div className="vop-program-empty-guide-card">
+          <BookOpen size={24}/>
+          <h5>No study guides attached yet</h5>
+          <p>You can create a guide directly in this track, or attach existing guides.</p>
+          <div style={{display:'flex',gap:10,marginTop:12}}>
+            {selected.canEdit && onCreateGuideInProgram && (
+              <button type="button" className="vop-primary" onClick={() => onCreateGuideInProgram(selected.id)}>
+                <Plus size={14}/> Create Guide in this Track
+              </button>
+            )}
+            {selected.canEdit&&<button type="button" className="vop-secondary" onClick={startEdit(selected)}>
+              <Edit3 size={14}/> Attach existing guides
+            </button>}
+          </div>
+        </div>}
+      </div>
     </div>:loading&&programs.length===0?<ShimmerCards cards={4} label="Loading programs"/>
     :visible.length?<div className={'vop-program-grid'+(loading?' vop-refreshing vop-shimmer-overlay':'')}>
       {visible.map(program=><article key={program.id} className="vop-program-card">
@@ -276,16 +343,35 @@ export default function ProgramManager({
             :<FolderOpen size={30} strokeWidth={1.5}/>}
         </div>
         <div className="vop-program-card-copy">
-          <span>{program.published?'PUBLISHED':'DRAFT'} · {program.organizationId?'ORGANIZATION':'PLATFORM'}</span>
-          <h3>{program.title}</h3><p>{program.description||'Open the curriculum for this program.'}</p>
-          <small><BookOpen size={14}/>{program.guideIds.length} guides ·
-            {program.entryMode==='sections'?' section-first':' lesson-first'}{program.certificateEligible?' · certificate eligible':''}</small>
+          <div className="vop-program-card-badges">
+            <span className={'vop-status '+(program.published?'published':'draft')}>{program.published?'PUBLISHED':'DRAFT'}</span>
+            <span className="vop-program-track-pill">TIER 2 TRACK</span>
+          </div>
+          <h3>{program.title}</h3>
+          <p>{program.description||'Open this study track to view its attached guides and lessons.'}</p>
+          <div className="vop-program-card-meta">
+            <small><BookOpen size={13}/>{program.guideIds.length} {program.guideIds.length===1?'guide':'guides'} attached</small>
+            <small>{program.entryMode==='sections'?'Section-first':'Lesson-first'}</small>
+            {program.certificateEligible&&<small className="vop-cert-pill">Certificate</small>}
+          </div>
         </div>
-        <button type="button" onClick={()=>setSelectedId(program.id)}>
-          View curriculum <ChevronRight size={15}/></button>
+        <div className="vop-program-card-foot">
+          <button type="button" className="vop-primary vop-track-open-btn" onClick={()=>setSelectedId(program.id)}>
+            View track <ChevronRight size={15}/></button>
+          {program.canEdit&&<button type="button" className="vop-actions vop-actions-delete"
+            onClick={(e)=>{e.stopPropagation();void deletePermanently(program);}}
+            title="Delete program" style={{color:'var(--danger,#c5221f)'}}>
+            <Trash2 size={15}/></button>}
+        </div>
       </article>)}
-    </div>:<div className="vop-program-empty">
-      <Globe2 size={24}/><h3>No programs yet</h3>
-      <p>Create a program and assign your existing guide/modules to it.</p></div>}
+    </div>:<div className="vop-program-empty-hero">
+      <div className="vop-program-empty-icon"><FolderOpen size={36}/></div>
+      <h3>No Study Tracks Created Yet</h3>
+      <p>Study Tracks (Series) are the Tier 2 containers that organize your curriculum into overarching correspondence series (e.g. Discover Guides, Focus on Prophecy). You don't need any modules created first—create your track now and attach study guides later.</p>
+      <button type="button" className="vop-primary vop-empty-hero-cta"
+        onClick={()=>{setEditing({...blank(organizationId),id:''});setSelectedId('');setGuideQuery('');}}>
+        <Plus size={18}/> Create First Study Track
+      </button>
+    </div>}
   </section>;
 }

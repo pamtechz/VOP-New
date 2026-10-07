@@ -1,12 +1,13 @@
 import React,{useEffect,useMemo,useState} from 'react';
 import {
-  CalendarDays, Check, ChevronLeft, ChevronRight, Droplets, GraduationCap, Mail, Phone, Plus,
-  RefreshCw, Search, UserCheck, UserPlus, Users, X,
+  Building2, CalendarDays, Check, ChevronLeft, ChevronRight, Droplets, GraduationCap, Mail,
+  Pencil, Phone, Plus, RefreshCw, Search, Trash2, UserCheck, UserPlus, Users, X,
 } from 'lucide-react';
 import { auth } from '../lib/firebase';
 import type { User } from '../types';
 import { ModalLayer } from '../components/layout/ModalLayer';
 import { ShimmerList } from '../components/layout/Shimmer';
+import { appConfirm } from '../components/layout/AppDialog';
 import { ViewModeToggle, type AdminViewMode } from '../components/admin/ViewModeToggle';
 import './candidate-management.css';
 
@@ -16,6 +17,7 @@ type Candidate={
   uid:string;displayName:string;email:string;phoneNumber?:string;userCode?:string;
   userType?:string;role?:string;roleLabel?:string;disabled?:boolean;status?:string;
   organizationId?:string;organizationName?:string;conferenceName?:string;districtName?:string;
+  churchName?:string;
   createdAt?:string;lastLogin?:string;
   information?:{enrollmentDate?:string;graduating?:boolean;graduated?:boolean;baptismCandidate?:boolean;baptized?:boolean;baptismScheduledDate?:string;baptismDate?:string};
 };
@@ -41,33 +43,56 @@ function initials(value:string){return value.trim().split(/\s+/).slice(0,2).map(
 
 export default function CandidateEnrollment({currentUser}:{currentUser:User}){
   const isSuperAdmin=currentUser.role==='super_admin';
-  const [organizationId,setOrganizationId]=useState(String(currentUser.organizationId||''));
+  const userOrgId=String(currentUser.organizationId||'');
+  const [organizationId,setOrganizationId]=useState(userOrgId);
+  const [selectedOrgFilter,setSelectedOrgFilter]=useState('');
   const [organizations,setOrganizations]=useState<Organization[]>([]);
   const [candidates,setCandidates]=useState<Candidate[]>([]);
   const [courses,setCourses]=useState<Course[]>([]);
   const [courseId,setCourseId]=useState('');
   const [name,setName]=useState(''); const [email,setEmail]=useState(''); const [phone,setPhone]=useState(''); const [password,setPassword]=useState('');
+  const [orgSearch,setOrgSearch]=useState('');
   const [search,setSearch]=useState(''); const [status,setStatus]=useState<'all'|'active'|'graduated'|'graduating'|'scheduled'|'baptized'>('all');
   const [page,setPage]=useState(1); const pageSize=10;
   const [viewMode,setViewMode]=useState<AdminViewMode>('table');
   const [loading,setLoading]=useState(true); const [saving,setSaving]=useState(false);
   const [message,setMessage]=useState(''); const [error,setError]=useState('');
   const [enrollOpen,setEnrollOpen]=useState(false);
+
+  // Edit Candidate (Details & Belonging)
+  const [editingCandidate,setEditingCandidate]=useState<Candidate|null>(null);
+  const [editName,setEditName]=useState('');
+  const [editEmail,setEditEmail]=useState('');
+  const [editPhone,setEditPhone]=useState('');
+  const [editDisabled,setEditDisabled]=useState(false);
+  const [editOrgId,setEditOrgId]=useState('');
+  const [editOrgSearch,setEditOrgSearch]=useState('');
+  const [editConferenceName,setEditConferenceName]=useState('');
+  const [editDistrictName,setEditDistrictName]=useState('');
+  const [editChurchName,setEditChurchName]=useState('');
+
+  // Baptism tracking
   const [baptismOpen,setBaptismOpen]=useState<Candidate|null>(null);
   const [baptismStatus,setBaptismStatus]=useState<'not_marked'|'scheduled'|'baptized'>('not_marked');
   const [baptismScheduledDate,setBaptismScheduledDate]=useState('');
   const [baptismDate,setBaptismDate]=useState('');
 
   const loadCandidates=async()=>{
-    const response=await adminUsers('list');
+    const targetOrg=!isSuperAdmin?userOrgId:(selectedOrgFilter||undefined);
+    const response=await adminUsers('list',targetOrg?{organizationId:targetOrg}:{});
     const items=(response.items||[]) as Candidate[];
-    setCandidates(items.filter(item=>item.userType==='learner'||item.roleLabel==='Learner'));
+    let learners=items.filter(item=>item.userType==='learner'||item.roleLabel==='Learner');
+    if(!isSuperAdmin&&userOrgId){
+      learners=learners.filter(item=>String(item.organizationId||'')===userOrgId);
+    }
+    setCandidates(learners);
   };
   const loadOrganizations=async()=>{
     const response=await adminUsers('listOrganizations');
     const items=((response.items||[]) as Organization[]).filter(item=>item.status!=='inactive');
     setOrganizations(items);
-    if(!organizationId && items.length===1)setOrganizationId(items[0].id);
+    if(!organizationId&&!isSuperAdmin&&userOrgId)setOrganizationId(userOrgId);
+    else if(!organizationId&&isSuperAdmin&&items.length===1)setOrganizationId(items[0].id);
   };
   const refresh=async()=>{
     setLoading(true);setError('');
@@ -76,18 +101,20 @@ export default function CandidateEnrollment({currentUser}:{currentUser:User}){
     finally{setLoading(false);}
   };
 
-  useEffect(()=>{void refresh()},[]);
-  useEffect(()=>{setPage(1)},[search,status]);
+  useEffect(()=>{void refresh()},[selectedOrgFilter]);
+  useEffect(()=>{setPage(1)},[search,status,selectedOrgFilter]);
+
+  const effectiveEnrollOrgId=!isSuperAdmin?userOrgId:organizationId;
   useEffect(()=>{
     const firebaseUser=auth?.currentUser;
-    if(!organizationId||!firebaseUser){setCourses([]);setCourseId('');return;}
+    if(!effectiveEnrollOrgId||!firebaseUser){setCourses([]);setCourseId('');return;}
     let cancelled=false;
     void (async()=>{
       try{
         const token=await firebaseUser.getIdToken();
         const response=await fetch('/api/admin/content',{
           method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
-          body:JSON.stringify({action:'listGuides',collection:'guides',organizationId}),
+          body:JSON.stringify({action:'listGuides',collection:'guides',organizationId:effectiveEnrollOrgId}),
         });
         const body=await response.json().catch(()=>({})) as {items?:Course[];error?:string};
         if(!response.ok)throw new Error(body.error||'Could not load courses.');
@@ -95,11 +122,25 @@ export default function CandidateEnrollment({currentUser}:{currentUser:User}){
       }catch(e){if(!cancelled)setError(e instanceof Error?e.message:'Could not load courses.');}
     })();
     return()=>{cancelled=true};
-  },[organizationId]);
+  },[effectiveEnrollOrgId]);
+
+  const filteredOrgsForEnroll=useMemo(()=>{
+    if(!orgSearch.trim())return organizations;
+    const q=orgSearch.trim().toLowerCase();
+    return organizations.filter(o=>o.name.toLowerCase().includes(q));
+  },[organizations,orgSearch]);
+
+  const filteredOrgsForEdit=useMemo(()=>{
+    if(!editOrgSearch.trim())return organizations;
+    const q=editOrgSearch.trim().toLowerCase();
+    return organizations.filter(o=>o.name.toLowerCase().includes(q));
+  },[organizations,editOrgSearch]);
 
   const filtered=useMemo(()=>{
     const q=search.trim().toLowerCase();
     return candidates.filter(candidate=>{
+      if(!isSuperAdmin&&userOrgId&&String(candidate.organizationId||'')!==userOrgId)return false;
+      if(isSuperAdmin&&selectedOrgFilter&&String(candidate.organizationId||'')!==selectedOrgFilter)return false;
       const info=candidate.information||{};
       const matchesSearch=!q||[
         candidate.displayName,candidate.email,candidate.phoneNumber,candidate.userCode,
@@ -113,7 +154,7 @@ export default function CandidateEnrollment({currentUser}:{currentUser:User}){
         ||(status==='baptized'&&info.baptized===true);
       return matchesSearch&&matchesStatus;
     });
-  },[candidates,search,status]);
+  },[candidates,search,status,isSuperAdmin,userOrgId,selectedOrgFilter]);
   const totalPages=Math.max(1,Math.ceil(filtered.length/pageSize));
   const rows=filtered.slice((page-1)*pageSize,page*pageSize);
   const activeCount=candidates.filter(item=>!item.disabled&&item.information?.graduated!==true).length;
@@ -144,7 +185,7 @@ export default function CandidateEnrollment({currentUser}:{currentUser:User}){
         body:JSON.stringify({
           action:'updateBaptism',
           candidateId:baptismOpen.uid,
-          organizationId:baptismOpen.organizationId||organizationId||undefined,
+          organizationId:baptismOpen.organizationId||effectiveEnrollOrgId||undefined,
           baptismStatus,
           baptismScheduledDate:baptismStatus==='not_marked'?'':baptismScheduledDate,
           baptismDate:baptismStatus==='baptized'?baptismDate:'',
@@ -159,17 +200,93 @@ export default function CandidateEnrollment({currentUser}:{currentUser:User}){
     finally{setSaving(false);}
   };
 
+  const openEditCandidate=(candidate:Candidate)=>{
+    setEditingCandidate(candidate);
+    setEditName(candidate.displayName||'');
+    setEditEmail(candidate.email||'');
+    setEditPhone(candidate.phoneNumber||'');
+    setEditDisabled(candidate.disabled===true);
+    setEditOrgId(candidate.organizationId||userOrgId||'');
+    setEditOrgSearch('');
+    setEditConferenceName(candidate.conferenceName||'');
+    setEditDistrictName(candidate.districtName||'');
+    setEditChurchName(candidate.churchName||'');
+    setError('');
+  };
+
+  const saveCandidateEdit=async()=>{
+    if(!editingCandidate)return;
+    setSaving(true);setError('');setMessage('');
+    try{
+      if(!editName.trim()||!editEmail.trim())throw new Error('Candidate name and email are required.');
+      const firebaseUser=auth?.currentUser;
+      if(!firebaseUser)throw new Error('Your session has expired. Sign in again.');
+      const token=await firebaseUser.getIdToken();
+      const targetOrg=isSuperAdmin?(editOrgId||editingCandidate.organizationId):userOrgId;
+      const response=await fetch('/api/admin/candidates',{
+        method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
+        body:JSON.stringify({
+          action:'updateCandidate',
+          candidateId:editingCandidate.uid,
+          displayName:editName.trim(),
+          email:editEmail.trim(),
+          phoneNumber:editPhone.trim(),
+          disabled:editDisabled,
+          organizationId:targetOrg,
+          conferenceName:editConferenceName.trim(),
+          districtName:editDistrictName.trim(),
+          churchName:editChurchName.trim(),
+        }),
+      });
+      const body=await response.json().catch(()=>({})) as {error?:string;candidate?:Candidate};
+      if(!response.ok||!body.candidate)throw new Error(body.error||'Candidate could not be updated.');
+      setCandidates(current=>current.map(item=>item.uid===body.candidate!.uid?{...item,...body.candidate}:item));
+      setMessage('Candidate details and belonging updated successfully.');
+      setEditingCandidate(null);
+    }catch(e){setError(e instanceof Error?e.message:'Candidate update failed.');}
+    finally{setSaving(false);}
+  };
+
+  const deleteCandidate=async(candidate:Candidate)=>{
+    const candidateName=candidate.displayName||candidate.email||'this candidate';
+    if(!await appConfirm(`Permanently delete candidate "${candidateName}"? This removes their candidate record and login account.`,{
+      title:'Delete candidate',confirmLabel:'Delete candidate',tone:'danger',
+    }))return;
+    setSaving(true);setError('');setMessage('');
+    try{
+      const firebaseUser=auth?.currentUser;
+      if(!firebaseUser)throw new Error('Your session has expired. Sign in again.');
+      const token=await firebaseUser.getIdToken();
+      const response=await fetch('/api/admin/candidates',{
+        method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
+        body:JSON.stringify({
+          action:'deleteCandidate',
+          candidateId:candidate.uid,
+          organizationId:candidate.organizationId||userOrgId,
+        }),
+      });
+      const body=await response.json().catch(()=>({})) as {error?:string};
+      if(!response.ok)throw new Error(body.error||'Could not delete candidate.');
+      setCandidates(current=>current.filter(item=>item.uid!==candidate.uid));
+      setMessage(`Candidate "${candidateName}" deleted successfully.`);
+      if(editingCandidate?.uid===candidate.uid)setEditingCandidate(null);
+    }catch(e){setError(e instanceof Error?e.message:'Could not delete candidate.');}
+    finally{setSaving(false);}
+  };
+
   const submit=async(e:React.FormEvent)=>{
     e.preventDefault();setSaving(true);setError('');setMessage('');
     try{
-      if(!organizationId||!courseId||!name.trim()||!email.trim())throw new Error('Organization, course, full name and email are required.');
+      const targetOrg=!isSuperAdmin?userOrgId:organizationId;
+      if(!targetOrg)throw new Error('Please select an organization.');
+      if(!courseId||!name.trim()||!email.trim())throw new Error('Course, full name and email are required.');
       if(password&&password.length<6)throw new Error('Password must contain at least 6 characters.');
       const firebaseUser=auth?.currentUser;
       if(!firebaseUser)throw new Error('Your session has expired. Sign in again.');
       const token=await firebaseUser.getIdToken();
       const response=await fetch('/api/admin/enrollCandidate',{
         method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
-        body:JSON.stringify({organizationId,guideId:courseId,displayName:name.trim(),email:email.trim(),phoneNumber:phone.trim(),password}),
+        body:JSON.stringify({organizationId:targetOrg,guideId:courseId,displayName:name.trim(),email:email.trim(),phoneNumber:phone.trim(),password}),
       });
       const body=await response.json().catch(()=>({})) as {error?:string;created?:boolean};
       if(!response.ok)throw new Error(body.error||'Candidate enrollment failed.');
@@ -180,14 +297,19 @@ export default function CandidateEnrollment({currentUser}:{currentUser:User}){
     finally{setSaving(false);}
   };
 
+  const currentOrgName=organizations.find(o=>o.id===userOrgId)?.name||((currentUser as unknown as {organizationName?:string}).organizationName)||'Your Organization';
+
   return <div className="vop-candidates-page">
     <div className="vop-page-head">
       <div className="vop-heading"><div className="vop-heading-icon"><GraduationCap size={30}/></div>
-        <div><h1>Candidates</h1><p>View candidates in your authorized scope and enroll learners into published courses.</p></div>
+        <div>
+          <h1>Candidates</h1>
+          <p>{!isSuperAdmin?`Managing candidates enrolled in ${currentOrgName}.`:'View and manage candidates across organizations and assign belonging.'}</p>
+        </div>
       </div>
       <div className="vop-reference-actions">
         <button className="vop-secondary" type="button" disabled={loading} onClick={()=>void refresh()}><RefreshCw size={16}/>{loading?'Refreshing…':'Refresh'}</button>
-        <button className="vop-primary" type="button" onClick={()=>setEnrollOpen(true)}><UserPlus size={17}/>Add candidate</button>
+        <button className="vop-primary" type="button" onClick={()=>{if(!isSuperAdmin)setOrganizationId(userOrgId);setEnrollOpen(true)}}><UserPlus size={17}/>Add candidate</button>
       </div>
     </div>
 
@@ -205,6 +327,12 @@ export default function CandidateEnrollment({currentUser}:{currentUser:User}){
     <section className="vop-card vop-candidate-list-card">
       <div className="vop-candidate-toolbar">
         <div className="vop-search"><Search size={18}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search candidate, email, organization…"/></div>
+        {isSuperAdmin&&(
+          <select className="vop-filter" value={selectedOrgFilter} onChange={e=>setSelectedOrgFilter(e.target.value)} title="Filter candidates by organization">
+            <option value="">All organizations</option>
+            {organizations.map(o=><option key={o.id} value={o.id}>{o.name}</option>)}
+          </select>
+        )}
         <select className="vop-filter" value={status} onChange={e=>setStatus(e.target.value as typeof status)}>
           <option value="all">All candidates</option><option value="active">Active</option>
           <option value="graduating">Graduating</option><option value="graduated">Graduated</option><option value="scheduled">Baptism scheduled</option><option value="baptized">Baptized</option>
@@ -214,7 +342,7 @@ export default function CandidateEnrollment({currentUser}:{currentUser:User}){
       {loading&&candidates.length===0?<div className="vop-candidate-table-wrap"><ShimmerList rows={7} compact label="Loading candidates"/></div>
         :rows.length===0?<div className="vop-candidate-table-wrap"><div className="vop-empty">No candidates match this view.</div></div>
         :viewMode==='table'?<div className={'vop-candidate-table-wrap'+(loading?' vop-refreshing vop-shimmer-overlay':'')}>
-          <table className="vop-candidate-table"><thead><tr><th>#</th><th>Candidate</th><th>Organization</th><th>Enrollment</th><th>Ministry status</th><th>Baptism tracking</th><th>Account</th></tr></thead>
+          <table className="vop-candidate-table"><thead><tr><th>#</th><th>Candidate</th><th>Organization</th><th>Enrollment</th><th>Ministry status</th><th>Actions & Tracking</th><th>Account</th></tr></thead>
             <tbody>{rows.map((candidate,index)=>{
               const info=candidate.information||{};
               const ministry=info.baptized?'Baptized':info.baptismCandidate?'Baptism scheduled':info.graduated?'Graduated':info.graduating?'Graduating':'Studying';
@@ -229,7 +357,14 @@ export default function CandidateEnrollment({currentUser}:{currentUser:User}){
                 <td><strong>{candidate.organizationName||'Platform / unassigned'}</strong><small>{[candidate.conferenceName,candidate.districtName].filter(Boolean).join(' · ')||'No hierarchy assignment'}</small></td>
                 <td>{dateLabel(info.enrollmentDate||candidate.createdAt)}</td>
                 <td><span className="vop-candidate-ministry-status">{ministry}</span></td>
-                <td><div style={{display:'grid',gap:6}}><small>{baptismLabel}</small><button type="button" className="vop-secondary" onClick={()=>openBaptismTracking(candidate)}><Droplets size={14}/>Manage</button></div></td>
+                <td>
+                  <div style={{display:'flex',alignItems:'center',gap:6,flexWrap:'wrap'}}>
+                    <button type="button" className="vop-secondary" onClick={()=>openEditCandidate(candidate)} title="Edit candidate details and belonging"><Pencil size={13}/>Edit</button>
+                    <button type="button" className="vop-secondary" onClick={()=>openBaptismTracking(candidate)} title="Manage baptism tracking"><Droplets size={13}/>Baptism</button>
+                    <button type="button" className="vop-secondary vop-actions-delete" onClick={()=>void deleteCandidate(candidate)} title="Delete candidate" style={{color:'var(--danger,#c5221f)'}}><Trash2 size={13}/>Delete</button>
+                    <small style={{display:'block',width:'100%',color:'var(--text-muted,#73859a)'}}>{baptismLabel}</small>
+                  </div>
+                </td>
                 <td><span className={'vop-status '+(candidate.disabled?'disabled':'enabled')}>{candidate.disabled?'Inactive':'Active'}</span></td>
               </tr>;
             })}</tbody></table>
@@ -251,7 +386,11 @@ export default function CandidateEnrollment({currentUser}:{currentUser:User}){
                 <div><small>Hierarchy</small><strong>{[candidate.conferenceName,candidate.districtName].filter(Boolean).join(' · ')||'Not assigned'}</strong></div>
                 <div><small>Baptism</small><strong>{baptismLabel}</strong></div>
               </div>
-              <div className="vop-admin-record-card-actions"><button type="button" className="vop-secondary" onClick={()=>openBaptismTracking(candidate)}><Droplets size={14}/>Manage baptism</button></div>
+              <div className="vop-admin-record-card-actions">
+                <button type="button" className="vop-secondary" onClick={()=>openEditCandidate(candidate)}><Pencil size={14}/>Edit candidate</button>
+                <button type="button" className="vop-secondary" onClick={()=>openBaptismTracking(candidate)}><Droplets size={14}/>Manage baptism</button>
+                <button type="button" className="vop-secondary vop-actions-delete" onClick={()=>void deleteCandidate(candidate)} style={{color:'var(--danger,#c5221f)'}}><Trash2 size={14}/>Delete</button>
+              </div>
             </article>;
           })}
         </div>}
@@ -272,12 +411,105 @@ export default function CandidateEnrollment({currentUser}:{currentUser:User}){
       </div>
     </div></ModalLayer>}
 
+    {editingCandidate&&<ModalLayer><div className="vop-candidate-modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget&&!saving)setEditingCandidate(null)}}>
+      <div className="vop-candidate-modal" role="dialog" aria-modal="true" aria-label="Edit candidate details and belonging">
+        <div className="vop-candidate-modal-head">
+          <div>
+            <h2>Edit candidate</h2>
+            <p>Update candidate details and organization / church belonging.</p>
+          </div>
+          <button type="button" disabled={saving} onClick={()=>setEditingCandidate(null)}><X size={18}/></button>
+        </div>
+        <div className="vop-form-grid">
+          <div className="vop-field"><label>Full name *</label><input value={editName} onChange={e=>setEditName(e.target.value)} required/></div>
+          <div className="vop-field"><label>Email address *</label><div className="vop-candidate-icon-input"><Mail size={16}/><input type="email" value={editEmail} onChange={e=>setEditEmail(e.target.value)} required/></div></div>
+          <div className="vop-field"><label>Phone number</label><div className="vop-candidate-icon-input"><Phone size={16}/><input value={editPhone} onChange={e=>setEditPhone(e.target.value)}/></div></div>
+          <div className="vop-field"><label>Account status</label><select value={editDisabled?'inactive':'active'} onChange={e=>setEditDisabled(e.target.value==='inactive')}><option value="active">Active</option><option value="inactive">Disabled / Inactive</option></select></div>
+
+          <div className="vop-belonging-legend">Candidate Belonging & Affiliation</div>
+
+          {isSuperAdmin?(
+            <div className="vop-field" style={{gridColumn:'1/-1'}}>
+              <label>Assigned organization <small>(Search & select)</small></label>
+              <div className="vop-search-org-picker">
+                <div className="vop-candidate-icon-input" style={{marginBottom: 6}}>
+                  <Search size={15}/>
+                  <input
+                    value={editOrgSearch}
+                    onChange={e=>setEditOrgSearch(e.target.value)}
+                    placeholder="Search organization by name…"
+                  />
+                </div>
+                <select value={editOrgId} onChange={e=>setEditOrgId(e.target.value)}>
+                  <option value="">Select organization ({filteredOrgsForEdit.length} available)</option>
+                  {filteredOrgsForEdit.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}
+                </select>
+              </div>
+            </div>
+          ):(
+            <div className="vop-field" style={{gridColumn:'1/-1'}}>
+              <label>Organization</label>
+              <div className="vop-auto-org-badge">
+                <Building2 size={16}/>
+                <div>
+                  <strong>{editingCandidate.organizationName||currentOrgName}</strong>
+                  <small>Candidates belong to this organization</small>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="vop-field"><label>Conference / Field / Region</label><input value={editConferenceName} onChange={e=>setEditConferenceName(e.target.value)} placeholder="e.g. Copperbelt Conference"/></div>
+          <div className="vop-field"><label>District</label><input value={editDistrictName} onChange={e=>setEditDistrictName(e.target.value)} placeholder="e.g. Ndola Central District"/></div>
+          <div className="vop-field" style={{gridColumn:'1/-1'}}><label>Local Church / Branch</label><input value={editChurchName} onChange={e=>setEditChurchName(e.target.value)} placeholder="e.g. Riverside Church"/></div>
+        </div>
+        <div className="vop-candidate-modal-actions" style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+          <button className="vop-secondary vop-danger-button" type="button" disabled={saving} onClick={()=>void deleteCandidate(editingCandidate)} style={{color:'var(--danger,#c5221f)'}}>
+            <Trash2 size={16}/>Delete candidate
+          </button>
+          <div style={{display:'flex',gap:8}}>
+            <button className="vop-secondary" type="button" disabled={saving} onClick={()=>setEditingCandidate(null)}>Cancel</button>
+            <button className="vop-primary" type="button" disabled={saving||!editName.trim()||!editEmail.trim()} onClick={()=>void saveCandidateEdit()}><Check size={16}/>{saving?'Saving…':'Save candidate'}</button>
+          </div>
+        </div>
+      </div>
+    </div></ModalLayer>}
+
     {enrollOpen&&<ModalLayer><div className="vop-candidate-modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget&&!saving)setEnrollOpen(false)}}>
       <form className="vop-candidate-modal" onSubmit={submit} role="dialog" aria-modal="true" aria-label="Add candidate">
         <div className="vop-candidate-modal-head"><div><h2>Add candidate</h2><p>Create or locate an account and enroll it into a published course.</p></div><button type="button" disabled={saving} onClick={()=>setEnrollOpen(false)}><X size={18}/></button></div>
         <div className="vop-form-grid">
-          {(isSuperAdmin||organizations.length>1)&&<div className="vop-field"><label>Organization *</label><select value={organizationId} onChange={e=>{setOrganizationId(e.target.value);setCourseId('')}}><option value="">Select organization</option>{organizations.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></div>}
-          <div className="vop-field"><label>Course *</label><select value={courseId} onChange={e=>setCourseId(e.target.value)} disabled={!organizationId}><option value="">Select a published course</option>{courses.map(course=><option key={course.id} value={course.id}>{course.title||course.id}{course.language?' · '+course.language.toUpperCase():''}</option>)}</select></div>
+          {!isSuperAdmin?(
+            <div className="vop-field" style={{gridColumn:'1/-1'}}>
+              <label>Organization (Assigned automatically)</label>
+              <div className="vop-auto-org-badge">
+                <Building2 size={16}/>
+                <div>
+                  <strong>{currentOrgName}</strong>
+                  <small>Candidates added within your organization are automatically assigned to it</small>
+                </div>
+              </div>
+            </div>
+          ):(
+            <div className="vop-field" style={{gridColumn:'1/-1'}}>
+              <label>Organization * <small>(Search & select)</small></label>
+              <div className="vop-search-org-picker">
+                <div className="vop-candidate-icon-input" style={{marginBottom: 6}}>
+                  <Search size={15}/>
+                  <input
+                    value={orgSearch}
+                    onChange={e=>setOrgSearch(e.target.value)}
+                    placeholder="Search organization by name…"
+                  />
+                </div>
+                <select value={organizationId} onChange={e=>{setOrganizationId(e.target.value);setCourseId('')}} required>
+                  <option value="">Select organization ({filteredOrgsForEnroll.length} available)</option>
+                  {filteredOrgsForEnroll.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}
+                </select>
+              </div>
+            </div>
+          )}
+          <div className="vop-field"><label>Course *</label><select value={courseId} onChange={e=>setCourseId(e.target.value)} disabled={!effectiveEnrollOrgId} required><option value="">Select a published course</option>{courses.map(course=><option key={course.id} value={course.id}>{course.title||course.id}{course.language?' · '+course.language.toUpperCase():''}</option>)}</select></div>
           <div className="vop-field"><label>Full name *</label><input value={name} onChange={e=>setName(e.target.value)} required/></div>
           <div className="vop-field"><label>Email *</label><div className="vop-candidate-icon-input"><Mail size={16}/><input type="email" value={email} onChange={e=>setEmail(e.target.value)} required/></div></div>
           <div className="vop-field"><label>Phone</label><div className="vop-candidate-icon-input"><Phone size={16}/><input value={phone} onChange={e=>setPhone(e.target.value)}/></div></div>
@@ -288,3 +520,4 @@ export default function CandidateEnrollment({currentUser}:{currentUser:User}){
     </div></ModalLayer>}
   </div>;
 }
+

@@ -176,92 +176,166 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
     finally { setSaving(false); }
   };
 
+  type PersonalTab = 'account' | 'interface' | 'notifications' | 'accessibility' | 'security' | 'privacy';
+  const [activeTab, setActiveTab] = useState<PersonalTab>('account');
+
+  const personalTabs: { id: PersonalTab; label: string; icon: React.ReactNode }[] = [
+    { id: 'account', label: t('settings.tab_account', 'Account'), icon: <UserRound size={17} /> },
+    { id: 'interface', label: t('settings.tab_interface', 'Interface & Study'), icon: <Globe2 size={17} /> },
+    { id: 'notifications', label: t('settings.tab_notifications', 'Notifications'), icon: <Bell size={17} /> },
+    { id: 'accessibility', label: t('settings.tab_accessibility', 'Accessibility'), icon: <Accessibility size={17} /> },
+    { id: 'security', label: t('settings.tab_security', 'Passkeys & Security'), icon: <Fingerprint size={17} /> },
+    { id: 'privacy', label: t('settings.tab_privacy', 'Privacy & Data'), icon: <ShieldCheck size={17} /> },
+  ];
+
   return <div className="vop-personal-settings vop-page-shell">
     <div className="vop-personal-header vop-page-head">
       <div><p className="vop-kicker">{organizationAccount?'Organization Account':t('account.my_account','My Account')}</p><h1>{organizationAccount?'Personal Settings':t('settings.personal_title','Personal Settings')}</h1><p>{organizationAccount?'Preferences and sign-in security for this organization staff account. These settings are separate from organization-wide configuration.':t('settings.personal_description','These settings apply only to your VOP account.')}</p></div>
       <button className="vop-secondary" type="button" onClick={onBack}>{t('common.back','Back')}</button>
     </div>
     {message && <div className="vop-personal-message vop-card" role="status">{message}</div>}
-    {busy ? <div className="vop-personal-loading vop-card" role="status">Loading your settings…</div> : <div className="vop-personal-grid">
-      <section className="vop-personal-card vop-card">
-        <h2><UserRound size={19}/> Account</h2>
-        <p>{currentUser.displayName} · {currentUser.email}</p>
-        <small>{organizationAccount?'Your organization assignment and permissions are managed separately and cannot be changed here.':'Your role, organization, permissions and learning records are managed separately and cannot be changed here.'}</small>
-      </section>
-      <section className="vop-personal-card vop-card">
-        <h2><Globe2 size={19}/> Interface</h2>
-        <label>Theme<select value={settings.theme === 'dark' ? 'dark' : 'light'} onChange={e => { const theme=e.target.value as 'light'|'dark'; patch('theme',theme); persistThemePreference(theme); }}><option value="light">Light (default)</option><option value="dark">Dark</option></select></label>
-        <label>{t('settings.ui_language', 'Interface language')}<select value={settings.uiLocale || getUiLocale()} onChange={e => { patch('uiLocale', e.target.value); setUiLocale(e.target.value); }}>
-          {uiLocales.map(language => <option key={language.code} value={language.code}>{language.name} · {language.nativeName || language.code}</option>)}
-        </select></label>
-        {!organizationAccount&&<label>{t('settings.study_language', 'Study language')}<select value={settings.studyLanguage || getActiveLanguage()} onChange={e => patch('studyLanguage', e.target.value)}>
-          <option value="">{t('settings.system_default', 'System default')}</option>
-          {languages.filter(language => language.enabled !== false).map(language => <option key={language.code} value={language.code}>{language.name} · {language.nativeName || language.code}</option>)}
-        </select></label>}
-      </section>
-      <section className="vop-personal-card vop-card">
-        <h2><Bell size={19}/> Notifications</h2>
-        {(['enabled','email','announcements','certificates'] as const).map(key => <label key={key} className="vop-personal-toggle"><input type="checkbox" checked={settings.notifications?.[key] !== false} onChange={e => patch('notifications', { ...settings.notifications, [key]: e.target.checked })}/>{key === 'enabled' ? 'Enable notifications' : key.charAt(0).toUpperCase()+key.slice(1)+' notifications'}</label>)}
-        {notificationCapabilities&&!notificationCapabilities.email.available&&<small role="status">
-          Email delivery is not currently available from this VOP deployment. Your preference is saved and will be enforced when the administrator enables and configures the mail provider.
-        </small>}
-      </section>
-      <section className="vop-personal-card vop-card">
-        <h2><Accessibility size={19}/> Accessibility</h2>
-        {(['reducedMotion','largeText','highContrast'] as const).map(key => <label key={key}><input type="checkbox" checked={Boolean(settings.accessibility?.[key])} onChange={e => {
-          const accessibility={ ...settings.accessibility, [key]: e.target.checked };
-          patch('accessibility', accessibility);
-          applyAccessibilityPreferences(accessibility);
-        }}/>{key === 'reducedMotion' ? 'Reduce motion' : key === 'largeText' ? 'Use larger text' : 'Increase contrast'}</label>)}
-      </section>
-      {!organizationAccount&&<section className="vop-personal-card vop-card">
-        <h2><BookOpen size={19}/> Offline study on this device</h2>
-        <label className="vop-personal-toggle"><input type="checkbox" checked={trustedDevice} onChange={e => void changeTrustedDevice(e.target.checked)}/> Remember previously opened study materials for offline reading</label>
-        <small>Use only on a private device. Cached course material can remain accessible to someone using the same browser after sign-out. Lesson completion while offline is saved as pending, not as an official result, until the server verifies it.</small>
-        <small>Reload while online after changing this option. For complete removal of previously cached content, clear the browser’s site data.</small>
-      </section>}
-      <section className="vop-personal-card vop-card">
-        <h2><Fingerprint size={19}/> Passkeys & device verification</h2>
-        {!passkeyCapable?<p>This browser or connection does not support secure passkey sign-in.</p>:<>
-          <p>{platformBiometric
-            ?'Enable a passkey after signing in once. Your device can then verify you using fingerprint, face recognition, PIN or screen lock.'
-            :'Enable a passkey after signing in once. The available verification method is controlled by your device or passkey provider.'}</p>
-          <small>VOP stores a public-key credential only. Biometric data remains on your device and is not uploaded to VOP or Firebase.</small>
-          <button type="button" className="vop-primary" disabled={passkeyBusy} onClick={()=>void enablePasskey()}>
-            <Fingerprint size={17}/>{passkeyBusy?'Please wait…':'Enable passkey on this device'}
+    {busy ? <div className="vop-personal-loading vop-card" role="status">Loading your settings…</div> : <>
+      <div className="vop-personal-tabs" role="tablist" aria-label="Personal settings sections">
+        {personalTabs.map(tab => (
+          <button
+            key={tab.id}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === tab.id}
+            className={`vop-personal-tab-btn ${activeTab === tab.id ? 'active' : ''}`}
+            onClick={() => setActiveTab(tab.id)}
+          >
+            {tab.icon}
+            <span>{tab.label}</span>
           </button>
-          {passkeys.length>0&&<div style={{display:'grid',gap:8,marginTop:12}}>
-            {passkeys.map(item=><div key={item.id} className="vop-setting-row">
-              <div><div className="vop-setting-name">{item.label||'Passkey'}</div><div className="vop-setting-help">Added {item.createdAt?new Date(item.createdAt).toLocaleDateString():'to this account'}</div></div>
-              <button type="button" className="vop-secondary danger" disabled={passkeyBusy} onClick={()=>void removePasskey(item)}><Trash2 size={15}/>Remove</button>
-            </div>)}
-          </div>}
-        </>}
-      </section>
-      <section className="vop-personal-card vop-card">
-        <h2><ShieldCheck size={19}/> Privacy & account data</h2>
-        <label>Profile visibility<select value={settings.privacy?.profileVisibility || 'organization'} onChange={e => patch('privacy', { ...settings.privacy, profileVisibility: e.target.value as 'private' | 'organization' })}><option value="organization">My organization</option><option value="private">Private</option></select></label>
-        <div style={{display:'flex',gap:8,flexWrap:'wrap',marginTop:10}}>
-          <button type="button" className="vop-secondary" disabled={privacyBusy} onClick={()=>void downloadMyData()}><Download size={16}/>Export my data</button>
-          <a className="vop-secondary" href="/privacy">Privacy Policy</a>
-          <a className="vop-secondary" href="/terms">Terms of Service</a>
-        </div>
-        {accountLifecycle&&['requested','processing','blocked'].includes(accountLifecycle.status)?<div className="vop-setting-list" style={{marginTop:12}}>
-          <div className="vop-setting-row"><div><div className="vop-setting-name">Deletion status: {accountLifecycle.status}</div><div className="vop-setting-help">
-            {accountLifecycle.scheduledFor?'Scheduled for '+new Date(accountLifecycle.scheduledFor).toLocaleDateString()+'. ':''}
-            {accountLifecycle.reason||'Your account remains recoverable until the grace period ends.'}
-          </div></div></div>
-          {accountLifecycle.status!=='processing'&&<button type="button" className="vop-secondary" disabled={privacyBusy} onClick={()=>void undoDeletionRequest()}><RotateCcw size={16}/>Cancel deletion request</button>}
-        </div>:<div style={{display:'grid',gap:8,marginTop:12}}>
-          <strong>Request account deletion</strong>
-          <small>A 30-day recovery period applies. Organization owners, Super Admins and mentors with active learner assignments must transfer those responsibilities first. Some certificate, financial and audit records are retained or pseudonymized under the Privacy Policy.</small>
-          <label>Optional reason<textarea value={deletionReason} maxLength={500} onChange={e=>setDeletionReason(e.target.value)} placeholder="Optional"/></label>
-          <label>Type DELETE MY ACCOUNT to confirm<input value={deletionConfirmation} autoComplete="off" onChange={e=>setDeletionConfirmation(e.target.value)}/></label>
-          <button type="button" className="vop-secondary danger" disabled={privacyBusy||deletionConfirmation!=='DELETE MY ACCOUNT'} onClick={()=>void submitDeletionRequest()}><Trash2 size={16}/>Request account deletion</button>
-        </div>}
-      </section>
-      {!organizationAccount&&<LocalizationParticipation/>}
-      <button className="vop-personal-save vop-primary" type="button" disabled={saving} onClick={() => void save()}><Save size={18}/>{saving ? t('common.saving','Saving…') : t('settings.save','Save personal settings')}</button>
-    </div>}
+        ))}
+      </div>
+
+      <div className="vop-personal-tab-content">
+        {activeTab === 'account' && (
+          <div className="vop-personal-tab-pane">
+            <section className="vop-personal-card vop-card">
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:8}}>
+                <h2><UserRound size={19}/> Account</h2>
+                <span className={'vop-chip ' + (currentUser.accountType === 'organization' || currentUser.organizationId ? 'vop-account-type-org' : 'vop-account-type-personal')} style={{fontSize:11.5,fontWeight:750,padding:'4px 10px',borderRadius:6}}>
+                  {currentUser.accountType === 'organization' || currentUser.organizationId ? 'Organisation Account' : 'Personal Account'}
+                </span>
+              </div>
+              <p>{currentUser.displayName} · {currentUser.email}</p>
+              {currentUser.accountType === 'organization' || currentUser.organizationId ? (
+                <div style={{margin:'8px 0',padding:'10px 12px',borderRadius:8,background:'var(--theme-surface-soft,#f0f5ff)',border:'1px solid #c7d9fc',fontSize:12,color:'#1e3a8a'}}>
+                  <strong>Organisation Account Status:</strong> A personal account can manage an organisation account. Immediately an account has been assigned to an organisation, it assumes the organisation account type while retaining your personal identity and credentials.
+                </div>
+              ) : (
+                <div style={{margin:'8px 0',padding:'10px 12px',borderRadius:8,background:'var(--theme-surface-soft,#f8fafc)',border:'1px solid #e2e8f0',fontSize:12,color:'#475569'}}>
+                  <strong>Personal Account Status:</strong> Personal accounts are separate from organisation accounts. If your account is assigned to an organisation, it will immediately assume the Organisation Account type.
+                </div>
+              )}
+              <small>{organizationAccount?'Your organization assignment and permissions are managed separately and cannot be changed here.':'Your role, organization, permissions and learning records are managed separately and cannot be changed here.'}</small>
+            </section>
+          </div>
+        )}
+
+        {activeTab === 'interface' && (
+          <div className="vop-personal-tab-pane">
+            <section className="vop-personal-card vop-card">
+              <h2><Globe2 size={19}/> Interface</h2>
+              <label>Theme<select value={settings.theme === 'dark' ? 'dark' : 'light'} onChange={e => { const theme=e.target.value as 'light'|'dark'; patch('theme',theme); persistThemePreference(theme); }}><option value="light">Light (default)</option><option value="dark">Dark</option></select></label>
+              <label>{t('settings.ui_language', 'Interface language')}<select value={settings.uiLocale || getUiLocale()} onChange={e => { patch('uiLocale', e.target.value); setUiLocale(e.target.value); }}>
+                {uiLocales.map(language => <option key={language.code} value={language.code}>{language.name} · {language.nativeName || language.code}</option>)}
+              </select></label>
+              {!organizationAccount&&<label>{t('settings.study_language', 'Study language')}<select value={settings.studyLanguage || getActiveLanguage()} onChange={e => patch('studyLanguage', e.target.value)}>
+                <option value="">{t('settings.system_default', 'System default')}</option>
+                {languages.filter(language => language.enabled !== false).map(language => <option key={language.code} value={language.code}>{language.name} · {language.nativeName || language.code}</option>)}
+              </select></label>}
+            </section>
+            {!organizationAccount&&<section className="vop-personal-card vop-card">
+              <h2><BookOpen size={19}/> Offline study on this device</h2>
+              <label className="vop-personal-toggle"><input type="checkbox" checked={trustedDevice} onChange={e => void changeTrustedDevice(e.target.checked)}/> Remember previously opened study materials for offline reading</label>
+              <small>Use only on a private device. Cached course material can remain accessible to someone using the same browser after sign-out. Lesson completion while offline is saved as pending, not as an official result, until the server verifies it.</small>
+              <small>Reload while online after changing this option. For complete removal of previously cached content, clear the browser’s site data.</small>
+            </section>}
+            {!organizationAccount&&<LocalizationParticipation/>}
+          </div>
+        )}
+
+        {activeTab === 'notifications' && (
+          <div className="vop-personal-tab-pane">
+            <section className="vop-personal-card vop-card">
+              <h2><Bell size={19}/> Notifications</h2>
+              {(['enabled','email','announcements','certificates'] as const).map(key => <label key={key} className="vop-personal-toggle"><input type="checkbox" checked={settings.notifications?.[key] !== false} onChange={e => patch('notifications', { ...settings.notifications, [key]: e.target.checked })}/>{key === 'enabled' ? 'Enable notifications' : key.charAt(0).toUpperCase()+key.slice(1)+' notifications'}</label>)}
+              {notificationCapabilities&&!notificationCapabilities.email.available&&<small role="status">
+                Email delivery is not currently available from this VOP deployment. Your preference is saved and will be enforced when the administrator enables and configures the mail provider.
+              </small>}
+            </section>
+          </div>
+        )}
+
+        {activeTab === 'accessibility' && (
+          <div className="vop-personal-tab-pane">
+            <section className="vop-personal-card vop-card">
+              <h2><Accessibility size={19}/> Accessibility</h2>
+              {(['reducedMotion','largeText','highContrast'] as const).map(key => <label key={key}><input type="checkbox" checked={Boolean(settings.accessibility?.[key])} onChange={e => {
+                const accessibility={ ...settings.accessibility, [key]: e.target.checked };
+                patch('accessibility', accessibility);
+                applyAccessibilityPreferences(accessibility);
+              }}/>{key === 'reducedMotion' ? 'Reduce motion' : key === 'largeText' ? 'Use larger text' : 'Increase contrast'}</label>)}
+            </section>
+          </div>
+        )}
+
+        {activeTab === 'security' && (
+          <div className="vop-personal-tab-pane">
+            <section className="vop-personal-card vop-card">
+              <h2><Fingerprint size={19}/> Passkeys & device verification</h2>
+              {!passkeyCapable?<p>This browser or connection does not support secure passkey sign-in.</p>:<>
+                <p>{platformBiometric
+                  ?'Enable a passkey after signing in once. Your device can then verify you using fingerprint, face recognition, PIN or screen lock.'
+                  :'Enable a passkey after signing in once. The available verification method is controlled by your device or passkey provider.'}</p>
+                <small>VOP stores a public-key credential only. Biometric data remains on your device and is not uploaded to VOP or Firebase.</small>
+                <button type="button" className="vop-primary" disabled={passkeyBusy} onClick={()=>void enablePasskey()}>
+                  <Fingerprint size={17}/>{passkeyBusy?'Please wait…':'Enable passkey on this device'}
+                </button>
+                {passkeys.length>0&&<div style={{display:'grid',gap:8,marginTop:12}}>
+                  {passkeys.map(item=><div key={item.id} className="vop-setting-row">
+                    <div><div className="vop-setting-name">{item.label||'Passkey'}</div><div className="vop-setting-help">Added {item.createdAt?new Date(item.createdAt).toLocaleDateString():'to this account'}</div></div>
+                    <button type="button" className="vop-secondary danger" disabled={passkeyBusy} onClick={()=>void removePasskey(item)}><Trash2 size={15}/>Remove</button>
+                  </div>)}
+                </div>}
+              </>}
+            </section>
+          </div>
+        )}
+
+        {activeTab === 'privacy' && (
+          <div className="vop-personal-tab-pane">
+            <section className="vop-personal-card vop-card">
+              <h2><ShieldCheck size={19}/> Privacy & account data</h2>
+              <label>Profile visibility<select value={settings.privacy?.profileVisibility || 'organization'} onChange={e => patch('privacy', { ...settings.privacy, profileVisibility: e.target.value as 'private' | 'organization' })}><option value="organization">My organization</option><option value="private">Private</option></select></label>
+              <div style={{display:'flex',gap:8,flexWrap:'wrap',marginTop:10}}>
+                <button type="button" className="vop-secondary" disabled={privacyBusy} onClick={()=>void downloadMyData()}><Download size={16}/>Export my data</button>
+                <a className="vop-secondary" href="/privacy">Privacy Policy</a>
+                <a className="vop-secondary" href="/terms">Terms of Service</a>
+              </div>
+              {accountLifecycle&&['requested','processing','blocked'].includes(accountLifecycle.status)?<div className="vop-setting-list" style={{marginTop:12}}>
+                <div className="vop-setting-row"><div><div className="vop-setting-name">Deletion status: {accountLifecycle.status}</div><div className="vop-setting-help">
+                  {accountLifecycle.scheduledFor?'Scheduled for '+new Date(accountLifecycle.scheduledFor).toLocaleDateString()+'. ':''}
+                  {accountLifecycle.reason||'Your account remains recoverable until the grace period ends.'}
+                </div></div></div>
+                {accountLifecycle.status!=='processing'&&<button type="button" className="vop-secondary" disabled={privacyBusy} onClick={()=>void undoDeletionRequest()}><RotateCcw size={16}/>Cancel deletion request</button>}
+              </div>:<div style={{display:'grid',gap:8,marginTop:12}}>
+                <strong>Request account deletion</strong>
+                <small>A 30-day recovery period applies. Organization owners, Super Admins and mentors with active learner assignments must transfer those responsibilities first. Some certificate, financial and audit records are retained or pseudonymized under the Privacy Policy.</small>
+                <label>Optional reason<textarea value={deletionReason} maxLength={500} onChange={e=>setDeletionReason(e.target.value)} placeholder="Optional"/></label>
+                <label>Type DELETE MY ACCOUNT to confirm<input value={deletionConfirmation} autoComplete="off" onChange={e=>setDeletionConfirmation(e.target.value)}/></label>
+                <button type="button" className="vop-secondary danger" disabled={privacyBusy||deletionConfirmation!=='DELETE MY ACCOUNT'} onClick={()=>void submitDeletionRequest()}><Trash2 size={16}/>Request account deletion</button>
+              </div>}
+            </section>
+          </div>
+        )}
+
+        <button className="vop-personal-save vop-primary" type="button" disabled={saving} onClick={() => void save()}><Save size={18}/>{saving ? t('common.saving','Saving…') : t('settings.save','Save personal settings')}</button>
+      </div>
+    </>}
   </div>;
 };

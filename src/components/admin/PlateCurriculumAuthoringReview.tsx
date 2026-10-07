@@ -1,7 +1,8 @@
 import React, {useEffect,useState} from 'react';
 import {
   ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BookOpen, ChevronRight,
-  Copy, FileQuestion, GripVertical, MoreVertical, Plus, Trash2,
+  Copy, Edit3, FileQuestion, GripVertical, MoreVertical, PanelLeftClose, PanelLeftOpen,
+  Plus, Save, Settings, Trash2,
 } from 'lucide-react';
 import type {CurriculumChapter,CurriculumSection} from '../../../shared/curriculumStructure';
 import {
@@ -34,6 +35,11 @@ type Props={
     kind:'chapter'|'section'|'block';anchorId:string;destinationLessonId:string;
     destinationParentId:string;mode:'move'|'copy';
   })=>void;
+  onBack?:()=>void;
+  onSave?:(publish?:boolean)=>void | Promise<void>;
+  onOpenSettings?:()=>void;
+  saving?:boolean;
+  lessonHeaderFields?:React.ReactNode;
 };
 const id=(kind:string)=>kind+'-'+Math.random().toString(36).slice(2,12);
 const freshPage=(index:number):CurriculumSection=>({
@@ -60,7 +66,7 @@ const duplicateSectionSafely=(section:CurriculumSection):CurriculumSection=>{
 
 export function PlateCurriculumAuthoringReview({
   chapters,organizationId,onChange,onPageError,onQuiz,canAttachQuiz,lessonPublished,programTitle,guideTitle,lessonTitle,
-  initialSectionId,canTransfer,otherLessons,onTransfer,
+  initialSectionId,canTransfer,otherLessons,onTransfer,onBack,onSave,onOpenSettings,saving,lessonHeaderFields,
 }:Props){
   const initialChapter=initialSectionId
     ?chapters.find(item=>item.sections.some(section=>section.id===initialSectionId))
@@ -75,6 +81,9 @@ export function PlateCurriculumAuthoringReview({
   const [editorRevision,setEditorRevision]=useState(0);
   const chapter=chapters.find(item=>item.id===chapterId)||chapters[0];
   const chapterIndex=chapters.findIndex(item=>item.id===chapter?.id);
+
+  const [editingSectionId,setEditingSectionId]=useState<string|null>(null);
+  const [sidebarCollapsed,setSidebarCollapsed]=useState(false);
 
   const canLeaveChapter=()=>{
     if(!invalidChapter)return true;
@@ -226,35 +235,52 @@ export function PlateCurriculumAuthoringReview({
     </div>;
 
   return <div className="vop-plate-authoring-review">
-    <div className="vop-plate-path">
+    {!onBack && <div className="vop-plate-path">
       <BookOpen size={15}/><span>{programTitle||'Course / Program'}</span><ChevronRight size={14}/>
       <span>{guideTitle||'Guide / Module'}</span><ChevronRight size={14}/>
       <strong>{lessonTitle||'Lesson'}</strong>
-    </div>
-    <div className="vop-plate-author-head">
+    </div>}
+    {!onBack && <div className="vop-plate-author-head">
       <div><span>CONTINUOUS DOCUMENT AUTHORING</span>
         <h3>Write first. Define learner pages inside the document.</h3>
         <p>Write each chapter naturally in Plate. Put the cursor in any paragraph or heading and choose <strong>Start section</strong>. That block starts a new learner page, and every following block stays on that page until the next section boundary.</p>
       </div>
       <button type="button" className="vop-secondary" disabled={chapters.length>=40}
         onClick={addChapter}><Plus size={16}/> Chapter</button>
-    </div>
+    </div>}
     <div className="vop-plate-chapter-picker">
-      <label>Chapter
-        <select value={chapter?.id||''} onChange={e=>{
+      {onBack && (
+        <button
+          type="button"
+          className="vop-plate-back-btn"
+          onClick={onBack}
+          title="Back to curriculum"
+          aria-label="Back"
+        >
+          <ArrowLeft size={18}/>
+        </button>
+      )}
+      <select
+        aria-label="Select chapter"
+        className="vop-plate-chapter-select"
+        value={chapter?.id||''}
+        onChange={e=>{
           const next=chapters.find(item=>item.id===e.target.value);
           if(!next||!canLeaveChapter())return;
           setChapterId(next.id);setFocusSectionId(next.sections[0]?.id||'');remountEditor();
-        }}>
-          {chapters.map((item,index)=><option key={item.id} value={item.id}>
-            {index+1}. {item.title}
-          </option>)}
-        </select>
-      </label>
+        }}
+      >
+        {chapters.map((item,index)=><option key={item.id} value={item.id}>
+          {index+1}. {item.title}
+        </option>)}
+      </select>
       {chapter&&<input aria-label="Chapter title" className="vop-plate-chapter-title"
         value={chapter.title} onChange={e=>onChange(chapters.map(item=>item.id===chapter.id
           ?{...item,title:e.target.value}:item))}/>}
+      {lessonHeaderFields}
       {chapter&&<StructureActionsMenu label="Chapter">
+        <button type="button" disabled={chapters.length>=40} onClick={addChapter}>
+          <Plus size={15}/> Add chapter</button>
         <button type="button" disabled={chapterIndex<=0} onClick={()=>moveChapter(-1)}>
           <ArrowUp size={15}/> Move chapter up</button>
         <button type="button" disabled={chapterIndex<0||chapterIndex>=chapters.length-1} onClick={()=>moveChapter(1)}>
@@ -264,58 +290,133 @@ export function PlateCurriculumAuthoringReview({
         <button type="button" disabled={!canAttachQuiz}
           onClick={()=>onQuiz({type:'chapter',id:chapter.id})}>
           <FileQuestion size={15}/> Chapter quiz</button>
+        {onSave && <button type="button" disabled={saving} onClick={()=>onSave(false)}>
+          <Save size={15}/> Save draft</button>}
+        {onSave && <button type="button" disabled={saving} onClick={()=>onSave(true)}>
+          <Save size={15}/> Publish lesson</button>}
+        {onOpenSettings && <button type="button" onClick={onOpenSettings}>
+          <Settings size={15}/> Lesson details & media</button>}
         {destinations('chapter',chapter.id)}
       </StructureActionsMenu>}
     </div>
 
-    {chapter&&<div className="vop-plate-document-shell">
-      <aside className="vop-plate-outline" aria-label="Learner page outline">
+    {chapter&&<div className={'vop-plate-document-shell '+(sidebarCollapsed?'vop-plate-sidebar-collapsed':'')}>
+      <aside className={'vop-plate-outline '+(sidebarCollapsed?'collapsed':'')} aria-label="Learner page outline">
         <div className="vop-plate-outline-head">
-          <div><span>LEARNER PAGES</span><strong>{chapter.sections.length} sections</strong></div>
-          <button type="button" title="Add a blank section" aria-label="Add a blank section"
-            onClick={addSection} disabled={chapter.sections.length>=40}><Plus size={15}/></button>
-        </div>
-        <p className="vop-plate-outline-help">Sections are page boundaries inside the document—not separate block forms.</p>
-        <div className="vop-plate-outline-list">
-          {chapter.sections.map((section,index)=><div key={section.id}
-            className={'vop-plate-outline-row '+(section.id===focusSectionId?'active':'')}>
-            <button type="button" className="vop-plate-outline-main"
-              onClick={()=>setFocusSectionId(section.id)}>
-              <span>{index+1}</span>
-              <span><strong>{section.title}</strong>
-                <small>{section.document?.length||section.blocks.length} content blocks</small></span>
+          {!sidebarCollapsed ? (
+            <div><span>LEARNER PAGES</span><strong>{chapter.sections.length} sections</strong></div>
+          ) : (
+            <span className="vop-plate-outline-collapsed-title" title="Learner Pages">PAGES</span>
+          )}
+          <div className="vop-plate-outline-head-actions">
+            <button type="button" title="Add a blank section" aria-label="Add a blank section"
+              onClick={addSection} disabled={chapter.sections.length>=40}><Plus size={14}/></button>
+            <button type="button"
+              className="vop-plate-outline-collapse-toggle"
+              title={sidebarCollapsed ? "Expand outline" : "Collapse outline"}
+              aria-label={sidebarCollapsed ? "Expand outline" : "Collapse outline"}
+              onClick={()=>setSidebarCollapsed(v=>!v)}>
+              {sidebarCollapsed ? <PanelLeftOpen size={14}/> : <PanelLeftClose size={14}/>}
             </button>
-            <input key={section.id+':'+section.title} aria-label={'Rename section '+(index+1)}
-              defaultValue={section.title}
-              onKeyDown={event=>{if(event.key==='Enter')event.currentTarget.blur();}}
-              onBlur={event=>{
-                if(event.currentTarget.value.trim()!==section.title)renameSection(section.id,event.currentTarget.value);
-              }}/>
-            <StructureActionsMenu label={'Section '+(index+1)}>
-              <button type="button" disabled={!canAttachQuiz}
-                onClick={()=>onQuiz({type:'section',id:section.id})}>
-                <FileQuestion size={15}/> Section quiz</button>
-              <button type="button" disabled={index===0}
-                onClick={()=>moveSection(section.id,-1)}><ArrowUp size={15}/> Move page up</button>
-              <button type="button" disabled={index===chapter.sections.length-1}
-                onClick={()=>moveSection(section.id,1)}><ArrowDown size={15}/> Move page down</button>
-              <button type="button" disabled={chapter.sections.length>=40}
-                onClick={()=>duplicateSection(section.id)}><Copy size={15}/> Duplicate section</button>
-              {chapters.length>1&&<label className="vop-plate-move-label">Move into chapter
-                <select value="" disabled={chapter.sections.length<=1}
-                  onChange={event=>moveToChapter(section.id,event.target.value)}>
-                  <option value="">Choose chapter…</option>
-                  {chapters.filter(item=>item.id!==chapter.id).map(item=>
-                    <option key={item.id} value={item.id} disabled={item.sections.length>=40}>{item.title}</option>)}
-                </select>
-              </label>}
-              {destinations('section',section.id)}
-              <button className="vop-structure-delete" type="button"
-                disabled={chapter.sections.length<=1||lessonPublished}
-                title={lessonPublished?'Unpublish and resolve dependent quizzes before deleting a published section.':''}
-                onClick={()=>removeSection(section.id)}><Trash2 size={15}/> Delete section</button>
-            </StructureActionsMenu>
-          </div>)}
+          </div>
+        </div>
+        {!sidebarCollapsed && <p className="vop-plate-outline-help">Sections are page boundaries inside the document—not separate block forms.</p>}
+        <div className="vop-plate-outline-list">
+          {chapter.sections.map((section,index)=>{
+            const isEditing=editingSectionId===section.id;
+            const isActive=section.id===focusSectionId;
+            if (sidebarCollapsed) {
+              return (
+                <button
+                  key={section.id}
+                  type="button"
+                  className={'vop-plate-outline-mini-badge '+(isActive?'active':'')}
+                  title={`Section ${index+1}: ${section.title}`}
+                  onClick={()=>setFocusSectionId(section.id)}
+                >
+                  {index+1}
+                </button>
+              );
+            }
+            return (
+              <div key={section.id}
+                className={'vop-plate-outline-row '+(isActive?'active':'')}>
+                {isEditing ? (
+                  <div className="vop-plate-outline-inline-rename">
+                    <input
+                      autoFocus
+                      key={section.id+':'+section.title}
+                      aria-label={'Rename section '+(index+1)}
+                      className="vop-plate-outline-rename-input"
+                      defaultValue={section.title}
+                      onKeyDown={event=>{
+                        if(event.key==='Enter'){
+                          const next=event.currentTarget.value.trim();
+                          if(next&&next!==section.title)renameSection(section.id,next);
+                          setEditingSectionId(null);
+                        }else if(event.key==='Escape'){
+                          setEditingSectionId(null);
+                        }
+                      }}
+                      onBlur={event=>{
+                        const next=event.currentTarget.value.trim();
+                        if(next&&next!==section.title)renameSection(section.id,next);
+                        setEditingSectionId(null);
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <>
+                    <button type="button" className="vop-plate-outline-main"
+                      onClick={()=>setFocusSectionId(section.id)}
+                      onDoubleClick={()=>setEditingSectionId(section.id)}
+                      title="Click to jump to this section in the document">
+                      <span className="vop-plate-outline-badge">{index+1}</span>
+                      <span className="vop-plate-outline-text">
+                        <strong>{section.title}</strong>
+                        <small>{section.document?.length||section.blocks.length} content blocks</small>
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      className="vop-plate-outline-quick-rename"
+                      title="Rename section"
+                      aria-label="Rename section"
+                      onClick={(e)=>{e.stopPropagation();setEditingSectionId(section.id);}}
+                    >
+                      <Edit3 size={12}/>
+                    </button>
+                    <StructureActionsMenu label={'Section '+(index+1)}>
+                      <button type="button" onClick={()=>setEditingSectionId(section.id)}>
+                        <Edit3 size={15}/> Rename section</button>
+                      <button type="button" disabled={!canAttachQuiz}
+                        onClick={()=>onQuiz({type:'section',id:section.id})}>
+                        <FileQuestion size={15}/> Section quiz</button>
+                      <button type="button" disabled={index===0}
+                        onClick={()=>moveSection(section.id,-1)}><ArrowUp size={15}/> Move page up</button>
+                      <button type="button" disabled={index===chapter.sections.length-1}
+                        onClick={()=>moveSection(section.id,1)}><ArrowDown size={15}/> Move page down</button>
+                      <button type="button" disabled={chapter.sections.length>=40}
+                        onClick={()=>duplicateSection(section.id)}><Copy size={15}/> Duplicate section</button>
+                      {chapters.length>1&&<label className="vop-plate-move-label">Move into chapter
+                        <select value="" disabled={chapter.sections.length<=1}
+                          onChange={event=>moveToChapter(section.id,event.target.value)}>
+                          <option value="">Choose chapter…</option>
+                          {chapters.filter(item=>item.id!==chapter.id).map(item=>
+                            <option key={item.id} value={item.id} disabled={item.sections.length>=40}>{item.title}</option>)}
+                        </select>
+                      </label>}
+                      {destinations('section',section.id)}
+                      <button className="vop-structure-delete" type="button"
+                        disabled={chapter.sections.length<=1||lessonPublished}
+                        title={lessonPublished?'Unpublish and resolve dependent quizzes before deleting a published section.':''}
+                        onClick={()=>removeSection(section.id)}><Trash2 size={15}/> Delete section</button>
+                    </StructureActionsMenu>
+                  </>
+                )}
+              </div>
+            );
+          })}
         </div>
       </aside>
       <section className="vop-plate-document-pane">

@@ -1,5 +1,5 @@
 import { auth } from '../lib/firebase';
-import type { PayableItem, PaymentMethod } from '../../shared/payments';
+import type { PayableItem, PaymentMethod, ThreeDSecureVerification } from '../../shared/payments';
 
 export interface ClientPayment {
   id:string;
@@ -37,6 +37,8 @@ export interface ClientPayment {
   failedAt:string;
   verifiedAt:string;
   fulfilledAt:string;
+  threeDSecure?:ThreeDSecureVerification;
+  pciDssCompliant?:boolean;
   itemSnapshot?:Record<string,unknown>;
 }
 
@@ -109,6 +111,10 @@ export async function loadPaymentReceipt(paymentId:string){
 
 export async function adminPaymentRequest<T>(path:string,body:Record<string,unknown>={}):Promise<T>{
   return request<T>('admin/'+path,body);
+}
+
+export async function loadPaymentCompliance(){
+  return request<{ok:true;compliance:Record<string,unknown>}>('compliance',{},'GET');
 }
 
 let lencoScriptPromise:Promise<void>|null=null;

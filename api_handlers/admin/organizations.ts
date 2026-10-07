@@ -168,8 +168,33 @@ export default async function handler(req: Request, res: Response) {
     const ctx = await authenticateTenant(req, action === 'delete' ? undefined : requestedOrg, ['acceptInvite','declineInvite','listInvites','dismissInvite','clearInviteHistory'].includes(action));
     const permissionAction = action === 'list' ? 'view' : action === 'create' ? 'create' : ['update','assignOwner','transferOwnership'].includes(action) ? 'update' : action === 'delete' ? 'delete' : '';
     if (permissionAction) await requirePermission(ctx, 'organizations', permissionAction);
+const VALID_ORGANIZATION_TYPES = [
+  'union',
+  'conference',
+  'district',
+  'church',
+  'secondary_school',
+  'adventist_university',
+  'acm',
+  'pcm',
+  'other',
+] as const;
+type OrganizationType = typeof VALID_ORGANIZATION_TYPES[number];
+
+function sanitizeOrgType(rawType: unknown, rawCustom: unknown): { organizationType: OrganizationType; customOrganizationType: string } {
+  const typeStr = String(rawType || 'church').trim().toLowerCase();
+  const organizationType: OrganizationType = (VALID_ORGANIZATION_TYPES as readonly string[]).includes(typeStr)
+    ? (typeStr as OrganizationType)
+    : 'church';
+  const customOrganizationType = organizationType === 'other'
+    ? String(rawCustom || '').trim().slice(0, 80)
+    : '';
+  return { organizationType, customOrganizationType };
+}
+
     if (action === 'create') {
       if (!ctx.isSuperAdmin) throw new Error('Only the VOP Super Admin can create organizations.');
+      const { organizationType, customOrganizationType } = sanitizeOrgType(body.organizationType, body.customOrganizationType);
       const name = String(body.name || '').trim();
       const organizationId = id(body.id || slug(name));
       const billingCountry=normalizedBillingCountryName(body.billingCountry||'Zambia');
@@ -179,6 +204,7 @@ export default async function handler(req: Request, res: Response) {
       const now = new Date().toISOString();
       await ref.set({
         id:organizationId,name,slug:slug(name),status:'active',ownerUid:'',
+        organizationType,customOrganizationType,
         billingCountry,countryCode:billingProfile.countryCode,billingProfile,
         plan:'unsubscribed',quotas:{},featureEntitlements:{},billingAccessSuspended:false,
         createdAt:now,updatedAt:now,
@@ -189,6 +215,7 @@ export default async function handler(req: Request, res: Response) {
         ok:true,
         item:{
           id:organizationId,name,status:'active',billingCountry,countryCode:billingProfile.countryCode,billingProfile,
+          organizationType,customOrganizationType,
           plan:String(created.data()?.plan||'unsubscribed'),
           defaultSubscriptionPlanId:defaultSubscription?.planId||null,
         },
@@ -254,7 +281,7 @@ export default async function handler(req: Request, res: Response) {
         );
         transaction.set(
           existingProfileRef,
-          {organizationId,organizationRole:role,updatedAt:FieldValue.serverTimestamp()},
+          {organizationId,organizationRole:role,accountType:'organization',updatedAt:FieldValue.serverTimestamp()},
           {merge:true},
         );
         transaction.update(inviteRef, {
@@ -271,6 +298,7 @@ export default async function handler(req: Request, res: Response) {
         role: preservedPlatformRole,
         organizationId,
         organizationRole: role,
+        accountType: 'organization',
       });
       if(invitedBy&&invitedBy!==ctx.auth.uid){
         const organization=await bootstrapDb.doc('organizations/'+organizationId).get();
@@ -462,7 +490,7 @@ export default async function handler(req: Request, res: Response) {
           const data = organization.data() || {};
           const members = await organization.ref.collection('members').where('active','==',true).get();
           const people=organizationPeopleCounts(members.docs as unknown as Array<{data:()=>Record<string,unknown>}>);
-          return { id:organization.id, name:String(data.name || organization.id), slug:String(data.slug || organization.id), status:String(data.status || 'active'), ownerUid:String(data.ownerUid || ''), plan:String(data.plan || 'unsubscribed'), quotas:data.quotas || {}, billingCountry:String(data.billingCountry||data.billingProfile?.countryName||(String(data.countryCode||'ZM')==='ZM'?'Zambia':'International')), countryCode:String(data.countryCode||data.billingProfile?.countryCode||'ZM'), billingProfile:data.billingProfile||organizationBillingProfile(data), createdAt:String(data.createdAt || ''), updatedAt:String(data.updatedAt || ''), ...people };
+          return { id:organization.id, name:String(data.name || organization.id), slug:String(data.slug || organization.id), status:String(data.status || 'active'), ownerUid:String(data.ownerUid || ''), organizationType:String(data.organizationType || 'church'), customOrganizationType:String(data.customOrganizationType || ''), plan:String(data.plan || 'unsubscribed'), quotas:data.quotas || {}, billingCountry:String(data.billingCountry||data.billingProfile?.countryName||(String(data.countryCode||'ZM')==='ZM'?'Zambia':'International')), countryCode:String(data.countryCode||data.billingProfile?.countryCode||'ZM'), billingProfile:data.billingProfile||organizationBillingProfile(data), createdAt:String(data.createdAt || ''), updatedAt:String(data.updatedAt || ''), ...people };
         }));
         return res.status(200).json({ok:true,items:items.filter(item => item.status === 'active')});
       }
@@ -474,7 +502,7 @@ export default async function handler(req: Request, res: Response) {
         const people=organizationPeopleCounts(members.docs as unknown as Array<{data:()=>Record<string,unknown>}>);
         return res.status(200).json({ ok:true, items:[{
           id: organization.id, name:String(data.name || organization.id), slug:String(data.slug || organization.id),
-          status:String(data.status || 'active'), ownerUid:String(data.ownerUid || ''), plan:String(data.plan || 'unsubscribed'),
+          status:String(data.status || 'active'), ownerUid:String(data.ownerUid || ''), organizationType:String(data.organizationType || 'church'), customOrganizationType:String(data.customOrganizationType || ''), plan:String(data.plan || 'unsubscribed'),
           quotas:data.quotas || {}, billingCountry:String(data.billingCountry||data.billingProfile?.countryName||(String(data.countryCode||'ZM')==='ZM'?'Zambia':'International')), countryCode:String(data.countryCode||data.billingProfile?.countryCode||'ZM'), billingProfile:data.billingProfile||organizationBillingProfile(data), createdAt:String(data.createdAt || ''), updatedAt:String(data.updatedAt || ''), ...people
         }]});
       }
@@ -489,6 +517,8 @@ export default async function handler(req: Request, res: Response) {
           slug: String(data.slug || organization.id),
           status: String(data.status || 'active'),
           ownerUid: String(data.ownerUid || ''),
+          organizationType: String(data.organizationType || 'church'),
+          customOrganizationType: String(data.customOrganizationType || ''),
           plan: String(data.plan || 'unsubscribed'),
           quotas: data.quotas || {},
           billingCountry:String(data.billingCountry||data.billingProfile?.countryName||(String(data.countryCode||'ZM')==='ZM'?'Zambia':'International')),
@@ -585,9 +615,14 @@ export default async function handler(req: Request, res: Response) {
       if (!ctx.isSuperAdmin && data.billingCountry !== undefined) throw new Error('Only the VOP Super Admin can change an organization billing country.');
       const nextBillingCountry=data.billingCountry!==undefined?normalizedBillingCountryName(data.billingCountry):undefined;
       const nextBillingProfile=nextBillingCountry?organizationBillingProfile({billingCountry:nextBillingCountry}):undefined;
+      const orgTypeFields = data.organizationType !== undefined
+        ? sanitizeOrgType(data.organizationType, data.customOrganizationType)
+        : null;
       const allowed: Record<string, unknown> = {
         name: typeof data.name === 'string' ? data.name.trim() : undefined,
         slug: typeof data.slug === 'string' ? slug(data.slug) : undefined,
+        organizationType: orgTypeFields ? orgTypeFields.organizationType : undefined,
+        customOrganizationType: orgTypeFields ? orgTypeFields.customOrganizationType : undefined,
         billingCountry:nextBillingCountry,
         countryCode:nextBillingProfile?.countryCode,
         billingProfile:nextBillingProfile,
@@ -724,13 +759,13 @@ export default async function handler(req: Request, res: Response) {
           assignedBy:ctx.auth.uid, updatedAt:now
         }, { merge:true });
         transaction.set(targetProfileRef, {
-          organizationId, organizationRole:'owner', updatedAt:FieldValue.serverTimestamp()
+          organizationId, organizationRole:'owner', accountType:'organization', updatedAt:FieldValue.serverTimestamp()
         }, { merge:true });
         transaction.set(organizationRef, { ownerUid:uid, updatedAt:FieldValue.serverTimestamp() }, { merge:true });
       });
 
       const authService = getAuth();
-      await authService.setCustomUserClaims(uid, { role: ['union_admin','conference_admin','district_admin','church_admin'].includes(platformRole) ? platformRole : 'student', ...( ['union_admin','conference_admin','district_admin','church_admin'].includes(platformRole) ? { adminNodeType:targetProfile.adminNodeType, adminNodeId:targetProfile.adminNodeId } : {} ), organizationId, organizationRole:'owner' });
+      await authService.setCustomUserClaims(uid, { role: ['union_admin','conference_admin','district_admin','church_admin'].includes(platformRole) ? platformRole : 'student', ...( ['union_admin','conference_admin','district_admin','church_admin'].includes(platformRole) ? { adminNodeType:targetProfile.adminNodeType, adminNodeId:targetProfile.adminNodeId } : {} ), organizationId, organizationRole:'owner', accountType:'organization' });
       if (previousOwnerUid && previousOwnerUid !== uid) {
         await authService.setCustomUserClaims(previousOwnerUid, { role: hierarchyRole(String((await previousOwnerProfileRef?.get())?.data()?.role || '')) || 'student', organizationId, organizationRole:'admin' }).catch(() => undefined);
       }
@@ -816,6 +851,7 @@ export default async function handler(req: Request, res: Response) {
             churchId: actorHierarchyRole === 'church_admin' ? actorHierarchyNodeId : '',
           } : {}),
           organizationId:managedOrganizationId, organizationRole:role,
+          accountType:'organization',
           privileges:{admin:role==='admin',guardian:role==='admin',editor:role==='admin'||role==='editor'||role==='mentor',manager:role==='admin',developer:false,coordinator:role==='admin'},
           information:{enrollmentDate:now,graduating:false,graduated:false,baptismCandidate:false,baptized:false},
           progress:{discoverProgress:0,completedGuidesCount:0,totalGuidesCount:0,guideScores:{},completedLessons:[]},
@@ -823,7 +859,7 @@ export default async function handler(req: Request, res: Response) {
         }, {merge:true});
         transaction.set(ctx.db.doc('organizations/' + managedOrganizationId + '/members/' + created.uid), {uid:created.uid,organizationId:managedOrganizationId,role,active:true,invitedBy:ctx.auth.uid,joinedAt:now,updatedAt:now},{merge:true});
       });
-      await authService.setCustomUserClaims(created.uid, { role:'student', organizationId:managedOrganizationId, organizationRole:role });
+      await authService.setCustomUserClaims(created.uid, { role:'student', organizationId:managedOrganizationId, organizationRole:role, accountType:'organization' });
       await writeTenantAudit(ctx,'membership.create','organizations/' + managedOrganizationId + '/members/' + created.uid,undefined,{uid:created.uid,role});
       return res.status(200).json({ok:true,item:{uid:created.uid,email,displayName,role}});
     }
@@ -855,11 +891,11 @@ export default async function handler(req: Request, res: Response) {
           invitedBy: ctx.auth.uid, joinedAt: String(existingData.organizationId || '') === managedOrganizationId ? String(existingData.joinedAt || now) : now, updatedAt: now
         }, { merge: true });
         transaction.set(profileRef, {
-          organizationId: managedOrganizationId, organizationRole: memberRole, updatedAt: FieldValue.serverTimestamp()
+          organizationId: managedOrganizationId, organizationRole: memberRole, accountType: 'organization', updatedAt: FieldValue.serverTimestamp()
         }, { merge: true });
       });
       const authService = getAuth();
-      await authService.setCustomUserClaims(uid, { role: hierarchyRole(String(existingData.role || '')) || 'student', ...(hierarchyRole(String(existingData.role || '')) ? { adminNodeType:existingData.adminNodeType, adminNodeId:existingData.adminNodeId } : {}), organizationId:managedOrganizationId, organizationRole:memberRole });
+      await authService.setCustomUserClaims(uid, { role: hierarchyRole(String(existingData.role || '')) || 'student', ...(hierarchyRole(String(existingData.role || '')) ? { adminNodeType:existingData.adminNodeType, adminNodeId:existingData.adminNodeId } : {}), organizationId:managedOrganizationId, organizationRole:memberRole, accountType:'organization' });
       await writeTenantAudit(ctx, 'membership.upsert', targetMemberRef.path, existingMember.exists ? existingMember.data() : undefined, { uid, role:memberRole, active:body.active !== false, previousOrganizationId: existingOrganizationId || null });
       return res.status(200).json({ ok: true });
     }
@@ -888,7 +924,7 @@ export default async function handler(req: Request, res: Response) {
           active:false, removedAt:now, removedBy:ctx.auth.uid, updatedAt:now
         }, { merge:true });
         transaction.set(profileSnap.ref, {
-          ...(hierarchyRole(String(profileData.role || '')) ? { organizationRole:'learner' } : { organizationId:'', organizationRole:'learner' }),
+          ...(hierarchyRole(String(profileData.role || '')) ? { organizationRole:'learner', accountType:'personal' } : { organizationId:'', organizationRole:'learner', accountType:'personal' }),
           updatedAt:FieldValue.serverTimestamp()
         }, { merge:true });
         if (isOwner && ctx.isSuperAdmin) {
@@ -899,7 +935,7 @@ export default async function handler(req: Request, res: Response) {
         }
       });
       const authService = getAuth();
-      await authService.setCustomUserClaims(uid, { role: hierarchyRole(String(profileData.role || '')) || 'student', organizationId:'', organizationRole:'learner' });
+      await authService.setCustomUserClaims(uid, { role: hierarchyRole(String(profileData.role || '')) || 'student', organizationId:'', organizationRole:'learner', accountType:'personal' });
       await writeTenantAudit(ctx, 'membership.remove', memberSnap.ref.path, memberData, { uid, active:false, removedBy:ctx.auth.uid });
       return res.status(200).json({ ok:true });
     }

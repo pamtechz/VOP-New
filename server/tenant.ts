@@ -220,7 +220,11 @@ export async function subscriptionAudiencePolicy(db:Firestore){
   const data=snapshot.data()||{};
   const audience=data.subscriptionAudience&&typeof data.subscriptionAudience==='object'
     ?data.subscriptionAudience as Record<string,unknown>:{};
+  const globalQuotas=data.globalQuotas&&typeof data.globalQuotas==='object'
+    ?data.globalQuotas as Record<string,number>:{};
   return {
+    subscriptionsEnabled:data.subscriptionsEnabled!==false,
+    globalQuotas,
     learnersCandidates:audience.learnersCandidates===true,
     organizations:audience.organizations!==false,
     churches:audience.churches!==false,
@@ -281,6 +285,7 @@ export function billingTenantAudienceKey(type:BillingTenantType){
 
 export async function billingTenantAudienceEnabled(db:Firestore,type:BillingTenantType){
   const audience=await subscriptionAudiencePolicy(db);
+  if(audience.subscriptionsEnabled===false)return false;
   return audience[billingTenantAudienceKey(type)]!==false;
 }
 
@@ -674,6 +679,36 @@ export async function enforceOrganizationMembershipQuotas(
   uid='',
 ){
   const audience=await subscriptionAudiencePolicy(ctx.db);
+  if(audience.subscriptionsEnabled===false){
+    const normalizedRole=String(nextRole||'learner').trim().toLowerCase();
+    const existing=uid?await ctx.db.doc(`organizations/${organizationId}/members/${uid}`).get():null;
+    const existingActive=existing?.exists&&existing.data()?.active===true;
+    const existingRole=String(existing?.data()?.role||'').trim().toLowerCase();
+    const usage=await organizationUsageSnapshot(ctx.db,organizationId);
+
+    const nextConsumesMemberSeat=!CANDIDATE_MEMBERSHIP_ROLES.has(normalizedRole);
+    const existingConsumesMemberSeat=existingActive&&!CANDIDATE_MEMBERSHIP_ROLES.has(existingRole);
+    const seatDelta=nextConsumesMemberSeat&&!existingConsumesMemberSeat?1:0;
+    const candidateDelta=CANDIDATE_MEMBERSHIP_ROLES.has(normalizedRole)
+      &&!(existingActive&&CANDIDATE_MEMBERSHIP_ROLES.has(existingRole))?1:0;
+    const mentorDelta=MENTOR_MEMBERSHIP_ROLES.has(normalizedRole)
+      &&!(existingActive&&MENTOR_MEMBERSHIP_ROLES.has(existingRole))?1:0;
+
+    const maxSeats=Number(audience.globalQuotas?.maxSeats);
+    const maxCandidates=Number(audience.globalQuotas?.maxCandidates);
+    const maxMentors=Number(audience.globalQuotas?.maxMentors);
+
+    if(Number.isFinite(maxSeats)&&maxSeats>=0&&usage.seats+seatDelta>maxSeats){
+      throw new Error(`The organization has reached the platform member/staff seat limit (${maxSeats}). Subscriptions are currently disabled; usage is regulated by platform usage controls.`);
+    }
+    if(Number.isFinite(maxCandidates)&&maxCandidates>=0&&usage.candidates+candidateDelta>maxCandidates){
+      throw new Error(`The organization has reached the platform candidate limit (${maxCandidates}). Subscriptions are currently disabled; usage is regulated by platform usage controls.`);
+    }
+    if(Number.isFinite(maxMentors)&&maxMentors>=0&&usage.mentors+mentorDelta>maxMentors){
+      throw new Error(`The organization has reached the platform mentor limit (${maxMentors}). Subscriptions are currently disabled; usage is regulated by platform usage controls.`);
+    }
+    return;
+  }
   if(!audience.organizations||ctx.isSuperAdmin)return;
   await ensureOrganizationDefaultSubscription(ctx.db,organizationId,ctx.auth.uid);
   const organization=await ctx.db.doc(`organizations/${organizationId}`).get();
@@ -717,6 +752,16 @@ export async function enforceOrganizationQuota(
 ){
   if(!organizationId)throw new Error('An organization is required for quota enforcement.');
   const audience=await subscriptionAudiencePolicy(db);
+  if(audience.subscriptionsEnabled===false){
+    const limit=Number(audience.globalQuotas?.[quotaKey]);
+    if(Number.isFinite(limit)&&limit>=0){
+      const currentUsage=await ownedCollectionCount(db,organizationId,collectionName);
+      if(currentUsage+increment>limit){
+        throw new Error(`The organization has reached the platform ${quotaKey} limit (${limit}). Subscriptions are currently disabled; usage is regulated by platform usage controls.`);
+      }
+    }
+    return;
+  }
   if(!audience.organizations)return;
   await ensureOrganizationDefaultSubscription(db,organizationId);
   const organization=await db.doc(`organizations/${organizationId}`).get();
@@ -846,6 +891,17 @@ export async function enforceBillingTenantQuota(
 ){
   if(type==='organization')return enforceOrganizationQuota(db,tenantId,collectionName,quotaKey,increment);
   if(!tenantId)throw new Error('A hierarchy tenant is required for quota enforcement.');
+  const audience=await subscriptionAudiencePolicy(db);
+  if(audience.subscriptionsEnabled===false){
+    const limit=Number(audience.globalQuotas?.[quotaKey]);
+    if(Number.isFinite(limit)&&limit>=0){
+      const currentUsage=await ownedBillingTenantCollectionCount(db,type,tenantId,collectionName);
+      if(currentUsage+increment>limit){
+        throw new Error(`The ${type} tenant has reached the platform ${quotaKey} limit (${limit}). Subscriptions are currently disabled; usage is regulated by platform usage controls.`);
+      }
+    }
+    return;
+  }
   if(!(await billingTenantAudienceEnabled(db,type)))return;
   await ensureBillingTenantDefaultSubscription(db,type,tenantId);
   const tenantRef=billingTenantRef(db,type,tenantId);

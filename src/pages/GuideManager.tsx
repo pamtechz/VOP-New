@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Archive, BookOpen, CalendarDays, Check, ChevronLeft, ChevronRight, Edit3,
-  Filter, Globe, Image as ImageIcon, MoreVertical, Plus, RefreshCw, Save,
-  Search, ShieldCheck, X, Copy
+  Filter, FolderOpen, Globe, Image as ImageIcon, MoreVertical, Plus, RefreshCw, Save,
+  Search, ShieldCheck, Trash2, X, Copy
 } from 'lucide-react';
 import type { CustomLanguage, DiscoverGuide } from '../types';
 import { auth } from '../lib/firebase';
@@ -29,6 +29,7 @@ type GuideRecord = {
   archived: boolean;
   sharingScope: 'private' | 'organization' | 'shared';
   lessonCount: number;
+  programId?: string;
   updatedAt?: string;
   updatedBy?: string;
   ownerUid?: string;
@@ -56,6 +57,10 @@ type GuideGroup = {
 type Props = {
   languages: CustomLanguage[];
   guides: DiscoverGuide[];
+  programs?: Array<{ id: string; title: string; guideIds: string[] }>;
+  initialProgramId?: string;
+  onClearInitialProgram?: () => void;
+  onOpenTrackTab?: () => void;
   onSaved?: () => void;
   onOpenSettings?: () => void;
   onOpenGuide?: (guideId: string) => void;
@@ -63,16 +68,17 @@ type Props = {
 };
 
 async function guideAdmin(
-  action: 'listGuides' | 'upsertGuide' | 'archiveGuide' | 'forkGuide',
+  action: 'listGuides' | 'upsertGuide' | 'archiveGuide' | 'forkGuide' | 'deleteGuide' | 'upsert' | 'list',
   data?: Record<string, unknown>,
   organizationId?: string,
+  collection: 'guides' | 'programs' = 'guides',
 ) {
   if (!auth?.currentUser) throw new Error('Your session has expired. Sign in again.');
   const token = await auth.currentUser.getIdToken();
   const response = await fetch('/api/admin/content', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-    body: JSON.stringify({ action, collection: 'guides', data, organizationId: organizationId || undefined }),
+    body: JSON.stringify({ action, collection, data, organizationId: organizationId || undefined }),
   });
   const body = await response.json().catch(() => ({})) as { error?: string; items?: unknown[]; item?: { id?: string } };
   if (!response.ok) throw new Error(body.error || 'Guide request failed.');
@@ -188,9 +194,15 @@ function groupGuides(records: GuideRecord[]): GuideGroup[] {
   return [...groups.values()].sort((a, b) => a.discoverNumber - b.discoverNumber || a.title.localeCompare(b.title));
 }
 
-export default function GuideManager({ languages, guides, onSaved, onOpenSettings, onOpenGuide, organizationId = '' }: Props) {
+export default function GuideManager({
+  languages, guides, programs, initialProgramId, onClearInitialProgram,
+  onOpenTrackTab, onSaved, onOpenSettings, onOpenGuide, organizationId = ''
+}: Props) {
   const [records, setRecords] = useState<GuideRecord[]>([]);
   const [editing, setEditing] = useState<GuideRecord | null>(null);
+  const [availablePrograms, setAvailablePrograms] = useState<Array<{ id: string; title: string; guideIds: string[] }>>([]);
+  const [programSelectModalOpen, setProgramSelectModalOpen] = useState(false);
+  const [chosenProgramId, setChosenProgramId] = useState('');
   const [search, setSearch] = useState('');
   const [languageFilter, setLanguageFilter] = useState('all');
   const [seasonFilter, setSeasonFilter] = useState('all');
@@ -212,18 +224,38 @@ export default function GuideManager({ languages, guides, onSaved, onOpenSetting
     setLoading(true);
     setError('');
     try {
-      const response = await guideAdmin('listGuides', undefined, organizationId);
+      const [response, programsResponse] = await Promise.all([
+        guideAdmin('listGuides', undefined, organizationId),
+        guideAdmin('list', undefined, organizationId, 'programs').catch(() => ({ items: [] })),
+      ]);
       const apiRecords = (response.items || []) as Array<Record<string, unknown>>;
       const lessonCounts = new Map(guides.map(guide => [
         guide.id, guide.lessons.filter(lesson => lesson.type === 'Lesson').length,
       ]));
       setRecords(apiRecords.map(item => makeRecord(item, lessonCounts.get(valueText(item.id)) || 0)));
+      const progs = ((programsResponse.items || []) as Array<{ id: string; title: string; guideIds?: string[] }>).map(p => ({
+        id: String(p.id),
+        title: String(p.title || ''),
+        guideIds: Array.isArray(p.guideIds) ? p.guideIds.map(String) : [],
+      }));
+      setAvailablePrograms(progs);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Could not load guides.');
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (programs && programs.length) setAvailablePrograms(programs);
+  }, [programs]);
+
+  useEffect(() => {
+    if (initialProgramId) {
+      startGuideCreation(initialProgramId);
+      onClearInitialProgram?.();
+    }
+  }, [initialProgramId]);
 
   useEffect(() => { void load(); }, [guides, organizationId]);
   useEffect(()=>{
@@ -260,7 +292,7 @@ export default function GuideManager({ languages, guides, onSaved, onOpenSetting
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
   const pageRows = filtered.slice((page - 1) * pageSize, page * pageSize);
 
-  const openNew = () => {
+  const startGuideCreation = (programId: string) => {
     const language = enabledLanguages[0]?.code || '';
     setEditing({
       id: '',
@@ -282,7 +314,18 @@ export default function GuideManager({ languages, guides, onSaved, onOpenSetting
       archived: false,
       sharingScope: organizationId ? 'organization' : 'shared',
       lessonCount: 0,
+      programId,
     });
+  };
+
+  const openNew = () => {
+    if (initialProgramId) {
+      startGuideCreation(initialProgramId);
+      return;
+    }
+    // Guides must be created within a program, or will ask to select the program before creating.
+    setChosenProgramId(availablePrograms[0]?.id || '');
+    setProgramSelectModalOpen(true);
   };
 
   const openEdit = (group: GuideGroup) => {
@@ -293,11 +336,16 @@ export default function GuideManager({ languages, guides, onSaved, onOpenSetting
       setError('This guide is owned by another contributor. Copy a shared guide into your organization before editing it.');
       return;
     }
-    setEditing({ ...preferred });
+    const currentProg = availablePrograms.find(p => p.guideIds.includes(preferred.id));
+    setEditing({ ...preferred, programId: currentProg?.id || '' });
   };
 
   const save = async () => {
     if (!editing) return;
+    if (!editing.programId) {
+      setError('A parent study track (program) is required. Please select a study track for this guide.');
+      return;
+    }
     if (!editing.language) {
       setError('Select a language for the guide.');
       return;
@@ -330,6 +378,18 @@ export default function GuideManager({ languages, guides, onSaved, onOpenSetting
         archived: false,
         sharingScope: editing.sharingScope,
       }, organizationId);
+
+      const savedId = saved.item?.id || editing.id || '';
+      if (editing.programId && savedId) {
+        const targetProg = availablePrograms.find(p => p.id === editing.programId);
+        if (targetProg && !targetProg.guideIds.includes(savedId)) {
+          await guideAdmin('upsert', {
+            ...targetProg,
+            guideIds: [...targetProg.guideIds, savedId],
+          }, organizationId, 'programs').catch(() => {});
+        }
+      }
+
       setEditing(null);
       setMessage(editing.published ? 'Guide published.' : 'Guide saved as draft.');
       onSaved?.();
@@ -370,20 +430,42 @@ export default function GuideManager({ languages, guides, onSaved, onOpenSetting
     }
   };
 
+  const deleteGuide = async (record: GuideRecord) => {
+    if (!await appConfirm(`Permanently delete the guide "${record.title}" (${record.language.toUpperCase()})? All lessons and assessments within this guide will also be deleted. This action cannot be undone.`, {
+      title: 'Delete guide/module',
+      confirmLabel: 'Delete guide',
+      tone: 'danger',
+    })) return;
+    setSaving(true);
+    setError('');
+    try {
+      await guideAdmin('deleteGuide', { id: record.id, language: record.language }, organizationId);
+      setMessage('Guide and its lessons deleted.');
+      if (editing?.id === record.id) setEditing(null);
+      onSaved?.();
+      await load();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Could not delete guide.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="vop-reference-manager">
       <div className="vop-page-head">
         <div className="vop-heading">
           <div className="vop-heading-icon vop-icon-orange"><BookOpen size={31}/></div>
           <div>
-            <h1>Guides & modules</h1>
-            <p>Create a guide first. Open it to add lessons, chapters, sections, blocks and assessments.</p>
+            <span className="vop-module-eyebrow">TIER 3 · INDEPENDENT STUDY GUIDES & MODULES</span>
+            <h1>Study Guides (Modules)</h1>
+            <p>Self-contained correspondence booklets (e.g. Discover Guides, Focus on Prophecy modules). Each guide contains its own lessons, chapters, authored sections, review questions, and final exam.</p>
           </div>
         </div>
         <div className="vop-reference-actions">
           <button className="vop-secondary" type="button" onClick={() => void load()}><RefreshCw size={17}/>Refresh</button>
           <button className="vop-secondary" type="button" onClick={() => onOpenSettings?.()}><span><span aria-hidden="true">⚙</span> Guide Settings</span></button>
-          <button className="vop-primary" type="button" onClick={openNew}><Plus size={18}/>New Guide</button>
+          <button className="vop-primary" type="button" onClick={openNew}><Plus size={18}/>New Study Guide</button>
         </div>
       </div>
 
@@ -406,6 +488,16 @@ export default function GuideManager({ languages, guides, onSaved, onOpenSetting
           </div>
           <div className="vop-form-grid vop-reference-form-grid">
             <div className="vop-field"><label>Guide Title *</label><input value={editing.title} onChange={e => setEditing({...editing,title:e.target.value})}/></div>
+            <div className="vop-field">
+              <label>Parent Study Track (Program) *</label>
+              <select value={editing.programId || ''} onChange={e => setEditing({...editing, programId: e.target.value})}>
+                <option value="">Select study track</option>
+                {availablePrograms.map(p => (
+                  <option key={p.id} value={p.id}>{p.title}</option>
+                ))}
+              </select>
+              <small>This module belongs to this study track and will be linked on save.</small>
+            </div>
             <div className="vop-field"><label>Subtitle</label><input value={editing.subtitle} onChange={e => setEditing({...editing,subtitle:e.target.value})}/></div>
             <div className="vop-field"><label>Language *</label><select value={editing.language} onChange={e => setEditing({...editing,language:e.target.value})}><option value="">Select language</option>{enabledLanguages.map(item => <option key={item.code} value={item.code}>{item.name} · {item.code}</option>)}</select></div>
             <div className="vop-field"><label>Discover Number</label><input type="number" min="1" value={editing.discoverNumber} onChange={e => setEditing({...editing,discoverNumber:Math.max(1,Number(e.target.value)||1)})}/></div>
@@ -476,16 +568,33 @@ export default function GuideManager({ languages, guides, onSaved, onOpenSetting
             <select value={editing.published ? 'published' : 'draft'} onChange={e => setEditing({...editing,published:e.target.value==='published'})}><option value="draft">Draft</option><option value="published">Published</option></select>
           </div>
           {editing.image && <img src={editing.image} alt="" className="vop-reference-editor-image"/>}
-          <div className="vop-reference-editor-actions">
-            <button className="vop-secondary" type="button" onClick={() => setEditing(null)}>Cancel</button>
-            <button className="vop-primary" type="button" onClick={() => void save()} disabled={saving}><Save size={17}/>{saving ? 'Saving…' : 'Save Guide'}</button>
+          <div className="vop-reference-editor-actions" style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+            <div style={{display:'flex',gap:8}}>
+              <button className="vop-secondary vop-danger-button" type="button" onClick={() => void deleteGuide(editing)} disabled={saving} style={{color:'var(--danger,#c5221f)'}}>
+                <Trash2 size={16}/>Delete Guide
+              </button>
+              {!editing.archived && (
+                <button className="vop-secondary" type="button" onClick={() => void archive(editing)} disabled={saving}>
+                  <Archive size={16}/>Archive
+                </button>
+              )}
+            </div>
+            <div style={{display:'flex',gap:8}}>
+              <button className="vop-secondary" type="button" onClick={() => setEditing(null)}>Cancel</button>
+              <button className="vop-primary" type="button" onClick={() => void save()} disabled={saving}><Save size={17}/>{saving ? 'Saving…' : 'Save Guide'}</button>
+            </div>
           </div>
         </div>
       )}
 
       <div className={'vop-reference-table-wrap'+(loading&&records.length?' vop-refreshing vop-shimmer-overlay':'')}>
         {loading&&records.length===0 ? <ShimmerList rows={6} compact label="Loading guide records"/> : pageRows.length === 0 ? (
-          <div className="vop-empty"><ImageIcon size={26}/><span>No guide records are configured.</span></div>
+          <div className="vop-empty vop-empty-hero">
+            <BookOpen size={34}/>
+            <h3>No Study Guides Configured Yet</h3>
+            <p>Study Guides (Modules) are self-contained correspondence booklets housing lessons, chapters, and assessments. Create your first guide to get started.</p>
+            <button className="vop-primary" type="button" onClick={openNew}><Plus size={16}/> Create First Study Guide</button>
+          </div>
         ) : (
           <table className="vop-reference-table">
             <thead>
@@ -513,7 +622,7 @@ export default function GuideManager({ languages, guides, onSaved, onOpenSetting
                     <button key={'open-'+record.id} className="vop-secondary vop-guide-open-button" type="button"
                       onClick={()=>onOpenGuide(record.id)} title={'Manage '+record.language.toUpperCase()+' module lessons'}>
                       <BookOpen size={15}/> Open {record.language.toUpperCase()}
-                    </button>)}<button className="vop-actions" type="button" onClick={() => openEdit(group)} title={group.records.some(record => record.canEdit !== false) ? 'Edit guide' : 'Owned by another contributor'} disabled={!group.records.some(record => record.canEdit !== false)}><MoreVertical size={18}/></button>{group.records.filter(record => record.sharingScope === 'shared' && record.published).map(record => <button key={'copy-'+record.id} className="vop-actions" type="button" onClick={() => void fork(record)} title="Copy shared guide"><Copy size={16}/></button>)}</div></td>
+                    </button>)}<button className="vop-actions" type="button" onClick={() => openEdit(group)} title={group.records.some(record => record.canEdit !== false) ? 'Edit guide' : 'Owned by another contributor'} disabled={!group.records.some(record => record.canEdit !== false)}><MoreVertical size={18}/></button>{group.records.some(record => record.canEdit !== false) && <button className="vop-actions vop-actions-delete" type="button" onClick={() => { const rec = group.records.find(r => r.canEdit !== false); if (rec) void deleteGuide(rec); }} title="Delete guide" style={{color:'var(--danger,#c5221f)'}}><Trash2 size={16}/></button>}{group.records.filter(record => record.sharingScope === 'shared' && record.published).map(record => <button key={'copy-'+record.id} className="vop-actions" type="button" onClick={() => void fork(record)} title="Copy shared guide"><Copy size={16}/></button>)}</div></td>
                 </tr>
               ))}
             </tbody>
@@ -528,6 +637,67 @@ export default function GuideManager({ languages, guides, onSaved, onOpenSetting
           </div>
         </div>
       </div>
+
+      {programSelectModalOpen && (
+        <div className="vop-dialog-overlay" role="dialog" aria-modal="true" style={{
+          position:'fixed',inset:0,background:'rgba(15,23,42,0.6)',display:'flex',
+          alignItems:'center',justifyContent:'center',zIndex:1000,padding:20
+        }}>
+          <div className="vop-dialog-box" style={{
+            background:'var(--bg-card,#fff)',borderRadius:14,padding:'24px 28px',
+            maxWidth:480,width:'100%',boxShadow:'0 20px 40px rgba(0,0,0,0.22)',border:'1px solid var(--theme-border,#e2e8f0)'
+          }}>
+            <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:12}}>
+              <div style={{
+                width:42,height:42,borderRadius:10,background:'rgba(217,119,6,0.12)',
+                color:'var(--brand-orange,#d97706)',display:'flex',alignItems:'center',justifyContent:'center'
+              }}>
+                <FolderOpen size={24}/>
+              </div>
+              <div>
+                <span className="vop-module-eyebrow" style={{fontSize:11,fontWeight:800,color:'var(--brand-orange,#d97706)'}}>TIER 2 PARENT REQUIREMENT</span>
+                <h3 style={{margin:0,fontSize:18,fontWeight:800}}>Select Parent Study Track</h3>
+              </div>
+            </div>
+            <p style={{margin:'0 0 16px',color:'var(--theme-text-muted,#64748b)',fontSize:13,lineHeight:1.5}}>
+              In the VOP correspondence framework, every Study Guide (Module) must belong to a parent Study Track (Series/Program). Please select the study track this guide will be authored within:
+            </p>
+            {availablePrograms.length > 0 ? (
+              <div className="vop-field" style={{marginBottom:20}}>
+                <label style={{fontWeight:700,marginBottom:6,display:'block'}}>Parent Study Track (Program) *</label>
+                <select value={chosenProgramId} onChange={e => setChosenProgramId(e.target.value)}
+                  style={{width:'100%',padding:'10px 12px',borderRadius:8,border:'1px solid var(--theme-border,#cbd5e1)',background:'var(--theme-surface-soft,#f8fafc)'}}>
+                  {availablePrograms.map(p => (
+                    <option key={p.id} value={p.id}>{p.title} ({p.guideIds?.length || 0} guides attached)</option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div className="vop-alert warning" style={{marginBottom:20}}>
+                No study tracks found. A Study Track must be created before adding study guides.
+              </div>
+            )}
+            <div style={{display:'flex',justifyContent:'flex-end',gap:10}}>
+              <button className="vop-secondary" type="button" onClick={() => setProgramSelectModalOpen(false)}>Cancel</button>
+              {availablePrograms.length > 0 ? (
+                <button className="vop-primary" type="button" disabled={!chosenProgramId} onClick={() => {
+                  setProgramSelectModalOpen(false);
+                  startGuideCreation(chosenProgramId);
+                }}>
+                  Continue to Author Guide <ChevronRight size={16}/>
+                </button>
+              ) : (
+                <button className="vop-primary" type="button" onClick={() => {
+                  setProgramSelectModalOpen(false);
+                  onOpenTrackTab?.();
+                }}>
+                  <Plus size={16}/> Create Study Track First
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

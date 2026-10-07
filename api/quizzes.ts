@@ -34,6 +34,7 @@ function passMark(value:unknown){
   return parsed;
 }
 function assessmentKindFor(attachment:string){
+  if (attachment === 'program' || attachment === 'all') return 'final_exam';
   return attachment==='guide'?'final_exam':attachment==='chapter'?'chapter_quiz':'practice';
 }
 
@@ -43,32 +44,49 @@ function quizVisible(ctx: Context, data: Record<string, unknown>) {
     || (data.sharingScope === 'shared' && data.published === true);
 }
 
-/** The owning tenant must select a real, unarchived guide or one of its lessons. */
+/** The owning tenant must select a real, unarchived guide, program, or scope. */
 async function resolveAttachment(ctx: Context, data: Record<string, unknown>) {
   const attachmentType = data.attachmentType;
-  if (!['lesson','guide','chapter','section','block'].includes(String(attachmentType))) {
-    throw new Error('Attach a quiz to a guide, lesson, chapter, section or block.');
+  if (!['lesson','guide','chapter','section','block','program','all'].includes(String(attachmentType))) {
+    throw new Error('Attach a quiz to a program, guide, lesson, chapter, section or block.');
   }
   const guideId = safeId(data.guideId);
-  const guideRef = ctx.db.doc(`guides/${guideId}`);
-  const guideSnap = await guideRef.get();
-  if (!guideSnap.exists || guideSnap.data()?.archived === true) throw new Error('Choose an existing, non-archived guide.');
-  const guide = guideSnap.data() || {};
-  const organizationId = String(guide.organizationId || '').trim();
+  const programId = safeId(data.programId);
+  let guideRef = guideId ? ctx.db.doc(`guides/${guideId}`) : null;
+  let guideSnap = guideRef ? await guideRef.get() : null;
+  let programRef = programId ? ctx.db.doc(`programs/${programId}`) : null;
+  let programSnap = programRef ? await programRef.get() : null;
+
+  if (attachmentType === 'program') {
+    if (!programSnap || !programSnap.exists || programSnap.data()?.archived === true) {
+      if (!guideSnap || !guideSnap.exists) throw new Error('Choose an existing, non-archived program or study track.');
+    }
+  } else if (attachmentType !== 'all') {
+    if (!guideSnap || !guideSnap.exists || guideSnap.data()?.archived === true) {
+      throw new Error('Choose an existing, non-archived guide.');
+    }
+  }
+
+  const guide = guideSnap?.data() || {};
+  const program = programSnap?.data() || {};
+  const organizationId = String(guide.organizationId || program.organizationId || data.organizationId || '').trim();
   // The request's authenticated tenant context, not a form field, grants authority.
   if (ctx.tenantType === 'hierarchy') {
-    if (!organizationId || !(await organizationInHierarchyScope(ctx, organizationId))) {
+    if (organizationId && !(await organizationInHierarchyScope(ctx, organizationId))) {
       throw new Error('Choose a guide inside your authorized hierarchy scope.');
     }
-  } else if (organizationId !== ctx.organizationId) {
+  } else if (organizationId && organizationId !== ctx.organizationId) {
     throw new Error('Choose a guide owned by your selected organization.');
   }
-  if (String(data.language || '').trim().toLowerCase() !== String(guide.language || '').trim().toLowerCase()) throw new Error('The quiz language must match the guide.');
+  if (guideSnap?.exists && String(data.language || '').trim().toLowerCase() !== String(guide.language || '').trim().toLowerCase()) {
+    throw new Error('The quiz language must match the guide.');
+  }
   let parentLesson: Record<string, unknown> | undefined;
   let lessonId = '';
-  const isLessonAnchor = attachmentType !== 'guide';
+  const isLessonAnchor = !['guide', 'program', 'all'].includes(String(attachmentType));
   let anchorId = '';
   if (isLessonAnchor) {
+    if (!guideRef) throw new Error('Choose an existing, non-archived guide.');
     lessonId = safeId(data.lessonId);
     const parent = await guideRef.collection('lessons').doc(lessonId).get();
     if (!parent.exists || parent.data()?.archived === true || parent.data()?.type === 'Test') throw new Error('Choose a study lesson from the selected guide.');
@@ -80,12 +98,17 @@ async function resolveAttachment(ctx: Context, data: Record<string, unknown>) {
       }
     } else if (data.anchorId) throw new Error('Lesson-wide quizzes cannot reference a chapter or block.');
   } else if (data.lessonId || data.anchorId) {
-    throw new Error('An entire-guide quiz must not reference a particular lesson.');
+    throw new Error('A guide-wide or program-level quiz must not reference a particular lesson.');
   }
-  if (data.published === true && (guide.published !== true || (parentLesson && parentLesson.published !== true))) {
-    throw new Error('Publish the parent guide and lesson before publishing their quiz.');
+  if (data.published === true) {
+    if (guideSnap?.exists && (guide.published !== true || (parentLesson && parentLesson.published !== true))) {
+      throw new Error('Publish the parent guide and lesson before publishing their quiz.');
+    }
+    if (programSnap?.exists && program.published !== true) {
+      throw new Error('Publish the parent program before publishing its quiz.');
+    }
   }
-  return { attachmentType: attachmentType as QuizAttachmentType, guideId, guideRef, guide, lessonId, anchorId, parentLesson, organizationId };
+  return { attachmentType: attachmentType as QuizAttachmentType, guideId, guideRef: guideSnap?.exists ? guideRef : null, guide, programId, programRef: programSnap?.exists ? programRef : null, lessonId, anchorId, parentLesson, organizationId };
 }
 
 export default async function handler(req: Request, res: Response) {
@@ -233,29 +256,37 @@ export default async function handler(req: Request, res: Response) {
       const now = new Date().toISOString();
       const sharingScope = target.organizationId ? (data.sharingScope === 'shared' ? 'shared' : data.sharingScope === 'private' ? 'private' : 'organization') : 'shared';
       const assessmentId = 'quiz-' + id;
-      const assessmentRef = target.guideRef.collection('lessons').doc(assessmentId);
+      const assessmentRef = target.guideRef
+        ? target.guideRef.collection('lessons').doc(assessmentId)
+        : target.programRef
+          ? target.programRef.collection('assessments').doc(assessmentId)
+          : ctx.db.collection('assessments').doc(assessmentId);
       const occupied = await assessmentRef.get();
       if (occupied.exists && String(occupied.data()?.sourceQuizId || '') !== id) {
         throw new Error('The assessment ID conflicts with an existing lesson.');
       }
       const ownerUid = String(current.ownerUid || ctx.auth.uid);
       const quizDocument = {
-        id, title, description, language, guideId:target.guideId,
-        attachmentType:target.attachmentType, lessonId:target.lessonId,
-        anchorId:target.anchorId, assessmentKind,
+        id, title, description, language,
+        guideId: target.guideId || '',
+        programId: target.programId || '',
+        attachmentType: target.attachmentType, lessonId: target.lessonId,
+        anchorId: target.anchorId, assessmentKind,
         assessmentInstructions,assessmentTimeLimitMinutes,assessmentPassThreshold,
         assessmentMaxAttemptsMode,assessmentMaxAttempts,assessmentRetakeCooldownMinutes,assessmentFeedbackMode,
         organizationId:current.organizationId || target.organizationId,
-        ownerOrganizationId:current.ownerOrganizationId || target.organizationId,
-        ownerTenantId:current.ownerTenantId || tenantOwnerKey(ctx),
-        ownerUid, canonical:true, sharingScope, published, archived:false, questions, sourceContentId,
-        assessmentId, assessmentPath:assessmentRef.path,
-        createdAt:current.createdAt || now, updatedAt:FieldValue.serverTimestamp(), updatedBy:ctx.auth.uid,
+        ownerOrganizationId: current.ownerOrganizationId || target.organizationId,
+        ownerTenantId: current.ownerTenantId || tenantOwnerKey(ctx),
+        ownerUid, canonical: true, sharingScope, published, archived: false, questions, sourceContentId,
+        assessmentId, assessmentPath: assessmentRef.path,
+        createdAt: current.createdAt || now, updatedAt: FieldValue.serverTimestamp(), updatedBy: ctx.auth.uid,
       };
       const assessmentDocument = {
-        id:assessmentId, lessonId:assessmentId, guideId:target.guideId,
+        id: assessmentId, lessonId: assessmentId,
+        guideId: target.guideId || '',
+        programId: target.programId || '',
         title, description, language,
-        lessonNumber:quizLessonNumber(target.attachmentType, String(target.parentLesson?.lessonNumber || '')),
+        lessonNumber: quizLessonNumber(target.attachmentType, String(target.parentLesson?.lessonNumber || '')),
         type:'Test', sourceQuizId:id, attachmentType:target.attachmentType,
         attachedLessonId:target.lessonId, anchorId:target.anchorId,
         assessmentKind,

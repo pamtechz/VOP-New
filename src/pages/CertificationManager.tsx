@@ -41,6 +41,9 @@ export interface CertificateRecord {
 interface CertificationApprovalStage { id: string; label: string; approverRoles: string[]; enabled?: boolean; }
 
 interface CertificationConfig {
+  id?: string;
+  scope?: 'platform' | 'organization';
+  inherited?: boolean;
   enabled?: boolean;
   certificateTitle?: string;
   certificateBodyText?: string;
@@ -224,7 +227,8 @@ export const CertificationManager: React.FC<Props> = ({
   }, [approvedCandidates, certificates, issuerSearch]);
 
   const saveCertificationConfig = async (nextConfig: CertificationConfig) => {
-    await adminContent('upsert', 'certificationConfig', 'certification', {
+    const targetId = isSuperAdmin ? 'certification' : (config?.scope === 'organization' && config.id ? config.id : undefined);
+    await adminContent('upsert', 'certificationConfig', targetId, {
       enabled: nextConfig.enabled === true,
       verificationEnabled: nextConfig.verificationEnabled === true,
       minimumScore: nextConfig.minimumScore,

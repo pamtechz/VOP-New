@@ -134,6 +134,11 @@ export async function handleCurriculumPrograms(ctx:TenantContext,
   }
   if(action==='delete'){
     if(!previous.exists)throw new Error('Program not found.');
+    if(body.permanent===true || raw.permanent===true){
+      await ref.delete();
+      await writeTenantAudit(ctx,'program.delete',ref.path,current,undefined);
+      return res.status(200).json({ok:true,id,deleted:true});
+    }
     // Keep IDs, course order and existing progress references intact.
     await ref.update({
       published:false,archived:true,updatedAt:FieldValue.serverTimestamp(),updatedBy:ctx.auth.uid,
@@ -168,8 +173,6 @@ export async function handleCurriculumPrograms(ctx:TenantContext,
   if(targetOrganizationId && !ctx.isSuperAdmin && input.published &&
      input.sharingScope==='private')
     throw new Error('Publish an organization-visible program instead of a private draft.');
-  if(input.published&&!input.guideIds.length)
-    throw new Error('Add at least one guide before publishing the program.');
   if(input.archived&&input.published)
     throw new Error('An archived program cannot be published.');
   // Every guide must be in the SAME tenant as its parent program. A shared

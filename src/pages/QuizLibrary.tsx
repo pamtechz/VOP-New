@@ -1,16 +1,17 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Check, Copy, Edit3, Plus, RefreshCw, Save, Share2, Trash2 } from 'lucide-react';
+import { Check, CircleHelp, Copy, Edit3, Plus, RefreshCw, Save, Share2, Trash2 } from 'lucide-react';
 import { auth } from '../lib/firebase';
 import { getTranslation, getUiLocale } from '../services/i18n';
 import { appConfirm } from '../components/layout/AppDialog';
 import { ShimmerList } from '../components/layout/Shimmer';
 
-type AttachmentType = 'lesson' | 'guide' | 'chapter' | 'section' | 'block';
+type AttachmentType = 'section' | 'lesson' | 'chapter' | 'guide' | 'program' | 'block' | 'all';
 type Quiz = {
   id: string; title: string; description?: string; language: string; archived?: boolean;
   questions: Array<Record<string, unknown>>; published?: boolean;
   sharingScope?: 'private' | 'organization' | 'shared';
-  guideId?: string; lessonId?: string; attachmentType?: AttachmentType; anchorId?: string; assessmentKind?: 'final_exam'|'chapter_quiz'|'practice';
+  guideId?: string; lessonId?: string; attachmentType?: AttachmentType; anchorId?: string; programId?: string;
+  assessmentKind?: 'final_exam'|'chapter_quiz'|'practice';
   assessmentInstructions?: string; assessmentTimeLimitMinutes?: number; assessmentPassThreshold?: number;
   assessmentMaxAttemptsMode?: 'inherit'|'custom'; assessmentMaxAttempts?: number; assessmentRetakeCooldownMinutes?: number;
   assessmentFeedbackMode?: 'score_only'|'after_submit'|'none';
@@ -48,6 +49,7 @@ export default function QuizLibrary({ organizationId = '',initialGuideId,initial
   const t = (key: string, fallback: string) => getTranslation(key, getUiLocale(), undefined, fallback);
   const [items, setItems] = useState<Quiz[]>([]);
   const [guides, setGuides] = useState<Guide[]>([]);
+  const [programs, setPrograms] = useState<Array<{ id: string; title: string; guideIds: string[] }>>([]);
   const [selected, setSelected] = useState<Quiz | null>(null);
   const [sourceId, setSourceId] = useState('');
   const [title, setTitle] = useState('');
@@ -56,6 +58,7 @@ export default function QuizLibrary({ organizationId = '',initialGuideId,initial
   const [scope, setScope] = useState<'private' | 'organization' | 'shared'>('organization');
   const [published, setPublished] = useState(false);
   const [attachmentType, setAttachmentType] = useState<AttachmentType>('lesson');
+  const [programId, setProgramId] = useState('');
   const [guideId, setGuideId] = useState('');
   const [lessonId, setLessonId] = useState('');
   const [anchorId,setAnchorId] = useState('');
@@ -78,12 +81,18 @@ export default function QuizLibrary({ organizationId = '',initialGuideId,initial
   const load = async () => {
     setLoading(true); setError('');
     try {
-      const [quizzes, guideResponse] = await Promise.all([
+      const [quizzes, guideResponse, programsResponse] = await Promise.all([
         authorizedPost('/api/quizzes', { action: 'list', ...scopePayload }),
         authorizedPost('/api/admin/content', { action: 'listGuides', collection: 'guides', ...scopePayload }),
+        authorizedPost('/api/admin/content', { action: 'list', collection: 'programs', ...scopePayload }).catch(() => ({ items: [] })),
       ]);
       setItems((quizzes.items || []) as Quiz[]);
       setGuides((guideResponse.items || []) as Guide[]);
+      setPrograms(((programsResponse.items || []) as Array<{ id: string; title: string; guideIds?: string[] }>).map(p => ({
+        id: String(p.id),
+        title: String(p.title || ''),
+        guideIds: Array.isArray(p.guideIds) ? p.guideIds.map(String) : [],
+      })));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Could not load quiz library and guide options.');
     } finally { setLoading(false); }
@@ -93,6 +102,7 @@ export default function QuizLibrary({ organizationId = '',initialGuideId,initial
     if (!initialGuideId) return;
     setSelected(null);setSourceId('');setEditorOpen(true);
     setGuideId(initialGuideId);
+    setProgramId('');
     setLessonId(initialLessonId || '');
     setAttachmentType(initialExam ? 'guide' : initialAnchorType || (initialLessonId?'lesson':'guide'));
     setAnchorId(initialAnchorId || '');
@@ -143,6 +153,7 @@ export default function QuizLibrary({ organizationId = '',initialGuideId,initial
     setScope(copy ? 'organization' : quiz?.sharingScope || 'organization');
     setPublished(copy ? false : quiz?.published === true);
     setAttachmentType(quiz?.attachmentType || 'lesson');
+    setProgramId(copy ? '' : quiz?.programId || '');
     setGuideId(copy ? '' : quiz?.guideId || '');
     setLessonId(copy ? '' : quiz?.lessonId || '');
     setAnchorId(copy ? '' : quiz?.anchorId || '');
@@ -158,12 +169,19 @@ export default function QuizLibrary({ organizationId = '',initialGuideId,initial
   };
   const save = async () => {
     if (!title.trim()) return setError('Quiz title is required.');
-    if (!guideId || !currentGuide) return setError('Choose a guide in your selected organization.');
-    if (attachmentType !== 'guide' && (!lessonId || !lessonOptions.some(item => item.id === lessonId))) {
+    if (attachmentType === 'program' && !programId) {
+      return setError('Choose the study track (program) this exam will assess.');
+    }
+    const needsGuide = !['program', 'all'].includes(attachmentType);
+    if (needsGuide && (!guideId || !currentGuide)) {
+      return setError('Choose a guide/module in your selected organization.');
+    }
+    const isLessonLevel = !['guide', 'program', 'all'].includes(attachmentType);
+    if (isLessonLevel && (!lessonId || !lessonOptions.some(item => item.id === lessonId))) {
       return setError('Choose the lesson this quiz will assess.');
     }
     if (['chapter','section','block'].includes(attachmentType) && !anchorOptions.some(item=>item.id===anchorId)) {
-      return setError('Choose an existing chapter, section or block in this lesson.');
+      return setError('Choose an existing ' + attachmentType + ' in this lesson.');
     }
     if (published && !questions.length) return setError('Add at least one question before publishing.');
     setSaving(true); setError('');
@@ -172,8 +190,12 @@ export default function QuizLibrary({ organizationId = '',initialGuideId,initial
         ...scopePayload, action: 'upsert', id: selected?.id,
         data: {
           title: title.trim(), description: description.trim(),
-          language: currentGuide.language, sharingScope: scope, published,
-          attachmentType, guideId, lessonId: attachmentType === 'guide' ? '' : lessonId,
+          language: (currentGuide?.language || language || 'en').toLowerCase(),
+          sharingScope: scope, published,
+          attachmentType,
+          guideId: needsGuide ? guideId : (guideId || ''),
+          programId: attachmentType === 'program' ? programId : '',
+          lessonId: isLessonLevel ? lessonId : '',
           anchorId: ['chapter','section','block'].includes(attachmentType) ? anchorId : '',
           assessmentInstructions:assessmentInstructions.trim(),
           assessmentTimeLimitMinutes,assessmentPassThreshold,assessmentMaxAttemptsMode,
@@ -186,7 +208,7 @@ export default function QuizLibrary({ organizationId = '',initialGuideId,initial
           })),
         },
       });
-      setMessage('Quiz saved and attached to its study guide.');
+      setMessage('Quiz saved and attached to its ' + (attachmentType === 'program' ? 'study track.' : attachmentType === 'all' ? 'curriculum evaluation.' : 'study guide.'));
       setEditorOpen(false); setSelected(null); setSourceId('');
       await load();
       onSaved?.();
@@ -206,12 +228,16 @@ export default function QuizLibrary({ organizationId = '',initialGuideId,initial
   };
   return <div className="vop-reference-manager">
     <div className="vop-page-head">
-      <div className="vop-heading"><div className="vop-heading-icon"><Share2 size={28}/></div>
-        <div><h1>{t('admin.quiz_library','Quiz Library')}</h1><p>Private question bank: attach a quiz to a block, section, chapter, lesson or the final guide examination.</p></div>
+      <div className="vop-heading"><div className="vop-heading-icon"><CircleHelp size={28}/></div>
+        <div>
+          <span className="vop-module-eyebrow">TIER 4 (PART C) · EVALUATIONS & ASSESSMENTS</span>
+          <h1>Evaluations & Quizzes</h1>
+          <p>Author and manage private assessments attached to a section, lesson, module (guide), study track (program), or cross-curriculum evaluation.</p>
+        </div>
       </div>
       <div className="vop-reference-actions">
         <button className="vop-secondary" type="button" onClick={() => void load()}><RefreshCw size={17}/>{t('common.refresh','Refresh')}</button>
-        <button className="vop-primary" type="button" onClick={() => open(null)}><Plus size={17}/>{t('admin.new_quiz','New Quiz')}</button>
+        <button className="vop-primary" type="button" onClick={() => open(null)}><Plus size={17}/>New Quiz / Exam</button>
       </div>
     </div>
     {error && <div className="vop-alert error" role="alert">{error}</div>}
@@ -225,24 +251,43 @@ export default function QuizLibrary({ organizationId = '',initialGuideId,initial
       </div>
       <div className="vop-form-grid">
         <div className="vop-field"><label>Quiz Title *</label><input value={title} onChange={e => setTitle(e.target.value)}/></div>
-        <div className="vop-field"><label>Language</label><input value={currentGuide?.language?.toUpperCase() || language.toUpperCase()} readOnly placeholder="Choose a guide"/></div>
-        <div className="vop-field"><label>Attachment *</label>
-          <select value={attachmentType} onChange={e => { setAttachmentType(e.target.value as AttachmentType); setLessonId(''); setAnchorId(''); }}>
-            <option value="lesson">Individual lesson quiz</option>
-            <option value="chapter">Chapter quiz</option>
-            <option value="section">Section quiz</option>
-            <option value="block">Content-block quiz</option>
-            <option value="guide">Final guide examination</option>
+        <div className="vop-field"><label>Language</label>
+          <input value={currentGuide?.language?.toUpperCase() || (language || 'EN').toUpperCase()}
+            readOnly={Boolean(currentGuide)}
+            onChange={e => setLanguage(e.target.value.toLowerCase())}
+            placeholder="e.g. EN, ES, FR"/>
+        </div>
+        <div className="vop-field"><label>Attachment Target *</label>
+          <select value={attachmentType} onChange={e => {
+            const next = e.target.value as AttachmentType;
+            setAttachmentType(next);
+            setLessonId('');
+            setAnchorId('');
+          }}>
+            <option value="section">Section quiz (Tier 4)</option>
+            <option value="lesson">Lesson quiz (Tier 4)</option>
+            <option value="chapter">Chapter quiz (Tier 4)</option>
+            <option value="block">Content-block quiz (Tier 4)</option>
+            <option value="guide">Module / Study Guide exam (Tier 3)</option>
+            <option value="program">Program / Study Track exam (Tier 2)</option>
+            <option value="all">All / Cross-curriculum evaluation (Tier 1)</option>
           </select>
         </div>
-        <div className="vop-field"><label>Guide *</label>
+        {attachmentType === 'program' && <div className="vop-field"><label>Study Track (Program) *</label>
+          <select value={programId} onChange={e => setProgramId(e.target.value)}>
+            <option value="">Select a study track (program)</option>
+            {programs.map(prog => <option key={prog.id} value={prog.id}>{prog.title}</option>)}
+          </select>
+          {!programs.length && <small>No study tracks found. Create a study track first.</small>}
+        </div>}
+        {attachmentType !== 'program' && attachmentType !== 'all' && <div className="vop-field"><label>Study Guide (Module) *</label>
           <select value={guideId} onChange={e => { setGuideId(e.target.value); setLessonId(''); setAnchorId(''); setLanguage(editableGuides.find(item => item.id === e.target.value)?.language || ''); }}>
-            <option value="">Select a guide</option>
+            <option value="">Select a guide / module</option>
             {editableGuides.map(guide => <option key={guide.id} value={guide.id}>{guide.title} · {guide.language.toUpperCase()}{guide.published ? '' : ' (Draft)'}</option>)}
           </select>
           {!editableGuides.length && <small>No editable guides in the selected organization. Create a guide first.</small>}
-        </div>
-        {attachmentType !== 'guide' && <div className="vop-field"><label>Lesson *</label>
+        </div>}
+        {!['guide', 'program', 'all'].includes(attachmentType) && <div className="vop-field"><label>Lesson *</label>
           <select value={lessonId} onChange={e => {setLessonId(e.target.value);setAnchorId('');}} disabled={!currentGuide}>
             <option value="">Select a lesson</option>
             {lessonOptions.map(lesson => <option key={lesson.id} value={lesson.id}>{lesson.lessonNumber}. {lesson.title}{lesson.published ? '' : ' (Draft)'}</option>)}
@@ -263,7 +308,7 @@ export default function QuizLibrary({ organizationId = '',initialGuideId,initial
           <select value={published ? 'published' : 'draft'} onChange={e => setPublished(e.target.value === 'published')}>
             <option value="draft">Draft</option><option value="published">Published</option>
           </select>
-          {published && <small>Its guide and, for lesson quizzes, parent lesson must already be published.</small>}
+          {published && <small>{attachmentType === 'program' ? 'Its parent study track must already be published.' : attachmentType === 'all' ? 'Cross-curriculum evaluation will be published immediately.' : 'Its guide and, for lesson quizzes, parent lesson must already be published.'}</small>}
         </div>
       </div>
       <div className="vop-field"><label>{t('common.description','Description')}</label><textarea value={description} onChange={e => setDescription(e.target.value)}/></div>
@@ -281,7 +326,7 @@ export default function QuizLibrary({ organizationId = '',initialGuideId,initial
             <option value="after_submit">Score plus configured explanations</option>
             <option value="none">Completion only — hide score from learner</option>
           </select></div>
-          <div className="vop-field"><label>Assessment classification</label><input readOnly value={attachmentType==='guide'?'Final examination':attachmentType==='chapter'?'Chapter quiz':'Practice assessment'}/><small>Classification follows where the assessment is attached.</small></div>
+          <div className="vop-field"><label>Assessment classification</label><input readOnly value={attachmentType==='program'?'Program examination (Tier 2)':attachmentType==='all'?'Cross-curriculum evaluation (Tier 1)':attachmentType==='guide'?'Final examination':attachmentType==='chapter'?'Chapter quiz':'Practice assessment'}/><small>Classification follows where the assessment is attached.</small></div>
         </div>
       </div>
       <div style={{ display: 'grid', gap: 12, marginTop: 14 }}>
@@ -307,11 +352,18 @@ export default function QuizLibrary({ organizationId = '',initialGuideId,initial
       </div>
     </div>}
     <div className={'vop-reference-table-wrap'+(loading&&items.length?' vop-refreshing vop-shimmer-overlay':'')}>
-      {loading&&items.length===0 ? <ShimmerList rows={7} compact label="Loading quizzes"/> : <table className="vop-reference-table">
+      {loading&&items.length===0 ? <ShimmerList rows={7} compact label="Loading quizzes"/> : items.length === 0 ? (
+        <div className="vop-empty vop-empty-hero">
+          <CircleHelp size={34}/>
+          <h3>No Evaluations or Quizzes Configured</h3>
+          <p>Evaluations test understanding at chapter, lesson, or guide level with automated grading and pass marks. Create your first assessment to begin.</p>
+          <button className="vop-primary" type="button" onClick={() => open(null)}><Plus size={16}/> Create First Assessment</button>
+        </div>
+      ) : <table className="vop-reference-table">
         <thead><tr><th>Assessment</th><th>Attached to</th><th>Policy</th><th>Language</th><th>Questions</th><th>Sharing</th><th>Status</th><th>Actions</th></tr></thead>
         <tbody>{items.map(item => <tr key={item.id}>
           <td><strong>{item.title}</strong><div>{item.description || 'No description'}</div></td>
-          <td>{item.attachmentType === 'guide' ? 'Final guide exam: ' + guideName(item.guideId || '') : item.attachmentType === 'lesson' ? 'Lesson: ' + lessonName(item.guideId || '', item.lessonId || '') : item.anchorId ? item.attachmentType + ': ' + lessonName(item.guideId || '', item.lessonId || '') : 'Not attached (legacy)'}</td>
+          <td>{item.attachmentType === 'program' ? 'Program exam: ' + (programs.find(p => p.id === item.programId)?.title || item.programId || 'Study Track') : item.attachmentType === 'all' ? 'Cross-curriculum (All)' : item.attachmentType === 'guide' ? 'Final guide exam: ' + guideName(item.guideId || '') : item.attachmentType === 'lesson' ? 'Lesson: ' + lessonName(item.guideId || '', item.lessonId || '') : item.anchorId ? item.attachmentType + ': ' + lessonName(item.guideId || '', item.lessonId || '') : 'Not attached (legacy)'}</td>
           <td><strong>{item.assessmentKind==='final_exam'?'Final exam':item.assessmentKind==='chapter_quiz'?'Chapter quiz':'Practice'}</strong><div>{item.assessmentTimeLimitMinutes?item.assessmentTimeLimitMinutes+' min':'Untimed'} · {item.assessmentPassThreshold?item.assessmentPassThreshold+'% pass':'Default pass mark'} · {item.assessmentMaxAttemptsMode==='custom'?'Custom '+item.assessmentMaxAttempts+' attempts':'Organization attempt policy'}</div></td>
           <td>{item.language.toUpperCase()}</td><td>{item.questions?.length || 0}</td>
           <td>{item.sharingScope || 'organization'}</td><td>{item.archived ? 'Archived' : item.published ? 'Published' : 'Draft'}</td>

@@ -77,12 +77,13 @@
 .vop-user-table{width:100%;min-width:0;table-layout:fixed}
 .vop-user-table th,.vop-user-table td{padding-inline:12px}
 .vop-user-table th:first-child,.vop-user-table td:first-child{width:44px}
-.vop-user-table th:nth-child(2){width:28%}
-.vop-user-table th:nth-child(3){width:12%}
-.vop-user-table th:nth-child(4){width:25%}
-.vop-user-table th:nth-child(5){width:11%}
-.vop-user-table th:nth-child(6){width:16%}
-.vop-user-table th:nth-child(7){width:112px}
+.vop-user-table th:nth-child(2){width:24%}
+.vop-user-table th:nth-child(3){width:10%}
+.vop-user-table th:nth-child(4){width:13%}
+.vop-user-table th:nth-child(5){width:22%}
+.vop-user-table th:nth-child(6){width:10%}
+.vop-user-table th:nth-child(7){width:13%}
+.vop-user-table th:nth-child(8){width:112px}
 .vop-user-cell{min-width:0}
 .vop-user-cell>div{min-width:0}
 .vop-user-cell strong,.vop-user-cell span,.vop-user-cell small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -134,3 +135,26 @@
 .vop-user-record-card .vop-user-cell strong{white-space:normal}
 .vop-user-card-pills{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 @media(max-width:640px){.vop-user-view-row{align-items:flex-start}.vop-user-view-row>label{min-height:38px}}
+
+.vop-account-type-org{
+  background:#ede9fe!important;
+  color:#5b21b6!important;
+  border:1px solid #ddd6fe!important;
+  font-weight:750!important;
+}
+.vop-account-type-personal{
+  background:#f1f5f9!important;
+  color:#475569!important;
+  border:1px solid #e2e8f0!important;
+  font-weight:750!important;
+}
+[data-theme="dark"] .vop-account-type-org{
+  background:#2e1065!important;
+  color:#ddd6fe!important;
+  border-color:#5b21b6!important;
+}
+[data-theme="dark"] .vop-account-type-personal{
+  background:#1e293b!important;
+  color:#cbd5e1!important;
+  border-color:#334155!important;
+}

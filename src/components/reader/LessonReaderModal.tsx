@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import type { Lesson, DiscoverGuide, User } from '../../types';
-import { X, Volume2, VolumeX, ChevronLeft, ChevronRight, CheckCircle, Quote, Sparkles, BookOpen, MessageCircle } from 'lucide-react';
+import { X, Volume2, VolumeX, ChevronLeft, ChevronRight, CheckCircle, Quote, Sparkles, BookOpen, MessageCircle, HeartHandshake } from 'lucide-react';
 import { isLessonConfigured } from '../../services/lesson.ts';
 import { saveLessonResume } from '../../services/localStudy';
 import { getTranslation, getUiLocale } from '../../services/i18n';
@@ -40,6 +40,7 @@ export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({
   const [currentPageIndex, setCurrentPageIndex] = useState(() => clampPageIndex(initialPageIndex));
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [notice, setNotice] = useState('');
+  const [decision, setDecision] = useState<string>('accept');
   const currentPage = pages[currentPageIndex];
   const currentChapter = lesson.chapters?.find(chapter=>chapter.id===currentPage?.chapterId);
   const currentSection = currentChapter?.sections.find(section=>section.id===currentPage?.sectionId);
@@ -406,6 +407,66 @@ export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({
                     <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: 1.55 }}>
                       {currentPage.keyTakeaway}
                     </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Part C: Personal Decision & Reflection */}
+              {currentPageIndex === pages.length - 1 && (
+                <div className="vop-lesson-decision-card" style={{
+                  background: 'linear-gradient(135deg, rgba(254, 243, 199, 0.45), rgba(254, 249, 195, 0.65))',
+                  border: '1.5px solid #d97706',
+                  borderRadius: '1.25rem',
+                  padding: '1.25rem 1.4rem',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.85rem',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                    <HeartHandshake size={22} color="#b45309" />
+                    <div>
+                      <span style={{ fontSize: '0.75rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#b45309', display: 'block' }}>
+                        {t('lesson.decision_heading', 'Part C: Reflection & Commitment')}
+                      </span>
+                      <h4 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
+                        {t('lesson.decision_prompt', 'My Personal Decision')}
+                      </h4>
+                    </div>
+                  </div>
+                  <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: 1.55, margin: 0 }}>
+                    {t('lesson.decision_instruction', 'Having studied this guide, what is your personal response before God?')}
+                  </p>
+                  <div style={{ display: 'grid', gap: '0.5rem' }}>
+                    {[
+                      { id: 'accept', label: t('lesson.decision_accept', 'I accept this biblical truth into my life and choose to live by it.') },
+                      { id: 'pray', label: t('lesson.decision_pray', 'I believe this teaching and request prayer for spiritual strength.') },
+                      { id: 'questions', label: t('lesson.decision_questions', 'I have questions and would like to study further with a mentor.') }
+                    ].map(option => (
+                      <label key={option.id} style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.65rem',
+                        padding: '0.7rem 0.9rem',
+                        borderRadius: '0.75rem',
+                        background: decision === option.id ? 'rgba(245, 158, 11, 0.18)' : 'var(--bg-card, #fff)',
+                        border: `1.5px solid ${decision === option.id ? '#d97706' : 'var(--border-subtle, #e2e8f0)'}`,
+                        cursor: 'pointer',
+                        fontSize: '0.875rem',
+                        color: 'var(--text-primary)',
+                        fontWeight: decision === option.id ? 700 : 500,
+                        transition: 'all 0.15s ease'
+                      }}>
+                        <input
+                          type="radio"
+                          name="vop_decision"
+                          value={option.id}
+                          checked={decision === option.id}
+                          onChange={() => setDecision(option.id)}
+                          style={{ accentColor: '#d97706', width: '16px', height: '16px' }}
+                        />
+                        <span>{option.label}</span>
+                      </label>
+                    ))}
                   </div>
                 </div>
               )}

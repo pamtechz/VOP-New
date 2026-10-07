@@ -22,3 +22,49 @@
 .vop-candidate-card-grid .vop-candidate-person>div{min-width:0}
 .vop-candidate-card-grid .vop-candidate-person strong,.vop-candidate-card-grid .vop-candidate-person small{overflow-wrap:anywhere}
 @media(max-width:800px){.vop-candidate-toolbar{grid-template-columns:minmax(0,1fr) auto}.vop-candidate-toolbar .vop-filter{grid-column:1/-1;grid-row:2}}
+
+.vop-auto-org-badge{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 1px solid var(--border-subtle,#dce6f1);
+  border-radius: 10px;
+  background: var(--bg-secondary,#f8fafc);
+  color: var(--text-primary,#143e70);
+}
+.vop-auto-org-badge svg{color:#15599c;flex:none}
+.vop-auto-org-badge>div{display:grid;gap:2px}
+.vop-auto-org-badge strong{font-size:12px;font-weight:750;color:var(--text-primary,#143e70)}
+.vop-auto-org-badge small{font-size:10px;color:var(--text-muted,#75879f)}
+
+.vop-search-org-picker{display:grid;gap:6px}
+.vop-search-org-picker input{min-height:36px}
+.vop-search-org-picker select{min-height:38px}
+
+.vop-belonging-legend{
+  grid-column: 1 / -1;
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--text-muted,#73859a);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  padding-top: 8px;
+  margin-top: 4px;
+  border-top: 1px solid var(--border-subtle,#e2eaf3);
+}
+
+.vop-actions-delete{
+  color: var(--danger,#c5221f) !important;
+}
+.vop-actions-delete:hover{
+  background: rgba(197,34,31,0.08) !important;
+}
+.vop-danger-button{
+  color: var(--danger,#c5221f) !important;
+  border-color: rgba(197,34,31,0.3) !important;
+}
+.vop-danger-button:hover{
+  background: rgba(197,34,31,0.08) !important;
+}
+

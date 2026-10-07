@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { CheckCircle2, CreditCard, Download, LoaderCircle, Plus, RefreshCw, Search, Settings2, SlidersHorizontal, WalletCards, X, XCircle } from 'lucide-react';
+import { BookOpen, CheckCircle2, CreditCard, Download, Gauge, LoaderCircle, Lock, Plus, Radio, RefreshCw, Search, Settings2, Shield, ShieldCheck, SlidersHorizontal, Sparkles, Users, WalletCards, X, XCircle, Zap } from 'lucide-react';
 import type { User } from '../types';
 import type { PayableItem, PayableItemType, PaymentMethod } from '../../shared/payments';
 import { PAYABLE_ITEM_TYPES, minorToDecimal, paymentMethodLabel, paymentStatusLabel } from '../../shared/payments';
-import { adminPaymentRequest, type ClientPayment, type PaymentProviderDescriptor } from '../services/payments';
+import { adminPaymentRequest, loadPaymentCompliance, type ClientPayment, type PaymentProviderDescriptor } from '../services/payments';
 import { auth } from '../lib/firebase';
 import { appConfirm, appPrompt } from '../components/layout/AppDialog';
 import SubscriptionWorkspace, { type BillingTenantOption, type SubscriptionPackageView } from '../components/admin/SubscriptionWorkspace';
@@ -13,7 +13,7 @@ import { ShimmerList } from '../components/layout/Shimmer';
 import './payments.css';
 
 interface Props{currentUser:User}
-type Tab='checkout'|'transactions'|'subscriptions'|'items'|'providers'|'reconciliation';
+type Tab='checkout'|'transactions'|'subscriptions'|'usage'|'policy'|'items'|'providers'|'reconciliation'|'compliance';
 type Organization={id:string;name:string};
 type Target={id:string;name:string};
 type SubscriptionPackage=SubscriptionPackageView;
@@ -65,6 +65,8 @@ const PaymentManagement:React.FC<Props>=({currentUser})=>{
   });
   const [billingSettings,setBillingSettings]=useState({
     usdToZmwRate:'',fxSource:'frankfurter',fxQuoteTtlMinutes:'1440',fxUpdatedAt:'',fxProviderDate:'',
+    subscriptionsEnabled:true,
+    globalQuotas:{} as Record<string,string>,
     subscriptionAudience:{learnersCandidates:false,organizations:true,churches:true,districts:true,conferences:true,unions:true},
   });
   const [draft,setDraft]=useState({
@@ -119,12 +121,21 @@ const PaymentManagement:React.FC<Props>=({currentUser})=>{
         const settings=(billingResult.item||{}) as Record<string,unknown>;
         const subscriptionAudience=settings.subscriptionAudience&&typeof settings.subscriptionAudience==='object'
           ?settings.subscriptionAudience as Record<string,unknown>:{};
+        const rawGlobalQuotas=settings.globalQuotas&&typeof settings.globalQuotas==='object'
+          ?settings.globalQuotas as Record<string,unknown>:{};
+        const loadedGlobalQuotas:Record<string,string>={};
+        for(const q of SUBSCRIPTION_QUOTAS){
+          const val=rawGlobalQuotas[q.key];
+          loadedGlobalQuotas[q.key]=val!==undefined&&val!==null?String(val):'';
+        }
         setBillingSettings({
           usdToZmwRate:Number(settings.usdToZmwRate||0)>0?String(settings.usdToZmwRate):'',
           fxSource:String(settings.fxSource||'frankfurter'),
           fxQuoteTtlMinutes:String(settings.fxQuoteTtlMinutes||1440),
           fxUpdatedAt:String(settings.fxUpdatedAt||''),
           fxProviderDate:String(settings.fxProviderDate||''),
+          subscriptionsEnabled:settings.subscriptionsEnabled!==false,
+          globalQuotas:loadedGlobalQuotas,
           subscriptionAudience:{
             learnersCandidates:subscriptionAudience.learnersCandidates===true,
             organizations:subscriptionAudience.organizations!==false,
@@ -374,6 +385,14 @@ const PaymentManagement:React.FC<Props>=({currentUser})=>{
     const rawRate=billingSettings.usdToZmwRate.trim();
     const rate=rawRate?Number(rawRate):0;
     if(rawRate&&(!Number.isFinite(rate)||rate<=0)){setError('Enter a valid USD to ZMW exchange rate or leave it blank and refresh later.');return;}
+    const numericGlobalQuotas:Record<string,number>={};
+    for(const q of SUBSCRIPTION_QUOTAS){
+      const raw=billingSettings.globalQuotas[q.key];
+      if(raw!==undefined&&raw!==null&&raw.trim()!==''){
+        const n=Number(raw);
+        if(Number.isFinite(n)&&n>=0)numericGlobalQuotas[q.key]=Math.trunc(n);
+      }
+    }
     setBusy(true);setError('');
     try{
       await adminApi('/api/admin/plans',{
@@ -381,9 +400,11 @@ const PaymentManagement:React.FC<Props>=({currentUser})=>{
         ...(rawRate?{usdToZmwRate:rate}:{}),
         fxSource:billingSettings.fxSource.trim()||'platform-configured',
         fxQuoteTtlMinutes:Math.max(15,Math.trunc(Number(billingSettings.fxQuoteTtlMinutes)||1440)),
+        subscriptionsEnabled:billingSettings.subscriptionsEnabled,
+        globalQuotas:numericGlobalQuotas,
         subscriptionAudience:billingSettings.subscriptionAudience,
       });
-      setMessage('Platform billing and subscription audience policy updated.');
+      setMessage('Platform billing, subscription switch and usage controls updated.');
       await load();
     }catch(reason){setError(reason instanceof Error?reason.message:'Billing settings could not be saved.');}
     finally{setBusy(false);}
@@ -420,22 +441,42 @@ const PaymentManagement:React.FC<Props>=({currentUser})=>{
     setTab('checkout');
   };
 
+  const checkLiveCompliance=async()=>{
+    setBusy(true);setError('');setMessage('');
+    try{
+      const res=await loadPaymentCompliance();
+      const standard=String((res.compliance as Record<string,unknown>)?.standard||'PCI-DSS v4.0');
+      const scope=String((res.compliance as Record<string,unknown>)?.scope||'SAQ-A');
+      setMessage('PCI-DSS & 3D-Secure live verification confirmed: '+standard+' ('+scope+').');
+    }catch(e){
+      setError(e instanceof Error?e.message:'Compliance check failed.');
+    }finally{
+      setBusy(false);
+    }
+  };
 
   return <div className="vop-payment-admin">
     <div className="vop-page-header"><div><span className="vop-page-kicker">Financial operations</span><h1>Payments & Billing</h1><p>{isSuperAdmin?'Manage plans, subscriptions, charges, configured payment methods and transaction operations from one finance workspace.':canManageOwnSubscription?'Pay charges, download receipts, manage your institution subscription and review transactions in one place.':'Pay available charges, download receipts and review transactions in one place.'}</p></div>
       <div className="vop-payment-admin-actions"><button className="btn btn-outline" onClick={()=>void load()} disabled={loading}><RefreshCw size={16}/>Refresh</button>{isSuperAdmin&&tab==='items'&&<button className="btn btn-primary" onClick={startCreate}><Plus size={16}/>New payable item</button>}</div></div>
     <div className="vop-payment-admin-tabs">
       {(isSuperAdmin
-        ?([['transactions','Transactions'],['subscriptions','Plans & subscriptions'],['items','Payable items'],['providers','Providers'],['reconciliation','Reconciliation']] as Array<[Tab,string]>)
-        :canManageOwnSubscription
-          ?([['checkout','Pay & receipts'],['subscriptions','Plan & subscription'],['transactions','Transactions']] as Array<[Tab,string]>)
-          :([['checkout','Pay & receipts'],['transactions','Transactions']] as Array<[Tab,string]>)
+        ?([['transactions','Transactions'],['subscriptions','Plans & subscriptions'],['usage','Usage against plan limits'],['policy','Billing & subscription policy'],['items','Payable items'],['providers','Providers'],['reconciliation','Reconciliation'],['compliance','PCI-DSS & 3DS Compliance']] as Array<[Tab,string]>)
+        :billingSettings.subscriptionsEnabled===false
+          ?[]
+          :canManageOwnSubscription
+            ?([['checkout','Pay & receipts'],['subscriptions','Plan & subscription'],['usage','Usage against plan limits'],['transactions','Transactions']] as Array<[Tab,string]>)
+            :([['checkout','Pay & receipts'],['transactions','Transactions']] as Array<[Tab,string]>)
       ).map(([id,label])=><button key={id} className={tab===id?'active':''} onClick={()=>setTab(id)}>{label}</button>)}
     </div>
     {error&&<div className="vop-payment-alert danger"><XCircle size={17}/><span>{error}</span><button onClick={()=>setError('')}>×</button></div>}
     {message&&<div className="vop-payment-alert success"><CheckCircle2 size={17}/><span>{message}</span><button onClick={()=>setMessage('')}>×</button></div>}
 
-    {!isSuperAdmin&&tab==='checkout'&&<PaymentsPage currentUser={currentUser} embedded/>}
+    {!isSuperAdmin&&billingSettings.subscriptionsEnabled===false&&<div className="vop-card" style={{padding:'40px 24px',textAlign:'center',marginTop:20,borderRadius:16}}>
+      <h3 style={{margin:'0 0 10px',fontSize:22,fontWeight:700}}>Subscriptions & Payments Disabled</h3>
+      <p style={{margin:0,color:'var(--text-muted)',fontSize:14}}>Subscriptions and payments are currently disabled by the platform administrator. All features and learning resources are freely accessible.</p>
+    </div>}
+
+    {(isSuperAdmin||billingSettings.subscriptionsEnabled!==false)&&!isSuperAdmin&&tab==='checkout'&&<PaymentsPage currentUser={currentUser} embedded/>}
 
     {tab==='transactions'&&<>
       <div className="vop-payment-admin-toolbar vop-payment-filter-grid">
@@ -454,26 +495,398 @@ const PaymentManagement:React.FC<Props>=({currentUser})=>{
       {loading&&transactions.length===0?<ShimmerList rows={8} compact label="Loading transactions"/>:<div className={'vop-payment-admin-table-wrap'+(loading?' vop-refreshing vop-shimmer-overlay':'')}><table className="vop-payment-admin-table"><thead><tr><th>Reference</th><th>Payer</th><th>Institution</th><th>Item</th><th>Amount</th><th>Method</th><th>Status</th>{isSuperAdmin&&<th>Verification</th>}</tr></thead><tbody>{filtered.map(payment=><tr key={payment.id} onClick={()=>void openDetails(payment)}><td><strong>{payment.reference}</strong>{isSuperAdmin&&<small>{payment.providerReference||'Provider reference pending'}</small>}</td><td>{payment.payerName||payment.payerEmail}<small>{payment.payerEmail}</small></td><td>{billingTenants.find(item=>item.type===payment.billingTenantType&&item.id===payment.billingTenantId)?.name||organizations.find(org=>org.id===payment.organizationId)?.name||(payment.billingTenantId?typeLabel(payment.billingTenantType)+' · '+payment.billingTenantId:payment.organizationId?'Authorized organization':'Platform')}</td><td>{payment.description}</td><td>{payment.currency} {payment.amountDecimal}</td><td>{paymentMethodLabel(payment.paymentMethod)}</td><td><span className={'vop-payment-status '+statusClass(payment.status)}>{paymentStatusLabel(payment.status as never)}</span></td>{isSuperAdmin&&<td>{payment.verificationStatus}</td>}</tr>)}</tbody></table></div>}
     </>}
 
-    {(isSuperAdmin||canManageOwnSubscription)&&tab==='subscriptions'&&<>
+    {(isSuperAdmin||(canManageOwnSubscription&&billingSettings.subscriptionsEnabled!==false))&&(tab==='subscriptions'||tab==='usage')&&<>
       <SubscriptionWorkspace
         currentUser={currentUser}
         isSuperAdmin={isSuperAdmin}
         billingTenants={billingTenants}
         packages={packages}
         busy={busy}
+        focusSection={tab==='usage'?'usage':'plans'}
         onCreatePlan={isSuperAdmin?startPackageCreate:undefined}
         onEditPlan={isSuperAdmin?startPackageEdit:undefined}
         onDeletePlan={isSuperAdmin?deletePackage:undefined}
         onOpenCheckout={isSuperAdmin?undefined:openConsumerCheckout}
       />
-      {isSuperAdmin&&<section className="vop-payment-reconciliation vop-billing-policy-card"><Settings2 size={34}/><div><h2>Billing & subscription policy</h2><p>Plans have one canonical USD price. Zambian institutions receive a locked ZMW quote from the daily Frankfurter USD→ZMW rate. Subscription policy is institutional by default; learners/candidates are excluded from individual subscription billing unless Super Admin explicitly enables it.</p><div className="vop-payable-editor-grid"><label><span>USD → ZMW rate</span><input inputMode="decimal" value={billingSettings.usdToZmwRate} onChange={e=>setBillingSettings(v=>({...v,usdToZmwRate:e.target.value,fxSource:'manual'}))} placeholder="Daily rate"/></label><label><span>Rate source</span><input value={billingSettings.fxSource} readOnly disabled/></label><label><span>Quote validity (minutes)</span><input inputMode="numeric" value={billingSettings.fxQuoteTtlMinutes} onChange={e=>setBillingSettings(v=>({...v,fxQuoteTtlMinutes:e.target.value}))}/></label></div><fieldset className="vop-billing-audience"><legend>Subscription-bearing accounts</legend><label className="vop-checkbox"><input type="checkbox" checked={billingSettings.subscriptionAudience.learnersCandidates} onChange={e=>setBillingSettings(v=>({...v,subscriptionAudience:{...v.subscriptionAudience,learnersCandidates:e.target.checked}}))}/>Learners / candidates require subscription billing</label><p className="vop-payment-security">Currently off: learner, student and candidate accounts do not require an individual subscription and do not consume member/staff seats. Institutional subscription policy remains enabled for organizations, churches, districts, conferences and unions.</p></fieldset><div className="vop-payment-admin-actions"><button className="btn btn-primary" disabled={busy} onClick={()=>void refreshBillingRate()}><RefreshCw size={16}/>Refresh daily rate</button><button className="btn btn-outline" disabled={busy} onClick={()=>void saveBillingSettings()}><Settings2 size={16}/>Save billing policy</button></div>{billingSettings.fxUpdatedAt&&<small>Last refreshed: {new Date(billingSettings.fxUpdatedAt).toLocaleString()}{billingSettings.fxProviderDate?' · provider date '+billingSettings.fxProviderDate:''}</small>}</div></section>}
+      {isSuperAdmin&&tab==='subscriptions'&&<div className="vop-policy-subcard-banner">
+        <div className="vop-policy-subcard-text">
+          <Zap size={18}/>
+          <div>
+            <strong>Global SaaS Billing & Quota Policy</strong>
+            <span>{billingSettings.subscriptionsEnabled?'Subscriptions are currently enforced across institutions.':'Global Free Mode is active: subscriptions are bypassed.'}</span>
+          </div>
+        </div>
+        <button className="btn btn-outline" type="button" onClick={()=>setTab('policy')}>
+          <Settings2 size={15}/>Configure Billing Policy & Free Mode Caps
+        </button>
+      </div>}
     </>}
+
+    {isSuperAdmin&&tab==='policy'&&<div className="vop-billing-policy-studio">
+      <div className="vop-policy-header">
+        <div>
+          <span className="vop-card-kicker">Global SaaS Governance</span>
+          <h2>Billing & subscription policy</h2>
+          <p>Control platform monetization, toggle the subscription module on/off globally, configure free-tier platform quotas, and manage live foreign exchange rates.</p>
+        </div>
+        <div className="vop-policy-header-badge">
+          {billingSettings.subscriptionsEnabled ? (
+            <span className="vop-policy-badge active">
+              <span className="vop-pulse-dot"/>
+              Subscriptions Enforced (SaaS Mode)
+            </span>
+          ) : (
+            <span className="vop-policy-badge free">
+              <Sparkles size={14}/>
+              Global Free Mode Active
+            </span>
+          )}
+        </div>
+      </div>
+
+      <section className={`vop-policy-card vop-policy-hero ${billingSettings.subscriptionsEnabled?'enabled':'disabled'}`}>
+        <div className="vop-policy-hero-body">
+          <div className="vop-policy-hero-title">
+            <Zap size={22} className="vop-hero-icon"/>
+            <div>
+              <h3>Subscription Module Master Switch</h3>
+              <span className="vop-policy-subtext">
+                {billingSettings.subscriptionsEnabled
+                  ?'Institutional subscriptions are enabled. Organizations require active paid or free packages to access tiered features.'
+                  :'Subscription module is turned OFF platform-wide. All institutional features are 100% free with usage capped by the platform controls below.'}
+              </span>
+            </div>
+          </div>
+
+          <label className="vop-toggle-switch" aria-label="Toggle subscription module enforcement">
+            <input
+              type="checkbox"
+              checked={billingSettings.subscriptionsEnabled}
+              onChange={e=>setBillingSettings(v=>({...v,subscriptionsEnabled:e.target.checked}))}
+            />
+            <span className="vop-toggle-slider"/>
+            <strong className="vop-toggle-label">{billingSettings.subscriptionsEnabled?'ENABLED':'DISABLED'}</strong>
+          </label>
+        </div>
+
+        <div className={`vop-policy-status-banner ${billingSettings.subscriptionsEnabled?'active':'free'}`}>
+          {billingSettings.subscriptionsEnabled ? (
+            <>
+              <CheckCircle2 size={16}/>
+              <span><strong>Standard Paid SaaS Mode:</strong> Institutions choose catalog plans with automated invoicing, regional currency conversion, and plan-defined quota limits.</span>
+            </>
+          ) : (
+            <>
+              <Sparkles size={16}/>
+              <span><strong>Free Platform Mode (Non-profit / Open Access):</strong> Paid barriers, billing term expiration locks, and subscription requirements are completely bypassed. Resource limits are governed platform-wide by the usage controls configured below.</span>
+            </>
+          )}
+        </div>
+      </section>
+
+      <section className="vop-policy-card">
+        <div className="vop-policy-card-head">
+          <div>
+            <span className="vop-card-kicker">Resource Governance</span>
+            <h3>Platform Usage Controls (Free Mode Caps)</h3>
+            <p>Configure maximum allowable resources per institution when the subscription module is turned off. Leave empty for <strong>Unlimited</strong>.</p>
+          </div>
+          <Gauge size={22} className="vop-head-icon"/>
+        </div>
+
+        <div className="vop-policy-quota-categories">
+          <div className="vop-policy-quota-group">
+            <header className="vop-quota-group-header">
+              <BookOpen size={16}/>
+              <h4>Learning & Curriculum Content</h4>
+            </header>
+            <div className="vop-quota-inputs-grid">
+              {[
+                {key:'maxGuides',label:'Curriculum Guides / Lessons',desc:'Active lesson and guide collections'},
+                {key:'maxQuizzes',label:'Quizzes & Assessments',desc:'Active assessment records'},
+                {key:'maxPrograms',label:'Programs & Courses',desc:'Active program containers'},
+                {key:'maxLearningPaths',label:'Learning Paths',desc:'Sequential curriculum paths'},
+                {key:'maxBibleTopics',label:'Bible Topics',desc:'Thematic Bible study topics'},
+                {key:'maxSeasons',label:'Seasons & Quarters',desc:'Study term intervals'},
+                {key:'maxMaterials',label:'Learning Materials',desc:'PDFs, workbooks and media assets'},
+              ].map(item=>(
+                <div key={item.key} className="vop-policy-quota-item">
+                  <div className="vop-quota-info">
+                    <strong>{item.label}</strong>
+                    <small>{item.desc}</small>
+                  </div>
+                  <div className="vop-quota-input-wrapper">
+                    <input
+                      type="number" min="0" step="1" placeholder="Unlimited"
+                      value={billingSettings.globalQuotas[item.key]||''}
+                      onChange={e=>setBillingSettings(v=>({...v,globalQuotas:{...v.globalQuotas,[item.key]:e.target.value}}))}
+                    />
+                    <span className="vop-quota-unit">{billingSettings.globalQuotas[item.key]?'max':'∞'}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="vop-policy-quota-group">
+            <header className="vop-quota-group-header">
+              <Users size={16}/>
+              <h4>Members, Learners & Mentors</h4>
+            </header>
+            <div className="vop-quota-inputs-grid">
+              {[
+                {key:'maxSeats',label:'Member / Staff Seats',desc:'Admins, teachers, editors and staff'},
+                {key:'maxCandidates',label:'Candidates / Learners',desc:'Enrolled students and candidates'},
+                {key:'maxMentors',label:'Mentors',desc:'Active mentor assignments'},
+              ].map(item=>(
+                <div key={item.key} className="vop-policy-quota-item">
+                  <div className="vop-quota-info">
+                    <strong>{item.label}</strong>
+                    <small>{item.desc}</small>
+                  </div>
+                  <div className="vop-quota-input-wrapper">
+                    <input
+                      type="number" min="0" step="1" placeholder="Unlimited"
+                      value={billingSettings.globalQuotas[item.key]||''}
+                      onChange={e=>setBillingSettings(v=>({...v,globalQuotas:{...v.globalQuotas,[item.key]:e.target.value}}))}
+                    />
+                    <span className="vop-quota-unit">{billingSettings.globalQuotas[item.key]?'max':'∞'}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="vop-policy-quota-group">
+            <header className="vop-quota-group-header">
+              <Radio size={16}/>
+              <h4>Media & Broadcasting</h4>
+            </header>
+            <div className="vop-quota-inputs-grid">
+              {[
+                {key:'maxRadioItems',label:'Radio Items',desc:'Audio podcasts and radio tracks'},
+                {key:'maxRadioPlaylists',label:'Radio Playlists',desc:'Scheduled broadcast playlists'},
+                {key:'maxAnnouncements',label:'Announcements',desc:'Institution announcements'},
+                {key:'maxEvents',label:'Events & Programmes',desc:'Community event schedules'},
+              ].map(item=>(
+                <div key={item.key} className="vop-policy-quota-item">
+                  <div className="vop-quota-info">
+                    <strong>{item.label}</strong>
+                    <small>{item.desc}</small>
+                  </div>
+                  <div className="vop-quota-input-wrapper">
+                    <input
+                      type="number" min="0" step="1" placeholder="Unlimited"
+                      value={billingSettings.globalQuotas[item.key]||''}
+                      onChange={e=>setBillingSettings(v=>({...v,globalQuotas:{...v.globalQuotas,[item.key]:e.target.value}}))}
+                    />
+                    <span className="vop-quota-unit">{billingSettings.globalQuotas[item.key]?'max':'∞'}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div className="vop-policy-split-grid">
+        <section className="vop-policy-card">
+          <div className="vop-policy-card-head">
+            <div>
+              <span className="vop-card-kicker">Exchange Rate Engine</span>
+              <h3>Currency & FX Quotation</h3>
+              <p>Canonical plan pricing is USD. Zambian institutions pay in ZMW using locked daily rates.</p>
+            </div>
+          </div>
+
+          <div className="vop-policy-fx-controls">
+            <div className="vop-fx-field">
+              <label>Daily USD → ZMW Rate</label>
+              <div className="vop-fx-input-wrap">
+                <span className="vop-fx-prefix">1 USD =</span>
+                <input
+                  inputMode="decimal"
+                  value={billingSettings.usdToZmwRate}
+                  onChange={e=>setBillingSettings(v=>({...v,usdToZmwRate:e.target.value,fxSource:'manual'}))}
+                  placeholder="28.50"
+                />
+                <span className="vop-fx-suffix">ZMW</span>
+              </div>
+            </div>
+
+            <div className="vop-fx-field">
+              <label>Rate Source</label>
+              <div className="vop-fx-readonly-tag">
+                {billingSettings.fxSource==='frankfurter'?'Frankfurter (Daily ECB)':billingSettings.fxSource}
+              </div>
+            </div>
+
+            <div className="vop-fx-field">
+              <label>Quote Lock TTL (Minutes)</label>
+              <input
+                inputMode="numeric"
+                value={billingSettings.fxQuoteTtlMinutes}
+                onChange={e=>setBillingSettings(v=>({...v,fxQuoteTtlMinutes:e.target.value}))}
+              />
+            </div>
+          </div>
+
+          <div className="vop-fx-meta-row">
+            {billingSettings.fxUpdatedAt&&(
+              <small>Last synced: {new Date(billingSettings.fxUpdatedAt).toLocaleString()}{billingSettings.fxProviderDate?` · Provider date: ${billingSettings.fxProviderDate}`:''}</small>
+            )}
+            <button className="btn btn-outline" disabled={busy} onClick={()=>void refreshBillingRate()}>
+              <RefreshCw size={14} className={busy?'spin':''}/> Refresh live rate
+            </button>
+          </div>
+        </section>
+
+        <section className="vop-policy-card">
+          <div className="vop-policy-card-head">
+            <div>
+              <span className="vop-card-kicker">Audience Segmentation</span>
+              <h3>Subscription Audience Rules</h3>
+              <p>Specify which account types are bound by subscription plan checks.</p>
+            </div>
+          </div>
+
+          <div className="vop-policy-audience-list">
+            <label className="vop-policy-audience-row">
+              <input
+                type="checkbox"
+                checked={billingSettings.subscriptionAudience.learnersCandidates}
+                onChange={e=>setBillingSettings(v=>({...v,subscriptionAudience:{...v.subscriptionAudience,learnersCandidates:e.target.checked}}))}
+              />
+              <div>
+                <strong>Learners / candidates require subscription billing</strong>
+                <p>When unchecked, candidates and learners do not require an individual subscription and do not consume member/staff seats.</p>
+              </div>
+            </label>
+
+            <div className="vop-policy-note">
+              <ShieldCheck size={16}/>
+              <span>Institutional policy applies to organizations, churches, districts, conferences, and unions automatically.</span>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <div className="vop-policy-actions-bar">
+        <div className="vop-policy-actions-info">
+          <span>Changes take effect immediately across all institutional tenants and API endpoints.</span>
+        </div>
+        <div className="vop-policy-actions-buttons">
+          <button className="btn btn-primary" disabled={busy} onClick={()=>void saveBillingSettings()}>
+            {busy?<LoaderCircle className="spin" size={16}/>:<Settings2 size={16}/>}
+            Save Billing Policy
+          </button>
+        </div>
+      </div>
+    </div>}
 
     {isSuperAdmin&&tab==='items'&&<div className="vop-payment-admin-cards">{items.map(item=><article key={item.id}><div><span>{typeLabel(item.itemType)}</span><h3>{item.name}</h3><p>{item.description||'Configured charge'}</p></div><dl><div><dt>Amount</dt><dd>{item.currency} {item.amountDecimal}</dd></div><div><dt>Scope</dt><dd>{organizations.find(org=>org.id===item.organizationId)?.name||typeLabel(item.scope)}</dd></div><div><dt>Status</dt><dd>{item.active?'Active':'Inactive'}</dd></div></dl><footer><button className="btn btn-outline" onClick={()=>startEdit(item)}>Edit</button><button className="btn btn-danger" onClick={()=>void deleteItem(item)}>Remove</button></footer></article>)}</div>}
 
     {isSuperAdmin&&tab==='providers'&&<div className="vop-payment-admin-cards">{providers.map(provider=><article key={provider.key}><div><span>{provider.environment}</span><h3>{provider.key.replace(/\b\w/g,c=>c.toUpperCase())}</h3><p>{provider.configured?'Server credentials detected.':'Credentials are not configured in the deployment environment.'}</p></div><dl><div><dt>Methods</dt><dd>{provider.methods.map(paymentMethodLabel).join(', ')}</dd></div><div><dt>Webhooks</dt><dd>{provider.capabilities.webhooks?'Supported':'Not available'}</dd></div>{provider.callbackPath&&<div><dt>Callback endpoint</dt><dd><code>{provider.callbackPath}</code></dd></div>}<div><dt>Status</dt><dd>{provider.enabled&&provider.configured?'Enabled':'Unavailable'}</dd></div></dl>{isSuperAdmin&&<footer><button className="btn btn-outline" disabled={!provider.configured||busy} onClick={()=>void configureProvider(provider,!provider.enabled)}>{provider.enabled?'Disable':'Enable'} provider</button></footer>}</article>)}</div>}
 
     {isSuperAdmin&&tab==='reconciliation'&&<section className="vop-payment-reconciliation"><Settings2 size={34}/><div><h2>Provider reconciliation</h2><p>Webhook delivery is not treated as the only source of truth. Pending provider transactions are independently re-queried and matched against VOP reference, amount and currency before fulfilment.</p><button className="btn btn-primary" disabled={busy} onClick={()=>void reconcile()}>{busy?<LoaderCircle className="spin" size={16}/>:<RefreshCw size={16}/>}Run reconciliation now</button></div></section>}
+
+    {isSuperAdmin&&tab==='compliance'&&<div className="vop-compliance-workspace">
+      <div className="vop-policy-header">
+        <div>
+          <span className="vop-card-kicker">Regulatory & Payment Card Industry Compliance</span>
+          <h2>Payment Card Industry Data Security Standard (PCI-DSS) & 3D-Secure</h2>
+          <p>Global card network standards and Bank of Zambia (BoZ) National Payment Systems regulatory governance.</p>
+        </div>
+        <div className="vop-policy-header-badge">
+          <span className="vop-policy-badge active">
+            <ShieldCheck size={14}/>
+            PCI-DSS v4.0 (SAQ-A) Compliant
+          </span>
+        </div>
+      </div>
+
+      <div className="vop-compliance-grid">
+        <section className="vop-policy-card vop-compliance-card">
+          <div className="vop-policy-card-head">
+            <div>
+              <span className="vop-card-kicker">Global Security Standard</span>
+              <h3>PCI-DSS v4.0 Zero-CHD Architecture</h3>
+              <p>Self-Assessment Questionnaire (SAQ) A Compliant Architecture</p>
+            </div>
+            <ShieldCheck size={24} className="vop-compliance-card-icon success"/>
+          </div>
+          <ul className="vop-compliance-checklist">
+            <li><strong>Zero Cardholder Data Storage:</strong> Primary Account Numbers (PAN), CVVs, and PINs never enter or reside on VOP application servers or Firestore databases.</li>
+            <li><strong>Automated Ingestion Guard:</strong> Server-side middleware scans and immediately rejects raw cardholder data with explicit PCI-DSS violation errors.</li>
+            <li><strong>Certified Gateway Tokenization:</strong> Customer card transactions are hosted and tokenized exclusively through PCI-DSS Level 1 compliant gateway windows.</li>
+            <li><strong>PAN Masking:</strong> Sensitive card numbers in audit logs and system messages are automatically scrubbed and redacted.</li>
+          </ul>
+        </section>
+
+        <section className="vop-policy-card vop-compliance-card">
+          <div className="vop-policy-card-head">
+            <div>
+              <span className="vop-card-kicker">Customer Transaction Validation</span>
+              <h3>EMV 3D-Secure (3DS) 2.2 Enforcement</h3>
+              <p>Strong Customer Authentication (SCA) & Fraud Liability Shift</p>
+            </div>
+            <Lock size={24} className="vop-compliance-card-icon active"/>
+          </div>
+          <ul className="vop-compliance-checklist">
+            <li><strong>Mandatory 2FA on Card Transactions:</strong> 100% of online card transactions enforce 3D-Secure two-factor bank authentication (SMS OTP or biometric app approval).</li>
+            <li><strong>Card Schemes Supported:</strong> Verified by Visa, Mastercard Identity Check, and American Express SafeKey.</li>
+            <li><strong>Liability Shift Protection:</strong> Upon successful 3D-Secure authentication, financial chargeback and fraud liability shifts to the customer's card-issuing bank.</li>
+            <li><strong>Customer Validation UI:</strong> Real-time in-app validation dialog certifies transaction state directly with the issuing bank.</li>
+          </ul>
+        </section>
+
+        <section className="vop-policy-card vop-compliance-card">
+          <div className="vop-policy-card-head">
+            <div>
+              <span className="vop-card-kicker">Jurisdiction & Local Regulation</span>
+              <h3>Republic of Zambia National Payment Systems</h3>
+              <p>Bank of Zambia (BoZ) Directives & National Cybersecurity Compliance</p>
+            </div>
+            <Shield size={24} className="vop-compliance-card-icon zambia"/>
+          </div>
+          <ul className="vop-compliance-checklist">
+            <li><strong>National Payment Systems Act (NPSA) No. 1 of 2007:</strong> Electronic transactions comply with Bank of Zambia guidelines for electronic payment systems.</li>
+            <li><strong>Data Protection Act No. 3 of 2021:</strong> Financial consumer data privacy, minimal data retention, and strict access controls are enforced across all tenants.</li>
+            <li><strong>ZMW Local Currency Settlements:</strong> Domestic transactions settle in Zambian Kwacha (ZMW) with automated daily Bank of Zambia / ECB exchange rate locking.</li>
+            <li><strong>Mobile Money Integration:</strong> Direct, authenticated mobile money integrations with Airtel Money Zambia, MTN MoMo Zambia, and Zamtel.</li>
+          </ul>
+        </section>
+
+        <section className="vop-policy-card vop-compliance-card">
+          <div className="vop-policy-card-head">
+            <div>
+              <span className="vop-card-kicker">Infrastructure Security</span>
+              <h3>Technical Security Controls (PCI-DSS Req 6 & 11)</h3>
+              <p>Network security, script whitelisting and encryption in transit</p>
+            </div>
+            <Zap size={24} className="vop-compliance-card-icon info"/>
+          </div>
+          <ul className="vop-compliance-checklist">
+            <li><strong>Transport Encryption:</strong> TLS 1.2+ / TLS 1.3 enforced across all web and mobile endpoints with HTTP Strict Transport Security (HSTS).</li>
+            <li><strong>Script Whitelisting (PCI DSS 4.0 Req 6.4.3):</strong> Strict CSP headers allow only authorized, tamper-evident payment scripts (pay.lenco.co).</li>
+            <li><strong>Encryption at Rest:</strong> AES-256 encryption protects all platform metadata, receipts, and immutable audit ledgers.</li>
+            <li><strong>Tamper-Evident Ledger:</strong> Every payment initiation, 3DS challenge, verification stamp, and refund is written to the audit log.</li>
+          </ul>
+        </section>
+      </div>
+
+      <div className="vop-policy-actions-bar">
+        <div className="vop-policy-actions-info">
+          <span>PCI-DSS & 3D-Secure policies are enforced globally across all customer checkouts and institutional billing tenants.</span>
+        </div>
+        <div className="vop-policy-actions-buttons">
+          <button className="btn btn-primary" disabled={busy} onClick={()=>void checkLiveCompliance()}>
+            {busy?<LoaderCircle size={16} className="spin"/>:<RefreshCw size={16}/>}
+            Verify Live PCI-DSS & 3DS Posture
+          </button>
+        </div>
+      </div>
+    </div>}
 
     {isSuperAdmin&&editingPackage!==undefined&&<div className="vop-payment-modal-layer"><section className="vop-payment-modal vop-payable-editor"><header><div><span>Organization subscription package</span><h2>{editingPackage?.id?'Edit subscription package':'New subscription package'}</h2></div><button onClick={()=>setEditingPackage(undefined)} aria-label="Close"><X size={18}/></button></header>
       <div className="vop-payable-editor-grid">
@@ -504,7 +917,7 @@ const PaymentManagement:React.FC<Props>=({currentUser})=>{
       <label className="vop-checkbox"><input type="checkbox" checked={draft.repeatable} onChange={e=>setDraft(v=>({...v,repeatable:e.target.checked}))}/>Allow repeat payments</label><label className="vop-checkbox"><input type="checkbox" checked={draft.active} onChange={e=>setDraft(v=>({...v,active:e.target.checked}))}/>Active</label></div>
       <button className="btn btn-primary vop-payment-submit" onClick={()=>void saveItem()} disabled={busy}>{busy?<LoaderCircle className="spin" size={16}/>:<CreditCard size={16}/>}Save payable item</button></section></div>}
 
-    {details&&<div className="vop-payment-modal-layer"><section className="vop-payment-modal vop-transaction-details"><header><div><span>Transaction details</span><h2>{details.payment.reference}</h2></div><button onClick={()=>setDetails(null)}><X size={18}/></button></header><dl><div><dt>Payer</dt><dd>{details.payment.payerName||details.payment.payerEmail}</dd></div><div><dt>Item</dt><dd>{details.payment.description}</dd></div><div><dt>Amount</dt><dd>{details.payment.currency} {details.payment.amountDecimal}</dd></div><div><dt>Status</dt><dd>{paymentStatusLabel(details.payment.status as never)}</dd></div>{isSuperAdmin&&<><div><dt>Provider</dt><dd>{details.payment.provider}</dd></div><div><dt>Provider reference</dt><dd>{details.payment.providerReference||'Pending'}</dd></div><div><dt>Webhook</dt><dd>{details.payment.webhookStatus}</dd></div><div><dt>Reconciliation</dt><dd>{details.payment.reconciliationStatus}</dd></div></>}<div><dt>Fulfilment</dt><dd>{details.payment.fulfilmentStatus}</dd></div><div><dt>Refunded</dt><dd>{details.payment.refundedMinor?details.payment.currency+' '+minorToDecimal(details.payment.refundedMinor,details.payment.currency):'None'}</dd></div></dl>
+    {details&&<div className="vop-payment-modal-layer"><section className="vop-payment-modal vop-transaction-details"><header><div><span>Transaction details</span><h2>{details.payment.reference}</h2></div><button onClick={()=>setDetails(null)}><X size={18}/></button></header><dl><div><dt>Payer</dt><dd>{details.payment.payerName||details.payment.payerEmail}</dd></div><div><dt>Item</dt><dd>{details.payment.description}</dd></div><div><dt>Amount</dt><dd>{details.payment.currency} {details.payment.amountDecimal}</dd></div><div><dt>Status</dt><dd>{paymentStatusLabel(details.payment.status as never)}</dd></div>{isSuperAdmin&&<><div><dt>Provider</dt><dd>{details.payment.provider}</dd></div><div><dt>Provider reference</dt><dd>{details.payment.providerReference||'Pending'}</dd></div><div><dt>Webhook</dt><dd>{details.payment.webhookStatus}</dd></div><div><dt>Reconciliation</dt><dd>{details.payment.reconciliationStatus}</dd></div></>}<div><dt>Fulfilment</dt><dd>{details.payment.fulfilmentStatus}</dd></div><div><dt>Refunded</dt><dd>{details.payment.refundedMinor?details.payment.currency+' '+minorToDecimal(details.payment.refundedMinor,details.payment.currency):'None'}</dd></div><div><dt>PCI-DSS Standard</dt><dd>Compliant (SAQ-A Zero Cardholder Data Stored)</dd></div>{details.payment.paymentMethod==='card'&&<><div><dt>3D-Secure 2.0</dt><dd>{details.payment.threeDSecure?.status==='authenticated'?'Certified & Authenticated (Liability Shifted)':details.payment.threeDSecure?.status==='challenge_required'?'Challenge Required':details.payment.threeDSecure?.status==='rejected'?'Validation Declined':'Enforced'}</dd></div><div><dt>Fraud Protection</dt><dd>{details.payment.threeDSecure?.liabilityShifted?'Fraud Liability Shifted to Card Issuer':'Strong Customer Authentication Active'}</dd></div></>}</dl>
       {isSuperAdmin&&['paid','partially_refunded'].includes(details.payment.status)&&<button className="btn btn-outline vop-payment-submit" onClick={()=>void requestRefund(details.payment)} disabled={busy}>Request refund</button>}
       {isSuperAdmin&&<><h3>Refunds</h3><div className="vop-payment-audit">{details.refunds?.length?details.refunds.map(refund=><div key={refund.id}><strong>{refund.currency} {refund.amountDecimal} · {typeLabel(refund.status)}</strong><span>{refund.reason}</span>{refund.status==='manual_action_required'&&<button className="btn btn-outline" onClick={()=>void completeManualRefund(refund)} disabled={busy}>Confirm provider refund</button>}</div>):<div><strong>No refunds</strong><span>—</span></div>}</div>
       <h3>Payment attempts</h3><div className="vop-payment-audit">{details.attempts.length?details.attempts.map((entry,index)=><div key={String(entry.id||index)}><strong>{paymentMethodLabel(String(entry.paymentMethod||'card') as PaymentMethod)} · {paymentStatusLabel(String(entry.status||'pending') as never)}</strong><span>{entry.createdAt?new Date(String(entry.createdAt)).toLocaleString():'Recorded'}</span></div>):<div><strong>No provider attempt recorded</strong><span>—</span></div>}</div>

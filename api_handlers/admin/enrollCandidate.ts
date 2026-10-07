@@ -61,11 +61,11 @@ export default async function handler(request:Request,response:Response){
     const progress={...oldProgress,discoverProgress:Number(oldProgress.discoverProgress||0),completedGuidesCount:Number(oldProgress.completedGuidesCount||0),totalGuidesCount:Number(oldProgress.totalGuidesCount||0),guideScores:oldProgress.guideScores||{},completedLessons:Array.isArray(oldProgress.completedLessons)?oldProgress.completedLessons:[]};
 
     await ctx.db.runTransaction(async transaction=>{
-      transaction.set(profileRef,{uid:account.uid,email,displayName:displayName||account.displayName||email.split('@')[0],...(phoneNumber?{phoneNumber}:{}),role:String(profile.role||'student'),userType:'learner',organizationId,organizationRole:'learner',information,progress,updatedAt:FieldValue.serverTimestamp(),createdAt:profile.createdAt||FieldValue.serverTimestamp()},{merge:true});
+      transaction.set(profileRef,{uid:account.uid,email,displayName:displayName||account.displayName||email.split('@')[0],...(phoneNumber?{phoneNumber}:{}),role:String(profile.role||'student'),userType:'learner',organizationId,organizationRole:'learner',accountType:'organization',information,progress,updatedAt:FieldValue.serverTimestamp(),createdAt:profile.createdAt||FieldValue.serverTimestamp()},{merge:true});
       transaction.set(ctx.db.doc(`organizations/${organizationId}/members/${account.uid}`),{uid:account.uid,organizationId,role:'learner',active:true,invitedBy:ctx.auth.uid,joinedAt:String(profile.joinedAt||now),updatedAt:now},{merge:true});
       transaction.set(ctx.db.doc(`courseEnrollments/${organizationId}_${account.uid}_${guideId}`),{uid:account.uid,organizationId,guideId,source:'admin',enrolledBy:ctx.auth.uid,enrolledAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp(),status:'active'},{merge:true});
     });
-    await authService.setCustomUserClaims(account.uid,{role:String(profile.role||'student'),organizationId,organizationRole:'learner'});
+    await authService.setCustomUserClaims(account.uid,{role:String(profile.role||'student'),organizationId,organizationRole:'learner',accountType:'organization'});
     const resetLink=!password?await authService.generatePasswordResetLink(email).catch(()=>null):null;
     await writeTenantAudit(ctx,'candidate.enroll',`users/${account.uid}`,undefined,{organizationId,guideId,created});
     return response.status(200).json({ok:true,created,resetLink,candidate:{uid:account.uid,email,displayName:displayName||account.displayName||email.split('@')[0],organizationId,guideId}});

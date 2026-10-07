@@ -62,6 +62,8 @@ export interface PlatformBillingSettings{
   fxQuoteTtlMinutes:number;
   fxProviderDate:string;
   subscriptionAudience:SubscriptionAudiencePolicy;
+  subscriptionsEnabled:boolean;
+  globalQuotas:Record<string,number>;
 }
 
 export async function loadPlatformBillingSettings(db:Firestore):Promise<PlatformBillingSettings>{
@@ -71,6 +73,8 @@ export async function loadPlatformBillingSettings(db:Firestore):Promise<Platform
   const ttl=Number(data.fxQuoteTtlMinutes||1440);
   const audience=data.subscriptionAudience&&typeof data.subscriptionAudience==='object'
     ?data.subscriptionAudience as Record<string,unknown>:{};
+  const globalQuotas=data.globalQuotas&&typeof data.globalQuotas==='object'
+    ?data.globalQuotas as Record<string,number>:{}
   return {
     baseCurrency:'USD',
     zambiaCurrency:'ZMW',
@@ -87,6 +91,8 @@ export async function loadPlatformBillingSettings(db:Firestore):Promise<Platform
       conferences:audience.conferences!==false,
       unions:audience.unions!==false,
     },
+    subscriptionsEnabled:data.subscriptionsEnabled!==false,
+    globalQuotas,
   };
 }
 

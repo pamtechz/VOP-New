@@ -1,12 +1,42 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowLeft, Building2, Check, Copy, CreditCard, Edit3, LayoutGrid, List, Plus, QrCode, RefreshCw, Shield, Users, UserPlus, Search, Trash2 } from 'lucide-react';
+import { ArrowLeft, Building2, Check, Copy, CreditCard, Edit3, LayoutGrid, List, Plus, QrCode, RefreshCw, Shield, Users, UserPlus, UserCheck, Search, Trash2 } from 'lucide-react';
 import { auth } from '../lib/firebase';
 import { getTranslation } from '../services/i18n';
 import { appConfirm } from '../components/layout/AppDialog';
 
+export type OrganizationType =
+  | 'union'
+  | 'conference'
+  | 'district'
+  | 'church'
+  | 'secondary_school'
+  | 'adventist_university'
+  | 'acm'
+  | 'pcm'
+  | 'other';
+
+export const ORGANIZATION_TYPE_OPTIONS: { value: OrganizationType; label: string }[] = [
+  { value: 'church', label: 'Church' },
+  { value: 'district', label: 'District' },
+  { value: 'conference', label: 'Conference / Field' },
+  { value: 'union', label: 'Union' },
+  { value: 'secondary_school', label: 'Secondary School' },
+  { value: 'adventist_university', label: 'Adventist University' },
+  { value: 'acm', label: 'Adventist Campus Ministries' },
+  { value: 'pcm', label: 'Public Campus Ministries' },
+  { value: 'other', label: 'Other (specify)' },
+];
+
+export function getOrganizationTypeLabel(type?: string, custom?: string): string {
+  if (type === 'other') return custom?.trim() || 'Other';
+  const match = ORGANIZATION_TYPE_OPTIONS.find(o => o.value === type);
+  return match ? match.label : (type || 'Church');
+}
+
 type Organization = {
   id:string;name:string;slug:string;status:string;ownerUid:string;plan:string;quotas:Record<string,unknown>;
-  memberCount:number;candidateCount?:number;billingCountry?:string;countryCode?:string;billingProfile?:{countryCode?:string;countryName?:string;billingCurrency?:string;pricingRegion?:string};createdAt?:string
+  memberCount:number;candidateCount?:number;billingCountry?:string;countryCode?:string;billingProfile?:{countryCode?:string;countryName?:string;billingCurrency?:string;pricingRegion?:string};createdAt?:string;
+  organizationType?:OrganizationType;customOrganizationType?:string;
 };
 type Member = { id:string; uid:string; role:string; active:boolean; joinedAt?:string; displayName?:string; email?:string };
 type DirectoryUser = { uid:string; displayName:string; email:string; organizationId?:string; organizationName?:string };
@@ -20,11 +50,23 @@ async function api(action:string,payload:Record<string,unknown>={}) {
   return body;
 }
 
-export default function OrganizationManagement({isSuperAdmin,onOpenBilling,onOpenCandidates}:{isSuperAdmin:boolean;onOpenBilling?:()=>void;onOpenCandidates?:()=>void}) {
+export default function OrganizationManagement({
+  isSuperAdmin,
+  onOpenBilling,
+  onOpenCandidates,
+  subscriptionsEnabled = true,
+}: {
+  isSuperAdmin: boolean;
+  onOpenBilling?: () => void;
+  onOpenCandidates?: () => void;
+  subscriptionsEnabled?: boolean;
+}) {
   const t=(key:string,fallback:string)=>getTranslation(key,fallback);
   const [items,setItems]=useState<Organization[]>([]),[selected,setSelected]=useState<Organization|null>(null),[detailsOpen,setDetailsOpen]=useState(false),[editing,setEditing]=useState(false);
   const [members,setMembers]=useState<Member[]>([]),[audit,setAudit]=useState<Array<Record<string,unknown>>>([]);
   const [name,setName]=useState(''),[organizationId,setOrganizationId]=useState(''),[billingCountry,setBillingCountry]=useState('Zambia'),[plan,setPlan]=useState('unsubscribed'),[status,setStatus]=useState('active');
+  const [organizationType,setOrganizationType]=useState<OrganizationType>('church'),[customOrganizationType,setCustomOrganizationType]=useState('');
+  const [typeFilter,setTypeFilter]=useState<string>('all'),[searchFilter,setSearchFilter]=useState<string>('');
   const [inviteEmail,setInviteEmail]=useState(''),[inviteRole,setInviteRole]=useState('viewer'),[inviteUrl,setInviteUrl]=useState('');
   const [memberRole,setMemberRole]=useState('viewer'),[memberSearch,setMemberSearch]=useState(''),[memberMatches,setMemberMatches]=useState<DirectoryUser[]>([]),[selectedUser,setSelectedUser]=useState<DirectoryUser|null>(null);
   const [ownerSearch,setOwnerSearch]=useState(''),[ownerMatches,setOwnerMatches]=useState<DirectoryUser[]>([]),[selectedOwner,setSelectedOwner]=useState<DirectoryUser|null>(null);
@@ -33,6 +75,7 @@ export default function OrganizationManagement({isSuperAdmin,onOpenBilling,onOpe
   const [selectedAuditIds,setSelectedAuditIds]=useState<Set<string>>(new Set());
   const [organizationView,setOrganizationView]=useState<'cards'|'table'>(()=>{try{return localStorage.getItem('vop-organizations-view')==='table'?'table':'cards'}catch{return 'cards'}});
   const [auditView,setAuditView]=useState<'table'|'cards'>(()=>{try{return localStorage.getItem('vop-audit-view')==='cards'?'cards':'table'}catch{return 'table'}});
+  const [activeDetailTab,setActiveDetailTab]=useState<'profile'|'subscription'|'members'|'candidates'|'invitations'|'audit'>('profile');
   const viewStorageKey='vop-admin-organization-view-v1:'+(auth?.currentUser?.uid||'anonymous');
 
   const loadDetails=async(id:string)=>{try{const [m,a]=await Promise.all([api('listMembers',{organizationId:id}),api('listAudit',{organizationId:id})]);setMembers((m.items||[]) as Member[]);setAudit((a.items||[]) as Array<Record<string,unknown>>);setSelectedAuditIds(new Set())}catch(e){setError(e instanceof Error?e.message:'Could not load organization details.')}};
@@ -41,7 +84,17 @@ export default function OrganizationManagement({isSuperAdmin,onOpenBilling,onOpe
   useEffect(()=>{try{localStorage.setItem('vop-organizations-view',organizationView)}catch{/* ignore */}},[organizationView]);
   useEffect(()=>{try{localStorage.setItem('vop-audit-view',auditView)}catch{/* ignore */}},[auditView]);
 
-  const restoreOrganizationFields=(item:Organization)=>{setName(item.name);setBillingCountry(item.billingCountry||item.billingProfile?.countryName||(item.countryCode==='ZM'?'Zambia':'International'));setPlan(item.plan||'unsubscribed');setStatus(item.status||'active');setMemberSearch('');setMemberMatches([]);setSelectedUser(null);setOwnerSearch('');setOwnerMatches([]);setSelectedOwner(null);setInviteEmail('');setInviteUrl('');setShowCreateMember(false)};
+  const restoreOrganizationFields=(item:Organization)=>{
+    setName(item.name);
+    setOrganizationType((item.organizationType as OrganizationType)||'church');
+    setCustomOrganizationType(item.customOrganizationType||'');
+    setBillingCountry(item.billingCountry||item.billingProfile?.countryName||(item.countryCode==='ZM'?'Zambia':'International'));
+    setPlan(item.plan||'unsubscribed');
+    setStatus(item.status||'active');
+    setMemberSearch('');setMemberMatches([]);setSelectedUser(null);
+    setOwnerSearch('');setOwnerMatches([]);setSelectedOwner(null);
+    setInviteEmail('');setInviteUrl('');setShowCreateMember(false);
+  };
   const writeOrganizationLocation=(item:Organization|null,mode:'push'|'replace',fromList=false)=>{
     if(typeof window==='undefined')return;
     const url=new URL(window.location.href);
@@ -59,12 +112,14 @@ export default function OrganizationManagement({isSuperAdmin,onOpenBilling,onOpe
     else window.history.replaceState(state,'',next);
   };
   const openOrganization=(item:Organization,historyMode:'push'|'replace'|'none'='push')=>{
-    setSelected(item);setDetailsOpen(true);setEditing(false);restoreOrganizationFields(item);void loadDetails(item.id);
+    setSelected(item);setDetailsOpen(true);setEditing(false);setActiveDetailTab('profile');restoreOrganizationFields(item);void loadDetails(item.id);
     try{sessionStorage.setItem(viewStorageKey,item.slug)}catch{/* storage may be unavailable */}
     if(historyMode!=='none')writeOrganizationLocation(item,historyMode,historyMode==='push');
   };
   const closeOrganization=(historyMode:'replace'|'none'='replace')=>{
-    setDetailsOpen(false);setEditing(false);setSelected(null);setMembers([]);setAudit([]);setName('');setOrganizationId('');setBillingCountry('Zambia');setError('');
+    setDetailsOpen(false);setEditing(false);setSelected(null);setMembers([]);setAudit([]);
+    setName('');setOrganizationId('');setOrganizationType('church');setCustomOrganizationType('');
+    setBillingCountry('Zambia');setError('');
     try{sessionStorage.removeItem(viewStorageKey)}catch{/* storage may be unavailable */}
     if(historyMode!=='none')writeOrganizationLocation(null,historyMode);
   };
@@ -105,8 +160,46 @@ export default function OrganizationManagement({isSuperAdmin,onOpenBilling,onOpe
   useEffect(()=>{if(ownerSearch.trim().length<2){setOwnerMatches([]);return}const timer=window.setTimeout(()=>void (async()=>{try{const body=await api('searchUsers',{organizationId:selected?.id,query:ownerSearch.trim()});setOwnerMatches((body.items||[]) as DirectoryUser[])}catch(e){setError(e instanceof Error?e.message:'Could not search accounts.')}})(),250);return()=>window.clearTimeout(timer)},[ownerSearch,selected?.id]);
   useEffect(()=>{if(memberSearch.trim().length<2){setMemberMatches([]);return}const timer=window.setTimeout(()=>void (async()=>{try{const body=await api('searchUsers',{organizationId:selected?.id,query:memberSearch.trim()});setMemberMatches((body.items||[]) as DirectoryUser[])}catch(e){setError(e instanceof Error?e.message:'Could not search accounts.')}})(),250);return()=>window.clearTimeout(timer)},[memberSearch,selected?.id]);
 
-  const create=async()=>{if(!name.trim())return;setSaving(true);setError('');try{const body=await api('create',{name:name.trim(),id:organizationId.trim()||undefined,billingCountry});setName('');setOrganizationId('');setBillingCountry('Zambia');setMessage('Organization created.');await load();const created=body.item as Organization|undefined;if(created)openOrganization(created)}catch(e){setError(e instanceof Error?e.message:'Could not create organization.')}finally{setSaving(false)}};
-  const save=async()=>{if(!selected)return;setSaving(true);setError('');try{await api('update',{organizationId:selected.id,data:{name:name.trim()||selected.name,...(isSuperAdmin?{billingCountry}:{})}});if(isSuperAdmin&&status!==selected.status)await api('setStatus',{organizationId:selected.id,status});setMessage('Organization settings saved.');setEditing(false);await load();}catch(e){setError(e instanceof Error?e.message:'Could not save organization.')}finally{setSaving(false)}};
+  const create=async()=>{
+    if(!name.trim())return;
+    setSaving(true);setError('');
+    try{
+      const body=await api('create',{
+        name:name.trim(),
+        id:organizationId.trim()||undefined,
+        billingCountry,
+        organizationType,
+        customOrganizationType:organizationType==='other'?customOrganizationType.trim():'',
+      });
+      setName('');setOrganizationId('');setBillingCountry('Zambia');
+      setOrganizationType('church');setCustomOrganizationType('');
+      setMessage('Organization created.');
+      await load();
+      const created=body.item as Organization|undefined;
+      if(created)openOrganization(created);
+    }catch(e){setError(e instanceof Error?e.message:'Could not create organization.')}
+    finally{setSaving(false)}
+  };
+  const save=async()=>{
+    if(!selected)return;
+    setSaving(true);setError('');
+    try{
+      await api('update',{
+        organizationId:selected.id,
+        data:{
+          name:name.trim()||selected.name,
+          organizationType,
+          customOrganizationType:organizationType==='other'?customOrganizationType.trim():'',
+          ...(isSuperAdmin?{billingCountry}:{}),
+        },
+      });
+      if(isSuperAdmin&&status!==selected.status)await api('setStatus',{organizationId:selected.id,status});
+      setMessage('Organization settings saved.');
+      setEditing(false);
+      await load();
+    }catch(e){setError(e instanceof Error?e.message:'Could not save organization.')}
+    finally{setSaving(false)}
+  };
   const deleteOrganization=async(item?:Organization)=>{if(!isSuperAdmin)return;const target=item||selected;if(!target)return;if(!await appConfirm('Permanently delete the organization "'+target.name+'"? This removes its tenant membership, invitations, settings and organization-scoped records. This action cannot be undone.', {title:'Delete organization',confirmLabel:'Delete permanently',tone:'danger'}))return;setSaving(true);setError('');try{await api('delete',{organizationId:target.id});if(selected?.id===target.id)closeOrganization('replace');setMessage('Organization deleted.');await load()}catch(e){setError(e instanceof Error?e.message:'Could not delete the organization.')}finally{setSaving(false)}};
   const assignOwner=async()=>{if(!editing||!selected||!selectedOwner)return;setSaving(true);setError('');try{await api('assignOwner',{organizationId:selected.id,uid:selectedOwner.uid});setOwnerSearch('');setOwnerMatches([]);setSelectedOwner(null);setMessage('Organization owner assigned.');await load();await loadDetails(selected.id)}catch(e){setError(e instanceof Error?e.message:'Could not assign the organization owner.')}finally{setSaving(false)}};
   const addExistingMember=async()=>{if(!editing||!selected||!selectedUser)return;setSaving(true);setError('');try{await api('setMember',{organizationId:selected.id,uid:selectedUser.uid,role:memberRole,active:true});setMemberSearch('');setMemberMatches([]);setSelectedUser(null);setMessage('User assigned to the organization.');await loadDetails(selected.id);await load()}catch(e){setError(e instanceof Error?e.message:'Could not assign the user.')}finally{setSaving(false)}};
@@ -152,6 +245,17 @@ export default function OrganizationManagement({isSuperAdmin,onOpenBilling,onOpe
   const candidateRecords=members.filter(item=>candidateRoles.has(String(item.role||'').toLowerCase()));
   const memberRoleOptions=[['mentor','Mentor'],['teacher','Teacher'],['editor','Editor'],['admin','Admin'],['viewer','Viewer']];
 
+  const filteredItems = items.filter(item => {
+    if (typeFilter !== 'all' && (item.organizationType || 'church') !== typeFilter) return false;
+    if (searchFilter.trim()) {
+      const q = searchFilter.toLowerCase();
+      const matchName = item.name.toLowerCase().includes(q);
+      const matchType = getOrganizationTypeLabel(item.organizationType, item.customOrganizationType).toLowerCase().includes(q);
+      if (!matchName && !matchType) return false;
+    }
+    return true;
+  });
+
   return <div>
     <div className="vop-page-header">
       <div><div className="vop-breadcrumb"><Building2 size={15}/> {isSuperAdmin?'Platform / Organizations':'My Organization'}</div><h1>{isSuperAdmin?t('admin.organizations','Organizations'):t('admin.my_organization','My Organization')}</h1><p>{isSuperAdmin?'Manage tenant workspaces, membership, plans and usage without exposing technical identifiers.':'Manage your organization profile, members and invitations.'}</p></div>
@@ -159,13 +263,17 @@ export default function OrganizationManagement({isSuperAdmin,onOpenBilling,onOpe
     </div>
     {message&&<div className="vop-toast"><Check size={16}/>{message}</div>}{error&&<div role="alert" style={{background:'#fff1f1',border:'1px solid #ffcaca',color:'#b42318',padding:12,borderRadius:11,marginBottom:14}}>{error}</div>}
 
-    {!detailsOpen&&isSuperAdmin&&<div className="vop-card vop-form-card" style={{marginBottom:16}}><div className="vop-section-title"><div><h2>{t('admin.create_organization','Create organization')}</h2><p>Create an isolated SaaS tenant workspace. Billing country determines whether the organization is charged in USD or receives a Zambia ZMW conversion.</p></div><Shield size={22}/></div><div className="vop-form-grid"><div className="vop-field"><label>Organization name *</label><input value={name} onChange={e=>setName(e.target.value)} placeholder="Organization name"/></div><div className="vop-field"><label>Organization ID <small>(optional)</small></label><input value={organizationId} onChange={e=>setOrganizationId(e.target.value)} placeholder="Generated automatically"/></div><div className="vop-field"><label>Billing country</label><input value={billingCountry} onChange={e=>setBillingCountry(e.target.value)} placeholder="e.g. Zambia"/><small>Use the organization’s legal billing country. Zambia is billed in ZMW; all other countries use USD.</small></div><div style={{display:'flex',alignItems:'end'}}><button className="vop-primary" type="button" disabled={saving||!name.trim()} onClick={()=>void create()}><Plus size={17}/>{t('admin.create_organization','Create Organization')}</button></div></div></div>}
+    {!detailsOpen&&isSuperAdmin&&<div className="vop-card vop-form-card" style={{marginBottom:16}}><div className="vop-section-title"><div><h2>{t('admin.create_organization','Create organization')}</h2><p>Create an isolated SaaS tenant workspace. Billing country determines whether the organization is charged in USD or receives a Zambia ZMW conversion.</p></div><Shield size={22}/></div><div className="vop-form-grid"><div className="vop-field"><label>Organization name *</label><input value={name} onChange={e=>setName(e.target.value)} placeholder="Organization name"/></div><div className="vop-field"><label>Organization type *</label><select value={organizationType} onChange={e=>setOrganizationType(e.target.value as OrganizationType)}>{ORGANIZATION_TYPE_OPTIONS.map(opt=><option key={opt.value} value={opt.value}>{opt.label}</option>)}</select></div>{organizationType==='other'&&<div className="vop-field"><label>Specify organization type *</label><input value={customOrganizationType} onChange={e=>setCustomOrganizationType(e.target.value)} placeholder="e.g. Mission, Secondary School, Hospital"/></div>}<div className="vop-field"><label>Organization ID <small>(optional)</small></label><input value={organizationId} onChange={e=>setOrganizationId(e.target.value)} placeholder="Generated automatically"/></div><div className="vop-field"><label>Billing country</label><input value={billingCountry} onChange={e=>setBillingCountry(e.target.value)} placeholder="e.g. Zambia"/><small>Use the organization’s legal billing country. Zambia is billed in ZMW; all other countries use USD.</small></div><div style={{display:'flex',alignItems:'end'}}><button className="vop-primary" type="button" disabled={saving||!name.trim()||(organizationType==='other'&&!customOrganizationType.trim())} onClick={()=>void create()}><Plus size={17}/>{t('admin.create_organization','Create Organization')}</button></div></div></div>}
 
-    {!detailsOpen&&<div className="vop-grid-2 vop-org-workspace"><div className="vop-card vop-form-card"><div className="vop-section-title"><div><h2>{isSuperAdmin?t('admin.tenant_workspaces','Tenant workspaces'):t('admin.my_organization','My Organization')}</h2><p>{isSuperAdmin?`${items.length} configured organization${items.length===1?'':'s'}.`:'Your organization account and its members.'}</p></div><div className="vop-view-switch" role="group" aria-label="Organization view"><button type="button" className={organizationView==='cards'?'active':''} onClick={()=>setOrganizationView('cards')}><LayoutGrid size={16}/>Cards</button><button type="button" className={organizationView==='table'?'active':''} onClick={()=>setOrganizationView('table')}><List size={16}/>Table</button></div></div>
+    {!detailsOpen&&<div className="vop-grid-2 vop-org-workspace"><div className="vop-card vop-form-card"><div className="vop-section-title"><div><h2>{isSuperAdmin?t('admin.tenant_workspaces','Tenant workspaces'):t('admin.my_organization','My Organization')}</h2><p>{isSuperAdmin?`${items.length} configured organization${items.length===1?'':'s'}.`:'Your organization account and its members.'}</p></div><div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}><div className="vop-view-switch" role="group" aria-label="Organization view"><button type="button" className={organizationView==='cards'?'active':''} onClick={()=>setOrganizationView('cards')}><LayoutGrid size={16}/>Cards</button><button type="button" className={organizationView==='table'?'active':''} onClick={()=>setOrganizationView('table')}><List size={16}/>Table</button></div></div></div>
+    {items.length>0&&<div style={{display:'flex',gap:10,flexWrap:'wrap',marginBottom:14,alignItems:'center'}}>
+      <div className="vop-input-with-icon" style={{maxWidth:260,flex:'1 1 200px'}}><Search size={15}/><input value={searchFilter} onChange={e=>setSearchFilter(e.target.value)} placeholder="Filter organizations..."/></div>
+      <select value={typeFilter} onChange={e=>setTypeFilter(e.target.value)} style={{maxWidth:240,flex:'1 1 180px'}}><option value="all">All Organization Types ({items.length})</option>{ORGANIZATION_TYPE_OPTIONS.map(opt=>{const count=items.filter(i=>(i.organizationType||'church')===opt.value).length;return <option key={opt.value} value={opt.value}>{opt.label} ({count})</option>;})}</select>
+    </div>}
     {organizationView==='cards'?<div style={{display:'grid',gap:9}}>
-      {items.map(item=><div key={item.id} className={'vop-org-list-card'+(selected?.id===item.id?' selected':'')}><button type="button" className="vop-org-list-main" onClick={()=>openOrganization(item)} aria-label={'Open '+item.name}><div style={{display:'flex',justifyContent:'space-between',gap:12,alignItems:'center'}}><strong>{item.name}</strong><span className="vop-chip">{item.status}</span></div><div style={{fontSize:12,color:'var(--text-muted)',marginTop:4}}>{item.memberCount} active member{item.memberCount===1?'':'s'} · {item.candidateCount||0} candidate{Number(item.candidateCount||0)===1?'':'s'} · {item.plan}</div></button><div className="vop-org-list-actions"><button type="button" className="vop-actions" onClick={()=>openOrganization(item)} title="View organization" aria-label="View organization"><Building2 size={16}/></button>{isSuperAdmin&&<button type="button" className="vop-actions vop-actions-delete" disabled={saving} onClick={()=>void deleteOrganization(item)} title={t('common.delete','Delete organization')} aria-label={t('common.delete','Delete organization')}><Trash2 size={16}/></button>}</div></div>)}
-      {!items.length&&!loading&&<div className="vop-empty">No organizations have been configured.</div>}
-    </div>:<div className="vop-table-wrap"><table className="vop-table"><thead><tr><th>Organization</th><th>Status</th><th>Members</th><th>Candidates</th><th>Plan</th><th>Actions</th></tr></thead><tbody>{items.map(item=><tr key={item.id}><td><strong>{item.name}</strong></td><td><span className="vop-chip">{item.status}</span></td><td>{item.memberCount}</td><td>{item.candidateCount||0}</td><td>{item.plan}</td><td><button className="vop-actions" type="button" onClick={()=>openOrganization(item)}><Building2 size={16}/></button>{isSuperAdmin&&<button className="vop-actions vop-actions-delete" type="button" disabled={saving} onClick={()=>void deleteOrganization(item)}><Trash2 size={16}/></button>}</td></tr>)}</tbody></table>{!items.length&&!loading&&<div className="vop-empty">No organizations have been configured.</div>}</div>}
+      {filteredItems.map(item=><div key={item.id} className={'vop-org-list-card'+(selected?.id===item.id?' selected':'')}><button type="button" className="vop-org-list-main" onClick={()=>openOrganization(item)} aria-label={'Open '+item.name}><div style={{display:'flex',justifyContent:'space-between',gap:12,alignItems:'center'}}><strong>{item.name}</strong><div style={{display:'flex',gap:6,alignItems:'center'}}><span className="vop-chip" style={{background:'#eaf2fd',color:'#0f4c92',fontWeight:700}}>{getOrganizationTypeLabel(item.organizationType,item.customOrganizationType)}</span><span className="vop-chip">{item.status}</span></div></div><div style={{fontSize:12,color:'var(--text-muted)',marginTop:4}}>{item.memberCount} active member{item.memberCount===1?'':'s'} · {item.candidateCount||0} candidate{Number(item.candidateCount||0)===1?'':'s'} · {item.plan}</div></button><div className="vop-org-list-actions"><button type="button" className="vop-actions" onClick={()=>openOrganization(item)} title="View organization" aria-label="View organization"><Building2 size={16}/></button>{isSuperAdmin&&<button type="button" className="vop-actions vop-actions-delete" disabled={saving} onClick={()=>void deleteOrganization(item)} title={t('common.delete','Delete organization')} aria-label={t('common.delete','Delete organization')}><Trash2 size={16}/></button>}</div></div>)}
+      {!filteredItems.length&&!loading&&<div className="vop-empty">{items.length?'No organizations match your filters.':'No organizations have been configured.'}</div>}
+    </div>:<div className="vop-table-wrap"><table className="vop-table"><thead><tr><th>Organization</th><th>Type</th><th>Status</th><th>Members</th><th>Candidates</th><th>Plan</th><th>Actions</th></tr></thead><tbody>{filteredItems.map(item=><tr key={item.id}><td><strong>{item.name}</strong></td><td><span className="vop-chip" style={{background:'#eaf2fd',color:'#0f4c92',fontWeight:700}}>{getOrganizationTypeLabel(item.organizationType,item.customOrganizationType)}</span></td><td><span className="vop-chip">{item.status}</span></td><td>{item.memberCount}</td><td>{item.candidateCount||0}</td><td>{item.plan}</td><td><button className="vop-actions" type="button" onClick={()=>openOrganization(item)}><Building2 size={16}/></button>{isSuperAdmin&&<button className="vop-actions vop-actions-delete" type="button" disabled={saving} onClick={()=>void deleteOrganization(item)}><Trash2 size={16}/></button>}</td></tr>)}</tbody></table>{!filteredItems.length&&!loading&&<div className="vop-empty">{items.length?'No organizations match your filters.':'No organizations have been configured.'}</div>}</div>}
     </div></div>}
 
     {detailsOpen&&selected&&<section className="vop-org-detail-page">
@@ -178,35 +286,126 @@ export default function OrganizationManagement({isSuperAdmin,onOpenBilling,onOpe
       </div>
       <div className="vop-org-detail-card vop-card">
       <div className="vop-org-editor-head"><div><div className="vop-breadcrumb"><Building2 size={15}/> {isSuperAdmin?'Organization Management':'My Organization'}</div><h2>{selected.name}</h2><p>{editing?'Editing is enabled. Save or cancel when finished.':'View organization information. Select Edit to enable changes.'}</p></div><span className={'vop-chip '+(editing?'enabled':'')}>{editing?'Editing':'Read only'}</span></div>
-      <div className="vop-form-grid"><div className="vop-field"><label>{t('common.name','Organization name')}</label><input value={name} disabled={!editing} onChange={e=>setName(e.target.value)}/></div><div className="vop-field"><label>Subscription package</label><input value={plan||'unsubscribed'} disabled readOnly/><small>{isSuperAdmin?'Package assignment is managed through the subscription workflow.':'Your package is managed by VOP billing. Upgrade or renew from the subscription page when eligible.'}</small></div><div className="vop-field"><label>Billing country</label><input value={billingCountry} disabled={!editing||!isSuperAdmin} onChange={e=>setBillingCountry(e.target.value)} placeholder="e.g. Zambia"/><small>{billingCountry.trim().toLowerCase()==='zambia'?'Canonical USD pricing is converted to ZMW for this organization.':'This organization is billed in USD.'}</small></div><div className="vop-field"><label>Status</label><select value={status} disabled={!editing||!isSuperAdmin} onChange={e=>setStatus(e.target.value)}><option value="active">Active</option><option value="suspended">Suspended</option><option value="archived">Archived</option></select></div></div>
-      {isSuperAdmin&&<div style={{marginTop:16}}><div className="vop-section-title"><div><h3>{t('admin.organization_owner','Organization owner')}</h3><p>{selected.ownerUid?'The current owner is shown in the member list below. Assigning a new owner transfers ownership from the previous owner.':'No owner is assigned yet. The Super Admin must assign an organization owner.'}</p></div><Shield size={18}/></div><div className="vop-form-grid"><div className="vop-field" style={{position:'relative'}}><label>Find owner by name or email</label><div className="vop-input-with-icon"><Search size={17}/><input value={ownerSearch} disabled={!editing} onChange={e=>{setOwnerSearch(e.target.value);setSelectedOwner(null)}} placeholder="Search an existing VOP account"/></div>{ownerMatches.length>0&&<div className="vop-org-suggestions">{ownerMatches.map(user=><button key={user.uid} type="button" onClick={()=>{setSelectedOwner(user);setOwnerSearch(user.displayName||user.email);setOwnerMatches([])}}><strong>{user.displayName||'Unnamed account'}</strong><span>{user.email}</span>{user.organizationId&&<small>{t('admin.already_assigned','Already assigned to an organization')}</small>}</button>)}</div>}</div><div style={{display:'flex',alignItems:'end'}}><button className="vop-primary" type="button" disabled={!editing||saving||!selectedOwner} onClick={()=>void assignOwner()}><Shield size={16}/>Assign Owner</button></div></div></div>}
 
-      <div className="vop-card vop-org-subscription-callout" style={{marginTop:16}}>
-        <div className="vop-section-title"><div><h3>Subscription & plan</h3><p>Plan limits, included capabilities, billing term and live usage are managed together in Payments & Billing. Organization settings cannot override purchased entitlements.</p></div><CreditCard size={20}/></div>
-        <div style={{display:'flex',gap:12,alignItems:'center',justifyContent:'space-between',flexWrap:'wrap'}}>
-          <div><span style={{fontSize:12,color:'var(--text-muted)'}}>Current package</span><div style={{fontWeight:800,marginTop:3}}>{plan&&plan!=='unsubscribed'?plan:'Not subscribed'}</div></div>
-          {onOpenBilling&&<button className="vop-secondary" type="button" onClick={onOpenBilling}><CreditCard size={16}/>Open Payments & Billing</button>}
+      <nav className="vop-org-tabs" role="tablist" aria-label="Organization workspace sections">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeDetailTab === 'profile'}
+          className={`vop-org-tab ${activeDetailTab === 'profile' ? 'active' : ''}`}
+          onClick={() => setActiveDetailTab('profile')}
+        >
+          <Building2 size={15}/>
+          Profile & Details
+        </button>
+        {subscriptionsEnabled && (
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeDetailTab === 'subscription'}
+            className={`vop-org-tab ${activeDetailTab === 'subscription' ? 'active' : ''}`}
+            onClick={() => setActiveDetailTab('subscription')}
+          >
+            <CreditCard size={15}/>
+            Subscription & Plan
+          </button>
+        )}
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeDetailTab === 'members'}
+          className={`vop-org-tab ${activeDetailTab === 'members' ? 'active' : ''}`}
+          onClick={() => setActiveDetailTab('members')}
+        >
+          <Users size={15}/>
+          Members
+          <span className="vop-tab-badge">{institutionalMembers.length}</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeDetailTab === 'candidates'}
+          className={`vop-org-tab ${activeDetailTab === 'candidates' ? 'active' : ''}`}
+          onClick={() => setActiveDetailTab('candidates')}
+        >
+          <UserCheck size={15}/>
+          Candidates
+          <span className="vop-tab-badge">{candidateRecords.length}</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeDetailTab === 'invitations'}
+          className={`vop-org-tab ${activeDetailTab === 'invitations' ? 'active' : ''}`}
+          onClick={() => setActiveDetailTab('invitations')}
+        >
+          <QrCode size={15}/>
+          Invitations
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeDetailTab === 'audit'}
+          className={`vop-org-tab ${activeDetailTab === 'audit' ? 'active' : ''}`}
+          onClick={() => setActiveDetailTab('audit')}
+        >
+          <Shield size={15}/>
+          Audit History
+          {audit.length > 0 && <span className="vop-tab-badge">{audit.length}</span>}
+        </button>
+      </nav>
+
+      {activeDetailTab === 'profile' && (
+        <div className="vop-org-tab-pane" role="tabpanel">
+          <div className="vop-form-grid"><div className="vop-field"><label>{t('common.name','Organization name')}</label><input value={name} disabled={!editing} onChange={e=>setName(e.target.value)}/></div><div className="vop-field"><label>Organization type</label><select value={organizationType} disabled={!editing} onChange={e=>setOrganizationType(e.target.value as OrganizationType)}>{ORGANIZATION_TYPE_OPTIONS.map(opt=><option key={opt.value} value={opt.value}>{opt.label}</option>)}</select></div>{organizationType==='other'&&<div className="vop-field"><label>Custom organization type</label><input value={customOrganizationType} disabled={!editing} onChange={e=>setCustomOrganizationType(e.target.value)} placeholder="Specify organization type"/></div>}{subscriptionsEnabled&&<div className="vop-field"><label>Subscription package</label><input value={plan||'unsubscribed'} disabled readOnly/><small>{isSuperAdmin?'Package assignment is managed through the subscription workflow.':'Your package is managed by VOP billing. Upgrade or renew from the subscription page when eligible.'}</small></div>}{subscriptionsEnabled&&<div className="vop-field"><label>Billing country</label><input value={billingCountry} disabled={!editing||!isSuperAdmin} onChange={e=>setBillingCountry(e.target.value)} placeholder="e.g. Zambia"/><small>{billingCountry.trim().toLowerCase()==='zambia'?'Canonical USD pricing is converted to ZMW for this organization.':'This organization is billed in USD.'}</small></div>}<div className="vop-field"><label>Status</label><select value={status} disabled={!editing||!isSuperAdmin} onChange={e=>setStatus(e.target.value)}><option value="active">Active</option><option value="suspended">Suspended</option><option value="archived">Archived</option></select></div></div>
+          {isSuperAdmin&&<div style={{marginTop:16}}><div className="vop-section-title"><div><h3>{t('admin.organization_owner','Organization owner')}</h3><p>{selected.ownerUid?'The current owner is shown in the member list below. Assigning a new owner transfers ownership from the previous owner.':'No owner is assigned yet. The Super Admin must assign an organization owner.'}</p></div><Shield size={18}/></div><div className="vop-form-grid"><div className="vop-field" style={{position:'relative'}}><label>Find owner by name or email</label><div className="vop-input-with-icon"><Search size={17}/><input value={ownerSearch} disabled={!editing} onChange={e=>{setOwnerSearch(e.target.value);setSelectedOwner(null)}} placeholder="Search an existing VOP account"/></div>{ownerMatches.length>0&&<div className="vop-org-suggestions">{ownerMatches.map(user=><button key={user.uid} type="button" onClick={()=>{setSelectedOwner(user);setOwnerSearch(user.displayName||user.email);setOwnerMatches([])}}><strong>{user.displayName||'Unnamed account'}</strong><span>{user.email}</span>{user.organizationId&&<small>{t('admin.already_assigned','Already assigned to an organization')}</small>}</button>)}</div>}</div><div style={{display:'flex',alignItems:'end'}}><button className="vop-primary" type="button" disabled={!editing||saving||!selectedOwner} onClick={()=>void assignOwner()}><Shield size={16}/>Assign Owner</button></div></div></div>}
         </div>
-      </div>
+      )}
 
-      <div style={{marginTop:18}}><div className="vop-section-title"><div><h3>{t('common.members','Members')}</h3><p>Institutional team members only. Learners and students are candidates and are managed separately.</p></div><Users size={20}/></div><div className="vop-form-grid"><div className="vop-field" style={{position:'relative'}}><label>{t('admin.find_existing_account','Find an existing account')}</label><div className="vop-input-with-icon"><Search size={17}/><input value={memberSearch} disabled={!editing} onChange={e=>{setMemberSearch(e.target.value);setSelectedUser(null)}} placeholder="Search by name or email"/></div>{memberMatches.length>0&&<div className="vop-org-suggestions">{memberMatches.map(user=><button key={user.uid} type="button" onClick={()=>{setSelectedUser(user);setMemberSearch(user.displayName||user.email);setMemberMatches([])}}><strong>{user.displayName||'Unnamed account'}</strong><span>{user.email}</span>{user.organizationId&&<small>{t('admin.already_assigned','Already assigned to an organization')}</small>}</button>)}</div>}</div><div className="vop-field"><label>Role</label><select value={memberRole} disabled={!editing} onChange={e=>setMemberRole(e.target.value)}>{memberRoleOptions.map(([v,l])=><option key={v} value={v}>{l}</option>)}</select></div><div style={{display:'flex',alignItems:'end',gap:8}}><button className="vop-secondary" type="button" disabled={!editing||saving||!selectedUser} onClick={()=>void addExistingMember()}><UserPlus size={16}/>{t('admin.assign_selected','Assign selected')}</button><button className="vop-primary" type="button" disabled={!editing} onClick={()=>setShowCreateMember(v=>!v)}><Plus size={16}/>{t('admin.add_new_account','Add new account')}</button></div></div>
-      {editing&&showCreateMember&&<div className="vop-card" style={{marginTop:12,border:'1px solid #dce6f3',padding:16}}><h3>{t('admin.create_account_here','Create account and add it here')}</h3><p style={{color:'var(--text-muted)'}}>The user receives a normal VOP account. No Firebase ID or technical setup is required.</p><div className="vop-form-grid"><div className="vop-field"><label>Full name *</label><input value={newMemberName} onChange={e=>setNewMemberName(e.target.value)} placeholder="Full name"/></div><div className="vop-field"><label>Email *</label><input type="email" value={newMemberEmail} onChange={e=>setNewMemberEmail(e.target.value)} placeholder="name@example.com"/></div><div className="vop-field"><label>Temporary password <small>(optional)</small></label><input type="password" value={newMemberPassword} onChange={e=>setNewMemberPassword(e.target.value)} placeholder="Leave empty to send/reset later"/></div><div style={{display:'flex',alignItems:'end'}}><button className="vop-primary" type="button" disabled={saving||!newMemberName.trim()||!newMemberEmail.trim()} onClick={()=>void createAndAssign()}><UserPlus size={16}/>{t('admin.create_assign','Create & Assign')}</button></div></div></div>}
-      <div className="vop-table-wrap" style={{marginTop:12}}><table className="vop-table"><thead><tr><th>Member</th><th>Email</th><th>Role</th><th>Status</th><th style={{textAlign:'right'}}>Actions</th></tr></thead><tbody>{institutionalMembers.map(item=>{const isOwner=item.role==='owner';return <tr key={item.uid}><td><strong>{item.displayName||'Account'}</strong>{isOwner&&<span className="vop-chip" style={{marginLeft:8}}>Owner</span>}</td><td>{item.email||'—'}</td><td>{isOwner?<span className="vop-chip">Owner</span>:<select value={item.role} disabled={!editing||saving} onChange={e=>void changeMemberRole(item.uid,e.target.value)}>{memberRoleOptions.map(([v,l])=><option key={v} value={v}>{l}</option>)}</select>}</td><td><span className="vop-chip">{item.active?'Active':'Removed'}</span></td><td style={{textAlign:'right'}}>{isOwner&&!isSuperAdmin?<span style={{fontSize:12,color:'var(--text-muted)'}}>Protected</span>:<button className="vop-secondary" type="button" disabled={!editing||saving||!item.active} onClick={()=>void removeMember(item)}>{t('common.remove','Remove')}</button>}</td></tr>})}</tbody></table>{!institutionalMembers.length&&<div className="vop-empty"><Users size={30}/><h4>{t('admin.no_members_yet','No members yet')}</h4><p>Assign an institutional team account or create a new one above.</p></div>}</div></div>
+      {subscriptionsEnabled && activeDetailTab === 'subscription' && (
+        <div className="vop-org-tab-pane" role="tabpanel">
+          <div className="vop-card vop-org-subscription-callout" style={{marginTop:0}}>
+            <div className="vop-section-title"><div><h3>Subscription & plan</h3><p>Plan limits, included capabilities, billing term and live usage are managed together in Payments & Billing. Organization settings cannot override purchased entitlements.</p></div><CreditCard size={20}/></div>
+            <div style={{display:'flex',gap:12,alignItems:'center',justifyContent:'space-between',flexWrap:'wrap'}}>
+              <div><span style={{fontSize:12,color:'var(--text-muted)'}}>Current package</span><div style={{fontWeight:800,marginTop:3}}>{plan&&plan!=='unsubscribed'?plan:'Not subscribed'}</div></div>
+              {onOpenBilling&&<button className="vop-secondary" type="button" onClick={onOpenBilling}><CreditCard size={16}/>Open Payments & Billing</button>}
+            </div>
+          </div>
+        </div>
+      )}
 
-      <div style={{marginTop:18}} className="vop-org-candidates"><div className="vop-section-title"><div><h3>Candidates / learners</h3><p>Learners, students and candidates are not organization members for subscription-seat purposes. They are managed from the Candidates workspace and counted only as candidate usage.</p></div><Users size={20}/></div>
-        <div className="vop-table-wrap"><table className="vop-table"><thead><tr><th>Candidate</th><th>Email</th><th>Status</th></tr></thead><tbody>{candidateRecords.map(item=><tr key={item.uid}><td><strong>{item.displayName||'Learner account'}</strong></td><td>{item.email||'—'}</td><td><span className="vop-chip">{item.active?'Active':'Removed'}</span></td></tr>)}</tbody></table>{!candidateRecords.length&&<div className="vop-empty"><Users size={30}/><h4>No candidates enrolled</h4><p>Enroll learners from the dedicated Candidates workspace.</p></div>}</div>
-        {onOpenCandidates&&<div style={{marginTop:10}}><button className="vop-secondary" type="button" onClick={onOpenCandidates}><Users size={16}/>Open Candidates workspace</button></div>}
-      </div>
+      {activeDetailTab === 'members' && (
+        <div className="vop-org-tab-pane" role="tabpanel">
+          <div className="vop-section-title"><div><h3>{t('common.members','Members')}</h3><p>Institutional team members only. Learners and students are candidates and are managed separately.</p></div><Users size={20}/></div>
+          <div className="vop-form-grid"><div className="vop-field" style={{position:'relative'}}><label>{t('admin.find_existing_account','Find an existing account')}</label><div className="vop-input-with-icon"><Search size={17}/><input value={memberSearch} disabled={!editing} onChange={e=>{setMemberSearch(e.target.value);setSelectedUser(null)}} placeholder="Search by name or email"/></div>{memberMatches.length>0&&<div className="vop-org-suggestions">{memberMatches.map(user=><button key={user.uid} type="button" onClick={()=>{setSelectedUser(user);setMemberSearch(user.displayName||user.email);setMemberMatches([])}}><strong>{user.displayName||'Unnamed account'}</strong><span>{user.email}</span>{user.organizationId&&<small>{t('admin.already_assigned','Already assigned to an organization')}</small>}</button>)}</div>}</div><div className="vop-field"><label>Role</label><select value={memberRole} disabled={!editing} onChange={e=>setMemberRole(e.target.value)}>{memberRoleOptions.map(([v,l])=><option key={v} value={v}>{l}</option>)}</select></div><div style={{display:'flex',alignItems:'end',gap:8}}><button className="vop-secondary" type="button" disabled={!editing||saving||!selectedUser} onClick={()=>void addExistingMember()}><UserPlus size={16}/>{t('admin.assign_selected','Assign selected')}</button><button className="vop-primary" type="button" disabled={!editing} onClick={()=>setShowCreateMember(v=>!v)}><Plus size={16}/>{t('admin.add_new_account','Add new account')}</button></div></div>
+          {editing&&showCreateMember&&<div className="vop-card" style={{marginTop:12,border:'1px solid #dce6f3',padding:16}}><h3>{t('admin.create_account_here','Create account and add it here')}</h3><p style={{color:'var(--text-muted)'}}>The user receives a normal VOP account. No Firebase ID or technical setup is required.</p><div className="vop-form-grid"><div className="vop-field"><label>Full name *</label><input value={newMemberName} onChange={e=>setNewMemberName(e.target.value)} placeholder="Full name"/></div><div className="vop-field"><label>Email *</label><input type="email" value={newMemberEmail} onChange={e=>setNewMemberEmail(e.target.value)} placeholder="name@example.com"/></div><div className="vop-field"><label>Temporary password <small>(optional)</small></label><input type="password" value={newMemberPassword} onChange={e=>setNewMemberPassword(e.target.value)} placeholder="Leave empty to send/reset later"/></div><div style={{display:'flex',alignItems:'end'}}><button className="vop-primary" type="button" disabled={saving||!newMemberName.trim()||!newMemberEmail.trim()} onClick={()=>void createAndAssign()}><UserPlus size={16}/>{t('admin.create_assign','Create & Assign')}</button></div></div></div>}
+          <div className="vop-table-wrap" style={{marginTop:12}}><table className="vop-table"><thead><tr><th>Member</th><th>Email</th><th>Role</th><th>Status</th><th style={{textAlign:'right'}}>Actions</th></tr></thead><tbody>{institutionalMembers.map(item=>{const isOwner=item.role==='owner';return <tr key={item.uid}><td><strong>{item.displayName||'Account'}</strong>{isOwner&&<span className="vop-chip" style={{marginLeft:8}}>Owner</span>}</td><td>{item.email||'—'}</td><td>{isOwner?<span className="vop-chip">Owner</span>:<select value={item.role} disabled={!editing||saving} onChange={e=>void changeMemberRole(item.uid,e.target.value)}>{memberRoleOptions.map(([v,l])=><option key={v} value={v}>{l}</option>)}</select>}</td><td><span className="vop-chip">{item.active?'Active':'Removed'}</span></td><td style={{textAlign:'right'}}>{isOwner&&!isSuperAdmin?<span style={{fontSize:12,color:'var(--text-muted)'}}>Protected</span>:<button className="vop-secondary" type="button" disabled={!editing||saving||!item.active} onClick={()=>void removeMember(item)}>{t('common.remove','Remove')}</button>}</td></tr>})}</tbody></table>{!institutionalMembers.length&&<div className="vop-empty"><Users size={30}/><h4>{t('admin.no_members_yet','No members yet')}</h4><p>Assign an institutional team account or create a new one above.</p></div>}</div>
+        </div>
+      )}
 
-      <div style={{marginTop:18}} className="vop-org-invitations"><div className="vop-section-title"><div><h3>Invite institutional members</h3><p>Create an email-bound invitation or shareable link for organization team roles. Candidate/learner enrollment belongs in the Candidates workspace.</p></div></div>
-        <div className="vop-form-grid"><div className="vop-field"><label>Email <small>(for a private email invite)</small></label><input type="email" value={inviteEmail} disabled={!editing} onChange={e=>setInviteEmail(e.target.value)} placeholder="member@example.org"/></div><div className="vop-field"><label>Role</label><select value={inviteRole} disabled={!editing} onChange={e=>setInviteRole(e.target.value)}>{memberRoleOptions.map(([v,l])=><option key={v} value={v}>{l}</option>)}</select></div><div style={{display:'flex',alignItems:'end',gap:8,flexWrap:'wrap'}}><button className="vop-secondary" type="button" disabled={!editing||saving||!inviteEmail.trim()} onClick={()=>void invite()}><Users size={16}/>{t('admin.create_invitation','Email Invite')}</button><button className="vop-primary" type="button" disabled={!editing||saving} onClick={()=>void createShareInvite()}><QrCode size={16}/>Create Share Link</button></div></div>
-        {inviteUrl&&<div className="vop-org-invite-result"><div><div className="vop-setting-name">Invitation link</div><div className="vop-setting-help">Share this HTTPS link. If the native VOP app is installed and app links are verified, it opens the app; otherwise it opens the website.</div><input readOnly value={inviteUrl}/><button className="vop-secondary" type="button" onClick={()=>void navigator.clipboard?.writeText(inviteUrl)}><Copy size={16}/>Copy Link</button></div><div><img src={'https://quickchart.io/qr?size=240&text='+encodeURIComponent(inviteUrl)} alt="QR code for organization invitation"/><small><QrCode size={13}/>Scan with VOP or a normal camera</small></div></div>}
-      </div>
-      <div style={{marginTop:18}} className="vop-audit-workspace">
-        <div className="vop-section-title"><div><h3>{t('admin.audit_history','Audit history')}</h3><p>Privileged organization changes are retained in an append-only, tamper-evident ledger. Remove or clear actions only hide records from this organization view; they never erase forensic evidence.</p></div><div className="vop-audit-actions"><div className="vop-view-switch" role="group" aria-label="Audit history view"><button type="button" className={auditView==='table'?'active':''} onClick={()=>setAuditView('table')}><List size={15}/>Table</button><button type="button" className={auditView==='cards'?'active':''} onClick={()=>setAuditView('cards')}><LayoutGrid size={15}/>Cards</button></div>{selectedAuditIds.size>0&&<button className="vop-secondary" type="button" disabled={saving} onClick={()=>void deleteAuditRecords([...selectedAuditIds])}><Trash2 size={15}/>Remove selected ({selectedAuditIds.size})</button>}<button className="vop-secondary" type="button" disabled={saving||!audit.length} onClick={()=>void clearAuditHistory()}><Trash2 size={15}/>Clear view</button></div></div>
-        {auditView==='table'?<div className="vop-table-wrap"><table className="vop-table"><thead><tr><th><input type="checkbox" aria-label="Select all audit records" checked={audit.length>0&&selectedAuditIds.size===audit.length} onChange={toggleAllAudit}/></th><th>Action</th><th>Target</th><th>Actor</th><th>Time</th><th aria-label="Actions"/></tr></thead><tbody>{audit.map(item=>{const id=String(item.id);return <tr key={id}><td><input type="checkbox" aria-label={'Select audit '+id} checked={selectedAuditIds.has(id)} onChange={()=>toggleAuditSelection(id)}/></td><td>{String(item.action||'')}</td><td>{String(item.target||'')}</td><td>{String(item.actorEmail||item.actorUid||'')}</td><td>{item.timestamp&&typeof item.timestamp==='object'?'Recorded':String(item.timestamp||'')}</td><td><button className="vop-actions vop-actions-delete" type="button" disabled={saving} onClick={()=>void deleteAuditRecords([id])} title="Remove audit record from view"><Trash2 size={15}/></button></td></tr>})}</tbody></table>{!audit.length&&<div className="vop-empty">No privileged changes have been recorded.</div>}</div>
-        :<div className="vop-audit-card-grid">{audit.map(item=>{const id=String(item.id);return <article key={id} className={'vop-audit-card'+(selectedAuditIds.has(id)?' selected':'')}><label><input type="checkbox" checked={selectedAuditIds.has(id)} onChange={()=>toggleAuditSelection(id)}/><strong>{String(item.action||'Audit event')}</strong></label><span>{String(item.target||'')}</span><small>{String(item.actorEmail||item.actorUid||'')} · {item.timestamp&&typeof item.timestamp==='object'?'Recorded':String(item.timestamp||'')}</small><button className="vop-actions vop-actions-delete" type="button" disabled={saving} onClick={()=>void deleteAuditRecords([id])}><Trash2 size={15}/></button></article>})}{!audit.length&&<div className="vop-empty">No privileged changes have been recorded.</div>}</div>}
-      </div>
+      {activeDetailTab === 'candidates' && (
+        <div className="vop-org-tab-pane vop-org-candidates" role="tabpanel">
+          <div className="vop-section-title"><div><h3>Candidates / learners</h3><p>{subscriptionsEnabled?'Learners, students and candidates are not organization members for subscription-seat purposes. They are managed from the Candidates workspace and counted only as candidate usage.':'Learners, students and candidates are managed from the Candidates workspace.'}</p></div><Users size={20}/></div>
+          <div className="vop-table-wrap"><table className="vop-table"><thead><tr><th>Candidate</th><th>Email</th><th>Status</th></tr></thead><tbody>{candidateRecords.map(item=><tr key={item.uid}><td><strong>{item.displayName||'Learner account'}</strong></td><td>{item.email||'—'}</td><td><span className="vop-chip">{item.active?'Active':'Removed'}</span></td></tr>)}</tbody></table>{!candidateRecords.length&&<div className="vop-empty"><Users size={30}/><h4>No candidates enrolled</h4><p>Enroll learners from the dedicated Candidates workspace.</p></div>}</div>
+          {onOpenCandidates&&<div style={{marginTop:10}}><button className="vop-secondary" type="button" onClick={onOpenCandidates}><Users size={16}/>Open Candidates workspace</button></div>}
+        </div>
+      )}
+
+      {activeDetailTab === 'invitations' && (
+        <div className="vop-org-tab-pane vop-org-invitations" role="tabpanel">
+          <div className="vop-section-title"><div><h3>Invite institutional members</h3><p>Create an email-bound invitation or shareable link for organization team roles. Candidate/learner enrollment belongs in the Candidates workspace.</p></div></div>
+          <div className="vop-form-grid"><div className="vop-field"><label>Email <small>(for a private email invite)</small></label><input type="email" value={inviteEmail} disabled={!editing} onChange={e=>setInviteEmail(e.target.value)} placeholder="member@example.org"/></div><div className="vop-field"><label>Role</label><select value={inviteRole} disabled={!editing} onChange={e=>setInviteRole(e.target.value)}>{memberRoleOptions.map(([v,l])=><option key={v} value={v}>{l}</option>)}</select></div><div style={{display:'flex',alignItems:'end',gap:8,flexWrap:'wrap'}}><button className="vop-secondary" type="button" disabled={!editing||saving||!inviteEmail.trim()} onClick={()=>void invite()}><Users size={16}/>{t('admin.create_invitation','Email Invite')}</button><button className="vop-primary" type="button" disabled={!editing||saving} onClick={()=>void createShareInvite()}><QrCode size={16}/>Create Share Link</button></div></div>
+          {inviteUrl&&<div className="vop-org-invite-result"><div><div className="vop-setting-name">Invitation link</div><div className="vop-setting-help">Share this HTTPS link. If the native VOP app is installed and app links are verified, it opens the app; otherwise it opens the website.</div><input readOnly value={inviteUrl}/><button className="vop-secondary" type="button" onClick={()=>void navigator.clipboard?.writeText(inviteUrl)}><Copy size={16}/>Copy Link</button></div><div><img src={'https://quickchart.io/qr?size=240&text='+encodeURIComponent(inviteUrl)} alt="QR code for organization invitation"/><small><QrCode size={13}/>Scan with VOP or a normal camera</small></div></div>}
+        </div>
+      )}
+
+      {activeDetailTab === 'audit' && (
+        <div className="vop-org-tab-pane vop-audit-workspace" role="tabpanel">
+          <div className="vop-section-title"><div><h3>{t('admin.audit_history','Audit history')}</h3><p>Privileged organization changes are retained in an append-only, tamper-evident ledger. Remove or clear actions only hide records from this organization view; they never erase forensic evidence.</p></div><div className="vop-audit-actions"><div className="vop-view-switch" role="group" aria-label="Audit history view"><button type="button" className={auditView==='table'?'active':''} onClick={()=>setAuditView('table')}><List size={15}/>Table</button><button type="button" className={auditView==='cards'?'active':''} onClick={()=>setAuditView('cards')}><LayoutGrid size={15}/>Cards</button></div>{selectedAuditIds.size>0&&<button className="vop-secondary" type="button" disabled={saving} onClick={()=>void deleteAuditRecords([...selectedAuditIds])}><Trash2 size={15}/>Remove selected ({selectedAuditIds.size})</button>}<button className="vop-secondary" type="button" disabled={saving||!audit.length} onClick={()=>void clearAuditHistory()}><Trash2 size={15}/>Clear view</button></div></div>
+          {auditView==='table'?<div className="vop-table-wrap"><table className="vop-table"><thead><tr><th><input type="checkbox" aria-label="Select all audit records" checked={audit.length>0&&selectedAuditIds.size===audit.length} onChange={toggleAllAudit}/></th><th>Action</th><th>Target</th><th>Actor</th><th>Time</th><th aria-label="Actions"/></tr></thead><tbody>{audit.map(item=>{const id=String(item.id);return <tr key={id}><td><input type="checkbox" aria-label={'Select audit '+id} checked={selectedAuditIds.has(id)} onChange={()=>toggleAuditSelection(id)}/></td><td>{String(item.action||'')}</td><td>{String(item.target||'')}</td><td>{String(item.actorEmail||item.actorUid||'')}</td><td>{item.timestamp&&typeof item.timestamp==='object'?'Recorded':String(item.timestamp||'')}</td><td><button className="vop-actions vop-actions-delete" type="button" disabled={saving} onClick={()=>void deleteAuditRecords([id])} title="Remove audit record from view"><Trash2 size={15}/></button></td></tr>})}</tbody></table>{!audit.length&&<div className="vop-empty">No privileged changes have been recorded.</div>}</div>
+          :<div className="vop-audit-card-grid">{audit.map(item=>{const id=String(item.id);return <article key={id} className={'vop-audit-card'+(selectedAuditIds.has(id)?' selected':'')}><label><input type="checkbox" checked={selectedAuditIds.has(id)} onChange={()=>toggleAuditSelection(id)}/><strong>{String(item.action||'Audit event')}</strong></label><span>{String(item.target||'')}</span><small>{String(item.actorEmail||item.actorUid||'')} · {item.timestamp&&typeof item.timestamp==='object'?'Recorded':String(item.timestamp||'')}</small><button className="vop-actions vop-actions-delete" type="button" disabled={saving} onClick={()=>void deleteAuditRecords([id])}><Trash2 size={15}/></button></article>})}{!audit.length&&<div className="vop-empty">No privileged changes have been recorded.</div>}</div>}
+        </div>
+      )}
     </div></section>}
   </div>;
 }

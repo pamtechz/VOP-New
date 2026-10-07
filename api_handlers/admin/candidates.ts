@@ -88,6 +88,198 @@ export default async function handler(request: Request, response: Response) {
       await writeTenantAudit(ctx, 'candidate.enroll', 'users/' + account.uid, undefined, { organizationId, guideId, created });
       return response.status(200).json({ ok:true, created, resetLink, candidate:{uid:account.uid,email,displayName:displayName || account.displayName || email.split('@')[0],organizationId,guideId} });
     }
+
+    if (body.action === 'updateCandidate') {
+      const targetOrgId = typeof body.organizationId === 'string' ? body.organizationId.trim() : '';
+      const ctx = await authenticateTenant(request, targetOrgId || undefined);
+      await requirePermission(ctx, 'users', 'update');
+      const candidateId = typeof body.candidateId === 'string' ? body.candidateId.trim() : '';
+      if (!candidateId || !/^[A-Za-z0-9_-]{1,160}$/.test(candidateId)) {
+        return response.status(400).json({ error: 'A valid candidate ID is required.' });
+      }
+
+      const candidateRef = ctx.db.doc(`users/${candidateId}`);
+      const candidateSnapshot = await candidateRef.get();
+      if (!candidateSnapshot.exists) return response.status(404).json({ error: 'Candidate was not found.' });
+
+      const candidateData = candidateSnapshot.data() || {};
+      const currentOrgId = String(candidateData.organizationId || '').trim();
+
+      if (!ctx.isSuperAdmin && (ctx.tenantType === 'organization' ? currentOrgId !== ctx.organizationId : !(await organizationInHierarchyScope(ctx, currentOrgId)))) {
+        return response.status(403).json({ error: 'This candidate belongs outside your authorized organization scope.' });
+      }
+
+      await requireSubscriptionFeature(ctx, 'candidates', currentOrgId || ctx.organizationId);
+
+      const nextOrgId = targetOrgId || currentOrgId;
+      if (nextOrgId && nextOrgId !== currentOrgId) {
+        if (!ctx.isSuperAdmin && !(ctx.tenantType === 'hierarchy' && await organizationInHierarchyScope(ctx, nextOrgId))) {
+          return response.status(403).json({ error: 'You do not have permission to transfer candidates outside your authorized organization scope.' });
+        }
+        const targetOrgSnap = await ctx.db.doc('organizations/' + nextOrgId).get();
+        if (!targetOrgSnap.exists || targetOrgSnap.data()?.status !== 'active') {
+          return response.status(400).json({ error: 'The selected target organization is inactive or does not exist.' });
+        }
+        await enforceOrganizationMembershipQuotas(ctx, nextOrgId, 'learner', candidateId);
+      }
+
+      const authService = getAuth(getApps()[0]);
+      const authUpdates: Parameters<typeof authService.updateUser>[1] = {};
+      const displayName = typeof body.displayName === 'string' ? body.displayName.trim() : '';
+      const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
+      const phoneNumber = typeof body.phoneNumber === 'string' ? body.phoneNumber.trim() : '';
+      const disabled = typeof body.disabled === 'boolean' ? body.disabled : undefined;
+
+      if (displayName) authUpdates.displayName = displayName;
+      if (email) authUpdates.email = email;
+      if (phoneNumber !== undefined) authUpdates.phoneNumber = phoneNumber || null;
+      if (disabled !== undefined) authUpdates.disabled = disabled;
+
+      if (Object.keys(authUpdates).length > 0) {
+        await authService.updateUser(candidateId, authUpdates).catch(err => {
+          console.warn('Could not update Firebase Auth record for candidate', err);
+        });
+      }
+
+      const conferenceName = typeof body.conferenceName === 'string' ? body.conferenceName.trim() : undefined;
+      const districtName = typeof body.districtName === 'string' ? body.districtName.trim() : undefined;
+      const churchName = typeof body.churchName === 'string' ? body.churchName.trim() : undefined;
+      const conferenceId = typeof body.conferenceId === 'string' ? body.conferenceId.trim() : undefined;
+      const districtId = typeof body.districtId === 'string' ? body.districtId.trim() : undefined;
+      const churchId = typeof body.churchId === 'string' ? body.churchId.trim() : undefined;
+
+      let orgName = candidateData.organizationName;
+      if (nextOrgId && nextOrgId !== currentOrgId) {
+        const oSnap = await ctx.db.doc('organizations/' + nextOrgId).get();
+        if (oSnap.exists) orgName = String(oSnap.data()?.name || nextOrgId);
+      }
+
+      const now = new Date().toISOString();
+      await ctx.db.runTransaction(async tx => {
+        if (nextOrgId && nextOrgId !== currentOrgId) {
+          if (currentOrgId) {
+            tx.set(ctx.db.doc(`organizations/${currentOrgId}/members/${candidateId}`), { active: false, updatedAt: now }, { merge: true });
+          }
+          tx.set(ctx.db.doc(`organizations/${nextOrgId}/members/${candidateId}`), {
+            uid: candidateId,
+            organizationId: nextOrgId,
+            role: 'learner',
+            active: true,
+            updatedAt: now,
+            reassignedBy: ctx.auth.uid,
+          }, { merge: true });
+        }
+        tx.set(candidateRef, {
+          ...(displayName ? { displayName } : {}),
+          ...(email ? { email } : {}),
+          ...(phoneNumber !== undefined ? { phoneNumber } : {}),
+          ...(disabled !== undefined ? { disabled } : {}),
+          organizationId: nextOrgId,
+          accountType: nextOrgId ? 'organization' : 'personal',
+          ...(orgName ? { organizationName: orgName } : {}),
+          ...(conferenceName !== undefined ? { conferenceName } : {}),
+          ...(districtName !== undefined ? { districtName } : {}),
+          ...(churchName !== undefined ? { churchName } : {}),
+          ...(conferenceId !== undefined ? { conferenceId } : {}),
+          ...(districtId !== undefined ? { districtId } : {}),
+          ...(churchId !== undefined ? { churchId } : {}),
+          updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
+      });
+
+      if (nextOrgId && nextOrgId !== currentOrgId) {
+        await authService.setCustomUserClaims(candidateId, {
+          role: String(candidateData.role || 'student'),
+          organizationId: nextOrgId,
+          organizationRole: 'learner',
+          accountType: nextOrgId ? 'organization' : 'personal',
+        }).catch(() => {});
+      }
+
+      const updatedSnap = await candidateRef.get();
+      const updatedData = updatedSnap.data() || {};
+      await writeTenantAudit(ctx, 'candidate.update', `users/${candidateId}`, undefined, {
+        displayName, email, phoneNumber, organizationId: nextOrgId, previousOrganizationId: currentOrgId,
+      });
+
+      return response.status(200).json({
+        ok: true,
+        candidate: {
+          uid: candidateId,
+          ...updatedData,
+          displayName: updatedData.displayName || displayName || candidateData.displayName,
+          email: updatedData.email || email || candidateData.email,
+          phoneNumber: updatedData.phoneNumber || phoneNumber || candidateData.phoneNumber,
+          organizationId: nextOrgId,
+          organizationName: orgName || updatedData.organizationName,
+          conferenceName: conferenceName ?? updatedData.conferenceName,
+          districtName: districtName ?? updatedData.districtName,
+          churchName: churchName ?? updatedData.churchName,
+          disabled: disabled ?? updatedData.disabled ?? false,
+          information: updatedData.information || {},
+        },
+      });
+    }
+
+    if (body.action === 'deleteCandidate') {
+      const requestedOrganizationId = typeof body.organizationId === 'string' ? body.organizationId.trim() : '';
+      const ctx = await authenticateTenant(request, requestedOrganizationId || undefined);
+      await requirePermission(ctx, 'users', 'delete');
+      if (ctx.tenantType === 'hierarchy') {
+        if (!requestedOrganizationId || !(await organizationInHierarchyScope(ctx, requestedOrganizationId))) {
+          return response.status(403).json({ error: 'The selected organization is outside your hierarchy scope.' });
+        }
+      } else {
+        requireOrgRole(ctx, ['owner','admin']);
+      }
+      const candidateId = typeof body.candidateId === 'string' ? body.candidateId.trim() : typeof body.uid === 'string' ? body.uid.trim() : '';
+      if (!candidateId || !/^[A-Za-z0-9_-]{1,160}$/.test(candidateId)) {
+        return response.status(400).json({ error: 'A valid candidate ID is required.' });
+      }
+      if (candidateId === String(ctx.auth.uid)) {
+        return response.status(400).json({ error: 'The signed-in administrator cannot delete their own account.' });
+      }
+
+      const candidateRef = ctx.db.doc(`users/${candidateId}`);
+      const candidateSnapshot = await candidateRef.get();
+      if (!candidateSnapshot.exists) return response.status(404).json({ error: 'Candidate was not found.' });
+      const candidateData = candidateSnapshot.data() || {};
+      const candidateOrganizationId = String(candidateData.organizationId || '').trim();
+
+      if (!ctx.isSuperAdmin) {
+        if (ctx.tenantType === 'organization') {
+          if (candidateOrganizationId !== ctx.organizationId) {
+            return response.status(403).json({ error: 'This candidate belongs outside your authorized organization.' });
+          }
+        } else if (!(await organizationInHierarchyScope(ctx, candidateOrganizationId))) {
+          return response.status(403).json({ error: 'This candidate belongs outside your authorized hierarchy scope.' });
+        }
+      }
+
+      const platformRole = String(candidateData.role || '').trim();
+      if (platformRole === 'super_admin' || ['union_admin','conference_admin','district_admin','church_admin'].includes(platformRole)) {
+        return response.status(403).json({ error: 'Administrative accounts cannot be deleted through candidate management.' });
+      }
+
+      const passkeys = await ctx.db.collection('passkeyCredentials').where('uid', '==', candidateId).limit(20).get();
+      if (!passkeys.empty) {
+        const cleanup = ctx.db.batch();
+        passkeys.docs.forEach(doc => cleanup.delete(doc.ref));
+        await cleanup.commit().catch(() => undefined);
+      }
+
+      const authService = getAuth(getApps()[0]);
+      await authService.deleteUser(candidateId).catch(() => undefined);
+      await candidateRef.delete();
+
+      if (candidateOrganizationId) {
+        await ctx.db.doc(`organizations/${candidateOrganizationId}/members/${candidateId}`).delete().catch(() => undefined);
+      }
+
+      await writeTenantAudit(ctx, 'candidate.delete', `users/${candidateId}`, candidateData, undefined);
+      return response.status(200).json({ ok: true, deleted: candidateId });
+    }
+
     if (body.action !== 'updateBaptism') return response.status(400).json({ error: 'Unsupported candidate action.' });
     const requestedOrganizationId = typeof body.organizationId === 'string' ? body.organizationId.trim() : '';
     const ctx = await authenticateTenant(request, requestedOrganizationId || undefined);

@@ -87,7 +87,16 @@ async function mine(req:Request,res:Response){
      }
    }
  }
- const configSnapshot=await db.doc('system/certification').get();
+ let configSnapshot=await db.doc('system/certification').get();
+ if(!configSnapshot.exists){
+   configSnapshot=await db.doc('certificationConfig/certification').get();
+ }
+ if(organizationId){
+   const orgConfigSnap=await db.collection('certificationConfig').where('organizationId','==',organizationId).limit(1).get();
+   if(!orgConfigSnap.empty){
+     configSnapshot=orgConfigSnap.docs[0];
+   }
+ }
  const certificateMap=new Map<string,ReturnType<typeof safe>>();
  certificateDocs.map(d=>safe({id:d.id,...d.data()})).filter(x=>x.status==='Certified')
    .forEach(record=>certificateMap.set(record.id,record));

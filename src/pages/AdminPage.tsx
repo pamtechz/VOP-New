@@ -7,7 +7,7 @@ import {
   Users, X, BarChart3, Layers, Grid2X2, Building2, HeartHandshake, WalletCards
 } from 'lucide-react';
 import { auth } from '../lib/firebase';
-import type { User, CustomLanguage, ChurchOrganization, Announcement, DiscoverGuide, AppRoute, LanguageCode } from '../types';
+import type { User, CustomLanguage, ChurchOrganization, Announcement, DiscoverGuide, AppRoute, LanguageCode, AppSettings } from '../types';
 import {
   subscribeLanguages, saveLanguageToFirestore, updateLanguageStatusInFirestore,
   deleteLanguageFromFirestore, subscribeSettings, saveSettingsToFirestore,
@@ -60,6 +60,7 @@ interface AdminPageProps {
   onToggleSidebar: () => void;
   onNavigateToCertificates?: () => void;
   onAccountChanged?: () => Promise<void>;
+  settings?: ExtendedAppSettings | AppSettings | null;
 }
 
 type AdminTab =
@@ -108,7 +109,7 @@ const ADMIN_NAV_GROUPS:Array<{id:AdminNavGroupId;label:string;ids:AdminTab[]}>= 
   {id:'learning',label:'Learning & content',ids:['curriculum','engagement','languages','translations','materials','certification']},
   {id:'community',label:'Community',ids:['announcements','events','radio','prayer','mentorship']},
   {id:'finance',label:'Finance',ids:['payments']},
-  {id:'organization',label:'Organization',ids:['organizations','unions','conferences','districts','churches']},
+  {id:'organization',label:'Organization',ids:['organizations']},
   {id:'account',label:'Account',ids:['accountNotifications','accountInvitations','accountProfile','accountPersonalSettings','accountCertificates','accountAbout']},
 ];
 function adminNavGroupFor(tab:AdminTab):AdminNavGroupId {
@@ -169,13 +170,13 @@ function Toggle({on, onClick}: {on: boolean; onClick: () => void}) {
   return <button type="button" className={'vop-toggle' + (on ? ' on' : '')} role="switch" aria-checked={on} onClick={onClick}><span /></button>;
 }
 
-async function adminContent(action: string, collection: string, id?: string, data?: Record<string, unknown>) {
+async function adminContent(action: string, collection: string, id?: string, data?: Record<string, unknown>, organizationId?: string) {
   if (!auth?.currentUser) throw new Error('Your session has expired. Sign in again.');
   const token = await auth.currentUser.getIdToken();
   const response = await fetch('/api/admin/content', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-    body: JSON.stringify({ action, collection, id, data }),
+    body: JSON.stringify({ action, collection, id, data, ...(organizationId ? { organizationId } : {}) }),
   });
   const body = await response.json().catch(() => ({})) as { error?: string; items?: unknown[] };
   if (!response.ok) throw new Error(body.error || 'Request failed.');
@@ -188,6 +189,7 @@ type InstitutionalSubscriptionState={
   paidPlanActive:boolean;
   exhaustedQuotaKeys:string[];
   planName:string;
+  subscriptionsEnabled:boolean;
 };
 
 async function loadInstitutionalSubscriptionState(
@@ -203,7 +205,7 @@ async function loadInstitutionalSubscriptionState(
   });
   const body=await response.json().catch(()=>({})) as {
     error?:string;plan?:unknown;featureEntitlements?:unknown;freeTier?:unknown;paidPlanActive?:unknown;
-    exhaustedQuotaKeys?:unknown;subscription?:unknown;catalogPlan?:unknown;
+    exhaustedQuotaKeys?:unknown;subscription?:unknown;catalogPlan?:unknown;subscriptionsEnabled?:unknown;
   };
   if(!response.ok)throw new Error(body.error||'Subscription entitlements could not be loaded.');
   const unsubscribed=String(body.plan||'').trim()==='unsubscribed';
@@ -220,13 +222,53 @@ async function loadInstitutionalSubscriptionState(
     paidPlanActive:body.paidPlanActive===true,
     exhaustedQuotaKeys:Array.isArray(body.exhaustedQuotaKeys)?body.exhaustedQuotaKeys.map(String):[],
     planName:String(subscription.planName||catalogPlan.name||body.plan||'Free plan'),
+    subscriptionsEnabled:body.subscriptionsEnabled!==false,
   };
 }
 
-export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguage, onBack, onLogout, onNavigate, uiLocale, sidebarCollapsed, onToggleSidebar, onAccountChanged }) => {
+export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguage, onBack, onLogout, onNavigate, uiLocale, sidebarCollapsed, onToggleSidebar, onAccountChanged, settings: propsSettings }) => {
   const [activeTab, setActiveTab] = useState<AdminTab>(() =>
     readInitialAdminTab(currentUser.uid,consumeNotificationAdminTarget()));
-  const adminT = (key: string, fallback: string) => getTranslation(`admin.${key}`, getUiLocale(), settings?.customTranslations, fallback, 'AdminPage');
+  const [settings, setSettings] = useState<ExtendedAppSettings | null>((propsSettings as ExtendedAppSettings) || null);
+  useEffect(() => {
+    if (propsSettings) {
+      setSettings(current => current || (propsSettings as ExtendedAppSettings));
+    }
+  }, [propsSettings]);
+
+  const resolvedSettings = useMemo<ExtendedAppSettings>(() => {
+    return settings || (propsSettings as ExtendedAppSettings) || {
+      appName: 'Voice of Prophecy',
+      organizationName: '',
+      schoolName: '',
+      directorName: '',
+      directorTitle: '',
+      contactPhone: '',
+      whatsappNumber: '',
+      contactEmail: '',
+      quizPassThreshold: 75,
+      quizMaxAttempts: 3,
+      quizRetakeCooldownMinutes: 0,
+      engagementPoints: { soloChallenge: 10, duelChallenge: 15, memoryReview: 1, practiceQuiz: 5, chapterQuiz: 10, finalExam: 25 },
+      defaultLanguage: activeLanguage || 'en',
+      appTagline: '',
+      timezone: '',
+      website: '',
+      welcomeMessage: '',
+      systemOptions: { allowRegistrations: true, requireApproval: false, enableEmailNotifications: false, showChurchInfo: false, enablePwa: false, maintenanceMode: false },
+      features: { candidatesModule: true, curriculumStudio: true, translations: true, radio: true, announcements: true, certification: true },
+      detailPages: {
+        aboutUsMission: '', aboutUsHistory: '', aboutUsLeadership: '', aboutAppDescription: '',
+        aboutAppVersion: '2.0.0', aboutAppCredits: '', contactOfficeAddress: '', contactOfficeHours: '',
+        contactPhoneNumbers: [], contactEmails: [], contactWhatsAppNumbers: [], socialLinks: {},
+      },
+    };
+  }, [settings, propsSettings, activeLanguage]);
+
+  const scopedAdminContent = (action: string, collection: string, id?: string, data?: Record<string, unknown>) =>
+    adminContent(action, collection, id, data, currentUser.organizationId || undefined);
+
+  const adminT = (key: string, fallback: string) => getTranslation(`admin.${key}`, getUiLocale(), (settings || resolvedSettings)?.customTranslations, fallback, 'AdminPage');
   const [curriculumSettingsOpen, setCurriculumSettingsOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -238,7 +280,6 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
   const [settingsSubtab, setSettingsSubtab] = useState<SettingsSubtab>('general');
   const [studioTab, setStudioTab] = useState<StudioTab>('lessons');
   const [languages, setLanguages] = useState<CustomLanguage[]>([]);
-  const [settings, setSettings] = useState<ExtendedAppSettings | null>(null);
   const [candidates, setCandidates] = useState<User[]>([]);
   const [churches, setChurches] = useState<ChurchOrganization[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
@@ -259,6 +300,27 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
   const [permissionLoading, setPermissionLoading] = useState(false);
   const [subscriptionFeatures,setSubscriptionFeatures]=useState<Partial<Record<SubscriptionFeatureKey,boolean>>|null>(null);
   const [subscriptionState,setSubscriptionState]=useState<InstitutionalSubscriptionState|null>(null);
+  const [subscriptionsEnabled,setSubscriptionsEnabled]=useState<boolean>(true);
+
+  useEffect(()=>{
+    let active=true;
+    if(!auth?.currentUser)return;
+    void auth.currentUser.getIdToken().then(token=>{
+      return fetch('/api/admin/plans',{
+        method:'POST',
+        headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
+        body:JSON.stringify({action:'getPolicyStatus'}),
+      });
+    }).then(async res=>{
+      if(!res?.ok)return null;
+      return res.json() as Promise<{ok?:boolean;subscriptionsEnabled?:boolean}>;
+    }).then(body=>{
+      if(active&&body&&body.subscriptionsEnabled!==undefined){
+        setSubscriptionsEnabled(body.subscriptionsEnabled!==false);
+      }
+    }).catch(()=>{});
+    return()=>{active=false;};
+  },[currentUser.uid]);
 
   useEffect(()=>{
     const group=adminNavGroupFor(activeTab);
@@ -363,6 +425,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
         if(!active)return;
         setSubscriptionFeatures(state.features);
         setSubscriptionState(state);
+        setSubscriptionsEnabled(state.subscriptionsEnabled!==false);
       })
       .catch(()=>{
         if(!active)return;
@@ -631,6 +694,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
     };
     return NAV.filter(item => {
       if(ORGANIZATION_ACCOUNT_TABS.has(item.id))return isOrganizationPortal;
+      if(item.id==='payments'&&!isSuperAdmin&&subscriptionsEnabled===false)return false;
       const feature=featureForTab[item.id];
       const role = String(currentUser.role || '');
       const organizationRole=String(currentUser.organizationRole||'');
@@ -660,15 +724,17 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
       // Language registry and canonical localization are platform governance.
       // Tenant administrators use published locales; only Super Admin gets these admin tabs.
       if ((item.id === 'languages' || item.id === 'translations') && !isSuperAdmin) return false;
-      if (item.id === 'conferences' && !['super_admin','union_admin','conference_admin'].includes(role)) return false;
-      if (item.id === 'districts' && !['super_admin','union_admin','conference_admin','district_admin'].includes(role)) return false;
-      if (item.id === 'churches' && !['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(role)) return false;
-      if (item.id === 'unions' && !['super_admin','union_admin'].includes(role)) return false;
+      // Unions, Conferences, Districts and Churches are unified under Organizations.
+      if (['unions','conferences','districts','churches'].includes(item.id)) return false;
       return true;
     }).map(item => ({ ...item, label: item.id==='settings'&&isOrganizationPortal?'Organization Settings':adminT(item.id, item.label) }));
-  }, [currentUser, permissionMatrix, activeLanguage, settings?.customTranslations, settings?.features, isSuperAdmin, isOrganizationPortal, subscriptionFeatures]);
+  }, [currentUser, permissionMatrix, activeLanguage, settings?.customTranslations, settings?.features, isSuperAdmin, isOrganizationPortal, subscriptionFeatures, subscriptionsEnabled]);
 
   useEffect(()=>{
+    if(['unions','conferences','districts','churches'].includes(activeTab)){
+      navigateAdminTab('organizations','replace');
+      return;
+    }
     if(visibleNav.some(item=>item.id===activeTab))return;
     navigateAdminTab('dashboard','replace');
   },[visibleNav,activeTab]);
@@ -1301,7 +1367,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
         })}</nav>
       </aside>
       <main className="vop-main">
-        {subscriptionState?.freeTier&&<section className={'vop-free-tier-banner '+(subscriptionState.exhaustedQuotaKeys.length?'limit-reached':'')}>
+        {subscriptionState?.freeTier && subscriptionsEnabled !== false && <section className={'vop-free-tier-banner '+(subscriptionState.exhaustedQuotaKeys.length?'limit-reached':'')}>
           <AlertTriangle size={20}/>
           <div>
             <strong>{subscriptionState.exhaustedQuotaKeys.length?'Free plan limit reached':'Free version active'}</strong>
@@ -1319,15 +1385,16 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
         {activeTab==='settings'&&renderSettings()}
         {activeTab==='languages'&&isSuperAdmin&&renderLanguages()}
         {activeTab==='translations'&&isSuperAdmin&&<LocalizationGovernancePanel/>}
-        {activeTab==='curriculum' && (curriculumSettingsOpen ? <CurriculumSettings languages={scopedLanguages} settings={settings} adminContent={adminContent} onBack={() => setCurriculumSettingsOpen(false)} showMessage={showMessage} /> : <CurriculumManager currentUser={currentUser} languages={scopedLanguages} initialTab={studioTab} onTabChange={setStudioTab} onOpenSettings={() => setCurriculumSettingsOpen(true)} />)}
+        {activeTab==='curriculum' && (curriculumSettingsOpen ? <CurriculumSettings languages={scopedLanguages} settings={settings || resolvedSettings} adminContent={scopedAdminContent} onBack={() => setCurriculumSettingsOpen(false)} showMessage={showMessage} /> : <CurriculumManager currentUser={currentUser} languages={scopedLanguages} initialTab={studioTab} onTabChange={setStudioTab} onOpenSettings={() => setCurriculumSettingsOpen(true)} />)}
         {activeTab==='candidates'&&<CandidateEnrollment currentUser={currentUser}/>}
         {activeTab==='certification'&&(
           <CertificationManager
-            settings={settings}
-            adminContent={adminContent}
+            settings={settings || resolvedSettings}
+            adminContent={scopedAdminContent}
             showMessage={showMessage}
             isSuperAdmin={currentUser.role === 'super_admin'}
             featureAvailable={isSuperAdmin||subscriptionFeatures===null
+              ||subscriptionsEnabled === false
               ||!Object.hasOwn(subscriptionFeatures,'certification')
               ||subscriptionFeatures.certification===true}
             onOpenBilling={()=>navigateAdminTab('payments')}
@@ -1336,21 +1403,21 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
         {activeTab==='prayer'&&<PrayerManagementPanel />}
         {activeTab==='engagement'&&<EngagementStudio currentUser={currentUser}/>}
         {activeTab==='mentorship'&&<MentorshipInsights guides={guides} />}
-        {activeTab==='organizations'&&<OrganizationManagement isSuperAdmin={currentUser.role==='super_admin'} onOpenBilling={()=>navigateAdminTab('payments')} onOpenCandidates={()=>navigateAdminTab('candidates')} />}
+        {activeTab==='organizations'&&<OrganizationManagement isSuperAdmin={currentUser.role==='super_admin'} onOpenBilling={subscriptionsEnabled !== false ? () => navigateAdminTab('payments') : undefined} onOpenCandidates={()=>navigateAdminTab('candidates')} subscriptionsEnabled={subscriptionsEnabled}/>}
         {activeTab==='payments'&&<PaymentManagement currentUser={currentUser}/>}
         {isOrganizationPortal&&activeTab==='accountNotifications'&&<NotificationsPage onBack={accountBack} onNavigate={navigateOrganizationRoute}/>}
         {isOrganizationPortal&&activeTab==='accountInvitations'&&<InvitationsPage
           currentUser={currentUser} guides={guides} onBack={accountBack} onNavigate={navigateOrganizationRoute}
           onInvitationAccepted={()=>navigateAdminTab('accountInvitations')} onAccountChanged={onAccountChanged}/>}
         {isOrganizationPortal&&activeTab==='accountProfile'&&<OrganizationAccountProfilePage
-          currentUser={currentUser} organizationName={settings?.aboutContext?.organizationName||settings?.organizationName}
+          currentUser={currentUser} organizationName={resolvedSettings?.aboutContext?.organizationName||resolvedSettings?.organizationName}
           onBack={accountBack} onUpdated={onAccountChanged} onOpenOrganization={()=>navigateAdminTab('settings')}/>}
         {isOrganizationPortal&&activeTab==='accountPersonalSettings'&&<PersonalSettingsPage
           currentUser={currentUser} context="organization" onBack={accountBack} onStudyLanguageChange={()=>{}}/>}
-        {isOrganizationPortal&&activeTab==='accountCertificates'&&settings&&<CertificatesPage
-          currentUser={currentUser} settings={settings} activeLanguage={activeLanguage as LanguageCode} onBack={accountBack}/>}
-        {isOrganizationPortal&&activeTab==='accountAbout'&&settings&&<AboutPage
-          settings={settings} activeLanguage={activeLanguage as LanguageCode} onBack={accountBack}/>}
+        {isOrganizationPortal&&activeTab==='accountCertificates'&&<CertificatesPage
+          currentUser={currentUser} settings={resolvedSettings} activeLanguage={activeLanguage as LanguageCode} onBack={accountBack}/>}
+        {isOrganizationPortal&&activeTab==='accountAbout'&&<AboutPage
+          settings={resolvedSettings} activeLanguage={activeLanguage as LanguageCode} onBack={accountBack}/>}
         {managedTabs.includes(activeTab as ManagedAdminCollection) && activeTab!=='translations' && (
           <AdminRecordsPanel
             kind={activeTab as ManagedAdminCollection}

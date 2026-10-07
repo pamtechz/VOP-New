@@ -17,13 +17,13 @@ export const SUBSCRIPTION_QUOTAS = [
 
 export const SUBSCRIPTION_FEATURES = [
   { key:'curriculum', label:'Curriculum Studio' },
-  { key:'candidates', label:'Candidate management' },
-  { key:'certification', label:'Certification' },
+  { key:'candidates', label:'Candidate Management' },
+  { key:'certification', label:'Certification & Diplomas' },
   { key:'mentorship', label:'Mentorship' },
-  { key:'radio', label:'Radio' },
-  { key:'materials', label:'Materials' },
+  { key:'radio', label:'Radio Broadcasting' },
+  { key:'materials', label:'Learning Materials' },
   { key:'announcements', label:'Announcements' },
-  { key:'payments', label:'Payments' },
+  { key:'payments', label:'Payment Gateway' },
 ] as const;
 
 export type SubscriptionQuotaKey = typeof SUBSCRIPTION_QUOTAS[number]['key'];

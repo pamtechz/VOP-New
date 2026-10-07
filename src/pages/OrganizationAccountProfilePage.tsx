@@ -80,7 +80,13 @@ export default function OrganizationAccountProfilePage({
         <div className="vop-org-account-membership">
           <span><Building2 size={15}/><strong>{organizationName||'Your organization'}</strong></span>
           <span><ShieldCheck size={15}/>{roleLabel(currentUser.organizationRole||currentUser.role)}</span>
+          <span className="vop-chip vop-account-type-org" style={{fontSize:11,fontWeight:750,padding:'3px 8px',borderRadius:6,display:'inline-flex',alignItems:'center',gap:4}}>
+            <Building2 size={12}/> Organisation Account
+          </span>
         </div>
+        <p style={{fontSize:11,color:'var(--text-muted,#64748b)',marginTop:8,lineHeight:1.4}}>
+          A personal account can manage an organisation account. Immediately an account has been assigned to an organisation, it assumes the organisation account type.
+        </p>
         {onOpenOrganization&&<button type="button" className="vop-secondary" onClick={onOpenOrganization}><Building2 size={15}/>Organization details</button>}
       </aside>
 

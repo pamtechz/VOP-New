@@ -29,3 +29,21 @@ export function lessonIsComplete(guide: DiscoverGuide, lesson: Lesson, user: Use
   return completed.includes(`${guide.language}:${guide.id}:${lesson.id}`)
     || completed.includes(lesson.id);
 }
+
+/** Determine whether an independent module/lesson in a linear VOP track is unlocked for the learner.
+ * Lesson 0 (or guide #1) is always unlocked.
+ * A subsequent lesson is unlocked if and only if the preceding lesson is completed.
+ */
+export function isLessonUnlocked(
+  guide: DiscoverGuide,
+  lessonIndex: number,
+  user: User,
+  passThreshold: number,
+  studyLessons: Lesson[]
+): boolean {
+  if (lessonIndex <= 0) return true;
+  if ((guide as { allowFreeNavigation?: boolean }).allowFreeNavigation === true) return true;
+  const previousLesson = studyLessons[lessonIndex - 1];
+  if (!previousLesson) return true;
+  return lessonIsComplete(guide, previousLesson, user, passThreshold);
+}

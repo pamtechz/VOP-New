@@ -148,6 +148,9 @@ export default async function handler(req: Request, res: Response) {
         throw new Error('Only an institutional tenant administrator can view subscription packages for this tenant.');
       }
       const audienceEnabled=await billingTenantAudienceEnabled(ctx.db,target.type);
+      if(!ctx.isSuperAdmin && !audienceEnabled){
+        return res.status(200).json({ ok: true, ...targetResponse(target), subscriptionRequired: false, items: [] });
+      }
       const snapshot = await ctx.db.collection('system/plans/catalog').where('active', '==', true).get();
       const items = await Promise.all(snapshot.docs.map(async doc => {
         const data = doc.data() || {};
@@ -171,6 +174,11 @@ export default async function handler(req: Request, res: Response) {
       }));
       items.sort((a,b)=>a.sortOrder-b.sortOrder||a.name.localeCompare(b.name));
       return res.status(200).json({ ok: true, ...targetResponse(target), subscriptionRequired:audienceEnabled, items });
+    }
+
+    if (action === 'getPolicyStatus' || action === 'getBillingPolicy') {
+      const settings=await loadPlatformBillingSettings(ctx.db);
+      return res.status(200).json({ok:true,subscriptionsEnabled:settings.subscriptionsEnabled});
     }
 
     if (action === 'getBillingSettings') {
@@ -199,9 +207,17 @@ export default async function handler(req: Request, res: Response) {
       const fxQuoteTtlMinutes=Math.max(15,Math.min(10080,Math.trunc(Number(body.fxQuoteTtlMinutes)||currentSettings.fxQuoteTtlMinutes||1440)));
       const fxSource=text(body.fxSource,currentSettings.fxSource||'platform-configured');
       const audienceInput=object(body.subscriptionAudience);
+      const subscriptionsEnabled=body.subscriptionsEnabled!==undefined
+        ?body.subscriptionsEnabled===true
+        :currentSettings.subscriptionsEnabled;
+      const globalQuotas=body.globalQuotas&&typeof body.globalQuotas==='object'
+        ?object(body.globalQuotas) as Record<string,number>
+        :currentSettings.globalQuotas;
       const data={
         baseCurrency:SAAS_BASE_CURRENCY,zambiaCurrency:ZAMBIA_BILLING_CURRENCY,
         usdToZmwRate,fxSource,fxUpdatedAt:suppliedRate?new Date().toISOString():currentSettings.fxUpdatedAt,fxQuoteTtlMinutes,
+        subscriptionsEnabled,
+        globalQuotas,
         subscriptionAudience:{
           learnersCandidates:audienceInput.learnersCandidates===true,
           organizations:audienceInput.organizations!==false,
@@ -281,6 +297,8 @@ export default async function handler(req: Request, res: Response) {
         usage,
         billingProfile:tenantData.billingProfile||{},
         subscriptionAudience:billingSettings.subscriptionAudience,
+        subscriptionsEnabled:billingSettings.subscriptionsEnabled,
+        globalQuotas:billingSettings.globalQuotas,
         subscriptionRequired:audienceEnabled,
         freeTier,
         paidPlanActive:audienceEnabled&&['active','trialing'].includes(effectiveSubscriptionStatus)

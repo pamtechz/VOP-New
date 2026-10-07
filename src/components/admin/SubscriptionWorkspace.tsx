@@ -28,6 +28,8 @@ type Overview = {
   usage: Usage;
   billingProfile: Record<string, unknown>;
   subscriptionAudience?: { learnersCandidates?: boolean; organizations?: boolean; churches?: boolean; districts?: boolean; conferences?: boolean; unions?: boolean };
+  subscriptionsEnabled?: boolean;
+  globalQuotas?: Record<string, number>;
   freeTier?: boolean;
   paidPlanActive?: boolean;
   exhaustedQuotaKeys?: string[];
@@ -42,6 +44,7 @@ interface Props {
   billingTenants: BillingTenantOption[];
   packages: SubscriptionPackageView[];
   busy?: boolean;
+  focusSection?: 'all' | 'usage' | 'plans';
   onCreatePlan?: () => void;
   onEditPlan?: (plan: SubscriptionPackageView) => void;
   onDeletePlan?: (plan: SubscriptionPackageView) => void | Promise<void>;
@@ -93,6 +96,7 @@ function planFitsUsage(plan: SubscriptionPackageView, usage: Usage, learnersCand
 
 export default function SubscriptionWorkspace({
   currentUser, isSuperAdmin, billingTenants, packages, busy = false,
+  focusSection = 'all',
   onCreatePlan, onEditPlan, onDeletePlan, onOpenCheckout,
 }: Props) {
   const organizationRole = String(currentUser.organizationRole || '');
@@ -141,8 +145,8 @@ export default function SubscriptionWorkspace({
     setLoading(true); setError('');
     try {
       const [current, catalog] = await Promise.all([
-        planApi({ action: 'getSubscription', billingTenantType: selectedTarget.type, billingTenantId: selectedTarget.id }),
-        planApi({ action: 'listAvailablePlans', billingTenantType: selectedTarget.type, billingTenantId: selectedTarget.id }),
+        planApi({ action: 'getSubscription', billingTenantType:selectedTarget.type, billingTenantId: selectedTarget.id }),
+        planApi({ action: 'listAvailablePlans', billingTenantType:selectedTarget.type, billingTenantId: selectedTarget.id }),
       ]);
       setOverview(current as unknown as Overview);
       setAvailablePlans((catalog.items || []) as SubscriptionPackageView[]);
@@ -188,7 +192,7 @@ export default function SubscriptionWorkspace({
     setWorking(true); setError('');
     try {
       await planApi({
-        action: 'assignPlan', billingTenantType: selectedTarget.type, billingTenantId: selectedTarget.id,
+        action: 'assignPlan', billingTenantType:selectedTarget.type, billingTenantId: selectedTarget.id,
         planId: plan.id, activationSource: 'manual_override', overrideReason: reason.trim(),
       });
       setMessage(planTitle + ' assigned. The institution now uses this plan’s entitlement snapshot.');
@@ -203,7 +207,7 @@ export default function SubscriptionWorkspace({
     setWorking(true); setError('');
     try {
       const result = await planApi({
-        action: 'activateFreePlan', billingTenantType: selectedTarget.type, billingTenantId: selectedTarget.id, planId: plan.id,
+        action:'activateFreePlan', billingTenantType:selectedTarget.type, billingTenantId: selectedTarget.id, planId: plan.id,
       });
       setMessage(result.alreadyActive === true
         ? planTitle + ' is already active.'
@@ -267,12 +271,15 @@ export default function SubscriptionWorkspace({
     return <div className="vop-payment-empty">Subscription administration is available to the institution’s authorized administrators.</div>;
   }
 
+  const isFreePlatformMode = overview?.subscriptionsEnabled === false;
   const activePlanAssigned = Boolean(active || currentPlan || currentPlanId || overview?.paidPlanActive || overview?.freeTier || (currentPlanName && currentPlanName !== "No active plan"));
-  const displayDescription = currentPlan?.description && currentPlan?.description.toLowerCase() !== currentPlanName.toLowerCase()
-    ? currentPlan.description
-    : (activePlanAssigned
-      ? 'Active institutional plan with standard limits and features.'
-      : 'No subscription package is currently assigned.');
+  const displayDescription = isFreePlatformMode
+    ? 'All institutional features are currently free. Resource limits are governed by platform usage controls.'
+    : currentPlan?.description && currentPlan?.description.toLowerCase() !== currentPlanName.toLowerCase()
+      ? currentPlan.description
+      : (activePlanAssigned
+        ? 'Active institutional plan with standard limits and features.'
+        : 'No subscription package is currently assigned.');
 
   return (
     <div className="vop-subscription-workspace">
@@ -280,7 +287,11 @@ export default function SubscriptionWorkspace({
         <div>
           <span className="vop-page-kicker">Subscription Management</span>
           <h2>Plan, subscription & usage</h2>
-          <p>Manage subscription packages, monitor live institutional capacity, and handle billing options seamlessly.</p>
+          <p>
+            {focusSection === 'usage'
+              ? 'Monitor live institutional capacity, resource consumption, and platform quota limits.'
+              : 'Manage subscription packages, monitor live institutional capacity, and handle billing options seamlessly.'}
+          </p>
         </div>
         <div className="vop-subscription-toolbar-actions">
           {isSuperAdmin && (
@@ -328,268 +339,353 @@ export default function SubscriptionWorkspace({
         <div className="vop-payment-empty">Loading subscription details…</div>
       ) : overview && (
         <>
-          <div className="vop-subscription-summary-grid">
-            <article className="vop-subscription-current">
-              <div className="vop-subscription-card-head">
-                <div>
-                  <span className="vop-card-kicker">Current Plan</span>
-                  <h3>{currentPlanName}</h3>
-                </div>
-                <span className={'vop-subscription-status ' + (active ? 'active' : 'inactive')}>
-                  <Zap size={13} style={{ marginRight: 4 }} />
-                  {subscriptionStatusLabel(status)}
-                </span>
-              </div>
-              <p className="vop-subscription-desc">{displayDescription}</p>
-
-              <dl className="vop-subscription-meta-list">
-                <div>
-                  <dt>Billing Interval</dt>
-                  <dd>{currentPlan || subscription.planInterval ? subscriptionIntervalLabel(subscription.planInterval || currentPlan?.interval) : '—'}</dd>
-                </div>
-                <div>
-                  <dt>Current Term Ends</dt>
-                  <dd>{formatDate(subscription.currentPeriodEnd)}</dd>
-                </div>
-                <div>
-                  <dt>Activation Method</dt>
-                  <dd>{reasonLabel(subscription.activationSource)}</dd>
-                </div>
-                <div>
-                  <dt>Billing Currency</dt>
-                  <dd>{String(subscription.billingCurrency || overview.billingProfile?.billingCurrency || currentPlan?.billingCurrency || 'USD')}</dd>
-                </div>
-              </dl>
-
-              {overview.freeTier && (
-                <div className="vop-subscription-warning">
-                  <AlertTriangle size={18} />
-                  <div>
-                    <strong>Free Tier Active</strong>
-                    <span>Your institution is operating on the free tier. Upgrade to increase capacity limits.</span>
-                  </div>
-                </div>
-              )}
-              {overview.billingAccessSuspended && (
-                <div className="vop-subscription-warning danger">
-                  <AlertTriangle size={18} />
-                  <div>
-                    <strong>Paid Access Suspended</strong>
-                    <span>{reasonLabel(overview.billingSuspendedReason)}</span>
-                  </div>
-                </div>
-              )}
-              {cancelAtPeriodEnd && (
-                <div className="vop-subscription-warning">
-                  <AlertTriangle size={18} />
-                  <div>
-                    <strong>Cancellation Scheduled</strong>
-                    <span>Subscription remains active until {formatDate(subscription.currentPeriodEnd)}.</span>
-                  </div>
-                </div>
-              )}
-
-              <div className="vop-subscription-actions">
-                {!isSuperAdmin && (
-                  <button className="btn btn-primary" type="button" onClick={() => openCheckout(currentPlanId || undefined)}>
-                    <CreditCard size={15} />
-                    {active ? 'Renew / Change Plan' : 'Choose a Plan'}
-                  </button>
-                )}
-                {active && !currentPlanFree && !cancelAtPeriodEnd && (
-                  <button className="btn btn-outline" type="button" disabled={working || busy} onClick={() => void cancel('period_end')}>
-                    Cancel at period end
-                  </button>
-                )}
-                {isSuperAdmin && active && (
-                  <button className="btn btn-danger" type="button" disabled={working || busy} onClick={() => void cancel('immediate')}>
-                    Cancel Now
-                  </button>
-                )}
-                {cancelAtPeriodEnd && (
-                  <button className="btn btn-outline" type="button" disabled={working || busy} onClick={() => void reactivate()}>
-                    <RotateCcw size={15} /> Keep Subscription
-                  </button>
-                )}
-                {isSuperAdmin && !active && currentPlanId && (
-                  <button className="btn btn-primary" type="button" disabled={working || busy} onClick={() => void reactivate()}>
-                    <RotateCcw size={15} /> Reactivate Subscription
-                  </button>
-                )}
-              </div>
-            </article>
-
-            <article className="vop-subscription-entitlements">
-              <div className="vop-subscription-card-head">
-                <div>
-                  <span className="vop-card-kicker">Included Features</span>
-                  <h3>Plan entitlements</h3>
-                </div>
-                <ShieldCheck size={22} className="vop-head-icon" />
-              </div>
-              <div className="vop-subscription-feature-grid">
-                {SUBSCRIPTION_FEATURES.map(feature => {
-                  const included = overview.featureEntitlements?.[feature.key] === true;
-                  return (
-                    <span key={feature.key} className={'vop-subscription-feature ' + (included ? 'included' : 'excluded')}>
-                      {included ? <Check size={14} className="icon-check" /> : <XCircle size={14} className="icon-cross" />}
-                      {feature.label}
+          {(() => {
+            const planSummarySection = (
+              <div className="vop-subscription-summary-grid">
+                <article className="vop-subscription-current">
+                  <div className="vop-subscription-card-head">
+                    <div>
+                      <span className="vop-card-kicker">Current Plan</span>
+                      <h3>{isFreePlatformMode ? 'Free Platform Mode' : currentPlanName}</h3>
+                    </div>
+                    <span className={'vop-subscription-status ' + (isFreePlatformMode ? 'active' : active ? 'active' : 'inactive')}>
+                      <Zap size={13} style={{ marginRight: 4 }} />
+                      {isFreePlatformMode ? 'Free Platform Tier' : subscriptionStatusLabel(status)}
                     </span>
-                  );
-                })}
-              </div>
-              <p className="vop-subscription-footnote">
-                Entitlements are snapshotted on activation. Changes to catalog plans will not disrupt active institution terms.
-              </p>
-            </article>
-          </div>
+                  </div>
+                  <p className="vop-subscription-desc">{displayDescription}</p>
 
-          <section className="vop-subscription-usage-section">
-            <div className="vop-subscription-section-head">
-              <div>
-                <span className="vop-card-kicker">Live Capacity</span>
-                <h3>Usage against plan limits</h3>
-                <p>Enforced in real-time before new institutional members or resources are allocated.</p>
-              </div>
-              <Gauge size={24} className="vop-head-icon" />
-            </div>
-
-            <div className="vop-subscription-usage-grid">
-              {SUBSCRIPTION_QUOTAS.map(definition => {
-                const used = Math.max(0, Number(usage[definition.usageKey] || 0));
-                const excludedFromBilling = definition.key === 'maxCandidates' && overview.subscriptionAudience?.learnersCandidates !== true;
-                const limit = excludedFromBilling ? null : subscriptionQuotaLimit(overview.quotas, definition.key);
-                const percent = limit === null ? 0 : limit === 0 ? (used > 0 ? 100 : 0) : Math.min(100, Math.round((used / limit) * 100));
-                const level = limit !== null && used >= limit ? 'danger' : limit !== null && percent >= 80 ? 'warning' : 'normal';
-
-                return (
-                  <article key={definition.key} className={'vop-subscription-usage-card ' + level}>
-                    <div className="vop-usage-card-top">
-                      <strong className="vop-usage-title">{definition.label}</strong>
-                      <span className="vop-usage-count">
-                        {used} / {excludedFromBilling ? 'Unlimited' : limit === null ? 'Unlimited' : limit}
-                        {limit !== null && <small className="vop-usage-pct"> ({percent}%)</small>}
-                      </span>
+                  <dl className="vop-subscription-meta-list">
+                    <div>
+                      <dt>Billing Interval</dt>
+                      <dd>{isFreePlatformMode ? 'Perpetual free' : currentPlan || subscription.planInterval ? subscriptionIntervalLabel(subscription.planInterval || currentPlan?.interval) : '—'}</dd>
                     </div>
-                    <div className="vop-subscription-meter" aria-label={definition.label + ' usage'}>
-                      <span style={{ width: (limit === null ? 0 : percent) + '%' }} />
+                    <div>
+                      <dt>Current Term Ends</dt>
+                      <dd>{isFreePlatformMode ? 'No expiry' : formatDate(subscription.currentPeriodEnd)}</dd>
                     </div>
-                    <small className="vop-usage-desc">
-                      {excludedFromBilling ? 'Learners/candidates are currently exempt from billing limits.' : definition.description}
-                    </small>
-                  </article>
-                );
-              })}
-            </div>
-          </section>
+                    <div>
+                      <dt>Activation Method</dt>
+                      <dd>{isFreePlatformMode ? 'Platform Switch (Free Mode)' : reasonLabel(subscription.activationSource)}</dd>
+                    </div>
+                    <div>
+                      <dt>Billing Currency</dt>
+                      <dd>{isFreePlatformMode ? 'Free' : String(subscription.billingCurrency || overview.billingProfile?.billingCurrency || currentPlan?.billingCurrency || 'USD')}</dd>
+                    </div>
+                  </dl>
 
-          <section className="vop-subscription-plans-section">
-            <div className="vop-subscription-section-head">
-              <div>
-                <span className="vop-card-kicker">Plan Catalog</span>
-                <h3>{isSuperAdmin ? 'Available Plans for Institution' : 'Upgrade, Downgrade or Renew'}</h3>
-                <p>
-                  {isSuperAdmin
-                    ? 'Manual assignments require audit justification. Customer plan changes execute via checkout.'
-                    : 'Prices are listed for your institution’s billing region. Final validation occurs at checkout.'}
-                </p>
-              </div>
-            </div>
-
-            <div className="vop-subscription-plan-grid">
-              {planOptions.map(plan => {
-                const planTitle = formatPlanName(plan.name);
-                const isCurrent = plan.id === currentPlanId;
-                const fits = planFitsUsage(plan, usage, overview.subscriptionAudience?.learnersCandidates === true);
-                const freePlan = Number(plan.priceUsd ?? plan.price ?? 0) === 0;
-                const enabledFeatures = SUBSCRIPTION_FEATURES.filter(feature => plan.features?.[feature.key] === true);
-
-                return (
-                  <article key={plan.id} className={'vop-subscription-plan-card ' + (isCurrent ? 'current' : '') + (fits ? '' : ' incompatible')}>
-                    <header>
+                  {isFreePlatformMode ? (
+                    <div className="vop-subscription-warning info">
+                      <Sparkles size={18} />
                       <div>
-                        <span className="vop-plan-tag">{subscriptionIntervalLabel(plan.interval)}</span>
-                        <h4>{planTitle}</h4>
+                        <strong>Subscriptions Switched Off Globally</strong>
+                        <span>The Super Admin has disabled the subscription module. All institutional features are 100% free with quotas regulated by platform usage controls.</span>
                       </div>
-                      {isCurrent && <span className="vop-subscription-current-chip">Current Plan</span>}
-                    </header>
-
-                    <p className="vop-plan-desc">{plan.description && plan.description.toLowerCase() !== planTitle.toLowerCase() ? plan.description : 'Institutional subscription package'}</p>
-
-                    <div className="vop-subscription-price">
-                      {freePlan ? (
-                        <>
-                          <strong>Free</strong>
-                          <span className="vop-price-sub"> / forever</span>
-                        </>
-                      ) : (
-                        <>
-                          <span className="vop-price-currency">{plan.billingCurrency || 'USD'}</span>
-                          <strong>{plan.billingPrice || Number(plan.priceUsd ?? plan.price ?? 0).toFixed(2)}</strong>
-                          <span className="vop-price-sub"> / {plan.interval === 'year' ? 'year' : plan.interval === 'one_time' ? 'one-time' : 'month'}</span>
-                        </>
+                    </div>
+                  ) : (
+                    <>
+                      {overview.freeTier && (
+                        <div className="vop-subscription-warning">
+                          <AlertTriangle size={18} />
+                          <div>
+                            <strong>Free version active</strong>
+                            <span>Your institution is operating on the free tier. Upgrade to increase capacity limits.</span>
+                          </div>
+                        </div>
                       )}
-                    </div>
+                      {overview.billingAccessSuspended && (
+                        <div className="vop-subscription-warning danger">
+                          <AlertTriangle size={18} />
+                          <div>
+                            <strong>Paid Access Suspended</strong>
+                            <span>{reasonLabel(overview.billingSuspendedReason)}</span>
+                          </div>
+                        </div>
+                      )}
+                      {cancelAtPeriodEnd && (
+                        <div className="vop-subscription-warning">
+                          <AlertTriangle size={18} />
+                          <div>
+                            <strong>Cancellation Scheduled</strong>
+                            <span>Subscription remains active until {formatDate(subscription.currentPeriodEnd)}.</span>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
 
-                    <div className="vop-plan-section-title">Quotas & Capacity</div>
-                    <div className="vop-subscription-plan-limits">
-                      {SUBSCRIPTION_QUOTAS.slice(0, 4).map(definition => {
-                        const limit = subscriptionQuotaLimit(plan.quotas, definition.key);
-                        return (
-                          <span key={definition.key}>
-                            {definition.label}: <strong>{limit === null ? 'Unlimited' : limit}</strong>
-                          </span>
-                        );
-                      })}
-                    </div>
+                  <div className="vop-subscription-actions">
+                    {isFreePlatformMode ? (
+                      <span className="vop-plan-tag" style={{ background: 'rgba(99, 102, 241, 0.1)', color: '#4f46e5', fontWeight: 600, padding: '8px 16px', borderRadius: 8 }}>
+                        Subscription Module Disabled · All Features Free
+                      </span>
+                    ) : (
+                      <>
+                        {!isSuperAdmin && (
+                          <button className="btn btn-primary" type="button" onClick={() => openCheckout(currentPlanId || undefined)}>
+                            <CreditCard size={15} />
+                            {active ? 'Renew / Change Plan' : 'Choose a Plan'}
+                          </button>
+                        )}
+                        {active && !currentPlanFree && !cancelAtPeriodEnd && (
+                          <button className="btn btn-outline" type="button" disabled={working || busy} onClick={() => void cancel('period_end')}>
+                            Cancel at period end
+                          </button>
+                        )}
+                        {isSuperAdmin && active && (
+                          <button className="btn btn-danger" type="button" disabled={working || busy} onClick={() => void cancel('immediate')}>
+                            Cancel Now
+                          </button>
+                        )}
+                        {cancelAtPeriodEnd && (
+                          <button className="btn btn-outline" type="button" disabled={working || busy} onClick={() => void reactivate()}>
+                            <RotateCcw size={15} /> Keep Subscription
+                          </button>
+                        )}
+                        {isSuperAdmin && !active && currentPlanId && (
+                          <button className="btn btn-primary" type="button" disabled={working || busy} onClick={() => void reactivate()}>
+                            <RotateCcw size={15} /> Reactivate Subscription
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </article>
 
-                    <div className="vop-plan-section-title">Included Features</div>
-                    <div className="vop-subscription-feature-summary">
-                      {enabledFeatures.map(feature => (
-                        <span key={feature.key}>
-                          <Check size={14} className="icon-check" />
+                <article className="vop-subscription-entitlements">
+                  <div className="vop-subscription-card-head">
+                    <div>
+                      <span className="vop-card-kicker">Included Features</span>
+                      <h3>Plan entitlements</h3>
+                    </div>
+                    <ShieldCheck size={22} className="vop-head-icon" />
+                  </div>
+                  <div className="vop-subscription-feature-grid">
+                    {SUBSCRIPTION_FEATURES.map(feature => {
+                      const included = isFreePlatformMode || overview.featureEntitlements?.[feature.key] === true;
+                      return (
+                        <span key={feature.key} className={'vop-subscription-feature ' + (included ? 'included' : 'excluded')}>
+                          {included ? <Check size={14} className="icon-check" /> : <XCircle size={14} className="icon-cross" />}
                           {feature.label}
                         </span>
-                      ))}
+                      );
+                    })}
+                  </div>
+                  <p className="vop-subscription-footnote">
+                    {isFreePlatformMode
+                      ? 'All features unlocked under platform free mode.'
+                      : 'Entitlements are snapshotted on activation. Changes to catalog plans will not disrupt active institution terms.'}
+                  </p>
+                </article>
+              </div>
+            );
+
+            const usageSection = (
+              <section className="vop-subscription-usage-section">
+                <div className="vop-subscription-section-head">
+                  <div>
+                    <span className="vop-card-kicker">Live Capacity</span>
+                    <h3>Usage against plan limits</h3>
+                    <p>
+                      {isFreePlatformMode
+                        ? 'Enforced in real-time under platform usage controls configured by the Super Admin.'
+                        : 'Enforced in real-time before new institutional members or resources are allocated.'}
+                    </p>
+                  </div>
+                  <Gauge size={24} className="vop-head-icon" />
+                </div>
+
+                {isFreePlatformMode && (
+                  <div className="vop-subscription-warning info" style={{ marginBottom: 16 }}>
+                    <Sparkles size={18} />
+                    <div>
+                      <strong>Platform Usage Controls in Effect</strong>
+                      <span>The subscription module is switched off. Resources (lessons, quizzes, seats, etc.) are governed by the platform limits configured by the Super Admin.</span>
                     </div>
+                  </div>
+                )}
 
-                    {!fits && (
-                      <div className="vop-subscription-plan-warning">
-                        <AlertTriangle size={15} /> Insufficient capacity for current usage
-                      </div>
-                    )}
+                <div className="vop-subscription-usage-grid">
+                  {SUBSCRIPTION_QUOTAS.map(definition => {
+                    const used = Math.max(0, Number(usage[definition.usageKey] || 0));
+                    const rawGlobalLimit = isFreePlatformMode ? overview.globalQuotas?.[definition.key] : undefined;
+                    const globalLimit = rawGlobalLimit !== undefined && rawGlobalLimit !== null ? Number(rawGlobalLimit) : null;
+                    const excludedFromBilling = !isFreePlatformMode && definition.key === 'maxCandidates' && overview.subscriptionAudience?.learnersCandidates !== true;
+                    const limit = isFreePlatformMode
+                      ? (globalLimit !== null && Number.isFinite(globalLimit) && globalLimit >= 0 ? globalLimit : null)
+                      : (excludedFromBilling ? null : subscriptionQuotaLimit(overview.quotas, definition.key));
+                    const percent = limit === null ? 0 : limit === 0 ? (used > 0 ? 100 : 0) : Math.min(100, Math.round((used / limit) * 100));
+                    const level = limit !== null && used >= limit ? 'danger' : limit !== null && percent >= 80 ? 'warning' : 'normal';
 
-                    <footer>
-                      {isSuperAdmin && onEditPlan && (
-                        <button className="btn btn-outline" type="button" onClick={() => onEditPlan(plan)}>
-                          Edit
-                        </button>
-                      )}
-                      {isSuperAdmin && onDeletePlan && (
-                        <button className="btn btn-outline" type="button" disabled={isCurrent || busy} onClick={() => void onDeletePlan(plan)}>
-                          Delete
-                        </button>
-                      )}
-                      {isSuperAdmin ? (
-                        <button className="btn btn-primary" type="button" disabled={isCurrent || !fits || working || busy} onClick={() => void assign(plan)}>
-                          {isCurrent ? 'Current Plan' : 'Assign manually'}
-                        </button>
-                      ) : freePlan ? (
-                        <button className="btn btn-primary" type="button" disabled={!fits || working || busy || (isCurrent && active)} onClick={() => void activateFreePlan(plan)}>
-                          {isCurrent && active ? 'Current Plan' : 'Activate free plan'}
-                        </button>
-                      ) : (
-                        <button className="btn btn-primary" type="button" disabled={!fits || working || busy} onClick={() => openCheckout(plan.id)}>
-                          {isCurrent && active ? 'Renew in checkout' : 'Choose plan'}
-                        </button>
-                      )}
-                    </footer>
-                  </article>
-                );
-              })}
-            </div>
-            {!planOptions.length && <div className="vop-payment-empty">No active subscription plans are available.</div>}
-          </section>
+                    return (
+                      <article key={definition.key} className={'vop-subscription-usage-card ' + level}>
+                        <div className="vop-usage-card-top">
+                          <strong className="vop-usage-title">{definition.label}</strong>
+                          <span className="vop-usage-count">
+                            {used} / {limit === null ? (excludedFromBilling ? 'Not billed' : 'Unlimited') : limit}
+                            {limit !== null && <small className="vop-usage-pct"> ({percent}%)</small>}
+                          </span>
+                        </div>
+                        <div className="vop-subscription-meter" aria-label={definition.label + ' usage'}>
+                          <span style={{ width: (limit === null ? 0 : percent) + '%' }} />
+                        </div>
+                        <small className="vop-usage-desc">
+                          {isFreePlatformMode
+                            ? (limit === null ? 'Platform free mode: Unlimited capacity.' : 'Platform free mode: Limit configured by Super Admin.')
+                            : (excludedFromBilling ? 'Not billed: Learners/candidates are currently exempt from billing limits.' : definition.description)}
+                        </small>
+                      </article>
+                    );
+                  })}
+                </div>
+              </section>
+            );
+
+            const catalogSection = (
+              <section className="vop-subscription-plans-section">
+                <div className="vop-subscription-section-head">
+                  <div>
+                    <span className="vop-card-kicker">Plan Catalog</span>
+                    <h3>{isSuperAdmin ? 'Available Plans for Institution' : 'Upgrade, Downgrade or Renew'}</h3>
+                    <p>
+                      {isSuperAdmin
+                        ? 'Manual assignments require audit justification. Customer plan changes execute via checkout.'
+                        : 'Prices are listed for your institution’s billing region. Final validation occurs at checkout.'}
+                    </p>
+                  </div>
+                </div>
+
+                {isFreePlatformMode && (
+                  <div className="vop-subscription-warning info" style={{ marginBottom: 16 }}>
+                    <Sparkles size={18} />
+                    <div>
+                      <strong>Subscription Catalog Bypassed</strong>
+                      <span>The subscription module is switched off globally. All features are free and plans do not need to be purchased.</span>
+                    </div>
+                  </div>
+                )}
+
+                <div className="vop-subscription-plan-grid">
+                  {planOptions.map(plan => {
+                    const planTitle = formatPlanName(plan.name);
+                    const isCurrent = plan.id === currentPlanId;
+                    const fits = planFitsUsage(plan, usage, overview.subscriptionAudience?.learnersCandidates === true);
+                    const freePlan=Number(plan.priceUsd??plan.price??0)===0;
+                    const enabledFeatures = SUBSCRIPTION_FEATURES.filter(feature => plan.features?.[feature.key] === true);
+
+                    return (
+                      <article key={plan.id} className={'vop-subscription-plan-card ' + (isCurrent ? 'current' : '') + (fits ? '' : ' incompatible')}>
+                        <header>
+                          <div>
+                            <span className="vop-plan-tag">{subscriptionIntervalLabel(plan.interval)}</span>
+                            <h4>{planTitle}</h4>
+                          </div>
+                          {isCurrent && <span className="vop-subscription-current-chip">Current Plan</span>}
+                        </header>
+
+                        <p className="vop-plan-desc">{plan.description && plan.description.toLowerCase() !== planTitle.toLowerCase() ? plan.description : 'Institutional subscription package'}</p>
+
+                        <div className="vop-subscription-price">
+                          {freePlan ? (
+                            <>
+                              <strong>Free</strong>
+                              <span className="vop-price-sub"> / forever</span>
+                            </>
+                          ) : (
+                            <>
+                              <span className="vop-price-currency">{plan.billingCurrency || 'USD'}</span>
+                              <strong>{plan.billingPrice || Number(plan.priceUsd ?? plan.price ?? 0).toFixed(2)}</strong>
+                              <span className="vop-price-sub"> / {plan.interval === 'year' ? 'year' : plan.interval === 'one_time' ? 'one-time' : 'month'}</span>
+                            </>
+                          )}
+                        </div>
+
+                        <div className="vop-plan-section-title">Quotas & Capacity</div>
+                        <div className="vop-subscription-plan-limits">
+                          {SUBSCRIPTION_QUOTAS.slice(0, 4).map(definition => {
+                            const limit = subscriptionQuotaLimit(plan.quotas, definition.key);
+                            return (
+                              <span key={definition.key}>
+                                {definition.label}: <strong>{limit === null ? 'Unlimited' : limit}</strong>
+                              </span>
+                            );
+                          })}
+                        </div>
+
+                        <div className="vop-plan-section-title">Included Features</div>
+                        <div className="vop-subscription-feature-summary">
+                          {enabledFeatures.map(feature => (
+                            <span key={feature.key}>
+                              <Check size={14} className="icon-check" />
+                              {feature.label}
+                            </span>
+                          ))}
+                        </div>
+
+                        {!fits && (
+                          <div className="vop-subscription-plan-warning">
+                            <AlertTriangle size={15} /> Below current institutional usage
+                          </div>
+                        )}
+
+                        <footer>
+                          {isSuperAdmin && onEditPlan && (
+                            <button className="btn btn-outline" type="button" onClick={() => onEditPlan(plan)}>
+                              Edit
+                            </button>
+                          )}
+                          {isSuperAdmin && onDeletePlan && (
+                            <button className="btn btn-outline" type="button" disabled={isCurrent || busy} onClick={() => void onDeletePlan(plan)}>
+                              Delete
+                            </button>
+                          )}
+                          {isSuperAdmin ? (
+                            <button className="btn btn-primary" type="button" disabled={isCurrent || !fits || working || busy} onClick={() => void assign(plan)}>
+                              {isCurrent ? 'Current Plan' : 'Assign manually'}
+                            </button>
+                          ) : freePlan ? (
+                            <button className="btn btn-primary" type="button" disabled={!fits || working || busy || (isCurrent && active)} onClick={() => void activateFreePlan(plan)}>
+                              {isCurrent && active ? 'Current Plan' : 'Activate free plan'}
+                            </button>
+                          ) : (
+                            <button className="btn btn-primary" type="button" disabled={!fits || working || busy || isFreePlatformMode} onClick={() => openCheckout(plan.id)}>
+                              {isCurrent && active ? 'Renew in checkout' : 'Choose plan'}
+                            </button>
+                          )}
+                        </footer>
+                      </article>
+                    );
+                  })}
+                </div>
+                {!planOptions.length && <div className="vop-payment-empty">No active subscription plans are available.</div>}
+              </section>
+            );
+
+            if (focusSection === 'usage') {
+              return (
+                <>
+                  {usageSection}
+                </>
+              );
+            }
+
+            if (focusSection === 'plans') {
+              return (
+                <>
+                  {planSummarySection}
+                  {catalogSection}
+                </>
+              );
+            }
+
+            return (
+              <>
+                {planSummarySection}
+                {usageSection}
+                {catalogSection}
+              </>
+            );
+          })()}
         </>
       )}
     </div>

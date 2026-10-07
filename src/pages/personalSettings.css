@@ -7,6 +7,7 @@
   padding: clamp(16px, 3vw, 32px);
   color: var(--personal-text);
 }
+
 .vop-personal-settings .vop-personal-header {
   display: flex;
   align-items: center;
@@ -20,6 +21,7 @@
   background: linear-gradient(115deg, var(--bg-elevated, #f0f6ff), var(--bg-card, #fff) 68%);
   box-shadow: 0 8px 30px rgba(9, 39, 95, .05);
 }
+
 .vop-personal-settings .vop-personal-header h1 {
   margin: 4px 0 8px;
   color: var(--text-primary, #0c3271);
@@ -27,7 +29,13 @@
   line-height: 1.13;
   font-weight: 800;
 }
-.vop-personal-settings .vop-personal-header p { margin: 0; color: var(--personal-muted); line-height: 1.5; }
+
+.vop-personal-settings .vop-personal-header p {
+  margin: 0;
+  color: var(--personal-muted);
+  line-height: 1.5;
+}
+
 .vop-personal-settings .vop-kicker {
   text-transform: uppercase;
   font-size: .76rem;
@@ -35,6 +43,7 @@
   letter-spacing: .12em;
   color: #2563a8 !important;
 }
+
 .vop-personal-settings .vop-secondary,
 .vop-personal-settings .vop-primary {
   display: inline-flex;
@@ -49,12 +58,39 @@
   min-height: 44px;
   text-decoration: none;
 }
-.vop-personal-settings .vop-secondary { background: var(--bg-card, #fff); border: 1px solid #cbd9ed; color: #164783; }
-.vop-personal-settings .vop-secondary:hover { border-color: #3f7cc3; background: #f4f9ff; }
-.vop-personal-settings .vop-primary { background: #0a438e; color: #fff; border: 1px solid #0a438e; }
-.vop-personal-settings .vop-primary:hover { background: #0b3370; }
-.vop-personal-settings button:disabled { opacity: .6; cursor: wait; }
-.vop-personal-settings .vop-personal-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+
+.vop-personal-settings .vop-secondary {
+  background: var(--bg-card, #fff);
+  border: 1px solid #cbd9ed;
+  color: #164783;
+}
+
+.vop-personal-settings .vop-secondary:hover {
+  border-color: #3f7cc3;
+  background: #f4f9ff;
+}
+
+.vop-personal-settings .vop-primary {
+  background: #0a438e;
+  color: #fff;
+  border: 1px solid #0a438e;
+}
+
+.vop-personal-settings .vop-primary:hover {
+  background: #0b3370;
+}
+
+.vop-personal-settings button:disabled {
+  opacity: .6;
+  cursor: wait;
+}
+
+.vop-personal-settings .vop-personal-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
 .vop-personal-settings .vop-personal-card {
   min-width: 0;
   margin: 0;
@@ -68,8 +104,12 @@
   background: var(--bg-card, #fff);
   box-shadow: 0 4px 22px rgba(15, 41, 79, .045);
 }
+
 .vop-personal-settings .vop-personal-card:first-child,
-.vop-personal-settings .vop-personal-card:nth-child(2) { grid-column: 1 / -1; }
+.vop-personal-settings .vop-personal-card:nth-child(2) {
+  grid-column: 1 / -1;
+}
+
 .vop-personal-settings .vop-personal-card h2 {
   display: flex;
   align-items: center;
@@ -80,6 +120,7 @@
   color: var(--text-primary, #113b74);
   font-weight: 800;
 }
+
 .vop-personal-settings .vop-personal-card h2 svg {
   flex: 0 0 auto;
   width: 35px;
@@ -89,15 +130,26 @@
   background: #eaf3ff;
   border-radius: 10px;
 }
-.vop-personal-settings .vop-personal-card p { margin: 0; line-height: 1.5; overflow-wrap: anywhere; }
-.vop-personal-settings .vop-personal-card small { color: var(--personal-muted); line-height: 1.5; }
-.vop-personal-settings .vop-personal-card > label {
+
+.vop-personal-settings .vop-personal-card p {
+  margin: 0;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.vop-personal-settings .vop-personal-card small {
+  color: var(--personal-muted);
+  line-height: 1.5;
+}
+
+.vop-personal-settings .vop-personal-card>label {
   display: grid;
   gap: 7px;
   font-size: .9rem;
   color: var(--text-secondary, #27496e);
   font-weight: 700;
 }
+
 .vop-personal-settings .vop-personal-card :is(select, input:not([type="checkbox"]), textarea) {
   width: 100%;
   min-width: 0;
@@ -111,12 +163,14 @@
   font-size: .95rem;
   font-weight: 500;
 }
+
 .vop-personal-settings .vop-personal-card :is(select, input, textarea):focus-visible,
 .vop-personal-settings button:focus-visible {
   outline: 3px solid #84b5f8;
   outline-offset: 2px;
 }
-.vop-personal-settings .vop-personal-card > .vop-personal-toggle {
+
+.vop-personal-settings .vop-personal-card>.vop-personal-toggle {
   display: flex;
   align-items: center;
   justify-content: flex-start;
@@ -126,6 +180,7 @@
   font-weight: 600;
   cursor: pointer;
 }
+
 .vop-personal-settings input[type="checkbox"] {
   appearance: auto;
   width: 18px;
@@ -135,7 +190,75 @@
   accent-color: #0a438e;
   cursor: pointer;
 }
-.vop-personal-settings .vop-personal-save { grid-column: 1 / -1; justify-self: end; }
+
+.vop-personal-settings .vop-personal-tabs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 6px 4px 14px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--border-subtle, #dce5f0);
+  scrollbar-width: none;
+}
+
+.vop-personal-settings .vop-personal-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.vop-personal-settings .vop-personal-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: var(--bg-card, #fff);
+  color: var(--personal-muted, #5d708a);
+  font-size: .93rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all .2s ease;
+  box-shadow: 0 2px 8px rgba(15, 41, 79, .03);
+  border: 1px solid var(--border-subtle, #e0e9f4);
+}
+
+.vop-personal-settings .vop-personal-tab-btn:hover {
+  background: var(--bg-elevated, #f0f6ff);
+  color: var(--text-primary, #0c3271);
+  border-color: #cbd9ed;
+}
+
+.vop-personal-settings .vop-personal-tab-btn.active {
+  background: #0a438e;
+  color: #fff;
+  border-color: #0a438e;
+  box-shadow: 0 4px 14px rgba(10, 67, 142, .25);
+}
+
+.vop-personal-settings .vop-personal-tab-btn svg {
+  flex-shrink: 0;
+}
+
+.vop-personal-settings .vop-personal-tab-content {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.vop-personal-settings .vop-personal-tab-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.vop-personal-settings .vop-personal-save {
+  justify-self: end;
+  align-self: flex-end;
+  margin-top: 10px;
+}
+
 .vop-personal-settings .vop-personal-message,
 .vop-personal-settings .vop-personal-loading {
   padding: 16px 20px;
@@ -145,9 +268,28 @@
   background: #f3f8ff;
   color: #184a82;
 }
+
 @media (max-width: 700px) {
-  .vop-personal-settings { padding: 12px; }
-  .vop-personal-settings .vop-personal-grid { grid-template-columns: minmax(0, 1fr); gap: 12px; }
-  .vop-personal-settings .vop-personal-card { grid-column: 1 / -1; }
-  .vop-personal-settings .vop-personal-save { width: 100%; }
+  .vop-personal-settings {
+    padding: 12px;
+  }
+
+  .vop-personal-settings .vop-personal-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .vop-personal-settings .vop-personal-card {
+    grid-column: 1 / -1;
+  }
+
+  .vop-personal-settings .vop-personal-save {
+    width: 100%;
+    align-self: stretch;
+  }
+
+  .vop-personal-settings .vop-personal-tab-btn {
+    padding: 9px 14px;
+    font-size: .88rem;
+  }
 }

@@ -169,6 +169,9 @@ async function serializeUsers(db: Firestore, authUsers: UserRecord[]) {
   return authUsers.map(authUser => {
     const profile = profileMap.get(authUser.uid) || {};
     const type = profileType(profile, authUser);
+    const orgId = String(profile.organizationId || '').trim();
+    const rawAccountType = String(profile.accountType || '').trim();
+    const accountType: 'personal' | 'organization' = orgId ? 'organization' : (rawAccountType === 'organization' ? 'organization' : 'personal');
     const conferenceId = typeof profile.conferenceId === 'string' ? profile.conferenceId : '';
     const districtId = typeof profile.districtId === 'string' ? profile.districtId : '';
     const unionId = typeof profile.unionId === 'string' ? profile.unionId : '';
@@ -180,6 +183,7 @@ async function serializeUsers(db: Firestore, authUsers: UserRecord[]) {
       phoneNumber: authUser.phoneNumber || String(profile.phoneNumber || ''),
       whatsappNumber: String(profile.whatsappNumber || ''),
       photoURL: authUser.photoURL || String(profile.photoURL || ''),
+      accountType,
       role: String(profile.role || 'student'),
       roleLabel: displayRole(type, profile),
       roleColor: roleColor(type),
@@ -288,11 +292,13 @@ async function syncOwnProfile(decoded: { uid: string; email?: string; name?: str
     }
   }
 
+  const accountType: 'personal' | 'organization' = organizationId ? 'organization' : 'personal';
   const profile = {
     uid: decoded.uid,
     email: decoded.email ?? existing.email ?? '',
     displayName: decoded.name ?? existing.displayName ?? decoded.email?.split('@')[0] ?? 'VOP Student',
     photoURL: decoded.picture ?? existing.photoURL ?? null,
+    accountType,
     role,
     organizationId,
     organizationRole,
@@ -313,6 +319,7 @@ async function syncOwnProfile(decoded: { uid: string; email?: string; name?: str
     ||String(existing.role||'student')!==String(profile.role||'student')
     ||String(existing.organizationId||'')!==String(profile.organizationId||'')
     ||String(existing.organizationRole||'')!==String(profile.organizationRole||'')
+    ||String(existing.accountType||'')!==accountType
     ||existing.privileges==null||existing.information==null||existing.progress==null;
   if(needsWrite){
     await ref.set({
@@ -603,6 +610,7 @@ export default async function handler(request: Request, response: Response) {
             churchId: hierarchyTenant === 'church_admin' ? hierarchyNodeId : String(profile.churchId || body.churchId || '').trim(),
           }
         : {};
+      const accountType: 'personal' | 'organization' = managedOrganizationId ? 'organization' : 'personal';
       await db.doc(`users/${created.uid}`).set({
         uid: created.uid,
         email,
@@ -610,6 +618,7 @@ export default async function handler(request: Request, response: Response) {
         ...(phoneNumber ? { phoneNumber } : {}),
         ...(whatsappNumber ? { whatsappNumber } : {}),
         userType: type,
+        accountType,
         ...profile,
         ...hierarchyMembershipFields,
         information: { enrollmentDate: new Date().toISOString(), graduating: false, graduated: false, baptismCandidate: false, baptized: false },
@@ -625,9 +634,9 @@ export default async function handler(request: Request, response: Response) {
       const membershipClaims = managedOrganizationId
         ? { organizationId: managedOrganizationId, organizationRole: profile.organizationRole }
         : {};
-      await authService.setCustomUserClaims(created.uid, { ...claims, ...membershipClaims });
+      await authService.setCustomUserClaims(created.uid, { ...claims, ...membershipClaims, accountType });
       const resetLink = await authService.generatePasswordResetLink(email).catch(() => null);
-      return response.status(200).json({ ok: true, item: { uid: created.uid, resetLink } });
+      return response.status(200).json({ ok: true, item: { uid: created.uid, resetLink, accountType } });
     }
 
     if (action === 'assignOrganization') {
@@ -653,6 +662,7 @@ export default async function handler(request: Request, response: Response) {
         transaction.set(db.doc('users/' + uid), {
           organizationId:targetOrganizationId,
           organizationRole:memberRole,
+          accountType:'organization',
           ...(hierarchyTenant ? {
             unionId: hierarchyTenant === 'union_admin' ? hierarchyNodeId : String(existingData.unionId || ''),
             conferenceId: hierarchyTenant === 'conference_admin' ? hierarchyNodeId : String(existingData.conferenceId || ''),
@@ -663,8 +673,8 @@ export default async function handler(request: Request, response: Response) {
         }, { merge:true });
       });
       const preservedPlatformRole = hierarchyRole(String(existingData.role || '')) || 'student';
-      await authService.setCustomUserClaims(uid, { role:preservedPlatformRole, ...(hierarchyRole(preservedPlatformRole) ? { adminNodeType: existingData.adminNodeType, adminNodeId: existingData.adminNodeId } : {}), organizationId:targetOrganizationId, organizationRole:memberRole });
-      return response.status(200).json({ ok:true, item:{uid, organizationId:targetOrganizationId, organizationRole:memberRole} });
+      await authService.setCustomUserClaims(uid, { role:preservedPlatformRole, ...(hierarchyRole(preservedPlatformRole) ? { adminNodeType: existingData.adminNodeType, adminNodeId: existingData.adminNodeId } : {}), organizationId:targetOrganizationId, organizationRole:memberRole, accountType:'organization' });
+      return response.status(200).json({ ok:true, item:{uid, organizationId:targetOrganizationId, organizationRole:memberRole, accountType:'organization'} });
     }
 
     if (!uid) return response.status(400).json({ error: 'User ID is required.' });
@@ -733,6 +743,7 @@ export default async function handler(request: Request, response: Response) {
         : organizationReassignment
           ? requestedManagedOrganizationId
           : tenantOrganizationId || String(existingData.organizationId || '').trim();
+      const accountType: 'personal' | 'organization' = effectiveOrganizationId ? 'organization' : 'personal';
       const baseProfile = profileForType(type, {
         ...body,
         ...(hierarchyReassignment ? {adminNodeType:requestedNodeType,adminNodeId:requestedNodeId} : {}),
@@ -750,17 +761,18 @@ export default async function handler(request: Request, response: Response) {
         phoneNumber: updated.phoneNumber || existingData.phoneNumber || '',
         whatsappNumber: typeof body.whatsappNumber === 'string' ? body.whatsappNumber.trim() : String(existingData.whatsappNumber || ''),
         userType: type,
+        accountType,
         ...profile,
         ...(hierarchyReassignment ? {
-          organizationId:'', organizationRole:'',
+          organizationId:'', organizationRole:'', accountType:'personal',
           unionId: requestedNodeType === 'union' ? requestedNodeId : '',
           conferenceId: requestedNodeType === 'conference' ? requestedNodeId : '',
           districtId: requestedNodeType === 'district' ? requestedNodeId : '',
           churchId: requestedNodeType === 'church' ? requestedNodeId : '',
         } : platformReassignment ? {
-          organizationId:'', organizationRole:'', unionId:'', conferenceId:'', districtId:'', churchId:'',
+          organizationId:'', organizationRole:'', accountType:'personal', unionId:'', conferenceId:'', districtId:'', churchId:'',
         } : organizationReassignment && !effectiveOrganizationId ? {
-          organizationId:'', organizationRole:'',
+          organizationId:'', organizationRole:'', accountType:'personal',
         } : {}),
         updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
@@ -796,10 +808,10 @@ export default async function handler(request: Request, response: Response) {
       await authService.setCustomUserClaims(
         uid,
         membershipOrganizationId && profile.organizationRole
-          ? { ...claims, organizationId:membershipOrganizationId, organizationRole:profile.organizationRole }
-          : claims,
+          ? { ...claims, organizationId:membershipOrganizationId, organizationRole:profile.organizationRole, accountType:'organization' }
+          : { ...claims, accountType },
       );
-      return response.status(200).json({ ok: true, item: { uid, email: updated.email, displayName: updated.displayName } });
+      return response.status(200).json({ ok: true, item: { uid, email: updated.email, displayName: updated.displayName, accountType } });
     }
 
     if (action === 'setStatus') {

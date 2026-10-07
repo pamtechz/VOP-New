@@ -231,10 +231,13 @@ export interface AccountProgress {
   lessonResume?: Record<string, LessonResumeState>;
 }
 
+export type AccountType = 'personal' | 'organization';
+
 export interface User {
   uid: string;
   displayName: string;
   email: string;
+  accountType?: AccountType;
   phoneNumber?: string;
   whatsappNumber?: string;
   photoURL?: string;
