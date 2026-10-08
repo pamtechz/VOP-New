@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Check, CircleHelp, Copy, Edit3, Plus, RefreshCw, Save, Share2, Trash2 } from 'lucide-react';
+import { Check, CircleHelp, Copy, Edit3, LoaderCircle, Plus, RefreshCw, Save, Share2, Trash2 } from 'lucide-react';
 import { auth } from '../lib/firebase';
 import { getTranslation, getUiLocale } from '../services/i18n';
 import { appConfirm } from '../components/layout/AppDialog';
@@ -236,7 +236,7 @@ export default function QuizLibrary({ organizationId = '',initialGuideId,initial
         </div>
       </div>
       <div className="vop-reference-actions">
-        <button className="vop-secondary" type="button" onClick={() => void load()}><RefreshCw size={17}/>{t('common.refresh','Refresh')}</button>
+        <button className="vop-secondary" type="button" disabled={loading} onClick={() => void load()}>{loading ? <LoaderCircle className="spin" size={17}/> : <RefreshCw size={17}/>} {loading ? t('common.loading', 'Loading…') : t('common.refresh','Refresh')}</button>
         <button className="vop-primary" type="button" onClick={() => open(null)}><Plus size={17}/>New Quiz / Exam</button>
       </div>
     </div>
@@ -348,7 +348,7 @@ export default function QuizLibrary({ organizationId = '',initialGuideId,initial
       </div>
       <div className="vop-reference-editor-actions">
         <button className="vop-secondary" type="button" onClick={addQuestion}><Plus size={16}/>Add Question</button>
-        <button className="vop-primary" type="button" disabled={saving} onClick={() => void save()}><Save size={17}/>{saving ? 'Saving…' : 'Save Quiz'}</button>
+        <button className="vop-primary" type="button" disabled={saving} onClick={() => void save()}>{saving ? <LoaderCircle className="spin" size={17}/> : <Save size={17}/>} {saving ? 'Saving…' : 'Save Quiz'}</button>
       </div>
     </div>}
     <div className={'vop-reference-table-wrap'+(loading&&items.length?' vop-refreshing vop-shimmer-overlay':'')}>

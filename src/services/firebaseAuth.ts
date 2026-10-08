@@ -1,13 +1,16 @@
 import { Capacitor } from '@capacitor/core';
 import { FirebaseAuthentication } from '@capacitor-firebase/authentication';
 import {
+  EmailAuthProvider,
   GoogleAuthProvider,
+  reauthenticateWithCredential,
   sendPasswordResetEmail,
   signInWithCredential,
   signInWithEmailAndPassword,
   signInWithPopup,
   signInWithCustomToken,
   signOut,
+  updatePassword,
 } from 'firebase/auth';
 import { auth, authPersistenceReady } from '../lib/firebase';
 
@@ -15,6 +18,33 @@ function requireAuth() {
   if (!auth) throw new Error('Firebase authentication is not configured for this deployment.');
   return auth;
 }
+
+export const changeUserPassword = async (currentPassword: string, newPassword: string) => {
+  const firebaseAuth = requireAuth();
+  await authPersistenceReady;
+  const user = firebaseAuth.currentUser;
+  if (!user || !user.email) throw new Error('You must be signed in with an active account to change your password.');
+  if (!currentPassword.trim()) throw new Error('Enter your current password.');
+  if (!newPassword || newPassword.length < 6) throw new Error('The new password must be at least 6 characters.');
+
+  try {
+    const credential = EmailAuthProvider.credential(user.email, currentPassword);
+    await reauthenticateWithCredential(user, credential);
+    await updatePassword(user, newPassword);
+  } catch (error: unknown) {
+    const code = (error as { code?: string })?.code;
+    if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
+      throw new Error('Current password is incorrect.');
+    }
+    if (code === 'auth/requires-recent-login') {
+      throw new Error('For security reasons, please sign out and sign in again before changing your password.');
+    }
+    if (code === 'auth/weak-password') {
+      throw new Error('Password is too weak. Please use at least 6 characters with letters and numbers.');
+    }
+    throw error;
+  }
+};
 
 export const emailSignIn = async (email: string, password: string) => {
   const firebaseAuth = requireAuth();

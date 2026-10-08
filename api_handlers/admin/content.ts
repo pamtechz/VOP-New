@@ -584,13 +584,17 @@ export default async function handler(req: Request, res: Response) {
       if (!language || !guideId) throw new Error('A guide and language are required for a lesson.');
       const guideRef = ctx.db.doc(`guides/${guideId}`);
       const guide = await guideRef.get();
-      if (!guide.exists || String(guide.data()?.organizationId || '') !== effectiveOrganizationId || guide.data()?.archived === true) throw new Error('The selected guide does not belong to this organization or is archived.');
-      if (String(guide.data()?.language || '').toLowerCase() !== language.toLowerCase()) throw new Error('The lesson language must match its guide.');
-      assertMutableTenantResource(ctx.isSuperAdmin,guide.data(),'edit');
-      const guideData=guide.data()||{};
+      const guideData = guide.data() || {};
+      const guideOrgId = String(guideData.organizationId || '');
+      const guideMatchesTenant = ctx.isSuperAdmin
+        || guideOrgId === effectiveOrganizationId
+        || (!guideOrgId && guideData.sharingScope === 'shared');
+      if (!guide.exists || !guideMatchesTenant || guideData.archived === true) throw new Error('The selected guide does not belong to this organization or is archived.');
+      if (String(guideData.language || '').toLowerCase() !== language.toLowerCase()) throw new Error('The lesson language must match its guide.');
+      assertMutableTenantResource(ctx.isSuperAdmin,guideData,'edit');
       const guideSystemWide=guideData.sharingScope==='shared'
         || String(guideData.scope||'')==='platform'
-        || !String(guideData.organizationId||'').trim();
+        || !guideOrgId.trim();
       const ref = guideRef.collection('lessons').doc(lessonId);
       const existing = await ref.get();
       if (existing.data()?.sourceQuizId) throw new Error('This assessment is linked to a quiz. Edit it through Quiz Library.');
@@ -658,8 +662,8 @@ export default async function handler(req: Request, res: Response) {
         } : {}),
         id: lessonId,
         lessonId,
-        organizationId: effectiveOrganizationId,
-        ownerOrganizationId: existing.data()?.ownerOrganizationId || effectiveOrganizationId,
+        organizationId: effectiveOrganizationId || guideOrgId,
+        ownerOrganizationId: existing.data()?.ownerOrganizationId || effectiveOrganizationId || guideOrgId,
         ownerTenantId: existing.data()?.ownerTenantId || guideData.ownerTenantId || tenantOwnerKey(ctx),
         ownerUid: existing.data()?.ownerUid || ctx.auth.uid,
         canonical: true,
@@ -699,12 +703,16 @@ export default async function handler(req: Request, res: Response) {
       if (!isLanguageCode(lang)) throw new Error('A valid language code is required.');
       const requestedGuideId = safeId(data.guideId);
       const guide = await ctx.db.doc(`guides/${requestedGuideId}`).get();
-      if (!guide.exists || guide.data()?.archived === true || String(guide.data()?.organizationId || '') !== effectiveOrganizationId || String(guide.data()?.language || '').toLowerCase() !== lang) throw new Error('A valid guide in this tenant and language is required.');
-      assertMutableTenantResource(ctx.isSuperAdmin,guide.data(),'edit');
-      const guideData=guide.data()||{};
+      const guideData = guide.data() || {};
+      const guideOrgId = String(guideData.organizationId || '');
+      const guideMatchesTenant = ctx.isSuperAdmin
+        || guideOrgId === effectiveOrganizationId
+        || (!guideOrgId && guideData.sharingScope === 'shared');
+      if (!guide.exists || guideData.archived === true || !guideMatchesTenant || String(guideData.language || '').toLowerCase() !== lang) throw new Error('A valid guide in this tenant and language is required.');
+      assertMutableTenantResource(ctx.isSuperAdmin,guideData,'edit');
       const guideSystemWide=guideData.sharingScope==='shared'
         || String(guideData.scope||'')==='platform'
-        || !String(guideData.organizationId||'').trim();
+        || !guideOrgId.trim();
       const ref = guide.ref.collection('lessons').doc(lessonId);
       const current = await ref.get();
       if (current.data()?.sourceQuizId) throw new Error('Publish or unpublish this assessment through Quiz Library.');
@@ -724,8 +732,8 @@ export default async function handler(req: Request, res: Response) {
       await ref.set({
         id: lessonId,
         lessonId,
-        organizationId: effectiveOrganizationId,
-        ownerOrganizationId: current.data()?.ownerOrganizationId || effectiveOrganizationId,
+        organizationId: effectiveOrganizationId || guideOrgId,
+        ownerOrganizationId: current.data()?.ownerOrganizationId || effectiveOrganizationId || guideOrgId,
         ownerUid: current.data()?.ownerUid || ctx.auth.uid,
         canonical: true,
         sharingScope: guideSystemWide

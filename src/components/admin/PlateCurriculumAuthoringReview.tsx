@@ -1,8 +1,8 @@
 import React, {useEffect,useState} from 'react';
 import {
   ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BookOpen, ChevronRight,
-  Copy, Edit3, FileQuestion, GripVertical, MoreVertical, PanelLeftClose, PanelLeftOpen,
-  Plus, Save, Settings, Trash2,
+  Copy, Edit3, FileQuestion, GripVertical, LoaderCircle, MoreVertical, PanelLeftClose, PanelLeftOpen,
+  Plus, Save, Send, Settings, Trash2,
 } from 'lucide-react';
 import type {CurriculumChapter,CurriculumSection} from '../../../shared/curriculumStructure';
 import {
@@ -235,11 +235,11 @@ export function PlateCurriculumAuthoringReview({
     </div>;
 
   return <div className="vop-plate-authoring-review">
-    {!onBack && <div className="vop-plate-path">
-      <BookOpen size={15}/><span>{programTitle||'Course / Program'}</span><ChevronRight size={14}/>
+    <div className="vop-plate-path">
+      <BookOpen size={15}/>{programTitle && <><span>{programTitle}</span><ChevronRight size={14}/></>}
       <span>{guideTitle||'Guide / Module'}</span><ChevronRight size={14}/>
       <strong>{lessonTitle||'Lesson'}</strong>
-    </div>}
+    </div>
     {!onBack && <div className="vop-plate-author-head">
       <div><span>CONTINUOUS DOCUMENT AUTHORING</span>
         <h3>Write first. Define learner pages inside the document.</h3>
@@ -278,6 +278,32 @@ export function PlateCurriculumAuthoringReview({
         value={chapter.title} onChange={e=>onChange(chapters.map(item=>item.id===chapter.id
           ?{...item,title:e.target.value}:item))}/>}
       {lessonHeaderFields}
+      {onSave && (
+        <div className="vop-plate-header-save-actions">
+          <button
+            type="button"
+            className="vop-plate-header-save-btn vop-plate-btn-save-draft"
+            disabled={saving}
+            onClick={() => onSave(false)}
+            title="Save lesson draft"
+            aria-label="Save lesson draft"
+          >
+            {saving ? <LoaderCircle className="spin" size={15}/> : <Save size={15}/>}
+            <span>{saving ? 'Saving…' : 'Save draft'}</span>
+          </button>
+          <button
+            type="button"
+            className="vop-plate-header-save-btn vop-plate-btn-publish"
+            disabled={saving}
+            onClick={() => onSave(true)}
+            title={lessonPublished ? 'Update published lesson' : 'Publish lesson'}
+            aria-label={lessonPublished ? 'Update published lesson' : 'Publish lesson'}
+          >
+            {saving ? <LoaderCircle className="spin" size={15}/> : <Send size={15}/>}
+            <span>{saving ? 'Publishing…' : lessonPublished ? 'Update' : 'Publish'}</span>
+          </button>
+        </div>
+      )}
       {chapter&&<StructureActionsMenu label="Chapter">
         <button type="button" disabled={chapters.length>=40} onClick={addChapter}>
           <Plus size={15}/> Add chapter</button>
@@ -291,9 +317,9 @@ export function PlateCurriculumAuthoringReview({
           onClick={()=>onQuiz({type:'chapter',id:chapter.id})}>
           <FileQuestion size={15}/> Chapter quiz</button>
         {onSave && <button type="button" disabled={saving} onClick={()=>onSave(false)}>
-          <Save size={15}/> Save draft</button>}
+          {saving ? <LoaderCircle className="spin" size={15}/> : <Save size={15}/>} {saving ? 'Saving…' : 'Save draft'}</button>}
         {onSave && <button type="button" disabled={saving} onClick={()=>onSave(true)}>
-          <Save size={15}/> Publish lesson</button>}
+          {saving ? <LoaderCircle className="spin" size={15}/> : <Save size={15}/>} {saving ? 'Publishing…' : 'Publish lesson'}</button>}
         {onOpenSettings && <button type="button" onClick={onOpenSettings}>
           <Settings size={15}/> Lesson details & media</button>}
         {destinations('chapter',chapter.id)}

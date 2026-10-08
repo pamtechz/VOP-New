@@ -1,6 +1,6 @@
 import React,{useEffect,useMemo,useState} from 'react';
 import {Archive,ArrowDown,ArrowLeft,ArrowUp,BookOpen,Check,ChevronRight,
-  Edit3,FolderOpen,Globe2,Plus,RefreshCw,Save,Search,ShieldCheck,Trash2,X} from 'lucide-react';
+  Edit3,FolderOpen,Globe2,LoaderCircle,Plus,RefreshCw,Save,Search,ShieldCheck,Trash2,X} from 'lucide-react';
 import {auth} from '../lib/firebase';
 import type {CurriculumProgramDraft} from '../../shared/programModel';
 import './program-manager.css';
@@ -167,7 +167,7 @@ export default function ProgramManager({
       </div>
       <div className="vop-program-actions">
         <button type="button" className="vop-secondary" onClick={()=>void load()} disabled={loading}>
-          <RefreshCw size={16}/> Refresh</button>
+          {loading ? <LoaderCircle className="spin" size={16}/> : <RefreshCw size={16}/>} {loading ? 'Refreshing…' : 'Refresh'}</button>
         <button type="button" className="vop-primary"
           onClick={()=>{setEditing({...blank(organizationId),id:''});setSelectedId('');setGuideQuery('');}}>
           <Plus size={16}/> New Study Track</button>
@@ -270,7 +270,10 @@ export default function ProgramManager({
           onChange={event=>setEditing({...editing,published:event.target.checked})}/> Published</label>
         <button type="button" className="vop-secondary" onClick={()=>setEditing(null)}>Cancel</button>
         <button type="button" className="vop-primary" disabled={saving||!editing.title.trim()}
-          onClick={()=>void save()}><Save size={16}/>{saving?'Saving…':editing.id?'Save Track':'Create Track'}</button>
+          onClick={()=>void save()}>
+          {saving ? <LoaderCircle className="spin" size={16}/> : <Save size={16}/>}
+          {saving ? 'Saving…' : editing.id ? 'Save Track' : 'Create Track'}
+        </button>
       </div>
     </div>:selected?<div className="vop-program-detail">
       <header>
@@ -284,15 +287,20 @@ export default function ProgramManager({
         <p>{selected.description||'No description provided for this study track.'}</p>
       </div>
       <div className="vop-program-detail-actions">
-        {selected.canEdit&&<button className="vop-primary" type="button" onClick={startEdit(selected)}>
+        {selected.canEdit&&<button className="vop-primary" type="button" onClick={startEdit(selected)} disabled={saving}>
           <Edit3 size={15}/> Edit track</button>}
-        {selected.canEdit&&!selected.archived&&<button className="vop-secondary" type="button"
-          onClick={()=>void archive(selected)}><Archive size={15}/> Archive</button>}
-        {selected.canEdit&&<button className="vop-secondary vop-danger-button" type="button"
+        {selected.canEdit&&!selected.archived&&<button className="vop-secondary" type="button" disabled={saving}
+          onClick={()=>void archive(selected)}>
+          {saving ? <LoaderCircle className="spin" size={15}/> : <Archive size={15}/>} Archive
+        </button>}
+        {selected.canEdit&&<button className="vop-secondary vop-danger-button" type="button" disabled={saving}
           onClick={()=>void deletePermanently(selected)} style={{color:'var(--danger,#c5221f)'}}>
-          <Trash2 size={15}/> Delete permanently</button>}
-        {selected.canEdit&&selected.archived&&<button className="vop-secondary" type="button"
-          onClick={()=>void restore(selected)}><RefreshCw size={15}/> Restore as draft</button>}
+          {saving ? <LoaderCircle className="spin" size={15}/> : <Trash2 size={15}/>} Delete permanently
+        </button>}
+        {selected.canEdit&&selected.archived&&<button className="vop-secondary" type="button" disabled={saving}
+          onClick={()=>void restore(selected)}>
+          {saving ? <LoaderCircle className="spin" size={15}/> : <RefreshCw size={15}/>} Restore as draft
+        </button>}
         {!selected.canEdit&&<span><ShieldCheck size={15}/> Shared program · read only</span>}
       </div>
       <div className="vop-program-modules-section">

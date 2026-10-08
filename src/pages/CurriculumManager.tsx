@@ -434,6 +434,8 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
   const [organizationOptions, setOrganizationOptions] = useState<Array<{id:string;name:string}>>([]);
   const [organizationLoading, setOrganizationLoading] = useState(false);
   const [scopeOrganizationId, setScopeOrganizationId] = useState(currentUser?.role === 'super_admin' ? '' : String(currentUser?.organizationId || ''));
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deletingLessonId, setDeletingLessonId] = useState<string | null>(null);
 
   useEffect(()=>{
     if(!editor){setEditorDirty(false);return;}
@@ -816,7 +818,8 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
       setEditorTab('content');
       return;
     }
-    if (!editor.title.trim()) return setError(tx('curriculum.lessonTitleRequired', 'Lesson title is required.'));
+    const resolvedTitle = editor.title.trim() || editor.chapters[0]?.title?.trim() || '';
+    if (!resolvedTitle) return setError(tx('curriculum.lessonTitleRequired', 'Lesson title is required.'));
     if (!editor.lessonNumber.trim()) return setError(tx('curriculum.lessonNumberRequiredMessage', 'Lesson number is required.'));
     if (editor.audioUrl.trim() && !['direct-audio','embed'].includes(resolveMediaSource(editor.audioUrl.trim())?.kind || '') ) {
       return setError('Audio must be a valid HTTPS file or an approved public audio embed. Use Add media to resolve a provider page.');
@@ -827,10 +830,11 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
     const normalizedLanguage = editor.language.trim().toLowerCase();
     if (!/^[a-z]{2,3}(?:[-_][a-z0-9]{2,8})?$/i.test(normalizedLanguage)) return setError(tx('curriculum.selectLanguageBeforeSaving', 'Select a valid configured language before saving.'));
     if (!editor.guideId.trim()) return setError(tx('curriculum.selectGuideBeforeSaving', 'Select a guide before saving.'));
-    const existingGuideRecord = editableGuides.find(item => String(item.id) === editor.guideId);
+    const existingGuideRecord = editableGuides.find(item => String(item.id) === editor.guideId)
+      || guides.find(item => String(item.id) === editor.guideId);
     if (!existingGuideRecord) return setError('Choose an editable guide within your selected organization. Refresh if the guide was recently created.');
     if (String(existingGuideRecord.language).trim().toLowerCase() !== normalizedLanguage) return setError(tx('curriculum.guideLanguageMismatch', 'The selected guide is not available for this language.'));
-    const guideOrganizationId = valueText(existingGuideRecord.organizationId);
+    const guideOrganizationId = valueText((existingGuideRecord as unknown as Record<string, unknown>).organizationId);
     const targetOrganizationId = scopeOrganizationId || guideOrganizationId;
     if (isSuperAdmin && guideOrganizationId && guideOrganizationId !== scopeOrganizationId) setScopeOrganizationId(guideOrganizationId);
 
@@ -854,7 +858,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
       const payload: Record<string, unknown> = {
         lessonId: id,
         lessonNumber: editor.lessonNumber.trim(),
-        title: editor.title.trim(),
+        title: resolvedTitle,
         description: editor.description.trim(),
         language: normalizedLanguage,
         guideId: editor.guideId,
@@ -864,14 +868,14 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
         ...(chapters ? {chapters} : {}),
         contentPages: structuredPages?.map(({blocks:_blocks,...page})=>page) || pageBlocks.map((blocks, index) => ({
           pageNumber: index + 1,
-          title: index === 0 ? editor.title.trim() : (blocks.find(block => block.type === 'heading')?.text || ''),
+          title: index === 0 ? resolvedTitle : (blocks.find(block => block.type === 'heading')?.text || ''),
           content: blocks.filter(block => ['paragraph', 'heading', 'quote'].includes(block.type)).map(block => block.text || '').filter(Boolean).join('\n\n') || editor.content,
           imageUrl: blocks.find(block => block.type === 'image')?.src || (index === 0 ? editor.imageUrl.trim() : ''),
         })),
         pages: structuredPages?.map(page=>({pageNumber:page.pageNumber,title:page.title,chapterId:page.chapterId,
           chapterTitle:page.chapterTitle,sectionId:page.sectionId,sectionTitle:page.sectionTitle,blocks:page.blocks})) || pageBlocks.map((blocks, index) => ({
           pageNumber: index + 1,
-          title: index === 0 ? editor.title.trim() : (blocks.find(block => block.type === 'heading')?.text || ''),
+          title: index === 0 ? resolvedTitle : (blocks.find(block => block.type === 'heading')?.text || ''),
           blocks: blocks.map(block => ({
             type: block.type,
             ...(block.text ? { text: block.text } : {}),
@@ -895,7 +899,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
       await adminContent('upsertLesson', 'curriculum', id, payload, targetOrganizationId);
       if (publish) await adminContent('publishLesson', 'curriculum', id, payload, targetOrganizationId);
       await load();
-      const savedEditor={ ...editor, id, guideTitle: valueText(guide.title) || editor.guideTitle, published: publish };
+      const savedEditor={ ...editor, id, title: resolvedTitle, guideTitle: valueText(guide.title) || editor.guideTitle, published: publish };
       savedEditorSignature.current=JSON.stringify(savedEditor);
       setEditor(savedEditor);
       setEditorDirty(false);
@@ -973,12 +977,15 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
       return;
     }
     if (!await appConfirm(tx('common.confirmDelete', 'Delete this curriculum record?'), {title:'Delete curriculum record',confirmLabel:'Delete',tone:'danger'})) return;
+    setDeletingId(id);
     try {
       await adminContent('delete', COLLECTIONS[kind], id);
       await load();
       notify(tx('common.recordDeleted', 'Record deleted.'));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : tx('common.couldNotDeleteRecord', 'Could not delete record.'));
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -989,6 +996,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
       tone: 'danger',
     })) return;
     setSaving(true);
+    setDeletingLessonId(lessonId);
     setError('');
     try {
       const guide = editableGuides.find(item => item.id === guideId) || guides.find(item => item.id === guideId);
@@ -1005,6 +1013,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
       setError(reason instanceof Error ? reason.message : 'Could not delete lesson.');
     } finally {
       setSaving(false);
+      setDeletingLessonId(null);
     }
   };
 
@@ -1120,12 +1129,29 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
             lessonPublished={editor.published}
             lessonHeaderFields={
               <div className="vop-plate-header-fields">
+                <label className="vop-plate-header-field vop-plate-field-title">
+                  <span>Lesson Title *</span>
+                  <input
+                    value={editor.title}
+                    placeholder="e.g. Lesson title"
+                    onChange={e => setEditor(prev => prev ? { ...prev, title: e.target.value } : prev)}
+                  />
+                </label>
+
+                <label className="vop-plate-header-field vop-plate-field-small">
+                  <span>Lesson # *</span>
+                  <input
+                    value={editor.lessonNumber}
+                    onChange={e => setEditor(prev => prev ? { ...prev, lessonNumber: e.target.value } : prev)}
+                  />
+                </label>
+
                 <label className="vop-plate-header-field">
                   <span>Guide *</span>
                   <select
                     value={editor.guideId}
                     onChange={e => {
-                      const selected = editableGuides.find(item => item.id === e.target.value);
+                      const selected = editableGuides.find(item => item.id === e.target.value) || guides.find(item => item.id === e.target.value);
                       setEditor(prev => prev ? {
                         ...prev,
                         guideId: e.target.value,
@@ -1141,14 +1167,6 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
                       </option>
                     ))}
                   </select>
-                </label>
-
-                <label className="vop-plate-header-field vop-plate-field-small">
-                  <span>Lesson Number *</span>
-                  <input
-                    value={editor.lessonNumber}
-                    onChange={e => setEditor(prev => prev ? { ...prev, lessonNumber: e.target.value } : prev)}
-                  />
                 </label>
 
                 <label className="vop-plate-header-field">
@@ -1187,6 +1205,8 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
               setEditor(null);setTab('quizzes');onTabChange?.('quizzes');
             }}
           />
+          {message && <div className="vop-toast">{message}</div>}
+          {error && <AppAlertDialog message={error} title="Curriculum Studio" onClose={() => setError('')}/>}
         </div>
       );
     }
@@ -1233,7 +1253,8 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
             {editor.published && <button className="vop-secondary vop-danger-button" type="button" onClick={() => void unpublishLesson()} disabled={saving}><X size={17}/>{saving?tx('common.saving','Saving…'):tx('curriculum.unpublish', 'Unpublish')}</button>}
             {Boolean(editor.id) && (
               <button className="vop-secondary vop-danger-button" type="button" onClick={() => void deleteLesson(editor.id, editor.guideId, editor.title || 'this lesson')} disabled={saving} style={{color:'var(--danger,#c5221f)'}}>
-                <Trash2 size={17}/>{tx('common.delete', 'Delete')}
+                {saving && deletingLessonId === editor.id ? <LoaderCircle className="spin" size={17}/> : <Trash2 size={17}/>}
+                <span>{saving && deletingLessonId === editor.id ? 'Deleting…' : tx('common.delete', 'Delete')}</span>
               </button>
             )}
             <button className="vop-primary" type="button" onClick={() => void saveLesson(true)} disabled={saving}>
@@ -1300,7 +1321,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
             {editorTab === 'media' && <div className="vop-form-grid vop-reference-single-column vop-lesson-tab-panel">
               <div className="vop-field"><label>Import public media from a trusted source</label>
                 <input type="url" placeholder="Paste a public WordPress, YouTube, TikTok, Instagram, Facebook, Umtu or direct media link" value={mediaSourceInput} onChange={e=>setMediaSourceInput(e.target.value)} />
-                <button className="vop-secondary" type="button" disabled={mediaResolving || !mediaSourceInput.trim()} onClick={()=>void resolvePastedMedia()}>{mediaResolving?'Checking source…':'Add media'}</button>
+                <button className="vop-secondary" type="button" disabled={mediaResolving || !mediaSourceInput.trim()} onClick={()=>void resolvePastedMedia()}>{mediaResolving ? <><LoaderCircle className="spin" size={15}/> Checking source…</> : 'Add media'}</button>
                 <small className="vop-field-help">Public provider embeds are used where available; trusted pages may expose direct media. No login-only or DRM-protected material is extracted.</small>
               </div>
               <div className="vop-field"><label>{tx('curriculum.audioUrl', 'Audio URL')}</label><div className="vop-input-with-icon"><Volume2 size={18}/><input value={editor.audioUrl} onChange={e => setEditor({...editor,audioUrl:e.target.value})}/></div></div>
@@ -1321,6 +1342,8 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
           </div>
 
         </div>
+        {message && <div className="vop-toast">{message}</div>}
+        {error && <AppAlertDialog message={error} title="Curriculum Studio" onClose={() => setError('')}/>}
       </div>
     );
   }
@@ -1354,7 +1377,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
             <button className="vop-secondary" type="button" onClick={() => { setTab('programs'); onTabChange?.('programs'); }}>
               <ArrowLeft size={16}/> Back to Studio
             </button>
-            <button className="vop-secondary" type="button" onClick={() => void load()}><RefreshCw size={17}/>{tx('common.refresh', 'Refresh')}</button>
+            <button className="vop-secondary" type="button" disabled={loading} onClick={() => void load()}>{loading ? <LoaderCircle className="spin" size={17}/> : <RefreshCw size={17}/>}{loading ? ' ' + tx('common.loading', 'Loading…') : tx('common.refresh', 'Refresh')}</button>
             <button className="vop-primary" type="button" onClick={() => setEditingRecord({id:'',name:'',description:'',published:false})}><Plus size={18}/>New {config[1]}</button>
           </div>
         </div>
@@ -1371,10 +1394,10 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
 
         <div className="vop-reference-toolbar">
           <div className="vop-search vop-reference-search"><Search size={19}/><input value={search} onChange={e => setSearch(e.target.value)} aria-label={'Search '+config[0]}/></div>
-          <button className="vop-secondary" type="button" onClick={() => void load()}><RefreshCw size={16}/>{tx('common.refresh', 'Refresh')}</button>
+          <button className="vop-secondary" type="button" disabled={loading} onClick={() => void load()}>{loading ? <LoaderCircle className="spin" size={16}/> : <RefreshCw size={16}/>}{loading ? ' ' + tx('common.loading', 'Loading…') : tx('common.refresh', 'Refresh')}</button>
         </div>
         <div className="vop-admin-record-layout">
-          <div className="vop-reference-table-wrap"><table className="vop-reference-table"><thead><tr><th>#</th><th>{tx('common.name', 'Name')}</th><th>{tx('common.description', 'Description')}</th><th>{tx('common.status', 'Status')}</th><th>{tx('common.actions', 'Actions')}</th></tr></thead><tbody>{filteredRecords.map((record,index)=><tr key={record.id}><td>{index+1}</td><td><strong>{valueText(record.name)}</strong></td><td>{valueText(record.description)}</td><td><span className={'vop-status '+(record.published?'published':'draft')}>{record.published?'Published':'Draft'}</span></td><td><button className="vop-actions" type="button" disabled={record.canEdit === false} title={record.canEdit === false ? 'Owned by another contributor' : 'Edit'} onClick={() => setEditingRecord(record)}><Edit3 size={15}/></button><button className="vop-actions" type="button" disabled={record.canEdit === false} title={record.canEdit === false ? 'Owned by another contributor' : 'Delete'} onClick={() => void deleteRecord(kind,record.id)}><Trash2 size={15}/></button></td></tr>)}</tbody></table>{filteredRecords.length===0&&<div className="vop-empty">{tx('curriculum.noRecords', 'No records are configured.')}</div>}</div>
+          <div className="vop-reference-table-wrap"><table className="vop-reference-table"><thead><tr><th>#</th><th>{tx('common.name', 'Name')}</th><th>{tx('common.description', 'Description')}</th><th>{tx('common.status', 'Status')}</th><th>{tx('common.actions', 'Actions')}</th></tr></thead><tbody>{filteredRecords.map((record,index)=><tr key={record.id}><td>{index+1}</td><td><strong>{valueText(record.name)}</strong></td><td>{valueText(record.description)}</td><td><span className={'vop-status '+(record.published?'published':'draft')}>{record.published?'Published':'Draft'}</span></td><td><button className="vop-actions" type="button" disabled={record.canEdit === false} title={record.canEdit === false ? 'Owned by another contributor' : 'Edit'} onClick={() => setEditingRecord(record)}><Edit3 size={15}/></button><button className="vop-actions" type="button" disabled={record.canEdit === false || deletingId === record.id} title={record.canEdit === false ? 'Owned by another contributor' : 'Delete'} onClick={() => void deleteRecord(kind,record.id)}>{deletingId === record.id ? <LoaderCircle className="spin" size={15}/> : <Trash2 size={15}/>}</button></td></tr>)}</tbody></table>{filteredRecords.length===0&&<div className="vop-empty">{tx('curriculum.noRecords', 'No records are configured.')}</div>}</div>
           {editingRecord && <form className="vop-card vop-form-card" onSubmit={e => {e.preventDefault();void saveRecord(kind);}}><div className="vop-section-title"><div><h2>{editingRecord.id?'Edit':'New'} {config[1]}</h2></div><button className="vop-actions" type="button" onClick={() => setEditingRecord(null)}><X size={16}/></button></div><div className="vop-field"><label>{tx('common.nameRequired', 'Name *')}</label><input value={valueText(editingRecord.name)} onChange={e => setEditingRecord({...editingRecord,name:e.target.value})}/></div><div className="vop-field"><label>{tx('common.description', 'Description')}</label><textarea value={valueText(editingRecord.description)} onChange={e => setEditingRecord({...editingRecord,description:e.target.value})}/></div><div className="vop-setting-row"><div><div className="vop-setting-name">{tx('common.published', 'Published')}</div></div><input type="checkbox" checked={editingRecord.published===true} onChange={e => setEditingRecord({...editingRecord,published:e.target.checked})}/></div><div className="vop-reference-editor-actions"><button className="vop-secondary" type="button" onClick={() => setEditingRecord(null)}>{tx('common.cancel', 'Cancel')}</button><button className="vop-primary" type="submit" disabled={saving}>{saving?<LoaderCircle className="vop-save-spin" size={16}/>:<Save size={16}/>}<span>{saving?tx('common.saving','Saving…'):tx('common.save', 'Save')}</span></button></div></form>}
         </div>
       </div>
@@ -1391,7 +1414,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
       <div className="vop-page-head">
         <div className="vop-heading"><div className="vop-heading-icon vop-icon-orange"><FileText size={31}/></div><div><h1>{tab === 'quizzes' ? 'Quizzes Management' : 'Curriculum Studio'}</h1><p>{tab === 'quizzes' ? 'Create and manage quiz questions for each lesson and guide.' : 'Create and manage VOP content, lessons, guides and learning paths.'}</p></div></div>
         <div className="vop-reference-actions">
-          <button className="vop-secondary" type="button" onClick={() => void load()}><RefreshCw size={17}/>{tx('common.refresh', 'Refresh')}</button>
+          <button className="vop-secondary" type="button" disabled={loading} onClick={() => void load()}>{loading ? <LoaderCircle className="spin" size={17}/> : <RefreshCw size={17}/>}{loading ? ' ' + tx('common.loading', 'Loading…') : tx('common.refresh', 'Refresh')}</button>
           <button className="vop-secondary" type="button" onClick={() => onOpenSettings?.()}><Settings size={17}/>{tab === 'quizzes' ? 'Quiz Settings' : 'Curriculum Settings'}</button>
           {tab==='lessons' && <button className="vop-primary" type="button" onClick={()=>selectedGuideId?openNewLesson(selectedGuideId):setLessonModuleRequiredModalOpen(true)}><Plus size={18}/>{selectedGuideId?'New lesson':'New lesson'}</button>}
         </div>
@@ -1469,8 +1492,8 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
                 setQuizPlacement({guideId:selectedGuideId,kind:'final_exam'});
                 setTab('quizzes');onTabChange?.('quizzes');
               }}><CircleHelp size={17}/> Create final exam</button>
-              <button className="vop-secondary" type="button" onClick={()=>void load()}>
-                <RefreshCw size={16}/> Refresh</button>
+              <button className="vop-secondary" type="button" disabled={loading} onClick={()=>void load()}>
+                {loading ? <LoaderCircle className="spin" size={16}/> : <RefreshCw size={16}/>} {loading ? 'Refreshing…' : 'Refresh'}</button>
             </div>
           </div>
           <div className="vop-module-exam-banner"><CircleHelp size={20}/>
@@ -1550,7 +1573,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
                     <button type="button" className="vop-secondary vop-actions-delete" disabled={saving}
                       onClick={()=>void deleteLesson(String(item.id), selectedGuideId, String(item.title||'Untitled lesson'))}
                       title="Delete lesson" style={{color:'var(--danger,#c5221f)'}}>
-                      <Trash2 size={16}/>
+                      {saving && deletingLessonId === String(item.id) ? <LoaderCircle className="spin" size={16}/> : <Trash2 size={16}/>}
                     </button>
                   )}
                 </div>

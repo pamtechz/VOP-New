@@ -293,3 +293,31 @@
     font-size: .88rem;
   }
 }
+
+.vop-personal-settings .spin {
+  animation: vop-personal-spin .85s linear infinite;
+}
+@keyframes vop-personal-spin {
+  to { transform: rotate(360deg); }
+}
+
+.vop-personal-settings .vop-personal-notice {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 11px 14px;
+  border-radius: 9px;
+  font-size: 13px;
+  line-height: 1.4;
+  margin-bottom: 8px;
+}
+.vop-personal-settings .vop-personal-notice.success {
+  background: var(--theme-success-bg, #ecfdf5);
+  color: var(--theme-success-text, #065f46);
+  border: 1px solid #a7f3d0;
+}
+.vop-personal-settings .vop-personal-notice.error {
+  background: var(--theme-danger-bg, #fef2f2);
+  color: var(--theme-danger-text, #991b1b);
+  border: 1px solid #fecaca;
+}

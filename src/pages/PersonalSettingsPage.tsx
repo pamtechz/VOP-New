@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Save, UserRound, Bell, Globe2, Accessibility, ShieldCheck, BookOpen, Fingerprint, Trash2, Download, RotateCcw } from 'lucide-react';
+import { Save, UserRound, Bell, Globe2, Accessibility, ShieldCheck, BookOpen, Fingerprint, Trash2, Download, RotateCcw, CheckCircle, Eye, EyeOff, KeyRound, LoaderCircle } from 'lucide-react';
 import type { User, CustomLanguage } from '../types';
+import { changeUserPassword, resetPassword } from '../services/firebaseAuth';
 import { getTranslation, getAvailableUiLocales, loadUiLocaleRegistry, setUiLocale, getUiLocale } from '../services/i18n';
 import { getActiveLanguage, getStoredSettings } from '../services/storage';
 import { hasTrustedOfflineDeviceConsent, setTrustedOfflineDeviceConsent } from '../services/offlineDeviceConsent';
@@ -44,6 +45,62 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
   const [privacyBusy,setPrivacyBusy]=useState(false);
   const [deletionConfirmation,setDeletionConfirmation]=useState('');
   const [deletionReason,setDeletionReason]=useState('');
+
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [passwordBusy, setPasswordBusy] = useState(false);
+  const [passwordMessage, setPasswordMessage] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [resetEmailBusy, setResetEmailBusy] = useState(false);
+
+  const handlePasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordError('');
+    setPasswordMessage('');
+    if (!currentPassword) {
+      setPasswordError('Please enter your current password.');
+      return;
+    }
+    if (newPassword.length < 6) {
+      setPasswordError('New password must be at least 6 characters long.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError('New password and confirmation do not match.');
+      return;
+    }
+    setPasswordBusy(true);
+    try {
+      await changeUserPassword(currentPassword, newPassword);
+      setPasswordMessage('Your password has been successfully updated.');
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (err) {
+      setPasswordError(err instanceof Error ? err.message : 'Could not update password.');
+    } finally {
+      setPasswordBusy(false);
+    }
+  };
+
+  const handleSendResetEmail = async () => {
+    if (!currentUser.email) return;
+    setPasswordError('');
+    setPasswordMessage('');
+    setResetEmailBusy(true);
+    try {
+      await resetPassword(currentUser.email);
+      setPasswordMessage(`A password reset link has been sent to ${currentUser.email}. Check your inbox to proceed.`);
+    } catch (err) {
+      setPasswordError(err instanceof Error ? err.message : 'Could not send reset email.');
+    } finally {
+      setResetEmailBusy(false);
+    }
+  };
   const changeTrustedDevice = async (enabled: boolean) => {
     if (enabled && !await appConfirm(
       'Store previously opened study materials on this device for offline reading? Only enable this on a private, trusted device. Other users of this browser may be able to access cached content.',
@@ -233,6 +290,117 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
               )}
               <small>{organizationAccount?'Your organization assignment and permissions are managed separately and cannot be changed here.':'Your role, organization, permissions and learning records are managed separately and cannot be changed here.'}</small>
             </section>
+
+            <section className="vop-personal-card vop-card">
+              <h2><KeyRound size={19}/> Change Password</h2>
+              <p>Update your sign-in password to keep your account protected.</p>
+              {passwordMessage && (
+                <div className="vop-personal-notice success" role="status">
+                  <CheckCircle size={16} /> <span>{passwordMessage}</span>
+                </div>
+              )}
+              {passwordError && (
+                <div className="vop-personal-notice error" role="alert">
+                  <span>{passwordError}</span>
+                </div>
+              )}
+              <form onSubmit={handlePasswordChange} style={{display:'grid',gap:14,marginTop:4}}>
+                <label>
+                  <span>Current password</span>
+                  <div style={{position:'relative',display:'flex',alignItems:'center'}}>
+                    <input
+                      type={showCurrentPassword ? 'text' : 'password'}
+                      value={currentPassword}
+                      onChange={e => setCurrentPassword(e.target.value)}
+                      placeholder="Enter your current password"
+                      autoComplete="current-password"
+                      disabled={passwordBusy}
+                      style={{paddingRight:42}}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowCurrentPassword(v => !v)}
+                      style={{position:'absolute',right:10,background:'none',border:'none',padding:4,cursor:'pointer',color:'var(--text-muted,#64748b)'}}
+                      title={showCurrentPassword ? 'Hide password' : 'Show password'}
+                      aria-label={showCurrentPassword ? 'Hide current password' : 'Show current password'}
+                    >
+                      {showCurrentPassword ? <EyeOff size={18}/> : <Eye size={18}/>}
+                    </button>
+                  </div>
+                </label>
+
+                <label>
+                  <span>New password</span>
+                  <div style={{position:'relative',display:'flex',alignItems:'center'}}>
+                    <input
+                      type={showNewPassword ? 'text' : 'password'}
+                      value={newPassword}
+                      onChange={e => setNewPassword(e.target.value)}
+                      placeholder="At least 6 characters"
+                      autoComplete="new-password"
+                      disabled={passwordBusy}
+                      style={{paddingRight:42}}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPassword(v => !v)}
+                      style={{position:'absolute',right:10,background:'none',border:'none',padding:4,cursor:'pointer',color:'var(--text-muted,#64748b)'}}
+                      title={showNewPassword ? 'Hide password' : 'Show password'}
+                      aria-label={showNewPassword ? 'Hide new password' : 'Show new password'}
+                    >
+                      {showNewPassword ? <EyeOff size={18}/> : <Eye size={18}/>}
+                    </button>
+                  </div>
+                </label>
+
+                <label>
+                  <span>Confirm new password</span>
+                  <div style={{position:'relative',display:'flex',alignItems:'center'}}>
+                    <input
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      value={confirmPassword}
+                      onChange={e => setConfirmPassword(e.target.value)}
+                      placeholder="Re-enter your new password"
+                      autoComplete="new-password"
+                      disabled={passwordBusy}
+                      style={{paddingRight:42}}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(v => !v)}
+                      style={{position:'absolute',right:10,background:'none',border:'none',padding:4,cursor:'pointer',color:'var(--text-muted,#64748b)'}}
+                      title={showConfirmPassword ? 'Hide password' : 'Show password'}
+                      aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+                    >
+                      {showConfirmPassword ? <EyeOff size={18}/> : <Eye size={18}/>}
+                    </button>
+                  </div>
+                </label>
+
+                <div style={{display:'flex',gap:12,alignItems:'center',flexWrap:'wrap',marginTop:6}}>
+                  <button
+                    type="submit"
+                    className="vop-primary"
+                    disabled={passwordBusy || !currentPassword || !newPassword || !confirmPassword}
+                    style={{minHeight:42}}
+                  >
+                    {passwordBusy ? <LoaderCircle className="spin" size={16}/> : <KeyRound size={16}/>}
+                    <span>{passwordBusy ? 'Updating password…' : 'Update password'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    className="vop-secondary"
+                    disabled={resetEmailBusy || passwordBusy}
+                    onClick={() => void handleSendResetEmail()}
+                    style={{minHeight:42}}
+                  >
+                    {resetEmailBusy ? <LoaderCircle className="spin" size={15}/> : <RotateCcw size={15}/>}
+                    <span>{resetEmailBusy ? 'Sending email…' : 'Forgot password? Send reset email'}</span>
+                  </button>
+                </div>
+              </form>
+            </section>
           </div>
         )}
 
@@ -302,6 +470,16 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
                     <button type="button" className="vop-secondary danger" disabled={passkeyBusy} onClick={()=>void removePasskey(item)}><Trash2 size={15}/>Remove</button>
                   </div>)}
                 </div>}
+                <p style={{marginTop:16,fontSize:13,color:'var(--text-muted,#64748b)'}}>
+                  Looking to update your sign-in password? You can change it anytime in the{' '}
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('account')}
+                    style={{background:'none',border:'none',color:'var(--primary,#1e40af)',textDecoration:'underline',cursor:'pointer',font:'inherit',fontWeight:600,padding:0}}
+                  >
+                    Account tab
+                  </button>.
+                </p>
               </>}
             </section>
           </div>

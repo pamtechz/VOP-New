@@ -15,7 +15,7 @@
 .vop-plate-author-head>button{display:inline-flex;align-items:center;gap:5px;
   padding:7px 9px;min-height:34px;font-size:12px;flex:none}
 .vop-plate-chapter-picker{display:flex;align-items:center;gap:8px;
-  padding:8px 12px;background:var(--bg-card,#fff);border:1px solid #dce6f2;border-radius:10px;min-width:0}
+  padding:8px 12px;background:var(--bg-card,#fff);border:1px solid #dce6f2;border-radius:10px;min-width:0;flex-wrap:wrap;}
 .vop-plate-back-btn{
   display:inline-flex;align-items:center;justify-content:center;
   width:36px;height:34px;border:1px solid #d8e2ef;border-radius:7px;
@@ -42,12 +42,17 @@
   display:inline-flex;
   align-items:center;
   gap:10px;
-  flex-wrap:nowrap;
+  flex-wrap:wrap;
 }
 .vop-plate-header-field{
   display:grid;
   gap:3px;
   min-width:130px;
+}
+.vop-plate-header-field.vop-plate-field-title{
+  min-width:140px;
+  max-width:220px;
+  flex:1;
 }
 .vop-plate-header-field.vop-plate-field-small{
   min-width:70px;
@@ -78,6 +83,67 @@
   background:#0e1e33;
   border-color:#203957;
   color:#e2e8f0;
+}
+
+.vop-plate-header-save-actions{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  flex:none;
+}
+.vop-plate-header-save-btn{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+  min-height:34px;
+  padding:6px 12px;
+  border-radius:7px;
+  font-size:12.5px;
+  font-weight:650;
+  cursor:pointer;
+  transition:all .15s ease;
+  white-space:nowrap;
+}
+.vop-plate-header-save-btn:disabled{
+  opacity:.65;
+  cursor:not-allowed;
+}
+.vop-plate-btn-save-draft{
+  background:#eff6ff;
+  border:1px solid #bfdbfe;
+  color:#1d4ed8;
+}
+.vop-plate-btn-save-draft:hover:not(:disabled){
+  background:#dbeafe;
+  border-color:#93c5fd;
+  color:#1e40af;
+}
+.vop-plate-btn-publish{
+  background:#1e3a8a;
+  border:1px solid #1e3a8a;
+  color:#ffffff;
+}
+.vop-plate-btn-publish:hover:not(:disabled){
+  background:#1d4ed8;
+  border-color:#1d4ed8;
+}
+[data-theme="dark"] .vop-plate-btn-save-draft{
+  background:#0f274a;
+  border-color:#1e40af;
+  color:#93c5fd;
+}
+[data-theme="dark"] .vop-plate-btn-save-draft:hover:not(:disabled){
+  background:#173b70;
+  color:#bfdbfe;
+}
+[data-theme="dark"] .vop-plate-btn-publish{
+  background:#2563eb;
+  border-color:#2563eb;
+  color:#ffffff;
+}
+[data-theme="dark"] .vop-plate-btn-publish:hover:not(:disabled){
+  background:#1d4ed8;
 }
 
 .vop-fullpage-lesson-editor{

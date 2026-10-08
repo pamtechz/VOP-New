@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Archive, BookOpen, CalendarDays, Check, ChevronLeft, ChevronRight, Edit3,
-  Filter, FolderOpen, Globe, Image as ImageIcon, MoreVertical, Plus, RefreshCw, Save,
+  Filter, FolderOpen, Globe, Image as ImageIcon, LoaderCircle, MoreVertical, Plus, RefreshCw, Save,
   Search, ShieldCheck, Trash2, X, Copy
 } from 'lucide-react';
 import type { CustomLanguage, DiscoverGuide } from '../types';
@@ -463,7 +463,10 @@ export default function GuideManager({
           </div>
         </div>
         <div className="vop-reference-actions">
-          <button className="vop-secondary" type="button" onClick={() => void load()}><RefreshCw size={17}/>Refresh</button>
+          <button className="vop-secondary" type="button" onClick={() => void load()} disabled={loading}>
+            {loading ? <LoaderCircle className="spin" size={17}/> : <RefreshCw size={17}/>}
+            {loading ? ' Refreshing…' : ' Refresh'}
+          </button>
           <button className="vop-secondary" type="button" onClick={() => onOpenSettings?.()}><span><span aria-hidden="true">⚙</span> Guide Settings</span></button>
           <button className="vop-primary" type="button" onClick={openNew}><Plus size={18}/>New Study Guide</button>
         </div>
@@ -571,17 +574,20 @@ export default function GuideManager({
           <div className="vop-reference-editor-actions" style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
             <div style={{display:'flex',gap:8}}>
               <button className="vop-secondary vop-danger-button" type="button" onClick={() => void deleteGuide(editing)} disabled={saving} style={{color:'var(--danger,#c5221f)'}}>
-                <Trash2 size={16}/>Delete Guide
+                {saving ? <LoaderCircle className="spin" size={16}/> : <Trash2 size={16}/>} Delete Guide
               </button>
               {!editing.archived && (
                 <button className="vop-secondary" type="button" onClick={() => void archive(editing)} disabled={saving}>
-                  <Archive size={16}/>Archive
+                  {saving ? <LoaderCircle className="spin" size={16}/> : <Archive size={16}/>} Archive
                 </button>
               )}
             </div>
             <div style={{display:'flex',gap:8}}>
               <button className="vop-secondary" type="button" onClick={() => setEditing(null)}>Cancel</button>
-              <button className="vop-primary" type="button" onClick={() => void save()} disabled={saving}><Save size={17}/>{saving ? 'Saving…' : 'Save Guide'}</button>
+              <button className="vop-primary" type="button" onClick={() => void save()} disabled={saving}>
+                {saving ? <LoaderCircle className="spin" size={17}/> : <Save size={17}/>}
+                <span>{saving ? 'Saving…' : 'Save Guide'}</span>
+              </button>
             </div>
           </div>
         </div>
