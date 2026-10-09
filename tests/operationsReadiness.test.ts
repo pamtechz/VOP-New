@@ -24,8 +24,8 @@ test('readiness panel uses authenticated live server data and preserves degraded
   assert.match(panel,/AbortController/);
   assert.match(panel,/if\(!response\.ok\|\|!payload/);
   assert.doesNotMatch(panel,/if\(!payload\.ok\)/);
-  assert.match(panel,/health\.backup\.status==='ok'/);
-  assert.match(panel,/health\.maintenance\.status==='ok'/);
+  assert.match(panel,/health\?\.backup\.status==='ok'/);
+  assert.match(panel,/health\?\.maintenance\.status==='ok'/);
   assert.match(panel,/health\.backup\.lastCompletedAt/);
   assert.match(panel,/health\.deployment\.sha/);
   assert.match(panel,/getTranslation\(/);
