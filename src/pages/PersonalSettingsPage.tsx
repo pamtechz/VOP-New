@@ -1,10 +1,12 @@
-import React, { useEffect, useState } from 'react';
-import { Save, UserRound, Bell, Globe2, Accessibility, ShieldCheck, BookOpen, Fingerprint, Trash2, Download, RotateCcw, CheckCircle, Eye, EyeOff, KeyRound, LoaderCircle } from 'lucide-react';
-import type { User, CustomLanguage } from '../types';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Save, UserRound, Bell, Globe2, Accessibility, ShieldCheck, BookOpen, Fingerprint, Trash2, Download, RotateCcw, CheckCircle, Eye, EyeOff, KeyRound, LoaderCircle, LayoutDashboard, Users, UserCheck } from 'lucide-react';
+import type { User, CustomLanguage, AppRoute } from '../types';
+import { auth } from '../lib/firebase';
 import { changeUserPassword, resetPassword } from '../services/firebaseAuth';
 import { getTranslation, getAvailableUiLocales, loadUiLocaleRegistry, setUiLocale, getUiLocale } from '../services/i18n';
 import { getActiveLanguage, getStoredSettings } from '../services/storage';
 import { hasTrustedOfflineDeviceConsent, setTrustedOfflineDeviceConsent } from '../services/offlineDeviceConsent';
+import { hasAdminPortalAccess } from '../services/portalAccess';
 import './personalSettings.css';
 import { appConfirm } from '../components/layout/AppDialog';
 import { LocalizationParticipation } from '../components/localization/LocalizationParticipation';
@@ -21,10 +23,18 @@ import {
   type AccountLifecycleStatus,
 } from '../services/accountLifecycle';
 
-interface Props { currentUser: User; onBack: () => void; onStudyLanguageChange: (language: string) => void; context?: 'learner'|'organization'; }
+interface Props { currentUser: User; onBack: () => void; onStudyLanguageChange: (language: string) => void; context?: 'learner'|'organization'; onNavigate?: (route: AppRoute) => void; }
 
-export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onStudyLanguageChange, context='learner' }) => {
+export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onStudyLanguageChange, context='learner', onNavigate }) => {
   const organizationAccount=context==='organization';
+  const isAdmin = hasAdminPortalAccess(currentUser);
+  const isGoogleAccount = useMemo(() => {
+    const user = auth?.currentUser;
+    if (!user) return false;
+    const hasGoogle = user.providerData.some(p => p.providerId === 'google.com');
+    const hasPassword = user.providerData.some(p => p.providerId === 'password');
+    return hasGoogle && !hasPassword;
+  }, []);
   const [settings, setSettings] = useState<PersonalSettings>({
     theme: 'light', language: '', notifications: { enabled: true, email: true, announcements: true, certificates: true },
     accessibility: { reducedMotion: false, largeText: false, highContrast: false },
@@ -61,7 +71,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
     e.preventDefault();
     setPasswordError('');
     setPasswordMessage('');
-    if (!currentPassword) {
+    if (!isGoogleAccount && !currentPassword.trim()) {
       setPasswordError('Please enter your current password.');
       return;
     }
@@ -75,8 +85,8 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
     }
     setPasswordBusy(true);
     try {
-      await changeUserPassword(currentPassword, newPassword);
-      setPasswordMessage('Your password has been successfully updated.');
+      await changeUserPassword(currentPassword, newPassword, isGoogleAccount);
+      setPasswordMessage(isGoogleAccount ? 'Password has been set successfully for your account.' : 'Your password has been successfully updated.');
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
@@ -248,7 +258,24 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
   return <div className="vop-personal-settings vop-page-shell">
     <div className="vop-personal-header vop-page-head">
       <div><p className="vop-kicker">{organizationAccount?'Organization Account':t('account.my_account','My Account')}</p><h1>{organizationAccount?'Personal Settings':t('settings.personal_title','Personal Settings')}</h1><p>{organizationAccount?'Preferences and sign-in security for this organization staff account. These settings are separate from organization-wide configuration.':t('settings.personal_description','These settings apply only to your VOP account.')}</p></div>
-      <button className="vop-secondary" type="button" onClick={onBack}>{t('common.back','Back')}</button>
+      <div style={{display:'flex',gap:8,alignItems:'center'}}>
+        {isAdmin && (
+          <button
+            className="vop-primary"
+            type="button"
+            onClick={() => {
+              if (currentUser.uid) {
+                try { sessionStorage.setItem('vop-admin-tab-v1:' + currentUser.uid, 'dashboard'); } catch {}
+              }
+              onNavigate ? onNavigate('admin') : onBack();
+            }}
+            title="Open administration workspace"
+          >
+            <ShieldCheck size={14}/> <span>Admin Operations</span>
+          </button>
+        )}
+        <button className="vop-secondary" type="button" onClick={onBack}>{t('common.back','Back')}</button>
+      </div>
     </div>
     {message && <div className="vop-personal-message vop-card" role="status">{message}</div>}
     {busy ? <div className="vop-personal-loading vop-card" role="status">Loading your settings…</div> : <>
@@ -271,6 +298,30 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
       <div className="vop-personal-tab-content">
         {activeTab === 'account' && (
           <div className="vop-personal-tab-pane">
+            {isAdmin && (
+              <section className="vop-personal-card vop-card">
+                <h2><ShieldCheck size={19}/> Admin Operations & Tools</h2>
+                <p>Quickly access core administrative tools and workspaces:</p>
+                <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(170px, 1fr))',gap:8,marginTop:2}}>
+                  <button type="button" className="vop-secondary" style={{justifyContent:'flex-start'}} onClick={() => { if (currentUser.uid) { try { sessionStorage.setItem('vop-admin-tab-v1:' + currentUser.uid, 'dashboard'); } catch {} } onNavigate ? onNavigate('admin') : onBack(); }}>
+                    <LayoutDashboard size={14}/> Dashboard
+                  </button>
+                  <button type="button" className="vop-secondary" style={{justifyContent:'flex-start'}} onClick={() => { if (currentUser.uid) { try { sessionStorage.setItem('vop-admin-tab-v1:' + currentUser.uid, 'curriculum'); } catch {} } onNavigate ? onNavigate('admin') : onBack(); }}>
+                    <BookOpen size={14}/> Curriculum Studio
+                  </button>
+                  <button type="button" className="vop-secondary" style={{justifyContent:'flex-start'}} onClick={() => { if (currentUser.uid) { try { sessionStorage.setItem('vop-admin-tab-v1:' + currentUser.uid, 'userManagement'); } catch {} } onNavigate ? onNavigate('admin') : onBack(); }}>
+                    <Users size={14}/> User Management
+                  </button>
+                  <button type="button" className="vop-secondary" style={{justifyContent:'flex-start'}} onClick={() => { if (currentUser.uid) { try { sessionStorage.setItem('vop-admin-tab-v1:' + currentUser.uid, 'candidates'); } catch {} } onNavigate ? onNavigate('admin') : onBack(); }}>
+                    <UserCheck size={14}/> Candidates & Progress
+                  </button>
+                  <button type="button" className="vop-secondary" style={{justifyContent:'flex-start'}} onClick={() => { if (currentUser.uid) { try { sessionStorage.setItem('vop-admin-tab-v1:' + currentUser.uid, 'settings'); } catch {} } onNavigate ? onNavigate('admin') : onBack(); }}>
+                    <ShieldCheck size={14}/> System Settings
+                  </button>
+                </div>
+              </section>
+            )}
+
             <section className="vop-personal-card vop-card">
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:8}}>
                 <h2><UserRound size={19}/> Account</h2>
@@ -292,8 +343,13 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
             </section>
 
             <section className="vop-personal-card vop-card">
-              <h2><KeyRound size={19}/> Change Password</h2>
-              <p>Update your sign-in password to keep your account protected.</p>
+              <h2><KeyRound size={19}/> {isGoogleAccount ? 'Set Account Password' : 'Change Password'}</h2>
+              <p>{isGoogleAccount ? 'You signed up with Google. You can set a password to also sign in directly using your email address without requiring a current password.' : 'Update your sign-in password to keep your account protected.'}</p>
+              {isGoogleAccount && (
+                <div className="vop-personal-notice info" role="status">
+                  <span>Signed in via Google. No current password is required.</span>
+                </div>
+              )}
               {passwordMessage && (
                 <div className="vop-personal-notice success" role="status">
                   <CheckCircle size={16} /> <span>{passwordMessage}</span>
@@ -304,33 +360,35 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
                   <span>{passwordError}</span>
                 </div>
               )}
-              <form onSubmit={handlePasswordChange} style={{display:'grid',gap:14,marginTop:4}}>
-                <label>
-                  <span>Current password</span>
-                  <div style={{position:'relative',display:'flex',alignItems:'center'}}>
-                    <input
-                      type={showCurrentPassword ? 'text' : 'password'}
-                      value={currentPassword}
-                      onChange={e => setCurrentPassword(e.target.value)}
-                      placeholder="Enter your current password"
-                      autoComplete="current-password"
-                      disabled={passwordBusy}
-                      style={{paddingRight:42}}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowCurrentPassword(v => !v)}
-                      style={{position:'absolute',right:10,background:'none',border:'none',padding:4,cursor:'pointer',color:'var(--text-muted,#64748b)'}}
-                      title={showCurrentPassword ? 'Hide password' : 'Show password'}
-                      aria-label={showCurrentPassword ? 'Hide current password' : 'Show current password'}
-                    >
-                      {showCurrentPassword ? <EyeOff size={18}/> : <Eye size={18}/>}
-                    </button>
-                  </div>
-                </label>
+              <form onSubmit={handlePasswordChange} style={{display:'grid',gap:12,marginTop:2}}>
+                {!isGoogleAccount && (
+                  <label>
+                    <span>Current password</span>
+                    <div style={{position:'relative',display:'flex',alignItems:'center'}}>
+                      <input
+                        type={showCurrentPassword ? 'text' : 'password'}
+                        value={currentPassword}
+                        onChange={e => setCurrentPassword(e.target.value)}
+                        placeholder="Enter your current password"
+                        autoComplete="current-password"
+                        disabled={passwordBusy}
+                        style={{paddingRight:36}}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowCurrentPassword(v => !v)}
+                        style={{position:'absolute',right:8,background:'none',border:'none',padding:3,cursor:'pointer',color:'var(--text-muted,#64748b)',display:'inline-flex',alignItems:'center'}}
+                        title={showCurrentPassword ? 'Hide password' : 'Show password'}
+                        aria-label={showCurrentPassword ? 'Hide current password' : 'Show current password'}
+                      >
+                        {showCurrentPassword ? <EyeOff size={16}/> : <Eye size={16}/>}
+                      </button>
+                    </div>
+                  </label>
+                )}
 
                 <label>
-                  <span>New password</span>
+                  <span>{isGoogleAccount ? 'Password' : 'New password'}</span>
                   <div style={{position:'relative',display:'flex',alignItems:'center'}}>
                     <input
                       type={showNewPassword ? 'text' : 'password'}
@@ -339,65 +397,65 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
                       placeholder="At least 6 characters"
                       autoComplete="new-password"
                       disabled={passwordBusy}
-                      style={{paddingRight:42}}
+                      style={{paddingRight:36}}
                     />
                     <button
                       type="button"
                       onClick={() => setShowNewPassword(v => !v)}
-                      style={{position:'absolute',right:10,background:'none',border:'none',padding:4,cursor:'pointer',color:'var(--text-muted,#64748b)'}}
+                      style={{position:'absolute',right:8,background:'none',border:'none',padding:3,cursor:'pointer',color:'var(--text-muted,#64748b)',display:'inline-flex',alignItems:'center'}}
                       title={showNewPassword ? 'Hide password' : 'Show password'}
                       aria-label={showNewPassword ? 'Hide new password' : 'Show new password'}
                     >
-                      {showNewPassword ? <EyeOff size={18}/> : <Eye size={18}/>}
+                      {showNewPassword ? <EyeOff size={16}/> : <Eye size={16}/>}
                     </button>
                   </div>
                 </label>
 
                 <label>
-                  <span>Confirm new password</span>
+                  <span>{isGoogleAccount ? 'Confirm password' : 'Confirm new password'}</span>
                   <div style={{position:'relative',display:'flex',alignItems:'center'}}>
                     <input
                       type={showConfirmPassword ? 'text' : 'password'}
                       value={confirmPassword}
                       onChange={e => setConfirmPassword(e.target.value)}
-                      placeholder="Re-enter your new password"
+                      placeholder={isGoogleAccount ? 'Re-enter password' : 'Re-enter your new password'}
                       autoComplete="new-password"
                       disabled={passwordBusy}
-                      style={{paddingRight:42}}
+                      style={{paddingRight:36}}
                     />
                     <button
                       type="button"
                       onClick={() => setShowConfirmPassword(v => !v)}
-                      style={{position:'absolute',right:10,background:'none',border:'none',padding:4,cursor:'pointer',color:'var(--text-muted,#64748b)'}}
+                      style={{position:'absolute',right:8,background:'none',border:'none',padding:3,cursor:'pointer',color:'var(--text-muted,#64748b)',display:'inline-flex',alignItems:'center'}}
                       title={showConfirmPassword ? 'Hide password' : 'Show password'}
                       aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
                     >
-                      {showConfirmPassword ? <EyeOff size={18}/> : <Eye size={18}/>}
+                      {showConfirmPassword ? <EyeOff size={16}/> : <Eye size={16}/>}
                     </button>
                   </div>
                 </label>
 
-                <div style={{display:'flex',gap:12,alignItems:'center',flexWrap:'wrap',marginTop:6}}>
+                <div style={{display:'flex',gap:10,alignItems:'center',flexWrap:'wrap',marginTop:4}}>
                   <button
                     type="submit"
                     className="vop-primary"
-                    disabled={passwordBusy || !currentPassword || !newPassword || !confirmPassword}
-                    style={{minHeight:42}}
+                    disabled={passwordBusy || (!isGoogleAccount && !currentPassword) || !newPassword || !confirmPassword}
                   >
-                    {passwordBusy ? <LoaderCircle className="spin" size={16}/> : <KeyRound size={16}/>}
-                    <span>{passwordBusy ? 'Updating password…' : 'Update password'}</span>
+                    {passwordBusy ? <LoaderCircle className="spin" size={14}/> : <KeyRound size={14}/>}
+                    <span>{passwordBusy ? (isGoogleAccount ? 'Setting password…' : 'Updating password…') : (isGoogleAccount ? 'Set password' : 'Update password')}</span>
                   </button>
 
-                  <button
-                    type="button"
-                    className="vop-secondary"
-                    disabled={resetEmailBusy || passwordBusy}
-                    onClick={() => void handleSendResetEmail()}
-                    style={{minHeight:42}}
-                  >
-                    {resetEmailBusy ? <LoaderCircle className="spin" size={15}/> : <RotateCcw size={15}/>}
-                    <span>{resetEmailBusy ? 'Sending email…' : 'Forgot password? Send reset email'}</span>
-                  </button>
+                  {!isGoogleAccount && (
+                    <button
+                      type="button"
+                      className="vop-secondary"
+                      disabled={resetEmailBusy || passwordBusy}
+                      onClick={() => void handleSendResetEmail()}
+                    >
+                      {resetEmailBusy ? <LoaderCircle className="spin" size={14}/> : <RotateCcw size={14}/>}
+                      <span>{resetEmailBusy ? 'Sending email…' : 'Forgot password?'}</span>
+                    </button>
+                  )}
                 </div>
               </form>
             </section>

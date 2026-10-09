@@ -69,7 +69,10 @@ export const DEFAULT_SETTINGS: AppSettings = {
     aboutUsMission: '', aboutUsHistory: '', aboutUsLeadership: '', aboutAppDescription: '',
     aboutAppVersion: '', aboutAppCredits: '', contactOfficeAddress: '', contactOfficeHours: '',
     contactPhoneNumbers: [], contactEmails: [], contactWhatsAppNumbers: [], socialLinks: {}
-  }
+  },
+  heroSlides: [],
+  heroSliderAutoplaySeconds: 6,
+  heroSliderIncludeDefaultSlides: true,
 };
 
 // // ---------------- Platform Security Check ---------------- //

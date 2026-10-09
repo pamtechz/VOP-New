@@ -1,10 +1,14 @@
-import React, {useEffect,useState} from 'react';
+import React, {useEffect, useMemo, useState} from 'react';
 import {
   ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BookOpen, ChevronRight,
-  Copy, Edit3, FileQuestion, GripVertical, LoaderCircle, MoreVertical, PanelLeftClose, PanelLeftOpen,
+  Copy, Edit3, Eye, FileQuestion, GripVertical, LoaderCircle, MoreVertical, PanelLeftClose, PanelLeftOpen,
   Plus, Save, Send, Settings, Trash2,
 } from 'lucide-react';
-import type {CurriculumChapter,CurriculumSection} from '../../../shared/curriculumStructure';
+import {
+  curriculumPages,
+  type CurriculumChapter,
+  type CurriculumSection,
+} from '../../../shared/curriculumStructure';
 import {
   curriculumSectionsToAuthoringDocument,
 } from '../../../shared/studyPlateAuthoring';
@@ -12,6 +16,8 @@ import {
   legacyBlocksToPlate,studyPlateLegacyBlocks,
   type StudyPlateDocument,
 } from '../../../shared/studyPlateDocument';
+import type { Lesson, DiscoverGuide } from '../../types';
+import { LessonReaderModal } from '../reader/LessonReaderModal';
 import { StructureActionsMenu } from './StructureActionsMenu';
 import { StudyPlatePageEditor } from './StudyPlatePageEditor';
 import './plate-structure.css';
@@ -40,6 +46,8 @@ type Props={
   onOpenSettings?:()=>void;
   saving?:boolean;
   lessonHeaderFields?:React.ReactNode;
+  autoSaveChip?:React.ReactNode;
+  recoveryBanner?:React.ReactNode;
 };
 const id=(kind:string)=>kind+'-'+Math.random().toString(36).slice(2,12);
 const freshPage=(index:number):CurriculumSection=>({
@@ -67,6 +75,7 @@ const duplicateSectionSafely=(section:CurriculumSection):CurriculumSection=>{
 export function PlateCurriculumAuthoringReview({
   chapters,organizationId,onChange,onPageError,onQuiz,canAttachQuiz,lessonPublished,programTitle,guideTitle,lessonTitle,
   initialSectionId,canTransfer,otherLessons,onTransfer,onBack,onSave,onOpenSettings,saving,lessonHeaderFields,
+  autoSaveChip,recoveryBanner,
 }:Props){
   const initialChapter=initialSectionId
     ?chapters.find(item=>item.sections.some(section=>section.id===initialSectionId))
@@ -84,6 +93,62 @@ export function PlateCurriculumAuthoringReview({
 
   const [editingSectionId,setEditingSectionId]=useState<string|null>(null);
   const [sidebarCollapsed,setSidebarCollapsed]=useState(false);
+  const [draggedIndex,setDraggedIndex]=useState<number|null>(null);
+  const [dragOverIndex,setDragOverIndex]=useState<number|null>(null);
+  const [dropPosition,setDropPosition]=useState<'above'|'below'|null>(null);
+  const [previewOpen,setPreviewOpen]=useState(false);
+
+  const reorderSection=(sourceIndex:number,targetIndex:number,position:'above'|'below')=>{
+    if(sourceIndex===targetIndex||!canLeaveChapter()||!chapter)return;
+    const sections=[...chapter.sections];
+    const [moved]=sections.splice(sourceIndex,1);
+    let destination=targetIndex;
+    if(sourceIndex<targetIndex){
+      destination=position==='above'?targetIndex-1:targetIndex;
+    }else{
+      destination=position==='below'?targetIndex+1:targetIndex;
+    }
+    destination=Math.max(0,Math.min(sections.length,destination));
+    sections.splice(destination,0,moved);
+    replaceSections(sections,moved.id);
+    setMessage(`Moved section "${moved.title}" to position ${destination+1}.`);
+  };
+
+  const previewLesson=useMemo<Lesson>(()=>{
+    const pages=curriculumPages(chapters);
+    return {
+      id:'preview-lesson',
+      guideId:'preview-guide',
+      title:lessonTitle||'Lesson Preview',
+      description:'',
+      estimatedMinutes:10,
+      type:'Lesson',
+      status:'Draft',
+      lessonNumber:'Preview',
+      chapters,
+      contentPages:pages,
+    };
+  },[chapters,lessonTitle]);
+
+  const previewGuide=useMemo<DiscoverGuide>(()=>({
+    id:'preview-guide',
+    title:guideTitle||'Guide Preview',
+    subtitle:programTitle||'Bible Study',
+    description:'',
+    image:'',
+    certificateEligible:false,
+    language:'en',
+    discoverNumber:1,
+    published:false,
+    lessons:[previewLesson],
+  }),[guideTitle,programTitle,previewLesson]);
+
+  const previewInitialPageIndex=useMemo(()=>{
+    if(!focusSectionId)return 0;
+    const pages=curriculumPages(chapters);
+    const index=pages.findIndex(p=>p.sectionId===focusSectionId);
+    return index>=0?index:0;
+  },[chapters,focusSectionId]);
 
   const canLeaveChapter=()=>{
     if(!invalidChapter)return true;
@@ -91,6 +156,16 @@ export function PlateCurriculumAuthoringReview({
     return false;
   };
   const remountEditor=()=>setEditorRevision(value=>value+1);
+
+  const jumpToSection=(sectionId:string)=>{
+    setFocusSectionId(sectionId);
+    window.requestAnimationFrame(()=>{
+      const target=window.document.querySelector('[data-vop-section-id="'+sectionId+'"]') as HTMLElement|null;
+      if(target){
+        target.scrollIntoView({block:'start',behavior:'smooth'});
+      }
+    });
+  };
 
   useEffect(()=>setInvalidChapter(''),[chapterId]);
   useEffect(()=>{
@@ -120,11 +195,23 @@ export function PlateCurriculumAuthoringReview({
     if(focusId)setFocusSectionId(focusId);
     remountEditor();
   };
-  const addSection=()=>{
+  const addSection=(afterSectionId?:string)=>{
     if(!canLeaveChapter()||!chapter||chapter.sections.length>=40)return;
     const next=freshPage(chapter.sections.length+1);
-    replaceSections([...chapter.sections,next],next.id);
-    setMessage('Blank learner section added. You can also start a section directly from any paragraph in the document.');
+    const targetId=afterSectionId||focusSectionId;
+    const currentIndex=targetId?chapter.sections.findIndex(item=>item.id===targetId):-1;
+    let nextSections:CurriculumSection[];
+    if(currentIndex>=0){
+      nextSections=[
+        ...chapter.sections.slice(0,currentIndex+1),
+        next,
+        ...chapter.sections.slice(currentIndex+1),
+      ];
+    }else{
+      nextSections=[...chapter.sections,next];
+    }
+    replaceSections(nextSections,next.id);
+    setMessage('New section added after the selected section.');
   };
   const renameSection=(sectionId:string,title:string)=>{
     const normalized=title.trim();
@@ -240,6 +327,7 @@ export function PlateCurriculumAuthoringReview({
       <span>{guideTitle||'Guide / Module'}</span><ChevronRight size={14}/>
       <strong>{lessonTitle||'Lesson'}</strong>
     </div>
+    {recoveryBanner}
     {!onBack && <div className="vop-plate-author-head">
       <div><span>CONTINUOUS DOCUMENT AUTHORING</span>
         <h3>Write first. Define learner pages inside the document.</h3>
@@ -280,6 +368,17 @@ export function PlateCurriculumAuthoringReview({
       {lessonHeaderFields}
       {onSave && (
         <div className="vop-plate-header-save-actions">
+          {autoSaveChip}
+          <button
+            type="button"
+            className="vop-plate-header-save-btn vop-plate-btn-preview"
+            onClick={() => setPreviewOpen(true)}
+            title="Preview this lesson as a student"
+            aria-label="Preview lesson as student"
+          >
+            <Eye size={15}/>
+            <span>Preview</span>
+          </button>
           <button
             type="button"
             className="vop-plate-header-save-btn vop-plate-btn-save-draft"
@@ -305,6 +404,8 @@ export function PlateCurriculumAuthoringReview({
         </div>
       )}
       {chapter&&<StructureActionsMenu label="Chapter">
+        <button type="button" onClick={() => setPreviewOpen(true)}>
+          <Eye size={15}/> Preview as student</button>
         <button type="button" disabled={chapters.length>=40} onClick={addChapter}>
           <Plus size={15}/> Add chapter</button>
         <button type="button" disabled={chapterIndex<=0} onClick={()=>moveChapter(-1)}>
@@ -335,8 +436,10 @@ export function PlateCurriculumAuthoringReview({
             <span className="vop-plate-outline-collapsed-title" title="Learner Pages">PAGES</span>
           )}
           <div className="vop-plate-outline-head-actions">
+            <button type="button" title="Student preview" aria-label="Student preview"
+              onClick={()=>setPreviewOpen(true)}><Eye size={14}/></button>
             <button type="button" title="Add a blank section" aria-label="Add a blank section"
-              onClick={addSection} disabled={chapter.sections.length>=40}><Plus size={14}/></button>
+              onClick={()=>addSection()} disabled={chapter.sections.length>=40}><Plus size={14}/></button>
             <button type="button"
               className="vop-plate-outline-collapse-toggle"
               title={sidebarCollapsed ? "Expand outline" : "Collapse outline"}
@@ -351,6 +454,9 @@ export function PlateCurriculumAuthoringReview({
           {chapter.sections.map((section,index)=>{
             const isEditing=editingSectionId===section.id;
             const isActive=section.id===focusSectionId;
+            const isDragging=draggedIndex===index;
+            const isDropTarget=dragOverIndex===index&&draggedIndex!==index;
+            const dropClass=isDropTarget?(dropPosition==='above'?'drop-above ':'drop-below '):'';
             if (sidebarCollapsed) {
               return (
                 <button
@@ -358,7 +464,7 @@ export function PlateCurriculumAuthoringReview({
                   type="button"
                   className={'vop-plate-outline-mini-badge '+(isActive?'active':'')}
                   title={`Section ${index+1}: ${section.title}`}
-                  onClick={()=>setFocusSectionId(section.id)}
+                  onClick={()=>jumpToSection(section.id)}
                 >
                   {index+1}
                 </button>
@@ -366,7 +472,46 @@ export function PlateCurriculumAuthoringReview({
             }
             return (
               <div key={section.id}
-                className={'vop-plate-outline-row '+(isActive?'active':'')}>
+                draggable={!isEditing}
+                onDragStart={e=>{
+                  e.dataTransfer.setData('text/plain',String(index));
+                  e.dataTransfer.effectAllowed='move';
+                  setDraggedIndex(index);
+                }}
+                onDragOver={e=>{
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect='move';
+                  const rect=e.currentTarget.getBoundingClientRect();
+                  const isAbove=e.clientY-rect.top<rect.height/2;
+                  const pos=isAbove?'above':'below';
+                  if(dragOverIndex!==index||dropPosition!==pos){
+                    setDragOverIndex(index);
+                    setDropPosition(pos);
+                  }
+                }}
+                onDragLeave={e=>{
+                  if(e.currentTarget.contains(e.relatedTarget as Node))return;
+                  if(dragOverIndex===index){
+                    setDragOverIndex(null);
+                    setDropPosition(null);
+                  }
+                }}
+                onDrop={e=>{
+                  e.preventDefault();
+                  const src=draggedIndex??parseInt(e.dataTransfer.getData('text/plain'),10);
+                  if(typeof src==='number'&&!isNaN(src)&&dropPosition){
+                    reorderSection(src,index,dropPosition);
+                  }
+                  setDraggedIndex(null);
+                  setDragOverIndex(null);
+                  setDropPosition(null);
+                }}
+                onDragEnd={()=>{
+                  setDraggedIndex(null);
+                  setDragOverIndex(null);
+                  setDropPosition(null);
+                }}
+                className={'vop-plate-outline-row '+(isActive?'active ':'')+(isDragging?'dragging ':'')+dropClass}>
                 {isEditing ? (
                   <div className="vop-plate-outline-inline-rename">
                     <input
@@ -393,8 +538,12 @@ export function PlateCurriculumAuthoringReview({
                   </div>
                 ) : (
                   <>
+                    <div className="vop-plate-outline-drag-handle"
+                      title="Drag to reorder section" aria-label="Drag to reorder section">
+                      <GripVertical size={13}/>
+                    </div>
                     <button type="button" className="vop-plate-outline-main"
-                      onClick={()=>setFocusSectionId(section.id)}
+                      onClick={()=>jumpToSection(section.id)}
                       onDoubleClick={()=>setEditingSectionId(section.id)}
                       title="Click to jump to this section in the document">
                       <span className="vop-plate-outline-badge">{index+1}</span>
@@ -402,6 +551,16 @@ export function PlateCurriculumAuthoringReview({
                         <strong>{section.title}</strong>
                         <small>{section.document?.length||section.blocks.length} content blocks</small>
                       </span>
+                    </button>
+                    <button
+                      type="button"
+                      className="vop-plate-outline-quick-add"
+                      title="Insert section after this page"
+                      aria-label="Insert section after this page"
+                      disabled={chapter.sections.length>=40}
+                      onClick={(e)=>{e.stopPropagation();addSection(section.id);}}
+                    >
+                      <Plus size={12}/>
                     </button>
                     <button
                       type="button"
@@ -413,6 +572,9 @@ export function PlateCurriculumAuthoringReview({
                       <Edit3 size={12}/>
                     </button>
                     <StructureActionsMenu label={'Section '+(index+1)}>
+                      <button type="button" disabled={chapter.sections.length>=40}
+                        onClick={()=>addSection(section.id)}>
+                        <Plus size={15}/> Insert section after</button>
                       <button type="button" onClick={()=>setEditingSectionId(section.id)}>
                         <Edit3 size={15}/> Rename section</button>
                       <button type="button" disabled={!canAttachQuiz}
@@ -446,9 +608,6 @@ export function PlateCurriculumAuthoringReview({
         </div>
       </aside>
       <section className="vop-plate-document-pane">
-        <div className="vop-plate-document-note">
-          <GripVertical size={15}/><span><strong>Authoring rule:</strong> section boundaries create the pages learners navigate. Ordinary paragraphs, headings, lists, images, audio and video remain content blocks inside the current section.</span>
-        </div>
         <StudyPlatePageEditor key={chapter.id+':'+editorRevision}
           chapterId={chapter.id}
           organizationId={organizationId}
@@ -471,5 +630,57 @@ export function PlateCurriculumAuthoringReview({
       <MoreVertical size={15}/>
       Section and block quiz anchors keep stable IDs. Lesson progress and certificate eligibility still follow the existing guide and lesson records; page boundaries change presentation, not completion ownership.
     </div>
+
+    {previewOpen && (
+      <>
+        <div className="vop-lesson-preview-banner" role="status">
+          <div className="vop-lesson-preview-banner-content">
+            <span className="vop-lesson-preview-pill"><Eye size={13}/> STUDENT PREVIEW</span>
+            <span>Viewing draft pages in the live reader. Changes made in the editor reflect here.</span>
+            <button type="button" className="vop-lesson-preview-exit-btn" onClick={()=>setPreviewOpen(false)}>
+              Back to Editor
+            </button>
+          </div>
+        </div>
+        <LessonReaderModal
+          lesson={previewLesson}
+          guide={previewGuide}
+          currentUser={{
+            uid: 'preview-author',
+            email: 'author-preview@voiceofprophecy.com',
+            displayName: 'Author Preview',
+            role: 'student',
+            information: {
+              enrollmentDate: '2026-01-01',
+              graduating: false,
+              graduated: false,
+              baptismCandidate: false,
+              baptized: false,
+            },
+            privileges: {
+              admin: false,
+              superAdmin: false,
+              guardian: false,
+              editor: false,
+              manager: false,
+              developer: false,
+            },
+            progress: {
+              completedGuidesCount: 0,
+              totalGuidesCount: 0,
+              discoverProgress: 0,
+              guideScores: {},
+              completedLessons: [],
+            },
+          }}
+          initialPageIndex={previewInitialPageIndex}
+          onClose={()=>setPreviewOpen(false)}
+          onComplete={()=>{
+            setMessage('Preview completed.');
+            setPreviewOpen(false);
+          }}
+        />
+      </>
+    )}
   </div>;
 }

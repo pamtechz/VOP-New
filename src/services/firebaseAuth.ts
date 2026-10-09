@@ -4,6 +4,7 @@ import {
   EmailAuthProvider,
   GoogleAuthProvider,
   reauthenticateWithCredential,
+  reauthenticateWithPopup,
   sendPasswordResetEmail,
   signInWithCredential,
   signInWithEmailAndPassword,
@@ -19,17 +20,32 @@ function requireAuth() {
   return auth;
 }
 
-export const changeUserPassword = async (currentPassword: string, newPassword: string) => {
+export const isGoogleAuthUser = (user = auth?.currentUser) => {
+  if (!user) return false;
+  const hasGoogle = user.providerData.some(p => p.providerId === 'google.com');
+  const hasPassword = user.providerData.some(p => p.providerId === 'password');
+  return hasGoogle && !hasPassword;
+};
+
+export const changeUserPassword = async (
+  currentPassword: string,
+  newPassword: string,
+  isGoogleAccount?: boolean,
+) => {
   const firebaseAuth = requireAuth();
   await authPersistenceReady;
   const user = firebaseAuth.currentUser;
   if (!user || !user.email) throw new Error('You must be signed in with an active account to change your password.');
-  if (!currentPassword.trim()) throw new Error('Enter your current password.');
   if (!newPassword || newPassword.length < 6) throw new Error('The new password must be at least 6 characters.');
 
+  const skipCurrentPassword = Boolean(isGoogleAccount) || isGoogleAuthUser(user);
+
   try {
-    const credential = EmailAuthProvider.credential(user.email, currentPassword);
-    await reauthenticateWithCredential(user, credential);
+    if (!skipCurrentPassword) {
+      if (!currentPassword.trim()) throw new Error('Enter your current password.');
+      const credential = EmailAuthProvider.credential(user.email, currentPassword);
+      await reauthenticateWithCredential(user, credential);
+    }
     await updatePassword(user, newPassword);
   } catch (error: unknown) {
     const code = (error as { code?: string })?.code;
@@ -37,6 +53,17 @@ export const changeUserPassword = async (currentPassword: string, newPassword: s
       throw new Error('Current password is incorrect.');
     }
     if (code === 'auth/requires-recent-login') {
+      if (skipCurrentPassword && !Capacitor.isNativePlatform()) {
+        try {
+          const provider = new GoogleAuthProvider();
+          provider.setCustomParameters({ prompt: 'select_account' });
+          await reauthenticateWithPopup(user, provider);
+          await updatePassword(user, newPassword);
+          return;
+        } catch {
+          // Fall through to error
+        }
+      }
       throw new Error('For security reasons, please sign out and sign in again before changing your password.');
     }
     if (code === 'auth/weak-password') {

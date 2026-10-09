@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import type { Lesson, DiscoverGuide, User } from '../../types';
-import { X, Volume2, VolumeX, ChevronLeft, ChevronRight, CheckCircle, Quote, Sparkles, BookOpen, MessageCircle, HeartHandshake } from 'lucide-react';
+import { X, Volume2, VolumeX, ChevronLeft, ChevronRight, CheckCircle, Quote, Sparkles, BookOpen, MessageCircle, HeartHandshake, ArrowLeft } from 'lucide-react';
 import { isLessonConfigured } from '../../services/lesson.ts';
 import { saveLessonResume } from '../../services/localStudy';
 import { getTranslation, getUiLocale } from '../../services/i18n';
@@ -10,6 +10,12 @@ import { StudyPlateContent } from './StudyPlateContent';
 import { ModalLayer } from '../layout/ModalLayer';
 import { lessonScoreForDisplay } from '../../services/lessonProgress';
 import type { SupportContextPrefill } from '../../services/supportContext';
+import { AudioNarrationBar } from './AudioNarrationBar';
+import { ScripturePopover } from './ScripturePopover';
+import { extractLessonPageSpokenText, findBestSpeechVoice, type NarrationPlaybackRate } from '../../services/lessonNarration';
+import { parseScriptureTokens } from '../../services/scriptureLookup';
+import './lesson-reader-audio.css';
+import './lesson-reader-page.css';
 
 interface LessonReaderModalProps {
   lesson: Lesson;
@@ -38,9 +44,20 @@ export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({
   const pages = configured ? lesson.contentPages! : [];
   const clampPageIndex=(value:number)=>Math.max(0,Math.min(Math.max(0,pages.length-1),Math.trunc(value)||0));
   const [currentPageIndex, setCurrentPageIndex] = useState(() => clampPageIndex(initialPageIndex));
-  const [isSpeaking, setIsSpeaking] = useState(false);
+  const scrollContentRef = useRef<HTMLDivElement>(null);
+  const [narrationStatus, setNarrationStatus] = useState<'idle' | 'playing' | 'paused'>('idle');
+  const [narrationRate, setNarrationRate] = useState<NarrationPlaybackRate>(1.0);
+  const [showNarrationBar, setShowNarrationBar] = useState(false);
+  const [selectedScriptureRef, setSelectedScriptureRef] = useState<string | null>(null);
+  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const [notice, setNotice] = useState('');
   const [decision, setDecision] = useState<string>('accept');
+
+  useEffect(() => {
+    if (scrollContentRef.current) {
+      scrollContentRef.current.scrollTop = 0;
+    }
+  }, [currentPageIndex]);
   const currentPage = pages[currentPageIndex];
   const currentChapter = lesson.chapters?.find(chapter=>chapter.id===currentPage?.chapterId);
   const currentSection = currentChapter?.sections.find(section=>section.id===currentPage?.sectionId);
@@ -70,6 +87,95 @@ export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({
     onPageChange?.(currentPageIndex);
   }, [currentPageIndex, lesson.id, onPageChange]);
 
+  const stopNarration = () => {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+    utteranceRef.current = null;
+    setNarrationStatus('idle');
+    setShowNarrationBar(false);
+  };
+
+  const startNarration = (overrideRate?: NarrationPlaybackRate) => {
+    if (!configured || !currentPage) return;
+    if (!('speechSynthesis' in window)) {
+      setNotice(t('accessibility.speech_unavailable', 'Audio read-aloud is not available on this device.'));
+      return;
+    }
+    const rateToUse = overrideRate ?? narrationRate;
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+
+    const spokenText = extractLessonPageSpokenText({
+      page: currentPage,
+      chapter: currentChapter,
+      section: currentSection,
+      isLastPage: currentPageIndex === pages.length - 1,
+    });
+
+    if (!spokenText.trim()) {
+      setNotice('No readable study text found on this page.');
+      return;
+    }
+
+    const utterance = new SpeechSynthesisUtterance(spokenText);
+    utterance.rate = rateToUse;
+    const voice = findBestSpeechVoice(guide.language || language);
+    if (voice) utterance.voice = voice;
+
+    utterance.onend = () => {
+      setNarrationStatus('idle');
+      utteranceRef.current = null;
+    };
+    utterance.onerror = () => {
+      setNarrationStatus('idle');
+      utteranceRef.current = null;
+    };
+    utterance.onpause = () => {
+      setNarrationStatus('paused');
+    };
+    utterance.onresume = () => {
+      setNarrationStatus('playing');
+    };
+
+    utteranceRef.current = utterance;
+    window.speechSynthesis.speak(utterance);
+    setNarrationStatus('playing');
+    setShowNarrationBar(true);
+  };
+
+  const pauseNarration = () => {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.pause();
+    }
+    setNarrationStatus('paused');
+  };
+
+  const resumeNarration = () => {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.resume();
+    }
+    setNarrationStatus('playing');
+  };
+
+  const handleRateChange = (newRate: NarrationPlaybackRate) => {
+    setNarrationRate(newRate);
+    if (narrationStatus === 'playing') {
+      startNarration(newRate);
+    }
+  };
+
+  const toggleNarration = () => {
+    if (narrationStatus === 'playing') {
+      pauseNarration();
+    } else if (narrationStatus === 'paused') {
+      resumeNarration();
+    } else {
+      startNarration();
+    }
+  };
+
   useEffect(() => {
     const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose(); };
     window.addEventListener('keydown', escape);
@@ -78,29 +184,6 @@ export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({
       if ('speechSynthesis' in window) window.speechSynthesis.cancel();
     };
   }, [onClose]);
-
-  const stopSpeech = () => {
-    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
-    setIsSpeaking(false);
-  };
-
-  const toggleSpeech = () => {
-    if (!configured || !currentPage) return;
-    if (!('speechSynthesis' in window)) {
-      setNotice('Audio read-aloud is not available on this device.');
-      return;
-    }
-    if (isSpeaking) { stopSpeech(); return; }
-    const text = `${currentPage.title}. ${currentPage.content} ${currentPage.scriptureQuote
-      ? `Scripture: ${currentPage.scriptureQuote.text}. ${currentPage.scriptureQuote.reference}` : ''}`;
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 0.95;
-    utterance.onend = () => setIsSpeaking(false);
-    utterance.onerror = () => setIsSpeaking(false);
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(utterance);
-    setIsSpeaking(true);
-  };
 
   const persistResume = async (pageIndex: number) => {
     if (lesson.type!=='Lesson' || !configured || pages.length < 1) return;
@@ -111,7 +194,7 @@ export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({
 
   const handleNext = async () => {
     if (!configured || !currentPage) return;
-    stopSpeech();
+    stopNarration();
     if (currentPageIndex < pages.length - 1) {
       const nextIndex = currentPageIndex + 1;
       setCurrentPageIndex(nextIndex);
@@ -129,10 +212,39 @@ export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({
 
   const handlePrev = () => {
     if (currentPageIndex === 0) return;
-    stopSpeech();
+    stopNarration();
     const previousIndex = Math.max(0, currentPageIndex - 1);
     setCurrentPageIndex(previousIndex);
     void persistResume(previousIndex);
+  };
+
+  const renderScriptureText = (text?: string) => {
+    if (!text) return null;
+    const tokens = parseScriptureTokens(text);
+    if (tokens.length <= 1 && !tokens[0]?.isScripture) {
+      return text;
+    }
+    return tokens.map((token, index) => {
+      if (!token.isScripture) {
+        return <React.Fragment key={index}>{token.text}</React.Fragment>;
+      }
+      return (
+        <button
+          key={index}
+          type="button"
+          className="vop-scripture-ref-btn"
+          onClick={(e) => {
+            e.stopPropagation();
+            setSelectedScriptureRef(token.reference || token.text);
+          }}
+          title={`View scripture: ${token.reference || token.text}`}
+          aria-label={`View scripture: ${token.reference || token.text}`}
+        >
+          <BookOpen size={11} style={{ display: 'inline', verticalAlign: '-1px', marginRight: '2px' }} />
+          {token.text}
+        </button>
+      );
+    });
   };
 
   const progressPercent = pages.length > 0
@@ -141,111 +253,107 @@ export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({
 
   return (
     <ModalLayer><div
-      className="modal-overlay vop-study-modal vop-lesson-modal"
-      role="presentation"
-      onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}
+      className="modal-overlay vop-study-modal vop-lesson-page-root"
+      role="main"
+      aria-label={lesson.title}
     >
       <section
         role="dialog"
         aria-modal="true"
         aria-label={lesson.title}
-        style={{
-          width: '100%',
-          maxWidth: '740px',
-          maxHeight: '92dvh',
-          display: 'flex',
-          flexDirection: 'column',
-          borderRadius: '1.5rem',
-          overflow: 'hidden',
-          background: '#fff',
-          boxShadow: '0 25px 60px rgba(0,0,0,0.22)',
-        }}
+        className="vop-lesson-page-view"
       >
-        {/* Header */}
-        <header style={{
-          padding: '1rem 1.25rem',
-          background: 'linear-gradient(135deg, #002d72 0%, #0d47a1 100%)',
-          color: '#fff',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '0.65rem',
-          flexShrink: 0,
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', minWidth: 0 }}>
+        {/* Full-Page Study Header */}
+        <header className="vop-lesson-page-header">
+          <div className="vop-lesson-page-header-left">
+            <button
+              type="button"
+              className="vop-lesson-page-back-btn"
+              onClick={onClose}
+              aria-label={t('lesson.back_to_guide', 'Back to Guide')}
+              title={t('lesson.back_to_guide', 'Back to Guide')}
+            >
+              <ArrowLeft size={16} />
+              <span>{t('common.back', 'Back to Guide')}</span>
+            </button>
+            <span className="vop-lesson-page-header-divider" aria-hidden="true">/</span>
             <div style={{
-              width: '2.25rem', height: '2.25rem',
-              borderRadius: '0.65rem',
-              background: 'rgba(255,255,255,0.12)',
+              width: '2.1rem', height: '2.1rem',
+              borderRadius: '0.6rem',
+              background: 'rgba(255,255,255,0.14)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               flexShrink: 0,
             }}>
               <BookOpen size={16} color="var(--vop-gold-400, #fbbf24)" />
             </div>
-            <div style={{ minWidth: 0 }}>
-              <p style={{ fontSize: '0.68rem', color: '#bfdbfe', fontWeight: 700, marginBottom: '0.1rem' }}>
-                {guide.subtitle} · {lesson.lessonNumber}
-              </p>
-              <h2 style={{
-                color: '#fff',
-                fontSize: '1rem',
-                fontWeight: 800,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}>
-                {lesson.title}
-              </h2>
+            <div className="vop-lesson-page-header-meta">
+              <span className="vop-lesson-kicker">
+                {guide.title || guide.subtitle} · Lesson {lesson.lessonNumber}
+              </span>
+              <h1>{lesson.title}</h1>
             </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexShrink: 0 }}>
+
+          <div className="vop-lesson-page-header-right">
             <button
               type="button"
-              onClick={toggleSpeech}
+              onClick={toggleNarration}
               disabled={!configured}
-              aria-label={isSpeaking ? t('accessibility.stop_reading','Stop reading aloud') : t('accessibility.read_aloud','Read this page aloud')}
-              style={{
-                border: 0,
-                background: isSpeaking ? 'rgba(251,191,36,0.25)' : 'rgba(255,255,255,0.1)',
-                color: isSpeaking ? '#fbbf24' : '#fff',
-                width: '2.25rem', height: '2.25rem',
-                borderRadius: '0.65rem',
-                cursor: configured ? 'pointer' : 'not-allowed',
-                opacity: configured ? 1 : 0.4,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}
+              aria-label={
+                narrationStatus === 'playing'
+                  ? t('accessibility.pause_reading','Pause reading aloud')
+                  : narrationStatus === 'paused'
+                  ? t('accessibility.resume_reading','Resume reading aloud')
+                  : t('accessibility.read_aloud','Read this page aloud')
+              }
+              className={`vop-lesson-page-icon-btn ${narrationStatus === 'playing' ? 'vop-reader-audio-btn-active' : ''}`}
+              title={
+                narrationStatus === 'playing'
+                  ? 'Pause Audio Narration'
+                  : narrationStatus === 'paused'
+                  ? 'Resume Audio Narration'
+                  : 'Read Lesson Page Aloud'
+              }
             >
-              {isSpeaking ? <VolumeX size={17} /> : <Volume2 size={17} />}
+              {narrationStatus === 'playing' ? <Volume2 size={17} /> : narrationStatus === 'paused' ? <VolumeX size={17} /> : <Volume2 size={17} />}
             </button>
             <button
               type="button"
               onClick={onClose}
               aria-label={t('accessibility.close_lesson','Close lesson')}
-              style={{
-                border: 0,
-                background: 'rgba(255,255,255,0.1)',
-                color: '#fff',
-                width: '2.25rem', height: '2.25rem',
-                borderRadius: '0.65rem',
-                cursor: 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}
+              className="vop-lesson-page-icon-btn"
+              title={t('accessibility.close_lesson','Close lesson')}
             >
               <X size={18} />
             </button>
           </div>
         </header>
 
+        {/* Audio Narration Control Bar */}
+        {configured && (showNarrationBar || narrationStatus !== 'idle') && (
+          <AudioNarrationBar
+            pageTitle={currentPage?.title || lesson.title}
+            pageSubtitle={currentSection?.title || (currentChapter?.title ? `${currentChapter.title} · p. ${currentPageIndex + 1}` : `Page ${currentPageIndex + 1} of ${pages.length}`)}
+            status={narrationStatus}
+            rate={narrationRate}
+            onPlay={() => startNarration()}
+            onPause={pauseNarration}
+            onResume={resumeNarration}
+            onStop={stopNarration}
+            onRateChange={handleRateChange}
+          />
+        )}
+
         {/* Progress bar */}
         {configured && (
-          <div data-surface="progress" style={{ padding: '0.6rem 1.25rem', background: 'var(--bg-card)', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
+          <div data-surface="progress" style={{ padding: '0.6rem 1.5rem', background: 'var(--bg-card)', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0 }}>
+            <div style={{ maxWidth: '880px', margin: '0 auto', display: 'flex', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
               <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>
                 Page {currentPageIndex + 1} of {pages.length}
               </span>
               <span style={{ fontSize: '0.75rem', color: '#002d72', fontWeight: 700 }}>{progressPercent}%</span>
             </div>
-            <div style={{ height: '5px', background: 'var(--border-strong)', borderRadius: '9999px', overflow: 'hidden' }}>
+            <div style={{ maxWidth: '880px', margin: '0 auto', height: '5px', background: 'var(--border-strong)', borderRadius: '9999px', overflow: 'hidden' }}>
               <div style={{
                 height: '100%',
                 width: `${progressPercent}%`,
@@ -258,15 +366,12 @@ export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({
         )}
 
         {/* Content */}
-        <div style={{
-          padding: 'clamp(1.25rem, 4vw, 2rem)',
-          overflowY: 'auto',
-          flex: 1,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '1.25rem',
-          color: 'var(--text-primary)',
-        }}>
+        <div
+          ref={scrollContentRef}
+          className="vop-lesson-page-scroll-container"
+        >
+          <div className="vop-lesson-page-reading-canvas">
+            <div className="vop-lesson-paper">
           {!configured || !currentPage ? (
             <div role="alert" style={{
               padding: '1.25rem',
@@ -293,11 +398,12 @@ export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({
                 {currentPageIndex===0&&lesson.media?.audioUrl&&<MediaPlayer src={lesson.media.audioUrl} title={lesson.title+' audio'} kind="audio"/>}
                 {currentSection.document
                   ? <StudyPlateContent document={currentSection.document}
+                      onScriptureClick={(ref) => setSelectedScriptureRef(ref)}
                       afterBlock={blockId=>assessmentLinks('block',blockId)}/>
                   : currentSection.blocks.map(block=><React.Fragment key={block.id}>
-                  {block.type==='heading'&&<h4 className="vop-structured-reader-heading">{block.text}</h4>}
-                  {block.type==='paragraph'&&<p className="vop-structured-reader-text">{block.text}</p>}
-                  {block.type==='quote'&&<blockquote className="vop-structured-reader-quote">{block.text}</blockquote>}
+                  {block.type==='heading'&&<h4 className="vop-structured-reader-heading">{renderScriptureText(block.text)}</h4>}
+                  {block.type==='paragraph'&&<p className="vop-structured-reader-text">{renderScriptureText(block.text)}</p>}
+                  {block.type==='quote'&&<blockquote className="vop-structured-reader-quote">{renderScriptureText(block.text)}</blockquote>}
                   {block.type==='image'&&block.src&&<img className="vop-structured-reader-image" loading="lazy" src={block.src} alt={block.text||''}/>}
                   {block.type==='video'&&<MediaPlayer src={block.src} title={currentSection.title+' video'} kind="video"/>}
                   {block.type==='audio'&&<MediaPlayer src={block.src} title={currentSection.title+' audio'} kind="audio"/>}
@@ -314,7 +420,7 @@ export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({
                 </div>}
                 {currentPageIndex===0&&lesson.media?.videoUrl&&<MediaPlayer src={lesson.media.videoUrl} title={lesson.title+' video'} kind="video"/>}
                 {currentPageIndex===0&&lesson.media?.audioUrl&&<MediaPlayer src={lesson.media.audioUrl} title={lesson.title+' audio'} kind="audio"/>}
-                <p className="vop-reader-page-copy" style={{fontSize:'1rem',lineHeight:1.75,whiteSpace:'pre-line'}}>{currentPage.content}</p>
+                <p className="vop-reader-page-copy" style={{fontSize:'1rem',lineHeight:1.75,whiteSpace:'pre-line'}}>{renderScriptureText(currentPage.content)}</p>
                 {currentPageIndex===pages.length-1&&assessmentLinks('lesson')}
               </>}
 
@@ -360,6 +466,21 @@ export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({
                   }}>
                     — {currentPage.scriptureQuote.reference}
                   </cite>
+                  <div className="vop-reader-quote-actions">
+                    <button
+                      type="button"
+                      className="vop-reader-quote-action-btn"
+                      onClick={() => {
+                        if (currentPage.scriptureQuote?.reference) {
+                          setSelectedScriptureRef(currentPage.scriptureQuote.reference);
+                        }
+                      }}
+                      aria-label={`Explore passage ${currentPage.scriptureQuote.reference}`}
+                    >
+                      <BookOpen size={13} />
+                      <span>{t('lesson.explore_scripture', 'Read Passage Details')}</span>
+                    </button>
+                  </div>
                 </blockquote>
               )}
 
@@ -473,76 +594,64 @@ export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({
             </>
           )}
 
-          {notice && (
-            <p role="status" style={{ color: '#92400e', fontSize: '0.85rem', padding: '0.5rem 0' }}>{notice}</p>
+              </div>
+            </div>
+
+            {notice && (
+              <p role="status" style={{ maxWidth: '880px', margin: '0.5rem auto 0', color: '#92400e', fontSize: '0.85rem', padding: '0.5rem 1rem' }}>{notice}</p>
+            )}
+          </div>
+
+          {/* Footer navigation */}
+          <footer data-surface="footer" className="vop-lesson-page-footer">
+            <div className="vop-lesson-page-footer-inner">
+              <button
+                type="button"
+                onClick={() => {
+                  if (configured && currentPageIndex > 0) {
+                    handlePrev();
+                  } else if (hasPreviousLesson && onPreviousLesson) {
+                    stopNarration();
+                    onPreviousLesson();
+                  }
+                }}
+                disabled={!configured || (currentPageIndex === 0 && !hasPreviousLesson)}
+                className="vop-lesson-page-nav-btn secondary"
+              >
+                <ChevronLeft size={18} />
+                <span>{currentPageIndex === 0 && hasPreviousLesson ? t('lesson.previous_lesson','Previous Lesson') : t('lesson.previous_page','Previous Page')}</span>
+              </button>
+
+              <div className="vop-lesson-page-progress-pill">
+                <span>Page <strong>{currentPageIndex + 1}</strong> of <strong>{pages.length}</strong></span>
+                <span>·</span>
+                <strong>{progressPercent}%</strong>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleNext}
+                disabled={!configured}
+                className={`vop-lesson-page-nav-btn primary ${currentPageIndex === pages.length - 1 ? 'complete' : ''}`}
+              >
+                {configured && currentPageIndex < pages.length - 1
+                  ? <><span>{t('lesson.next_page','Next Page')}</span><ChevronRight size={18} /></>
+                  : hasNextLesson
+                    ? <><span>{t('lesson.complete_continue','Complete & Continue')}</span><ChevronRight size={18} /></>
+                    : <><CheckCircle size={18} /><span>{t('lesson.complete','Complete Lesson')}</span></>}
+              </button>
+            </div>
+          </footer>
+
+          {/* Interactive Scripture Popover Modal */}
+          {selectedScriptureRef && (
+            <ScripturePopover
+              reference={selectedScriptureRef}
+              onClose={() => setSelectedScriptureRef(null)}
+            />
           )}
-        </div>
-
-        {/* Footer navigation */}
-        <footer data-surface="footer" style={{
-          padding: '1rem 1.25rem',
-          borderTop: '1px solid var(--border-subtle)',
-          background: 'var(--bg-card)',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          gap: '0.65rem',
-          flexShrink: 0,
-        }}>
-          <button
-            type="button"
-            onClick={() => {
-              if (configured && currentPageIndex > 0) {
-                handlePrev();
-              } else if (hasPreviousLesson && onPreviousLesson) {
-                stopSpeech();
-                onPreviousLesson();
-              }
-            }}
-            disabled={!configured || (currentPageIndex === 0 && !hasPreviousLesson)}
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: '0.4rem',
-              padding: '0.7rem 1.25rem',
-              border: '1.5px solid var(--border-strong)',
-              borderRadius: '9999px',
-              background: 'var(--bg-card)',
-              color: (currentPageIndex === 0 && !hasPreviousLesson) || !configured ? 'var(--text-muted)' : 'var(--text-primary)',
-              fontWeight: 600, fontSize: '0.875rem',
-              cursor: currentPageIndex === 0 || !configured ? 'not-allowed' : 'pointer',
-              opacity: currentPageIndex === 0 || !configured ? 0.5 : 1,
-            }}
-          >
-            <ChevronLeft size={18} /> {currentPageIndex === 0 && hasPreviousLesson ? t('lesson.previous_lesson','Previous Lesson') : t('lesson.previous_page','Previous Page')}
-          </button>
-
-          <button
-            type="button"
-            onClick={handleNext}
-            disabled={!configured}
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: '0.5rem',
-              padding: '0.7rem 1.75rem',
-              border: 'none',
-              borderRadius: '9999px',
-              background: !configured
-                ? 'var(--bg-elevated)'
-                : configured && currentPageIndex < pages.length - 1
-                ? 'linear-gradient(135deg, #002d72, #1d4ed8)'
-                : 'linear-gradient(135deg, #059669, #10b981)',
-              color: !configured ? 'var(--text-muted)' : '#fff',
-              fontWeight: 700, fontSize: '0.875rem',
-              cursor: !configured ? 'not-allowed' : 'pointer',
-              boxShadow: !configured ? 'none' : '0 4px 12px rgba(0,0,0,0.2)',
-            }}
-          >
-            {configured && currentPageIndex < pages.length - 1
-              ? <><span>{t('lesson.next_page','Next Page')}</span><ChevronRight size={18} /></>
-              : hasNextLesson
-                ? <><span>{t('lesson.complete_continue','Complete & Continue')}</span><ChevronRight size={18} /></>
-                : <><CheckCircle size={18} /><span>{t('lesson.complete','Complete Lesson')}</span></>}
-          </button>
-        </footer>
-      </section>
-    </div></ModalLayer>
+        </section>
+      </div>
+    </ModalLayer>
   );
 };

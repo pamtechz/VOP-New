@@ -4,8 +4,9 @@ import {
   ChevronDown, ChevronLeft, ChevronRight, Church, Edit3, ExternalLink, UserCheck,
   Filter, Globe, LayoutDashboard, Link2, Lock, Menu, Megaphone,
   Plus, Radio, RefreshCw, Save, Search, Settings, Shield, Trash2, Upload, LogOut, UserPlus,
-  Users, X, BarChart3, Layers, Grid2X2, Building2, HeartHandshake, WalletCards
+  Users, X, BarChart3, Layers, Grid2X2, Building2, HeartHandshake, WalletCards, Sliders
 } from 'lucide-react';
+import { HeroSliderManager } from '../components/admin/HeroSliderManager';
 import { auth } from '../lib/firebase';
 import type { User, CustomLanguage, ChurchOrganization, Announcement, DiscoverGuide, AppRoute, LanguageCode, AppSettings } from '../types';
 import {
@@ -70,7 +71,7 @@ type AdminTab =
   | 'accountNotifications' | 'accountInvitations' | 'accountProfile'
   | 'accountPersonalSettings' | 'accountCertificates' | 'accountAbout';
 
-type SettingsSubtab = 'general' | 'appInfo' | 'features' | 'services' | 'security' | 'notifications' | 'permissions';
+type SettingsSubtab = 'general' | 'appInfo' | 'heroSlider' | 'features' | 'services' | 'security' | 'notifications' | 'permissions';
 type StudioTab = 'programs' | 'lessons' | 'guides' | 'quizzes' | 'paths' | 'topics' | 'seasons';
 
 const NAV: Array<{id: AdminTab; label: string; icon: React.ComponentType<{size?: number}>}> = [
@@ -201,7 +202,12 @@ async function loadInstitutionalSubscriptionState(
   const response=await fetch('/api/admin/plans',{
     method:'POST',
     headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
-    body:JSON.stringify({action:'getSubscription',billingTenantType,billingTenantId}),
+    body:JSON.stringify({
+      action:'getSubscription',
+      billingTenantType,
+      billingTenantId,
+      organizationId:billingTenantType==='organization'?billingTenantId:undefined,
+    }),
   });
   const body=await response.json().catch(()=>({})) as {
     error?:string;plan?:unknown;featureEntitlements?:unknown;freeTier?:unknown;paidPlanActive?:unknown;
@@ -262,6 +268,9 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
         aboutAppVersion: '2.0.0', aboutAppCredits: '', contactOfficeAddress: '', contactOfficeHours: '',
         contactPhoneNumbers: [], contactEmails: [], contactWhatsAppNumbers: [], socialLinks: {},
       },
+      heroSlides: (settings || (propsSettings as ExtendedAppSettings))?.heroSlides || [],
+      heroSliderAutoplaySeconds: (settings || (propsSettings as ExtendedAppSettings))?.heroSliderAutoplaySeconds || 6,
+      heroSliderIncludeDefaultSlides: (settings || (propsSettings as ExtendedAppSettings))?.heroSliderIncludeDefaultSlides !== false,
     };
   }, [settings, propsSettings, activeLanguage]);
 
@@ -392,11 +401,13 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
     : String(currentUser.role || 'Learner').replaceAll('_',' ');
   const availableSettingsTabs: Array<{id: SettingsSubtab; label: string; icon: React.ComponentType<{size?:number}>}> = isSuperAdmin
     ? [
-        {id:'general',label:'General',icon:Settings},{id:'appInfo',label:'App Info',icon:Book},{id:'features',label:'Features',icon:Grid2X2},
+        {id:'general',label:'General',icon:Settings},{id:'appInfo',label:'App Info',icon:Book},{id:'heroSlider',label:'Hero Carousel',icon:Sliders},
+        {id:'features',label:'Features',icon:Grid2X2},
         {id:'services',label:'Services',icon:Link2},{id:'security',label:'Security',icon:Lock},{id:'notifications',label:'Notifications',icon:Bell},{id:'permissions',label:'Permissions',icon:Shield},
       ]
     : [
         {id:'general',label:isHierarchyAdmin ? 'Tenant Profile' : 'Organisation Profile',icon:Building2},
+        {id:'heroSlider',label:'Hero Carousel',icon:Sliders},
       ];
 
   useEffect(() => {
@@ -1146,6 +1157,25 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
           <div className="vop-card vop-section-card"><div className="vop-section-title"><div><h3>Configuration safety</h3><p>Destructive resets are intentionally not exposed as fake controls. Changes on this page persist only when you use the relevant Save action.</p></div></div></div>
         </div>
       </div>}
+      {settingsSubtab === 'heroSlider' && (
+        <HeroSliderManager
+          settings={settings}
+          onUpdateSettings={next => setSettings(next)}
+          onSave={async () => {
+            setSettingsSaving(true);
+            try {
+              await saveSettingsToFirestore(settings);
+              showMessage('Hero carousel settings saved.');
+            } catch (err) {
+              setError(err instanceof Error ? err.message : 'Could not save hero carousel settings.');
+            } finally {
+              setSettingsSaving(false);
+            }
+          }}
+          isSaving={settingsSaving}
+          onToast={msg => showMessage(msg)}
+        />
+      )}
       {isSuperAdmin && settingsSubtab === 'features' && <div className="vop-grid-2">
         <div className="vop-card vop-form-card"><div className="vop-section-title"><div><h2>Feature Toggles</h2><p>Enable or disable configured modules.</p></div></div><div className="vop-setting-list">{featureRows.map(item=>{const Icon=item.icon;const on=settings.features?.[item.key] !== false;return <div className="vop-setting-row" key={item.key}><div style={{display:'flex',alignItems:'center',gap:10}}><Icon size={19}/><div><div className="vop-setting-name">{item.label}</div><div className="vop-setting-help">Feature availability is securely managed.</div></div></div><Toggle on={on} onClick={()=>void toggleFeature(item.key)}/></div>;})}</div></div>
         <div className="vop-card vop-section-card"><div className="vop-section-title"><div><h3>Module policy</h3><p>Disabling a module hides it from learner navigation, blocks direct learner routes and suppresses its public content feed without deleting stored records.</p></div></div></div>

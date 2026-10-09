@@ -23,6 +23,7 @@ interface MenuItem {
   label: string;
   detail: string;
   icon: LucideIcon;
+  adminTab?: string;
 }
 
 export const MenuDrawer: React.FC<MenuDrawerProps> = ({
@@ -111,15 +112,27 @@ export const MenuDrawer: React.FC<MenuDrawerProps> = ({
     ...(localizationAccess?[{route:'localization' as const,label:t('navigation.localization_console','Localization console'),detail:t('navigation.localization_console_detail','Assigned translation and review work'),icon:Globe2}]:[]),
     ...(settings.features?.certification===false?[]:[{ route: 'certificates' as const, label: t('certificates.my_certificate', 'My Certificates'), detail: t('navigation.certificates_detail', 'Graduation and awards'), icon: Award }]),
     { route: 'about', label: t('navigation.about', 'About'), detail: t('navigation.about_detail', 'About the Voice of Prophecy'), icon: Info },
-    ...(isAdmin ? [{ route: 'admin' as const, label: t('navigation.admin', 'Admin Panel'), detail: t('navigation.admin_detail', 'Manage authorized ministry content'), icon: ShieldCheck }] : []),
+    ...(isAdmin ? [{ route: 'admin' as const, label: t('navigation.admin', 'Admin Panel'), detail: t('navigation.admin_detail', 'Manage authorized ministry content'), icon: ShieldCheck, adminTab: 'dashboard' }] : []),
   ];
+
+  const adminOperations: MenuItem[] = isAdmin ? [
+    { route: 'admin', label: t('navigation.admin_dashboard', 'Admin Dashboard'), detail: t('navigation.admin_dashboard_detail', 'Overview, statistics and quick actions'), icon: ShieldCheck, adminTab: 'dashboard' },
+    { route: 'admin', label: t('navigation.curriculum_studio', 'Curriculum Studio'), detail: t('navigation.curriculum_detail', 'Manage guides, lessons and questions'), icon: BookOpen, adminTab: 'curriculum' },
+    { route: 'admin', label: t('navigation.user_management', 'User Management'), detail: t('navigation.users_detail', 'Manage users, roles and staff accounts'), icon: UserCheck, adminTab: 'userManagement' },
+    { route: 'admin', label: t('navigation.candidates', 'Candidates & Progress'), detail: t('navigation.candidates_detail', 'Track enrolments and completions'), icon: Award, adminTab: 'candidates' },
+  ] : [];
 
   const renderLinks = (items: MenuItem[]) => items.map(item => {
     const Icon = item.icon;
-    return <button type="button" key={item.route}
+    return <button type="button" key={item.route + (item.adminTab || '')}
       className={'vop-account-link' + (currentRoute === item.route ? ' active' : '')}
       aria-current={currentRoute === item.route ? 'page' : undefined}
-      onClick={() => navigate(item.route)}>
+      onClick={() => {
+        if (item.adminTab && currentUser?.uid) {
+          try { sessionStorage.setItem('vop-admin-tab-v1:' + currentUser.uid, item.adminTab); } catch {}
+        }
+        navigate(item.route);
+      }}>
       <span className="vop-account-link-icon"><Icon size={21} aria-hidden="true" /></span>
       <span className="vop-account-link-copy"><strong>{item.label}</strong><small>{item.detail}</small></span>
     </button>;
@@ -180,6 +193,12 @@ export const MenuDrawer: React.FC<MenuDrawerProps> = ({
         </aside>
 
         <div className="vop-account-navigation">
+          {isAdmin && (
+            <section className="vop-account-group" aria-labelledby="vop-account-admin-ops">
+              <h3 id="vop-account-admin-ops">{t('navigation.admin_operations', 'Admin Operations')}</h3>
+              <nav aria-label={t('navigation.admin_operations', 'Admin Operations')} className="vop-account-link-grid">{renderLinks(adminOperations)}</nav>
+            </section>
+          )}
           <section className="vop-account-group" aria-labelledby="vop-account-learning">
             <h3 id="vop-account-learning">{t('navigation.learning', 'Learning & engagement')}</h3>
             <nav aria-label={t('navigation.learning', 'Learning & engagement')} className="vop-account-link-grid">{renderLinks(learning)}</nav>

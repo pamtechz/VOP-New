@@ -10,17 +10,32 @@ export type StudyPlateLeaf = {
   underline?:true;
   strikethrough?:true;
   code?:true;
+  subscript?:true;
+  superscript?:true;
+  fontFamily?:string;
+  fontSize?:string;
+  color?:string;
+  backgroundColor?:string;
+  scriptureRef?:string;
+  bibleVersion?:string;
+  isScriptureVerse?:boolean;
 };
 export type StudyPlateNode = {
-  type:'p'|'h1'|'h2'|'h3'|'blockquote'|'ul'|'ol'|'li'|'lic'|'a'|'img'|'video'|'audio'|'code_block';
+  type:'p'|'h1'|'h2'|'h3'|'blockquote'|'ul'|'ol'|'li'|'lic'|'a'|'img'|'video'|'audio'|'code_block'|'table'|'tr'|'th'|'td'|'callout';
   id?:string;
   url?:string;
   alt?:string;
+  align?:'left'|'center'|'right'|'justify';
+  indent?:number;
+  lineHeight?:string;
+  backgroundColor?:string;
+  borderColor?:string;
+  calloutType?:'info'|'warning'|'tip'|'reflection';
   children:Array<StudyPlateNode|StudyPlateLeaf>;
 };
 export type StudyPlateDocument=StudyPlateNode[];
 
-const blockTypes=new Set(['p','h1','h2','h3','blockquote','ul','ol','li','lic','a','img','video','audio','code_block']);
+const blockTypes=new Set(['p','h1','h2','h3','blockquote','ul','ol','li','lic','a','img','video','audio','code_block','table','tr','th','td','callout']);
 const idPattern=/^[A-Za-z0-9_-]{1,120}$/;
 const record=(value:unknown):Record<string,unknown>|null=>
   value!==null&&typeof value==='object'&&!Array.isArray(value)
@@ -60,16 +75,23 @@ export function normalizeStudyPlateDocument(raw:unknown):StudyPlateDocument {
         characters+=node.text.length;
         if(characters>maxChars)throw new Error('A study page supports at most 40,000 characters.');
         const leaf:StudyPlateLeaf={text:node.text};
-        for(const key of ['bold','italic','underline','strikethrough','code'] as const)
+        for(const key of ['bold','italic','underline','strikethrough','code','subscript','superscript'] as const)
           if(node[key]===true)leaf[key]=true;
+        if(typeof node.fontFamily==='string'&&node.fontFamily.length<=100)leaf.fontFamily=node.fontFamily;
+        if(typeof node.fontSize==='string'&&node.fontSize.length<=30)leaf.fontSize=node.fontSize;
+        if(typeof node.color==='string'&&node.color.length<=50)leaf.color=node.color;
+        if(typeof node.backgroundColor==='string'&&node.backgroundColor.length<=50)leaf.backgroundColor=node.backgroundColor;
+        if(typeof node.scriptureRef==='string'&&node.scriptureRef.length<=120)leaf.scriptureRef=node.scriptureRef;
+        if(typeof node.bibleVersion==='string'&&node.bibleVersion.length<=50)leaf.bibleVersion=node.bibleVersion;
+        if(node.isScriptureVerse===true)leaf.isScriptureVerse=true;
         return leaf;
       }
       throw new Error('Text leaves may contain at most 8000 characters.');
     }
     const type=String(node.type||'');
     if(!blockTypes.has(type))throw new Error('Unsupported study editor node: '+type);
-    if(top&&['li','lic','a'].includes(type))
-      throw new Error('Lists and links must be contained within a content block.');
+    if(top&&['li','lic','a','tr','th','td'].includes(type))
+      throw new Error('Lists, table cells and links must be contained within a content block.');
     if(!top&&['img','video','audio'].includes(type))
       throw new Error('Media blocks must be top-level study blocks.');
     if(!Array.isArray(node.children)||!node.children.length||node.children.length>160)
@@ -84,6 +106,24 @@ export function normalizeStudyPlateDocument(raw:unknown):StudyPlateDocument {
         throw new Error('Study blocks need unique stable identifiers.');
       ids.add(id);
       element.id=id;
+    }
+    if(typeof node.align==='string'&&['left','center','right','justify'].includes(node.align)){
+      element.align=node.align as 'left'|'center'|'right'|'justify';
+    }
+    if(typeof node.indent==='number'&&node.indent>=0&&node.indent<=8){
+      element.indent=Math.round(node.indent);
+    }
+    if(typeof node.lineHeight==='string'&&node.lineHeight.length<=20){
+      element.lineHeight=node.lineHeight;
+    }
+    if(typeof node.backgroundColor==='string'&&node.backgroundColor.length<=50){
+      element.backgroundColor=node.backgroundColor;
+    }
+    if(typeof node.borderColor==='string'&&node.borderColor.length<=50){
+      element.borderColor=node.borderColor;
+    }
+    if(typeof node.calloutType==='string'&&['info','warning','tip','reflection'].includes(node.calloutType)){
+      element.calloutType=node.calloutType as 'info'|'warning'|'tip'|'reflection';
     }
     if(type==='a'){
       element.url=safeLink(node.url);
@@ -116,6 +156,10 @@ export function normalizeStudyPlateDocument(raw:unknown):StudyPlateDocument {
       throw new Error('List items must contain list text or nested lists.');
     if(type==='lic'&&children.some(child=>'type' in child))
       throw new Error('List item content must contain text only.');
+    if(type==='table'&&children.some(child=>!('type' in child)||child.type!=='tr'))
+      throw new Error('Unsupported table structure: Table containers must contain table rows.');
+    if(type==='tr'&&children.some(child=>!('type' in child)||!['th','td'].includes(child.type)))
+      throw new Error('Unsupported table row structure: Table rows must contain table header or data cells.');
     return element;
   };
   return raw.map(node=>normalize(node,0,true) as StudyPlateNode);
@@ -164,7 +208,7 @@ export function studyPlateLegacyBlocks(value:StudyPlateDocument):Array<{
     return {
       id:node.id||'',
       type,
-      ...(['image','video','audio'].includes(type)?{src:node.url||''}:{text:text||' '}),
+      ...(['image','video','audio'].includes(type)?{src:node.url||''}:{text:text||''}),
     };
   });
 }

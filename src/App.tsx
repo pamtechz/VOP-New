@@ -818,8 +818,8 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
     setCurrentRoute(route);
     rememberLocation({route});
   };
-  const openCatalogLesson = (guide: DiscoverGuide, lesson: Lesson) =>
-    openStudyItem(guide,lesson,undefined,currentRoute);
+  const openCatalogLesson = (guide: DiscoverGuide, lesson: Lesson, pageIndex?: number) =>
+    openStudyItem(guide, lesson, pageIndex, currentRoute);
   const selectCatalogProgram=(programId:string)=>{
     setActiveProgramId(programId);
     rememberLocation({route:'lessons',...(programId?{programId}:{})});
@@ -859,7 +859,7 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
         <main className="vop-app-content" style={{ flex: 1, minWidth: 0 }}>
           <React.Suspense fallback={<RouteLoading/>}>
           {currentRoute === 'about' && <AboutPage settings={settings} activeLanguage={activeLanguage} onBack={goBack} />}
-          {currentRoute === 'personal-settings' && <PersonalSettingsPage onStudyLanguageChange={(language:LanguageCode) => { setActiveLang(language); setActiveLanguage(language); }} currentUser={currentUser} onBack={goBack} />}
+          {currentRoute === 'personal-settings' && <PersonalSettingsPage onStudyLanguageChange={(language:LanguageCode) => { setActiveLang(language); setActiveLanguage(language); }} currentUser={currentUser} onBack={goBack} onNavigate={navigate} />}
           {currentRoute === 'localization' && ['invited','active'].includes(String(currentUser.localizationAccess?.status||'')) && <LocalizationConsolePage currentUser={currentUser} onBack={goBack}/>} 
           {currentRoute === 'profile' && <ReferenceProfilePage currentUser={currentUser} allUsers={allUsers} guides={guides} unions={unions} conferences={conferences} districts={districts} churches={churches} settings={settings} activeLanguage={activeLanguage} onBack={goBack} onNavigateToCertificates={() => navigate('certificates')} />}
           {currentRoute === 'resources' && <ResourcesPage books={books} onBack={goBack} />}
@@ -908,7 +908,7 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
             onBack={goBack} onSelectLesson={(lesson,initialPageIndex) =>
               openStudyItem(activeGuide,lesson,initialPageIndex,'home')}
             onOpenCertificate={() => navigate('certificates')} />}
-          {showDashboardShell && <HomeDashboard currentUser={currentUser} guides={guides} announcements={announcements} settings={settings} activeLanguage={activeLanguage} onSelectGuide={openGuide} onOpenCertificate={() => navigate('certificates')} onOpenBooks={() => navigate('resources')} onOpenPrayer={() => navigate('prayer')} onOpenRadio={() => navigate('radio')} onOpenSupport={() => navigate('support')} />}
+          {showDashboardShell && <HomeDashboard currentUser={currentUser} guides={guides} announcements={announcements} settings={settings} activeLanguage={activeLanguage} onSelectGuide={openGuide} onSelectLesson={(guide, lesson, pageIndex) => openStudyItem(guide, lesson, pageIndex, 'home')} onOpenCertificate={() => navigate('certificates')} onOpenBooks={() => navigate('resources')} onOpenPrayer={() => navigate('prayer')} onOpenRadio={() => navigate('radio')} onOpenSupport={() => navigate('support')} onNavigate={navigate} />}
           </React.Suspense>
         </main>
         {currentRoute !== 'admin' && <BottomNav currentRoute={currentRoute} onNavigate={navigate} currentUser={currentUser} />}

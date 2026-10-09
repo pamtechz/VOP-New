@@ -169,5 +169,16 @@ export default defineConfig(({ mode }) => {
         },
       },
     ],
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes('node_modules/platejs') || id.includes('node_modules/@platejs')) {
+              return 'plate';
+            }
+          },
+        },
+      },
+    },
   };
 });

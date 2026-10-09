@@ -95,7 +95,46 @@ export interface AppSettings {
     announcementNotifications?: boolean;
     certificateNotifications?: boolean;
   };
+  heroSlides?: CustomHeroSlide[];
+  heroSliderAutoplaySeconds?: number;
+  heroSliderIncludeDefaultSlides?: boolean;
 }
+
+export type HeroSlideIcon =
+  | 'sparkles'
+  | 'book'
+  | 'heart'
+  | 'radio'
+  | 'award'
+  | 'clock'
+  | 'target'
+  | 'bookmark'
+  | 'flame'
+  | 'compass'
+  | 'megaphone'
+  | 'users';
+
+export interface CustomHeroSlide {
+  id: string;
+  title: string;
+  description: string;
+  kicker?: string;
+  badge?: string;
+  gradient?: string;
+  imageUrl?: string;
+  icon?: HeroSlideIcon | string;
+  enabled: boolean;
+  order: number;
+  primaryActionLabel?: string;
+  primaryActionTarget?: string;
+  secondaryActionLabel?: string;
+  secondaryActionTarget?: string;
+  startDate?: string;
+  endDate?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 
 export interface Union {
   id: string;

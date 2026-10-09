@@ -5,7 +5,7 @@ import {
 import { db, auth } from '../lib/firebase';
 import type {
   CustomLanguage, AppSettings, User, ChurchOrganization,
-  Announcement, BookResource, RadioBroadcast, DiscoverGuide
+  Announcement, BookResource, RadioBroadcast, DiscoverGuide, CustomHeroSlide
 } from '../types';
 
 
@@ -393,6 +393,33 @@ function normalizedDetailPages(value:unknown):NonNullable<AppSettings['detailPag
   };
 }
 
+export function normalizeHeroSlides(value: unknown): CustomHeroSlide[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((item, index) => {
+    const raw = item && typeof item === 'object' ? (item as Record<string, unknown>) : {};
+    return {
+      id: String(raw.id || `slide_${Date.now()}_${index}`),
+      title: String(raw.title || '').trim(),
+      description: String(raw.description || '').trim(),
+      kicker: raw.kicker ? String(raw.kicker).trim() : undefined,
+      badge: raw.badge ? String(raw.badge).trim() : undefined,
+      gradient: raw.gradient ? String(raw.gradient).trim() : undefined,
+      imageUrl: raw.imageUrl ? String(raw.imageUrl).trim() : undefined,
+      icon: raw.icon ? String(raw.icon).trim() : undefined,
+      enabled: raw.enabled !== false,
+      order: typeof raw.order === 'number' && !Number.isNaN(raw.order) ? raw.order : index,
+      primaryActionLabel: raw.primaryActionLabel ? String(raw.primaryActionLabel).trim() : undefined,
+      primaryActionTarget: raw.primaryActionTarget ? String(raw.primaryActionTarget).trim() : undefined,
+      secondaryActionLabel: raw.secondaryActionLabel ? String(raw.secondaryActionLabel).trim() : undefined,
+      secondaryActionTarget: raw.secondaryActionTarget ? String(raw.secondaryActionTarget).trim() : undefined,
+      startDate: raw.startDate ? String(raw.startDate).trim() : undefined,
+      endDate: raw.endDate ? String(raw.endDate).trim() : undefined,
+      createdAt: raw.createdAt ? String(raw.createdAt) : undefined,
+      updatedAt: raw.updatedAt ? String(raw.updatedAt) : undefined,
+    };
+  }).filter(slide => slide.title.length > 0 || slide.description.length > 0);
+}
+
 export const subscribeSettings = (
   callback: (settings: ExtendedAppSettings) => void,
   onError?: (error: Error) => void
@@ -410,6 +437,9 @@ export const subscribeSettings = (
         systemOptions:{allowRegistrations:false,requireApproval:false,enableEmailNotifications:false,showChurchInfo:false,enablePwa:false,maintenanceMode:false},
         features:{candidatesModule:true,curriculumStudio:true,translations:true,radio:true,announcements:true,certification:true},
         detailPages: normalizedDetailPages(undefined),
+        heroSlides: [],
+        heroSliderAutoplaySeconds: 6,
+        heroSliderIncludeDefaultSlides: true,
       });
       return;
     }
@@ -476,6 +506,9 @@ export const subscribeSettings = (
           },
           themeColor: data.themeColor || '',
           detailPages: normalizedDetailPages(data.detailPages),
+          heroSlides: normalizeHeroSlides(data.heroSlides),
+          heroSliderAutoplaySeconds: typeof data.heroSliderAutoplaySeconds === 'number' ? data.heroSliderAutoplaySeconds : 6,
+          heroSliderIncludeDefaultSlides: data.heroSliderIncludeDefaultSlides !== false,
         });
       } else {
         // Provide default baseline if doc does not exist yet
@@ -513,6 +546,9 @@ export const subscribeSettings = (
             certification: false,
           },
           detailPages: normalizedDetailPages(undefined),
+          heroSlides: [],
+          heroSliderAutoplaySeconds: 6,
+          heroSliderIncludeDefaultSlides: true,
         });
       }
     },

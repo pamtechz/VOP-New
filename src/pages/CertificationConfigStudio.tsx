@@ -38,7 +38,7 @@ const DEFAULT_BACKGROUND_WIDTH = 1513;
 const DEFAULT_BACKGROUND_HEIGHT = 1040;
 
 const EMPTY_PREVIEW_CERTIFICATE: CertificateArtworkRecord = {
-  candidateName: 'Aubrey Matende',
+  candidateName: 'MY FULL NAME',
   courseName: 'BIBLE CORRESPONDENCE COURSE',
   certificateNumber: 'VOP-2026-EXAMPLE',
   completionDate: '2023-06-12',
@@ -107,7 +107,7 @@ function normalizeBaseUrl(value: string) {
 function stringValue(config: CertificationConfig, key: keyof CertificationConfig) { const value = config[key]; return typeof value === 'string' ? value : ''; }
 
 export const CertificationConfigStudio: React.FC<Props> = ({ config, onSave, onBack }) => {
-  const [draft, setDraft] = useState<CertificationConfig>(() => ({ ...(config || {}), releaseMode:config?.releaseMode||'automatic', id: config?.id || 'certification', backgroundUrl: config?.backgroundUrl || DEFAULT_BACKGROUND, template: normalizeTemplate(config?.template, config?.backgroundUrl || DEFAULT_BACKGROUND) }));
+  const [draft, setDraft] = useState<CertificationConfig>(() => ({ ...(config || {}), releaseMode: config?.releaseMode || 'automatic', id: config?.id || 'certification', backgroundUrl: config?.backgroundUrl || DEFAULT_BACKGROUND, template: normalizeTemplate(config?.template, config?.backgroundUrl || DEFAULT_BACKGROUND) }));
   const [selectedId, setSelectedId] = useState('certify');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -115,12 +115,12 @@ export const CertificationConfigStudio: React.FC<Props> = ({ config, onSave, onB
 
   useEffect(() => {
     const nextTemplate = normalizeTemplate(config?.template, config?.backgroundUrl);
-    setDraft({ ...(config || {}), releaseMode:config?.releaseMode||'automatic', id: config?.id || 'certification', backgroundUrl: config?.backgroundUrl || DEFAULT_BACKGROUND, template: nextTemplate });
+    setDraft({ ...(config || {}), releaseMode: config?.releaseMode || 'automatic', id: config?.id || 'certification', backgroundUrl: config?.backgroundUrl || DEFAULT_BACKGROUND, template: nextTemplate });
     setSelectedId(nextTemplate.elements?.[0]?.id || 'certify');
     setError('');
   }, [config]);
 
-  const baseline = useMemo(() => ({ ...(config || {}), releaseMode:config?.releaseMode||'automatic', id: config?.id || 'certification', backgroundUrl: config?.backgroundUrl || DEFAULT_BACKGROUND, template: normalizeTemplate(config?.template, config?.backgroundUrl || DEFAULT_BACKGROUND) }), [config]);
+  const baseline = useMemo(() => ({ ...(config || {}), releaseMode: config?.releaseMode || 'automatic', id: config?.id || 'certification', backgroundUrl: config?.backgroundUrl || DEFAULT_BACKGROUND, template: normalizeTemplate(config?.template, config?.backgroundUrl || DEFAULT_BACKGROUND) }), [config]);
   const dirty = useMemo(() => JSON.stringify(draft) !== JSON.stringify(baseline), [draft, baseline]);
   const template = draft.template || DEFAULT_TEMPLATE;
   const elements = template.elements || [];
@@ -208,38 +208,38 @@ export const CertificationConfigStudio: React.FC<Props> = ({ config, onSave, onB
   };
 
   const previewCertificate = useMemo(() => ({ ...EMPTY_PREVIEW_CERTIFICATE, courseName: draft.courseName?.trim() || 'BIBLE CORRESPONDENCE COURSE', courseCode: draft.courseCode?.trim() || '' }), [draft.courseName, draft.courseCode]);
-  const organizationScoped=draft.scope==='organization';
-  const scopeLabel=organizationScoped
-    ? draft.inherited?'Organization configuration · currently inheriting platform defaults':'Organization configuration · custom settings'
+  const organizationScoped = draft.scope === 'organization';
+  const scopeLabel = organizationScoped
+    ? draft.inherited ? 'Organization configuration · currently inheriting platform defaults' : 'Organization configuration · custom settings'
     : 'Platform configuration';
 
   return (
     <div className="vop-cert-page">
-      <div className="vop-cert-list-head"><div><div className="vop-cert-kicker">{scopeLabel}</div><h1>Certificate Configuration</h1><p>{organizationScoped?'Design this organization’s own certificate, release policy and verification settings. Saving creates or updates the organization override while platform defaults remain the fallback.':'Design the platform certificate defaults from one Word-like editor. Organization-owned configurations can override these defaults inside their own tenant.'}</p></div><div className="vop-cert-head-actions"><button className="vop-cert-secondary-button vop-cert-config-back" type="button" onClick={onBack}><ArrowLeft size={18}/> Back to Candidates</button><button className="vop-cert-primary-button vop-cert-config-save" type="button" onClick={() => void save()} disabled={saving || !dirty}><Save size={18}/> {saving ? 'Saving…' : 'Save Configuration'}</button></div></div>
+      <div className="vop-cert-list-head"><div><div className="vop-cert-kicker">{scopeLabel}</div><h1>Certificate Configuration</h1><p>{organizationScoped ? 'Design this organization’s own certificate, release policy and verification settings. Saving creates or updates the organization override while platform defaults remain the fallback.' : 'Design the platform certificate defaults from one Word-like editor. Organization-owned configurations can override these defaults inside their own tenant.'}</p></div><div className="vop-cert-head-actions"><button className="vop-cert-secondary-button vop-cert-config-back" type="button" onClick={onBack}><ArrowLeft size={18} /> Back to Candidates</button><button className="vop-cert-primary-button vop-cert-config-save" type="button" onClick={() => void save()} disabled={saving || !dirty}><Save size={18} /> {saving ? 'Saving…' : 'Save Configuration'}</button></div></div>
       {error && <div className="vop-alert error" role="alert">{error}</div>}
-      <div className="vop-cert-config-status"><div className="vop-cert-config-status-icon"><ShieldCheck size={22}/></div><div><strong>Authoritative certificate template</strong><span>The saved template is used by certificate issuance, learner certificates and public verification.</span></div><span className={draft.enabled === true ? 'vop-cert-config-pill on' : 'vop-cert-config-pill'}>{draft.enabled === true ? 'Certification enabled' : 'Certification disabled'}</span></div>
+      <div className="vop-cert-config-status"><div className="vop-cert-config-status-icon"><ShieldCheck size={22} /></div><div><strong>Authoritative certificate template</strong><span>The saved template is used by certificate issuance, learner certificates and public verification.</span></div><span className={draft.enabled === true ? 'vop-cert-config-pill on' : 'vop-cert-config-pill'}>{draft.enabled === true ? 'Certification enabled' : 'Certification disabled'}</span></div>
 
       <div className="vop-cert-template-editor-shell">
         <aside className="vop-cert-template-toolbox">
           <div className="vop-cert-template-panel-head"><strong>Insert</strong><span>Word-style controls</span></div>
-          <button type="button" onClick={() => addElement('text')}><Type size={16}/><span>Text</span><Plus size={14}/></button>
-          <button type="button" onClick={() => addElement('candidateName')}><Type size={16}/><span>Candidate Name</span><Plus size={14}/></button>
-          <button type="button" onClick={() => addElement('courseName')}><Type size={16}/><span>Course Name</span><Plus size={14}/></button>
-          <button type="button" onClick={() => addElement('courseCode')}><Type size={16}/><span>Course Code</span><Plus size={14}/></button>
-          <button type="button" onClick={() => addElement('date')}><Type size={16}/><span>Date</span><Plus size={14}/></button>
-          <button type="button" onClick={() => addElement('certificateNumber')}><Type size={16}/><span>Certificate Number</span><Plus size={14}/></button>
-          <button type="button" onClick={() => addElement('image')}><Image size={16}/><span>Image</span><Plus size={14}/></button>
-          <button type="button" onClick={() => addElement('line')}><Move size={16}/><span>Line</span><Plus size={14}/></button>
-          <div className="vop-cert-template-tool-divider"/>
-          <button type="button" onClick={() => updateTemplate({ backgroundUrl: DEFAULT_BACKGROUND })}><Upload size={16}/><span>Use supplied background</span></button>
+          <button type="button" onClick={() => addElement('text')}><Type size={16} /><span>Text</span><Plus size={14} /></button>
+          <button type="button" onClick={() => addElement('candidateName')}><Type size={16} /><span>Candidate Name</span><Plus size={14} /></button>
+          <button type="button" onClick={() => addElement('courseName')}><Type size={16} /><span>Course Name</span><Plus size={14} /></button>
+          <button type="button" onClick={() => addElement('courseCode')}><Type size={16} /><span>Course Code</span><Plus size={14} /></button>
+          <button type="button" onClick={() => addElement('date')}><Type size={16} /><span>Date</span><Plus size={14} /></button>
+          <button type="button" onClick={() => addElement('certificateNumber')}><Type size={16} /><span>Certificate Number</span><Plus size={14} /></button>
+          <button type="button" onClick={() => addElement('image')}><Image size={16} /><span>Image</span><Plus size={14} /></button>
+          <button type="button" onClick={() => addElement('line')}><Move size={16} /><span>Line</span><Plus size={14} /></button>
+          <div className="vop-cert-template-tool-divider" />
+          <button type="button" onClick={() => updateTemplate({ backgroundUrl: DEFAULT_BACKGROUND })}><Upload size={16} /><span>Use supplied background</span></button>
           <div className="vop-cert-template-tool-note">The supplied VOP artwork is the base layer. Its border, blue ribbons, honeycomb pattern, VOP seal and SDA mark stay intact while editable fields sit above it.</div>
-          <button type="button" onClick={() => { updateTemplate(JSON.parse(JSON.stringify(DEFAULT_TEMPLATE))); setSelectedId(DEFAULT_TEMPLATE.elements?.[0]?.id || 'certify'); }}><RotateCw size={16}/><span>Reset to sample</span></button>
+          <button type="button" onClick={() => { updateTemplate(JSON.parse(JSON.stringify(DEFAULT_TEMPLATE))); setSelectedId(DEFAULT_TEMPLATE.elements?.[0]?.id || 'certify'); }}><RotateCw size={16} /><span>Reset to sample</span></button>
         </aside>
 
         <section className="vop-cert-template-editor-stage">
           <div className="vop-cert-template-stage-toolbar"><div><strong>Certificate canvas</strong><span>1513 × 1040 fixed artboard · default view 40%</span></div><div className="vop-cert-template-zoom"><button type="button" onClick={() => setZoom(value => clamp(value - .1, .4, 1))}>−</button><span>{Math.round(zoom * 100)}%</span><button type="button" onClick={() => setZoom(value => clamp(value + .1, .4, 1))}>+</button><button type="button" onClick={() => setZoom(0.4)} aria-label="Reset zoom">40%</button></div></div>
           <div className="vop-cert-template-scroll"><div className="vop-cert-template-artboard" tabIndex={0} role="application" aria-label="Certificate template editor. Use arrow keys to move the selected element." onKeyDown={handleCanvasKeyDown} style={{ width: CANVAS_WIDTH * zoom, height: CANVAS_HEIGHT * zoom }}>
-            <img className="vop-cert-template-editor-background" src={template.backgroundUrl || DEFAULT_BACKGROUND} alt=""/>
+            <img className="vop-cert-template-editor-background" src={template.backgroundUrl || DEFAULT_BACKGROUND} alt="" />
             {elements.map(element => {
               const style: React.CSSProperties = { left: element.x + '%', top: element.y + '%', width: element.width + '%', height: element.height + '%', transform: 'rotate(' + Number(element.rotate || 0) + 'deg)', color: element.color || '#111111', fontSize: Math.max(7, (element.fontSize || 16) * zoom) + 'px', fontWeight: element.fontWeight || 600, textAlign: element.textAlign || 'center', opacity: element.opacity ?? 1 };
               let content = '';
@@ -252,47 +252,47 @@ export const CertificationConfigStudio: React.FC<Props> = ({ config, onSave, onB
               if (element.type === 'image') {
                 const src = element.id === 'seal' ? (draft.sealUrl || element.src) : element.id === 'signature' ? (draft.signatureUrl || element.src) : element.id === 'logo' ? (draft.logoUrl || element.src) : element.src;
                 return src
-                  ? <img key={element.id} onPointerDown={event => startDrag(event, element)} className={'vop-cert-template-editor-element' + (selected?.id === element.id ? ' selected' : '')} style={{ ...style, objectFit: 'contain' }} src={src} alt=""/>
+                  ? <img key={element.id} onPointerDown={event => startDrag(event, element)} className={'vop-cert-template-editor-element' + (selected?.id === element.id ? ' selected' : '')} style={{ ...style, objectFit: 'contain' }} src={src} alt="" />
                   : <div key={element.id} onPointerDown={event => startDrag(event, element)} className={'vop-cert-template-editor-element' + (selected?.id === element.id ? ' selected' : '')} style={style}>Image</div>;
               }
               return <div key={element.id} onPointerDown={event => startDrag(event, element)} className={'vop-cert-template-editor-element' + (selected?.id === element.id ? ' selected' : '')} style={style}>{content}</div>;
             })}
           </div></div>
-          <div className="vop-cert-template-hint"><Move size={15}/> Drag to reposition • Arrow keys nudge • Shift + Arrow moves farther • Ctrl/Cmd + D duplicates • Delete removes • Use the inspector for text, dimensions, rotation and visibility.</div>
+          <div className="vop-cert-template-hint"><Move size={15} /> Drag to reposition • Arrow keys nudge • Shift + Arrow moves farther • Ctrl/Cmd + D duplicates • Delete removes • Use the inspector for text, dimensions, rotation and visibility.</div>
         </section>
 
         <aside className="vop-cert-template-inspector">
           <div className="vop-cert-template-panel-head"><strong>Properties</strong><span>{selected?.type || 'Nothing selected'}</span></div>
           {selected ? <>
             <div className="vop-cert-template-inspector-actions">
-              <button type="button" onClick={duplicateSelected} title="Duplicate (Ctrl/Cmd+D)"><Copy size={15}/></button>
-              <button type="button" onClick={removeSelected} title="Delete (Backspace/Delete)"><Trash2 size={15}/></button>
-              <button type="button" onClick={() => updateElement(selected.id, { visible: selected.visible === false })} title={selected.visible === false ? 'Show element' : 'Hide element'}>{selected.visible === false ? <EyeOff size={15}/> : <Eye size={15}/>}</button>
-              {['text','candidateName','courseName','courseCode','date','certificateNumber'].includes(selected.type) && <>
-                <button type="button" onClick={() => updateElement(selected.id, { textAlign: 'left' })} title="Align left"><AlignLeft size={15}/></button>
-                <button type="button" onClick={() => updateElement(selected.id, { textAlign: 'center' })} title="Align center"><AlignCenter size={15}/></button>
-                <button type="button" onClick={() => updateElement(selected.id, { textAlign: 'right' })} title="Align right"><AlignRight size={15}/></button>
+              <button type="button" onClick={duplicateSelected} title="Duplicate (Ctrl/Cmd+D)"><Copy size={15} /></button>
+              <button type="button" onClick={removeSelected} title="Delete (Backspace/Delete)"><Trash2 size={15} /></button>
+              <button type="button" onClick={() => updateElement(selected.id, { visible: selected.visible === false })} title={selected.visible === false ? 'Show element' : 'Hide element'}>{selected.visible === false ? <EyeOff size={15} /> : <Eye size={15} />}</button>
+              {['text', 'candidateName', 'courseName', 'courseCode', 'date', 'certificateNumber'].includes(selected.type) && <>
+                <button type="button" onClick={() => updateElement(selected.id, { textAlign: 'left' })} title="Align left"><AlignLeft size={15} /></button>
+                <button type="button" onClick={() => updateElement(selected.id, { textAlign: 'center' })} title="Align center"><AlignCenter size={15} /></button>
+                <button type="button" onClick={() => updateElement(selected.id, { textAlign: 'right' })} title="Align right"><AlignRight size={15} /></button>
               </>}
             </div>
-            {selected.type === 'text' && <label><span>Text</span><textarea value={selected.text || ''} onChange={event => updateElement(selected.id, { text: event.target.value })}/></label>}
-            {selected.type === 'image' && <label><span>Image URL</span><input value={selected.src || ''} onChange={event => updateElement(selected.id, { src: event.target.value })}/></label>}
-            {['text','candidateName','courseName','courseCode','date','certificateNumber'].includes(selected.type) && <>
-              <label><span>Font size</span><input type="number" min="8" max="120" value={selected.fontSize || 16} onChange={event => updateElement(selected.id, { fontSize: Number(event.target.value) })}/></label>
+            {selected.type === 'text' && <label><span>Text</span><textarea value={selected.text || ''} onChange={event => updateElement(selected.id, { text: event.target.value })} /></label>}
+            {selected.type === 'image' && <label><span>Image URL</span><input value={selected.src || ''} onChange={event => updateElement(selected.id, { src: event.target.value })} /></label>}
+            {['text', 'candidateName', 'courseName', 'courseCode', 'date', 'certificateNumber'].includes(selected.type) && <>
+              <label><span>Font size</span><input type="number" min="8" max="120" value={selected.fontSize || 16} onChange={event => updateElement(selected.id, { fontSize: Number(event.target.value) })} /></label>
               <label><span>Font weight</span><select value={String(selected.fontWeight || 600)} onChange={event => updateElement(selected.id, { fontWeight: Number(event.target.value) })}><option value="400">Normal</option><option value="600">Semi Bold</option><option value="700">Bold</option><option value="800">Extra Bold</option><option value="900">Black</option></select></label>
               <label><span>Alignment</span><select value={selected.textAlign || 'center'} onChange={event => updateElement(selected.id, { textAlign: event.target.value as 'left' | 'center' | 'right' })}><option value="left">Left</option><option value="center">Center</option><option value="right">Right</option></select></label>
-              <label><span>Colour</span><input type="color" value={selected.color || '#111111'} onChange={event => updateElement(selected.id, { color: event.target.value })}/></label>
+              <label><span>Colour</span><input type="color" value={selected.color || '#111111'} onChange={event => updateElement(selected.id, { color: event.target.value })} /></label>
             </>}
-            <div className="vop-cert-template-inspector-grid"><label><span>X %</span><input type="number" min="0" max={100 - selected.width} value={selected.x} onChange={event => updateElement(selected.id, { x: clamp(Number(event.target.value), 0, 100 - selected.width) })}/></label><label><span>Y %</span><input type="number" min="0" max={100 - selected.height} value={selected.y} onChange={event => updateElement(selected.id, { y: clamp(Number(event.target.value), 0, 100 - selected.height) })}/></label><label><span>Width %</span><input type="number" min="1" max={100 - selected.x} value={selected.width} onChange={event => updateElement(selected.id, { width: clamp(Number(event.target.value), 1, 100 - selected.x) })}/></label><label><span>Height %</span><input type="number" min="1" max={100 - selected.y} value={selected.height} onChange={event => updateElement(selected.id, { height: clamp(Number(event.target.value), 1, 100 - selected.y) })}/></label></div>
-            <label><span>Rotation °</span><input type="number" min="-180" max="180" value={selected.rotate || 0} onChange={event => updateElement(selected.id, { rotate: clamp(Number(event.target.value), -180, 180) })}/></label>
-            <label><span>Opacity</span><input type="number" min="0" max="1" step=".05" value={selected.opacity ?? 1} onChange={event => updateElement(selected.id, { opacity: clamp(Number(event.target.value), 0, 1) })}/></label>
+            <div className="vop-cert-template-inspector-grid"><label><span>X %</span><input type="number" min="0" max={100 - selected.width} value={selected.x} onChange={event => updateElement(selected.id, { x: clamp(Number(event.target.value), 0, 100 - selected.width) })} /></label><label><span>Y %</span><input type="number" min="0" max={100 - selected.height} value={selected.y} onChange={event => updateElement(selected.id, { y: clamp(Number(event.target.value), 0, 100 - selected.height) })} /></label><label><span>Width %</span><input type="number" min="1" max={100 - selected.x} value={selected.width} onChange={event => updateElement(selected.id, { width: clamp(Number(event.target.value), 1, 100 - selected.x) })} /></label><label><span>Height %</span><input type="number" min="1" max={100 - selected.y} value={selected.height} onChange={event => updateElement(selected.id, { height: clamp(Number(event.target.value), 1, 100 - selected.y) })} /></label></div>
+            <label><span>Rotation °</span><input type="number" min="-180" max="180" value={selected.rotate || 0} onChange={event => updateElement(selected.id, { rotate: clamp(Number(event.target.value), -180, 180) })} /></label>
+            <label><span>Opacity</span><input type="number" min="0" max="1" step=".05" value={selected.opacity ?? 1} onChange={event => updateElement(selected.id, { opacity: clamp(Number(event.target.value), 0, 1) })} /></label>
           </> : <div className="vop-cert-template-empty">Select an element on the certificate.</div>}
         </aside>
       </div>
 
-      <details className="vop-cert-template-advanced"><summary>Certification rules & assets</summary><div className="vop-cert-config-grid"><section className="vop-cert-config-card"><div className="vop-cert-config-card-head"><div><h2>Certification Rules</h2><p>{organizationScoped?'Organization issuance controls.':'Platform issuance controls.'}</p></div><LockKeyhole size={20}/></div><div className="vop-cert-toggle-list"><label className="vop-cert-toggle-row"><span><strong>Official certification</strong><small>Allow the server to issue official certificates.</small></span><input type="checkbox" checked={draft.enabled === true} onChange={event => update('enabled', event.target.checked)}/></label><label className="vop-cert-toggle-row"><span><strong>Public verification</strong><small>Allow certificate-number verification.</small></span><input type="checkbox" checked={draft.verificationEnabled === true} onChange={event => update('verificationEnabled', event.target.checked)}/></label></div><label className="vop-cert-config-field"><span>Certificate release</span><select value={draft.releaseMode||'automatic'} onChange={event=>update('releaseMode',event.target.value as 'automatic'|'review')}><option value="automatic">Automatic — issue immediately after verified completion</option><option value="review">Withhold for organization review before release</option></select><small>Automatic still revalidates every lesson and assessment on the server. Manual certificate issuance remains available for authorized exceptions.</small></label><label className="vop-cert-config-field"><span>Minimum certification score (%)</span><input type="number" min="0" max="100" step="1" value={draft.minimumScore ?? ''} onChange={event => update('minimumScore', event.target.value === '' ? undefined : Number(event.target.value))}/><small>Server-side certification threshold.</small></label></section><section className="vop-cert-config-card"><div className="vop-cert-config-card-head"><div><h2>Identity & assets</h2><p>Compatibility fields used by certificate issuance.</p></div><ExternalLink size={20}/></div><div className="vop-cert-config-fields">{TEXT_FIELDS.concat(ASSET_FIELDS).map(field => <label className="vop-cert-config-field" key={field.key}><span>{field.label}</span>{field.multiline ? <textarea rows={4} value={stringValue(draft, field.key)} onChange={event => update(field.key, event.target.value)}/> : <input value={stringValue(draft, field.key)} onChange={event => update(field.key, event.target.value)}/>}<small>{field.hint}</small></label>)}</div></section></div></details>
+      <details className="vop-cert-template-advanced"><summary>Certification rules & assets</summary><div className="vop-cert-config-grid"><section className="vop-cert-config-card"><div className="vop-cert-config-card-head"><div><h2>Certification Rules</h2><p>{organizationScoped ? 'Organization issuance controls.' : 'Platform issuance controls.'}</p></div><LockKeyhole size={20} /></div><div className="vop-cert-toggle-list"><label className="vop-cert-toggle-row"><span><strong>Official certification</strong><small>Allow the server to issue official certificates.</small></span><input type="checkbox" checked={draft.enabled === true} onChange={event => update('enabled', event.target.checked)} /></label><label className="vop-cert-toggle-row"><span><strong>Public verification</strong><small>Allow certificate-number verification.</small></span><input type="checkbox" checked={draft.verificationEnabled === true} onChange={event => update('verificationEnabled', event.target.checked)} /></label></div><label className="vop-cert-config-field"><span>Certificate release</span><select value={draft.releaseMode || 'automatic'} onChange={event => update('releaseMode', event.target.value as 'automatic' | 'review')}><option value="automatic">Automatic — issue immediately after verified completion</option><option value="review">Withhold for organization review before release</option></select><small>Automatic still revalidates every lesson and assessment on the server. Manual certificate issuance remains available for authorized exceptions.</small></label><label className="vop-cert-config-field"><span>Minimum certification score (%)</span><input type="number" min="0" max="100" step="1" value={draft.minimumScore ?? ''} onChange={event => update('minimumScore', event.target.value === '' ? undefined : Number(event.target.value))} /><small>Server-side certification threshold.</small></label></section><section className="vop-cert-config-card"><div className="vop-cert-config-card-head"><div><h2>Identity & assets</h2><p>Compatibility fields used by certificate issuance.</p></div><ExternalLink size={20} /></div><div className="vop-cert-config-fields">{TEXT_FIELDS.concat(ASSET_FIELDS).map(field => <label className="vop-cert-config-field" key={field.key}><span>{field.label}</span>{field.multiline ? <textarea rows={4} value={stringValue(draft, field.key)} onChange={event => update(field.key, event.target.value)} /> : <input value={stringValue(draft, field.key)} onChange={event => update(field.key, event.target.value)} />}<small>{field.hint}</small></label>)}</div></section></div></details>
 
-      <section className="vop-cert-config-card vop-cert-config-preview"><div className="vop-cert-config-card-head"><div><h2>Live Certificate Preview</h2><p>The same renderer is used for issued certificates and public verification.</p></div><ExternalLink size={20}/></div><div className="vop-cert-live-artwork"><CertificateArtwork certificate={previewCertificate} config={draft} verification={false}/></div></section>
-      <div className="vop-cert-note"><ShieldCheck size={22}/><div><strong>One-source certificate design</strong><span>All placement, wording and artwork controls are saved from Certificate Configuration and reused everywhere.</span></div></div>
+      <section className="vop-cert-config-card vop-cert-config-preview"><div className="vop-cert-config-card-head"><div><h2>Live Certificate Preview</h2><p>The same renderer is used for issued certificates and public verification.</p></div><ExternalLink size={20} /></div><div className="vop-cert-live-artwork"><CertificateArtwork certificate={previewCertificate} config={draft} verification={false} /></div></section>
+      <div className="vop-cert-note"><ShieldCheck size={22} /><div><strong>One-source certificate design</strong><span>All placement, wording and artwork controls are saved from Certificate Configuration and reused everywhere.</span></div></div>
     </div>
   );
 };

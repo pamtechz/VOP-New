@@ -41,14 +41,23 @@ export async function authenticateTenant(request: Request, requestedOrganization
   if (!profileSnap.exists) throw new Error('Account profile was not found.');
   const profile = profileSnap.data() || {};
   const isSuperAdmin = String(profile.role || '') === 'super_admin';
-  const hierarchyAdmin = ['union_admin', 'conference_admin', 'district_admin', 'church_admin'].includes(String(profile.role || ''));
+  const rawRole = String(profile.role || '');
+  const adminNodeType = String(profile.adminNodeType || '').trim().toLowerCase();
+  const adminNodeId = String(profile.adminNodeId || '').trim();
+  const inferredHierarchyRole = adminNodeType && adminNodeId
+    ? (adminNodeType === 'union' ? 'union_admin' : adminNodeType === 'conference' ? 'conference_admin' : adminNodeType === 'district' ? 'district_admin' : 'church_admin')
+    : '';
+  const hierarchyRoleName = ['union_admin', 'conference_admin', 'district_admin', 'church_admin'].includes(rawRole)
+    ? rawRole
+    : inferredHierarchyRole;
+  const hierarchyAdmin = Boolean(hierarchyRoleName && (adminNodeId || String(profile.adminNodeId || '').trim()));
   const profileOrganizationId = String(profile.organizationId || '').trim();
   const requestedId = String(requestedOrganizationId || '').trim();
 
   if (hierarchyAdmin) {
-    const nodeId = String(profile.adminNodeId || '').trim();
+    const nodeId = adminNodeId || String(profile.adminNodeId || '').trim();
     if (!nodeId) throw new Error('This administrator account is not linked to a hierarchy tenant.');
-    const role = String(profile.role || '');
+    const role = hierarchyRoleName;
     const collection = role === 'union_admin' ? 'unions' : role === 'conference_admin' ? 'conferences' : role === 'district_admin' ? 'districts' : 'churches';
     const node = await db.doc(collection + '/' + nodeId).get();
     if (!node.exists) throw new Error('The assigned hierarchy tenant does not exist.');
@@ -272,7 +281,10 @@ export function billingTenantFromContext(ctx:TenantContext):{type:BillingTenantT
   if(ctx.isSuperAdmin)return null;
   if(ctx.tenantType==='organization'&&ctx.organizationId)return {type:'organization',id:ctx.organizationId};
   if(ctx.tenantType==='hierarchy'){
-    const type=HIERARCHY_ROLE_TO_BILLING_TENANT[String(ctx.profile.role||'')];
+    const nodeType=String(ctx.profile.adminNodeType||'').trim().toLowerCase() as Exclude<BillingTenantType,'organization'>;
+    const type=(nodeType&&BILLING_TENANT_COLLECTION[nodeType]?nodeType:null)
+      ||HIERARCHY_ROLE_TO_BILLING_TENANT[String(ctx.profile.role||'')]
+      ||HIERARCHY_ROLE_TO_BILLING_TENANT[String(ctx.membership?.role||'')];
     const id=String(ctx.profile.adminNodeId||'').trim();
     return type&&id?{type,id}:null;
   }

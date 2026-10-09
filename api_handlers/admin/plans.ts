@@ -131,7 +131,14 @@ export default async function handler(req: Request, res: Response) {
     const body = object(req.body);
     const action = text(body.action, 'listPlans');
     const requestedOrganizationId = text(body.organizationId);
-    const ctx = await authenticateTenant(req, requestedOrganizationId || undefined);
+    const isStatusCheck = action === 'getPolicyStatus' || action === 'getBillingPolicy';
+    const ctx = await authenticateTenant(req, requestedOrganizationId || undefined, isStatusCheck);
+
+    if (isStatusCheck) {
+      const settings = await loadPlatformBillingSettings(ctx.db);
+      return res.status(200).json({ ok: true, subscriptionsEnabled: settings.subscriptionsEnabled });
+    }
+
     const readActions=['listPlans','listAvailablePlans','getSubscription','getBillingSettings'];
     const selfServiceActions=['activateFreePlan','cancelSubscription','reactivateSubscription'];
     await requirePermission(ctx, 'billing', readActions.includes(action) ? 'view' : selfServiceActions.includes(action) ? 'update' : 'manage');
@@ -236,7 +243,23 @@ export default async function handler(req: Request, res: Response) {
     }
 
     if (action === 'getSubscription') {
-      const target=targetFromRequest(ctx,body);
+      let target: { type: BillingTenantType; id: string };
+      try {
+        target = targetFromRequest(ctx, body);
+      } catch (err) {
+        if (!ctx.isSuperAdmin) {
+          return res.status(200).json({
+            ok: true,
+            plan: 'unsubscribed',
+            subscriptionsEnabled: false,
+            freeTier: true,
+            paidPlanActive: false,
+            featureEntitlements: {},
+            exhaustedQuotaKeys: [],
+          });
+        }
+        throw err;
+      }
       if(!selfServiceManager(ctx,target)&&!ctx.isSuperAdmin){
         throw new Error('You cannot access another institutional tenant subscription.');
       }

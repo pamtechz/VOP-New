@@ -70,8 +70,8 @@ export function normalizeCurriculumStructure(value:unknown):CurriculumChapter[] 
         const id=validId(block.id,'block',seen);
         const type=block.type as CurriculumBlockType;
         if(type==='image'||type==='video'||type==='audio')return {id,type,src:validSrc(block.src,type)};
-        const text=String(block.text||'').trim();
-        if(!text||text.length>8000)throw new Error('Text blocks require 1–8000 characters.');
+        const text=String(block.text??'').trim();
+        if(text.length>8000)throw new Error('Text blocks may contain at most 8000 characters.');
         return {id,type,text};
       });
       return {id,title,blocks,...(document?{document}:{})};

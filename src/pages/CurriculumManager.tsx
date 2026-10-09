@@ -3,8 +3,8 @@ import {
   ArrowLeft, Book, BookOpen, CalendarDays, CheckCircle, ChevronDown,
   ChevronLeft, ChevronRight, ChevronUp, CircleHelp, Clock, Edit3, Eye, FileText,
   Filter, Globe, Image as ImageIcon, Layers, Link as LinkIcon, List, ListOrdered,
-  LoaderCircle, MoreVertical, Plus, Quote, Redo2, RefreshCw, Save, Search, Send, Settings,
-  Table2, Trash2, Underline, Undo2, Video, Volume2, X
+  LoaderCircle, MoreVertical, Plus, Quote, Redo2, RefreshCw, RotateCcw, Save, Search, Send, Settings,
+  Sparkles, Table2, Trash2, Underline, Undo2, Video, Volume2, X
 } from 'lucide-react';
 import type { CustomLanguage, DiscoverGuide, Lesson, User } from '../types';
 import { auth } from '../lib/firebase';
@@ -96,6 +96,55 @@ type EditorState = {
   published: boolean;
   sharingScope: 'private' | 'organization' | 'shared';
 };
+
+type LocalLessonDraft = {
+  guideId: string;
+  lessonId: string;
+  savedAt: string;
+  lessonTitle: string;
+  editor: EditorState;
+};
+
+const getLocalDraftKey = (guideId: string, lessonId: string) =>
+  `vop_local_lesson_draft_${lessonId || 'new'}_${guideId || 'default'}`;
+
+function saveLocalDraft(editor: EditorState) {
+  try {
+    const key = getLocalDraftKey(editor.guideId, editor.id);
+    const payload: LocalLessonDraft = {
+      guideId: editor.guideId,
+      lessonId: editor.id,
+      savedAt: new Date().toISOString(),
+      lessonTitle: editor.title || 'Untitled lesson',
+      editor,
+    };
+    localStorage.setItem(key, JSON.stringify(payload));
+  } catch (err) {
+    console.warn('Failed to save local draft:', err);
+  }
+}
+
+function getLocalDraft(guideId: string, lessonId: string): LocalLessonDraft | null {
+  try {
+    const key = getLocalDraftKey(guideId, lessonId);
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as LocalLessonDraft;
+    if (parsed && parsed.editor && parsed.savedAt) return parsed;
+  } catch (err) {
+    console.warn('Failed to parse local draft:', err);
+  }
+  return null;
+}
+
+function clearLocalDraft(guideId: string, lessonId: string) {
+  try {
+    const key = getLocalDraftKey(guideId, lessonId);
+    localStorage.removeItem(key);
+  } catch {
+    // ignore
+  }
+}
 
 async function adminContentRequest(
   action: 'list' | 'listGuides' | 'listGuideLessons' | 'upsert' | 'upsertLesson' | 'transferLessonStructure' | 'delete' | 'publishLesson' | 'unpublishLesson' | 'deleteLesson' | 'deleteGuide',
@@ -436,11 +485,32 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
   const [scopeOrganizationId, setScopeOrganizationId] = useState(currentUser?.role === 'super_admin' ? '' : String(currentUser?.organizationId || ''));
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deletingLessonId, setDeletingLessonId] = useState<string | null>(null);
+  const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'dirty'>('idle');
+  const [lastAutoSavedAt, setLastAutoSavedAt] = useState<Date | null>(null);
+  const [recoverableDraft, setRecoverableDraft] = useState<LocalLessonDraft | null>(null);
 
   useEffect(()=>{
     if(!editor){setEditorDirty(false);return;}
     setEditorDirty(JSON.stringify(editor)!==savedEditorSignature.current);
   },[editor]);
+
+  useEffect(() => {
+    if (!editor || !editorDirty) {
+      setAutoSaveStatus(editor ? 'saved' : 'idle');
+      return;
+    }
+    setAutoSaveStatus('dirty');
+    const timer = setTimeout(() => {
+      setAutoSaveStatus('saving');
+      saveLocalDraft(editor);
+      setLastAutoSavedAt(new Date());
+      setTimeout(() => {
+        setAutoSaveStatus('saved');
+      }, 400);
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [editor, editorDirty]);
+
   useEffect(()=>{
     const warn=(event:BeforeUnloadEvent)=>{
       if(!editorDirty)return;
@@ -449,11 +519,30 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
     window.addEventListener('beforeunload',warn);
     return()=>window.removeEventListener('beforeunload',warn);
   },[editorDirty]);
+
   const leaveEditor=async()=>{
     if(editorDirty&&!await appConfirm('You have unsaved lesson changes. Leave without saving them?', {
       title:'Leave lesson editor?',confirmLabel:'Leave without saving',tone:'danger',
     }))return;
+    if (editor) clearLocalDraft(editor.guideId, editor.id);
+    setRecoverableDraft(null);
+    setAutoSaveStatus('idle');
     savedEditorSignature.current='';setEditorDirty(false);setEditor(null);setRequestedSectionId('');
+  };
+
+  const restoreLocalDraft = () => {
+    if (!recoverableDraft) return;
+    setEditor(recoverableDraft.editor);
+    setEditorDirty(true);
+    setRecoverableDraft(null);
+    notify('Restored unsaved draft from local recovery storage.');
+  };
+
+  const discardLocalDraft = () => {
+    if (editor) clearLocalDraft(editor.guideId, editor.id);
+    if (recoverableDraft) clearLocalDraft(recoverableDraft.guideId, recoverableDraft.lessonId);
+    setRecoverableDraft(null);
+    notify('Local recovery draft discarded.');
   };
 
   const enabledLanguages = useMemo(() => languages.filter(item => item.enabled !== false), [languages]);
@@ -720,8 +809,16 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
     if (isSuperAdmin && organizationId && organizationId !== scopeOrganizationId) setScopeOrganizationId(organizationId);
     const nextEditor=editorFromLesson(row);
     savedEditorSignature.current=JSON.stringify(nextEditor);
+    const existingDraft = getLocalDraft(nextEditor.guideId, nextEditor.id);
+    if (existingDraft && JSON.stringify(existingDraft.editor) !== savedEditorSignature.current) {
+      setRecoverableDraft(existingDraft);
+    } else {
+      setRecoverableDraft(null);
+    }
     setEditor(nextEditor);
     setEditorDirty(false);
+    setAutoSaveStatus('idle');
+    setLastAutoSavedAt(null);
     setRequestedSectionId(sectionId);
     setPlateValidationErrors({});
     setEditorTab('content');
@@ -744,8 +841,16 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
     next.guideTitle = String(guide?.title || '');
     next.lessonNumber = String(moduleLessons.filter(item=>item.type!=='Test').length+1);
     savedEditorSignature.current=JSON.stringify(next);
+    const existingDraft = getLocalDraft(next.guideId, '');
+    if (existingDraft && JSON.stringify(existingDraft.editor) !== savedEditorSignature.current) {
+      setRecoverableDraft(existingDraft);
+    } else {
+      setRecoverableDraft(null);
+    }
     setEditor(next);
     setEditorDirty(false);
+    setAutoSaveStatus('idle');
+    setLastAutoSavedAt(null);
     setRequestedSectionId('');
     setPlateValidationErrors({});
     setEditorTab('content');
@@ -901,6 +1006,10 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
       await load();
       const savedEditor={ ...editor, id, title: resolvedTitle, guideTitle: valueText(guide.title) || editor.guideTitle, published: publish };
       savedEditorSignature.current=JSON.stringify(savedEditor);
+      clearLocalDraft(editor.guideId, editor.id);
+      if (editor.id !== id) clearLocalDraft(editor.guideId, '');
+      setRecoverableDraft(null);
+      setAutoSaveStatus('saved');
       setEditor(savedEditor);
       setEditorDirty(false);
       setSelectedGuideId(editor.guideId);
@@ -1004,6 +1113,9 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
       await adminContent('deleteLesson', 'curriculum', lessonId, { guideId, language });
       notify(tx('curriculum.lessonDeleted', 'Lesson deleted.'));
       if (editor?.id === lessonId) {
+        clearLocalDraft(editor.guideId, editor.id);
+        setRecoverableDraft(null);
+        setAutoSaveStatus('idle');
         savedEditorSignature.current = '';
         setEditor(null);
         setEditorDirty(false);
@@ -1204,6 +1316,57 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
               setQuizPlacement({guideId:editor.guideId,lessonId:editor.id,anchorType:anchor.type,anchorId:anchor.id,kind:'practice'});
               setEditor(null);setTab('quizzes');onTabChange?.('quizzes');
             }}
+            autoSaveChip={
+              <span className={`vop-plate-autosave-chip ${autoSaveStatus}`} title={lastAutoSavedAt ? `Last auto-saved locally at ${lastAutoSavedAt.toLocaleTimeString()}` : 'Auto-save draft active'}>
+                {autoSaveStatus === 'saving' && (
+                  <>
+                    <LoaderCircle className="spin" size={13} />
+                    <span>Auto-saving…</span>
+                  </>
+                )}
+                {autoSaveStatus === 'saved' && (
+                  <>
+                    <CheckCircle size={13} />
+                    <span>Draft saved locally</span>
+                  </>
+                )}
+                {autoSaveStatus === 'dirty' && (
+                  <>
+                    <Save size={13} />
+                    <span>Unsaved changes</span>
+                  </>
+                )}
+                {autoSaveStatus === 'idle' && (
+                  <>
+                    <Save size={13} />
+                    <span>Auto-save active</span>
+                  </>
+                )}
+              </span>
+            }
+            recoveryBanner={
+              recoverableDraft ? (
+                <div className="vop-draft-recovery-banner" role="alert">
+                  <div className="vop-draft-recovery-info">
+                    <Sparkles size={18} />
+                    <div>
+                      <strong>Unsaved local draft found</strong>
+                      <span>
+                        Found a local auto-saved draft from {new Date(recoverableDraft.savedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })} ({formatDate(recoverableDraft.savedAt)}). Would you like to restore it?
+                      </span>
+                    </div>
+                  </div>
+                  <div className="vop-draft-recovery-actions">
+                    <button type="button" className="vop-draft-recovery-restore-btn" onClick={restoreLocalDraft}>
+                      <RotateCcw size={14} /> Restore draft
+                    </button>
+                    <button type="button" className="vop-draft-recovery-discard-btn" onClick={discardLocalDraft}>
+                      Discard
+                    </button>
+                  </div>
+                </div>
+              ) : null
+            }
           />
           {message && <div className="vop-toast">{message}</div>}
           {error && <AppAlertDialog message={error} title="Curriculum Studio" onClose={() => setError('')}/>}
@@ -1213,6 +1376,27 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
 
     return (
       <div className="vop-reference-editor-page vop-reference-lesson-editor">
+        {recoverableDraft && (
+          <div className="vop-draft-recovery-banner" role="alert" style={{ marginBottom: 16 }}>
+            <div className="vop-draft-recovery-info">
+              <Sparkles size={18} />
+              <div>
+                <strong>Unsaved local draft found</strong>
+                <span>
+                  Found a local auto-saved draft from {new Date(recoverableDraft.savedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })} ({formatDate(recoverableDraft.savedAt)}). Would you like to restore it?
+                </span>
+              </div>
+            </div>
+            <div className="vop-draft-recovery-actions">
+              <button type="button" className="vop-draft-recovery-restore-btn" onClick={restoreLocalDraft}>
+                <RotateCcw size={14} /> Restore draft
+              </button>
+              <button type="button" className="vop-draft-recovery-discard-btn" onClick={discardLocalDraft}>
+                Discard
+              </button>
+            </div>
+          </div>
+        )}
         <div className="vop-breadcrumb">
           <button type="button" className="vop-breadcrumb-button" onClick={leaveEditor}><ArrowLeft size={15}/>{tx('curriculum.studio', 'Curriculum Studio')}{editorDirty?' · Unsaved':''}</button>
           <span>›</span><span>{tx('curriculum.lessons', 'Lessons')}</span><span>›</span><span>{tx('curriculum.createEditLesson', 'Create / Edit Lesson')}</span>

@@ -1,14 +1,15 @@
 import {
   BookOpen, CalendarDays, ChevronLeft, ChevronRight, GraduationCap, HeartHandshake,
   House, LibraryBig, Megaphone, MessageCircle, Radio, ScrollText,
-  Settings, ShieldCheck, Swords, Brain, UserRound, Bell, UserPlus, type LucideIcon,
+  Settings, ShieldCheck, Swords, Brain, UserRound, Bell, UserPlus,
+  LayoutDashboard, Users, UserCheck, type LucideIcon,
 } from 'lucide-react';
 import type { AppRoute, AppSettings, User } from '../../types';
 import { getTranslation, getUiLocale } from '../../services/i18n';
 import './sidebar-system.css';
 import { hasAdminPortalAccess, hasMentorPortalAccess, hasLocalizationPortalAccess } from '../../services/portalAccess';
 
-type NavItem = { route:AppRoute; label:string; icon:LucideIcon };
+type NavItem = { route:AppRoute; label:string; icon:LucideIcon; adminTab?: string };
 type Props = {
   currentRoute:AppRoute;
   currentUser:User;
@@ -27,7 +28,27 @@ export function LearnerSidebar({currentRoute,currentUser,settings,collapsed,onTo
   const canSeekSupport=['student','learner','candidate'].includes(String(currentUser.role||'').toLowerCase())
     ||['student','learner','candidate'].includes(String(currentUser.organizationRole||'').toLowerCase());
   const localizationAccess=hasLocalizationPortalAccess(currentUser);
+
+  const handleNav = (item: NavItem) => {
+    if (item.adminTab && currentUser?.uid) {
+      try {
+        sessionStorage.setItem('vop-admin-tab-v1:' + currentUser.uid, item.adminTab);
+      } catch {}
+    }
+    onNavigate(item.route);
+  };
+
   const groups:{name:string;items:NavItem[]}[]=[
+    ...(isAdmin ? [{
+      name: t('navigation.admin_operations', 'Admin Operations'),
+      items: [
+        { route: 'admin' as const, label: t('navigation.admin_dashboard', 'Dashboard'), icon: LayoutDashboard, adminTab: 'dashboard' },
+        { route: 'admin' as const, label: t('navigation.curriculum_studio', 'Curriculum Studio'), icon: BookOpen, adminTab: 'curriculum' },
+        { route: 'admin' as const, label: t('navigation.user_management', 'User Management'), icon: Users, adminTab: 'userManagement' },
+        { route: 'admin' as const, label: t('navigation.candidates', 'Candidates & Progress'), icon: UserCheck, adminTab: 'candidates' },
+        { route: 'admin' as const, label: t('navigation.admin_settings', 'System Settings'), icon: Settings, adminTab: 'settings' },
+      ],
+    }] : []),
     {name:t('navigation.learning','Learning'),items:[
       {route:'home',label:t('navigation.discover','Discover'),icon:House},
       {route:'lessons',label:t('navigation.lessons','Lessons & assessments'),icon:BookOpen},
@@ -79,7 +100,7 @@ export function LearnerSidebar({currentRoute,currentUser,settings,collapsed,onTo
             className={'vop-learner-sidebar-link'+(currentRoute===item.route?' active':'')}
             title={collapsed?item.label:undefined} aria-label={item.label}
             aria-current={currentRoute===item.route?'page':undefined}
-            onClick={()=>onNavigate(item.route)}>
+            onClick={()=>handleNav(item)}>
             <Icon size={20} aria-hidden="true"/>{!collapsed&&<span>{item.label}</span>}
           </button>;
         })}

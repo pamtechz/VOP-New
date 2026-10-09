@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, BookOpen, CheckCircle2, ChevronRight, CircleHelp, Clock3, Search, Sparkles, RefreshCw } from 'lucide-react';
+import { ArrowLeft, BookOpen, Bookmark, CheckCircle2, ChevronRight, CircleHelp, Clock3, Play, Search, Sparkles, RefreshCw } from 'lucide-react';
 import type { CurriculumProgram, DiscoverGuide, Lesson, User } from '../types';
 import { getStoredSettings } from '../services/storage';
 import { loadFirestorePrograms } from '../services/firestoreData';
 import './program-catalog.css';
 import { lessonIsComplete, lessonScoreForDisplay } from '../services/lessonProgress';
 import { getTranslation, getUiLocale } from '../services/i18n';
+import { resolveLessonResumeBookmark, getActiveGuideBookmark, getActiveProgramBookmark } from '../services/lessonBookmark';
 import { ShimmerCards } from '../components/layout/Shimmer';
 
 interface Props {
@@ -15,7 +16,7 @@ interface Props {
   selectedProgramId: string;
   onSelectProgram: (programId: string) => void;
   onOpenGuide: (guide: DiscoverGuide) => void;
-  onOpenLesson: (guide: DiscoverGuide, lesson: Lesson) => void;
+  onOpenLesson: (guide: DiscoverGuide, lesson: Lesson, pageIndex?: number) => void;
   onRefresh: () => Promise<void>;
 }
 
@@ -48,6 +49,7 @@ export const LessonsPage: React.FC<Props> = ({
   const [query,setQuery] = useState('');
   const [language,setLanguage] = useState('all');
   const [kind,setKind] = useState<'all'|'Lesson'|'Test'>('all');
+  const [scope,setScope] = useState<'all'|'organization'|'shared'>('all');
   const settings=getStoredSettings();
   const t=(key:string,fallback:string)=>getTranslation(key,getUiLocale(),settings.customTranslations,fallback,'LessonsPage');
   const languages=useMemo(()=>[...new Set(guides.map(guide=>guide.language).filter(Boolean))].sort(),[guides]);
@@ -56,10 +58,20 @@ export const LessonsPage: React.FC<Props> = ({
   ).filter(({guide,lesson})=>{
     if(language!=='all'&&guide.language!==language)return false;
     if(kind!=='all'&&lesson.type!==kind)return false;
+    if(scope==='organization'){
+      const isOrg=Boolean(currentUser.organizationId && (
+        lesson.ownerOrganizationId===currentUser.organizationId ||
+        (!lesson.ownerOrganizationId && guide.ownerOrganizationId===currentUser.organizationId)
+      ));
+      if(!isOrg)return false;
+    } else if(scope==='shared'){
+      const isShared=lesson.sharingScope==='shared' || (!lesson.ownerOrganizationId && guide.sharingScope==='shared');
+      if(!isShared)return false;
+    }
     const needle=query.trim().toLowerCase();
     return !needle||[guide.title,guide.subtitle,lesson.title,lesson.description,lesson.lessonNumber]
       .join(' ').toLowerCase().includes(needle);
-  }),[guides,query,language,kind]);
+  }),[guides,query,language,kind,scope,currentUser.organizationId]);
   const availableProgramGuideIds=useMemo(()=>new Map(programs.map(program=>[
     program.id,
     [...new Set(program.guideIds)].filter(id=>guides.some(guide=>
@@ -120,14 +132,33 @@ export const LessonsPage: React.FC<Props> = ({
               <p>{activeProgram.description||'Select a guide or module to begin studying.'}</p></div>
           </div>
           <div className="vop-program-catalog-guides">
-            {programGuides.length?programGuides.map((guide,index)=><button type="button"
-              key={guide.id+':'+guide.language}
-              onClick={()=>onOpenGuide({...guide,learnerEntryMode:activeProgram.entryMode})}>
-              <span className="vop-program-catalog-number">{index+1}</span>
-              <span><strong>{guide.title}</strong>
-                <small>{guide.lessons.filter(lesson=>lesson.type==='Lesson').length} lessons ·
-                  {guide.language.toUpperCase()}</small></span><ChevronRight size={17}/>
-            </button>):<p role="status">This program has no available published guides yet.</p>}
+            {programGuides.length?programGuides.map((guide,index)=>{
+              const guideBm = getActiveGuideBookmark(guide, currentUser, settings.quizPassThreshold);
+              const hasResume = Boolean(guideBm?.bookmark.hasBookmark && !guideBm.bookmark.isCompleted);
+              return (
+                <div key={guide.id+':'+guide.language} className="vop-program-guide-item">
+                  <button type="button"
+                    className="vop-program-guide-main-btn"
+                    onClick={()=>onOpenGuide({...guide,learnerEntryMode:activeProgram.entryMode})}>
+                    <span className="vop-program-catalog-number">{index+1}</span>
+                    <span><strong>{guide.title}</strong>
+                      <small>{guide.lessons.filter(lesson=>lesson.type==='Lesson').length} lessons ·
+                        {guide.language.toUpperCase()}</small></span><ChevronRight size={17}/>
+                  </button>
+                  {hasResume && guideBm && (
+                    <button
+                      type="button"
+                      className="vop-program-guide-resume-link"
+                      onClick={() => onOpenLesson(guide, guideBm.lesson, guideBm.bookmark.pageIndex)}
+                      title={`Resume ${guideBm.lesson.title} at Page ${guideBm.bookmark.pageNumber}`}
+                    >
+                      <Bookmark size={12} fill="currentColor"/>
+                      <span>Resume L{guideBm.lesson.lessonNumber} (p. {guideBm.bookmark.pageNumber})</span>
+                    </button>
+                  )}
+                </div>
+              );
+            }):<p role="status">This program has no available published guides yet.</p>}
           </div>
         </div>:<>
           <div className="vop-program-catalog-intro"><div>
@@ -138,18 +169,27 @@ export const LessonsPage: React.FC<Props> = ({
               [program.title,program.description,...program.guideIds.flatMap(id=>
                 guides.filter(guide=>guide.id===id).map(guide=>guide.title))].join(' ')
                 .toLowerCase().includes(query.trim().toLowerCase()))
-              .map(program=>{const moduleCount=availableProgramGuideIds.get(program.id)?.length||0;return <button type="button" key={program.id}
-                className="vop-program-catalog-card"
-                onClick={()=>onSelectProgram(program.id)}>
-                <span className="vop-program-catalog-cover">
-                  {program.coverImageUrl?<img src={program.coverImageUrl} alt=""/>:<BookOpen size={27}/>}
-                </span><span className="vop-program-catalog-description">
-                  <small>{program.entryMode==='sections'?'STUDY BY SECTION':'STUDY BY LESSON'}</small>
-                  <strong>{program.title}</strong>
-                  <span>{program.description||'Explore this course.'}</span>
-                  <em>{moduleCount} {moduleCount===1?'module':'modules'} <ChevronRight size={14}/></em>
-                </span>
-              </button>})}
+              .map(program=>{
+                const moduleCount=availableProgramGuideIds.get(program.id)?.length||0;
+                const programBm = getActiveProgramBookmark(program, guides, currentUser, settings.quizPassThreshold);
+                return <button type="button" key={program.id}
+                  className="vop-program-catalog-card"
+                  onClick={()=>onSelectProgram(program.id)}>
+                  <span className="vop-program-catalog-cover">
+                    {program.coverImageUrl?<img src={program.coverImageUrl} alt=""/>:<BookOpen size={27}/>}
+                  </span><span className="vop-program-catalog-description">
+                    <small>{program.entryMode==='sections'?'STUDY BY SECTION':'STUDY BY LESSON'}</small>
+                    <strong>{program.title}</strong>
+                    <span>{program.description||'Explore this course.'}</span>
+                    {programBm && (
+                      <span className="vop-program-bookmark-badge">
+                        <Bookmark size={11} fill="currentColor"/>
+                        <span>Resume: L{programBm.lesson.lessonNumber} (p. {programBm.bookmark.pageNumber})</span>
+                      </span>
+                    )}
+                    <em>{moduleCount} {moduleCount===1?'module':'modules'} <ChevronRight size={14}/></em>
+                  </span>
+                </button>})}
           </div>
         </>}
       </section>}
@@ -166,6 +206,11 @@ export const LessonsPage: React.FC<Props> = ({
         <label>Content <select value={kind} onChange={event=>setKind(event.target.value as 'all'|'Lesson'|'Test')}>
           <option value="all">All items</option><option value="Lesson">Lessons</option><option value="Test">Assessments</option>
         </select></label>
+        {currentUser.organizationId && <label>Source <select value={scope} onChange={event=>setScope(event.target.value as 'all'|'organization'|'shared')}>
+          <option value="all">All sources</option>
+          <option value="organization">{settings.organizationName || 'Organization'}</option>
+          <option value="shared">Shared / Public</option>
+        </select></label>}
         <span role="status">{standaloneEntries.length} published item{standaloneEntries.length===1?'':'s'}</span>
         <button type="button" className="vop-lessons-refresh" disabled={refreshing} onClick={()=>void(async()=>{
           setRefreshing(true);setRefreshError('');
@@ -181,12 +226,33 @@ export const LessonsPage: React.FC<Props> = ({
       {standaloneEntries.length ? <div className={'vop-lessons-grid'+(refreshing?' vop-refreshing vop-shimmer-overlay':'')}>{standaloneEntries.map(({guide,lesson})=>{
         const state=status(guide,lesson);
         const attempted=lesson.type==='Test'&&lessonScoreForDisplay(guide,lesson,currentUser)!==undefined;
+        const isOrgLesson=Boolean(currentUser.organizationId && (
+          lesson.ownerOrganizationId===currentUser.organizationId ||
+          (!lesson.ownerOrganizationId && guide.ownerOrganizationId===currentUser.organizationId)
+        ));
+        const scopeTag=isOrgLesson ? (settings.organizationName || 'Organization') : (lesson.sharingScope==='shared' || guide.sharingScope==='shared' ? 'Shared' : '');
+        const bookmark = resolveLessonResumeBookmark(guide, lesson, currentUser, settings.quizPassThreshold);
+        const hasBookmark = Boolean(lesson.type === 'Lesson' && bookmark?.hasBookmark && !bookmark.isCompleted);
         return <article className="vop-material-card vop-lesson-card" key={guide.id+':'+guide.language+':'+lesson.id}>
-          <div className="vop-lesson-card-meta"><span>{guide.language.toUpperCase()} · {lesson.type==='Test'?'Assessment':'Lesson'} {lesson.lessonNumber}</span>
+          <div className="vop-lesson-card-meta"><span>{guide.language.toUpperCase()} · {lesson.type==='Test'?'Assessment':'Lesson'} {lesson.lessonNumber}{scopeTag ? ` · ${scopeTag}` : ''}</span>
             <span className={state.done?'vop-lesson-status completed':'vop-lesson-status'}>{state.done&&<CheckCircle2 size={13}/>} {state.label}</span>
           </div>
           <div className="vop-lesson-card-body">
-            <h2>{lesson.title}</h2><p>{lesson.description||'Study this part of the guide.'}</p>
+            <h2>{lesson.title}</h2>
+            {hasBookmark && bookmark ? (
+              <div className="vop-lesson-bookmark-pill">
+                <Bookmark size={13} fill="currentColor" className="text-amber-500"/>
+                <div className="vop-lesson-bookmark-pill-info">
+                  <span className="vop-lesson-bookmark-pill-title">
+                    Resume: <strong>{bookmark.sectionTitle ? `Section: “${bookmark.sectionTitle}”` : `Page ${bookmark.pageNumber}`}</strong>
+                  </span>
+                  <span className="vop-lesson-bookmark-pill-meta">
+                    Page {bookmark.pageNumber} of {bookmark.totalPages} · {bookmark.progressPercent}% read
+                  </span>
+                </div>
+              </div>
+            ) : null}
+            <p>{lesson.description||'Study this part of the guide.'}</p>
             <button type="button" className="vop-lesson-guide" onClick={()=>onOpenGuide(guide)}>
               <BookOpen size={15}/><span>{guide.title}</span><ChevronRight size={16}/>
             </button>
@@ -194,11 +260,34 @@ export const LessonsPage: React.FC<Props> = ({
           <div className="vop-lesson-card-footer">
             <span>{lesson.type==='Test'?<CircleHelp size={15}/>:<Clock3 size={15}/>}
               {lesson.type==='Test'?`${lesson.questions?.length||0} questions`:`${lesson.estimatedMinutes||15} min`}</span>
-            <button type="button" className="vop-lesson-open" onClick={()=>onOpenLesson(guide,lesson)}>
-              {lesson.type==='Test'
-                ?attempted?t('guide.retake_quiz','Retake quiz'):t('lessons.take_assessment','Take assessment')
-                :t('lessons.open_lesson','Open lesson')} <ChevronRight size={16}/>
-            </button>
+            {hasBookmark && bookmark ? (
+              <div className="vop-lesson-resume-btn-group">
+                <button
+                  type="button"
+                  className="vop-lesson-open vop-lesson-resume-btn"
+                  onClick={()=>onOpenLesson(guide, lesson, bookmark.pageIndex)}
+                  title={`Resume reading at Page ${bookmark.pageNumber}`}
+                >
+                  <Bookmark size={13} fill="currentColor"/>
+                  <span>Resume (p. {bookmark.pageNumber})</span>
+                  <ChevronRight size={15}/>
+                </button>
+                <button
+                  type="button"
+                  className="vop-lesson-restart-btn"
+                  onClick={()=>onOpenLesson(guide, lesson, 0)}
+                  title="Start from beginning (Page 1)"
+                >
+                  Page 1
+                </button>
+              </div>
+            ) : (
+              <button type="button" className="vop-lesson-open" onClick={()=>onOpenLesson(guide,lesson)}>
+                {lesson.type==='Test'
+                  ?attempted?t('guide.retake_quiz','Retake quiz'):t('lessons.take_assessment','Take assessment')
+                  :t('lessons.open_lesson','Open lesson')} <ChevronRight size={16}/>
+              </button>
+            )}
           </div>
         </article>;
       })}</div>:<div className="vop-materials-empty"><BookOpen size={40}/><h2>No published items found</h2>

@@ -1,0 +1,426 @@
+/* Voice of Prophecy Full-Page Lesson Reader Styles */
+
+/* 1. Full-Viewport Page Root */
+.vop-lesson-page-root,
+.modal-overlay.vop-lesson-page-root {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100vw !important;
+  height: 100dvh !important;
+  max-width: 100vw !important;
+  max-height: 100dvh !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  background: var(--bg-primary, #f8fafc) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  justify-content: flex-start !important;
+  z-index: 1200 !important;
+  border-radius: 0 !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  overflow: hidden !important;
+}
+
+/* 2. Full-Page Study Section */
+.vop-lesson-page-view {
+  width: 100% !important;
+  height: 100% !important;
+  max-width: 100% !important;
+  max-height: 100dvh !important;
+  display: flex !important;
+  flex-direction: column !important;
+  border-radius: 0 !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  background: var(--bg-primary, #f8fafc) !important;
+  overflow: hidden !important;
+}
+
+/* 3. Immersive Page Header */
+.vop-lesson-page-header {
+  padding: 0.85rem clamp(1rem, 3vw, 2rem);
+  background: linear-gradient(135deg, #002d72 0%, #0d47a1 100%);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-shrink: 0;
+  box-shadow: 0 4px 16px rgba(0, 45, 114, 0.18);
+  z-index: 20;
+}
+
+.vop-lesson-page-header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  min-width: 0;
+}
+
+.vop-lesson-page-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.45rem 0.85rem;
+  border-radius: 0.65rem;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.vop-lesson-page-back-btn:hover {
+  background: rgba(255, 255, 255, 0.22);
+  border-color: rgba(255, 255, 255, 0.4);
+  transform: translateX(-1px);
+}
+
+.vop-lesson-page-header-divider {
+  color: rgba(255, 255, 255, 0.3);
+  font-size: 1.1rem;
+  font-weight: 300;
+  user-select: none;
+}
+
+.vop-lesson-page-header-meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.vop-lesson-page-header-meta .vop-lesson-kicker {
+  font-size: 0.72rem;
+  color: #bfdbfe;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 0.1rem;
+}
+
+.vop-lesson-page-header-meta h1 {
+  margin: 0;
+  color: #fff;
+  font-size: 1.05rem;
+  font-weight: 800;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vop-lesson-page-header-right {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.vop-lesson-page-icon-btn {
+  border: 0;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  width: 2.35rem;
+  height: 2.35rem;
+  border-radius: 0.65rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.vop-lesson-page-icon-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.24);
+}
+
+.vop-lesson-page-icon-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.vop-lesson-page-icon-btn.active {
+  background: rgba(251, 191, 36, 0.28);
+  color: #fbbf24;
+}
+
+/* 4. Full-Page Reading Area */
+.vop-lesson-page-scroll-container {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: var(--bg-primary, #f8fafc);
+  display: flex;
+  flex-direction: column;
+  scroll-behavior: smooth;
+}
+
+.vop-lesson-page-reading-canvas {
+  width: 100%;
+  max-width: 880px;
+  margin: 0 auto;
+  padding: clamp(1.25rem, 3vw, 2.5rem) clamp(1rem, 2.5vw, 1.75rem);
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.vop-lesson-paper {
+  background: var(--bg-card, #ffffff);
+  border-radius: 1.25rem;
+  border: 1px solid var(--border-subtle, #e2e8f0);
+  box-shadow: 0 4px 24px rgba(15, 23, 42, 0.05);
+  padding: clamp(1.5rem, 4vw, 2.75rem);
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  color: var(--text-primary, #1e293b);
+  position: relative;
+}
+
+/* 5. Typography and Structured Reading Elements */
+.vop-structured-reader-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.8rem;
+  color: #64748b;
+  margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.vop-structured-reader-breadcrumb span {
+  font-weight: 600;
+  color: #0284c7;
+}
+
+.vop-structured-reader-breadcrumb strong {
+  font-weight: 800;
+  color: var(--text-primary, #0f172a);
+}
+
+.vop-structured-reader h3,
+.vop-reader-page-title {
+  font-size: clamp(1.35rem, 2.5vw, 1.85rem) !important;
+  font-weight: 850 !important;
+  line-height: 1.3 !important;
+  color: var(--text-primary, #0f172a) !important;
+  margin: 0 0 0.5rem !important;
+  letter-spacing: -0.015em;
+}
+
+.vop-structured-reader-heading {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #0f2744;
+  margin: 1.25rem 0 0.4rem;
+  line-height: 1.35;
+}
+
+.vop-structured-reader-text,
+.vop-reader-page-copy {
+  font-size: 1.05rem !important;
+  line-height: 1.8 !important;
+  color: var(--text-primary, #334155) !important;
+  margin: 0 0 1rem !important;
+}
+
+.vop-structured-reader-quote {
+  border-left: 4px solid #f59e0b;
+  background: var(--bg-elevated, #fefce8);
+  padding: 1rem 1.25rem;
+  border-radius: 0 0.75rem 0.75rem 0;
+  font-style: italic;
+  font-size: 1.05rem;
+  line-height: 1.75;
+  color: #451a03;
+  margin: 1rem 0;
+}
+
+.vop-structured-reader-image {
+  width: 100%;
+  max-height: 28rem;
+  object-fit: cover;
+  border-radius: 1rem;
+  margin: 1rem 0;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+}
+
+/* 6. Sticky Full-Page Reading Footer */
+.vop-lesson-page-footer {
+  padding: 0.85rem clamp(1rem, 3vw, 2rem);
+  background: var(--bg-card, #ffffff);
+  border-top: 1px solid var(--border-subtle, #e2e8f0);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-shrink: 0;
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.04);
+  z-index: 20;
+}
+
+.vop-lesson-page-footer-inner {
+  width: 100%;
+  max-width: 880px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.vop-lesson-page-progress-pill {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-muted, #64748b);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.vop-lesson-page-progress-pill strong {
+  color: #002d72;
+  font-weight: 800;
+}
+
+.vop-lesson-page-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.7rem 1.4rem;
+  border-radius: 9999px;
+  font-size: 0.875rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.vop-lesson-page-nav-btn.secondary {
+  border: 1.5px solid var(--border-strong, #cbd5e1);
+  background: var(--bg-card, #ffffff);
+  color: var(--text-primary, #0f172a);
+}
+
+.vop-lesson-page-nav-btn.secondary:hover:not(:disabled) {
+  background: var(--bg-elevated, #f1f5f9);
+  border-color: #94a3b8;
+}
+
+.vop-lesson-page-nav-btn.secondary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  color: var(--text-muted, #94a3b8);
+}
+
+.vop-lesson-page-nav-btn.primary {
+  border: none;
+  background: linear-gradient(135deg, #002d72, #1d4ed8);
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(0, 45, 114, 0.22);
+}
+
+.vop-lesson-page-nav-btn.primary:hover:not(:disabled) {
+  box-shadow: 0 6px 18px rgba(0, 45, 114, 0.32);
+  transform: translateY(-1px);
+}
+
+.vop-lesson-page-nav-btn.primary.complete {
+  background: linear-gradient(135deg, #059669, #10b981);
+  box-shadow: 0 4px 14px rgba(5, 150, 105, 0.22);
+}
+
+.vop-lesson-page-nav-btn.primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+
+/* 7. Dark Mode Page Theme Overrides */
+[data-theme="dark"] .vop-lesson-page-root,
+[data-theme="dark"] .modal-overlay.vop-lesson-page-root,
+[data-theme="dark"] .vop-lesson-page-view,
+[data-theme="dark"] .vop-lesson-page-scroll-container {
+  background: #07111f !important;
+  color: #f1f5f9 !important;
+}
+
+[data-theme="dark"] .vop-lesson-paper {
+  background: #101f33 !important;
+  border-color: #263a54 !important;
+  color: #f1f5f9 !important;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35) !important;
+}
+
+[data-theme="dark"] .vop-lesson-page-footer {
+  background: #0b1829 !important;
+  border-top-color: #263a54 !important;
+}
+
+[data-theme="dark"] .vop-structured-reader-breadcrumb {
+  color: #94a3b8 !important;
+}
+
+[data-theme="dark"] .vop-structured-reader-breadcrumb strong {
+  color: #f1f5f9 !important;
+}
+
+[data-theme="dark"] .vop-structured-reader-breadcrumb span {
+  color: #38bdf8 !important;
+}
+
+[data-theme="dark"] .vop-structured-reader h3,
+[data-theme="dark"] .vop-reader-page-title,
+[data-theme="dark"] .vop-structured-reader-heading {
+  color: #f8fafc !important;
+}
+
+[data-theme="dark"] .vop-structured-reader-text,
+[data-theme="dark"] .vop-reader-page-copy {
+  color: #cbd5e1 !important;
+}
+
+[data-theme="dark"] .vop-structured-reader-quote {
+  background: rgba(245, 158, 11, 0.12) !important;
+  color: #fde68a !important;
+  border-left-color: #f59e0b !important;
+}
+
+[data-theme="dark"] .vop-lesson-page-progress-pill strong {
+  color: #60a5fa !important;
+}
+
+@media (max-width: 640px) {
+  .vop-lesson-page-header {
+    padding: 0.75rem 1rem;
+    gap: 0.5rem;
+  }
+  .vop-lesson-page-back-btn span {
+    display: none;
+  }
+  .vop-lesson-page-header-divider {
+    display: none;
+  }
+  .vop-lesson-paper {
+    padding: 1.25rem 1rem;
+    border-radius: 0.85rem;
+  }
+  .vop-lesson-page-reading-canvas {
+    padding: 1rem 0.65rem;
+  }
+  .vop-lesson-page-progress-pill span:not(strong) {
+    display: none;
+  }
+}

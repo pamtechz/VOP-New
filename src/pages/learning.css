@@ -152,6 +152,23 @@
 .vop-lesson-card-footer{border-top:1px solid var(--theme-border);padding-top:14px}
 .vop-lesson-card-footer>span{display:flex;gap:6px;align-items:center;color:var(--theme-muted);font-size:12px}
 .vop-lesson-card .vop-lesson-open{display:inline-flex;gap:6px;align-items:center;justify-content:center;min-height:42px;padding:10px 13px;border:0;border-radius:10px;background:#0a438f;color:#fff;font-size:12px;font-weight:850;cursor:pointer}
+.vop-lesson-bookmark-pill{
+  display:flex;align-items:center;gap:9px;margin-bottom:12px;padding:8px 12px;
+  background:var(--theme-surface-soft,#f0f7ff);border:1px solid var(--theme-border-strong,#cbe0f8);border-radius:9px
+}
+.vop-lesson-bookmark-pill-info{display:flex;flex-direction:column;gap:2px;min-width:0}
+.vop-lesson-bookmark-pill-title{font-size:11.5px;color:var(--theme-title,#10386a)}
+.vop-lesson-bookmark-pill-title strong{color:#b45309}
+.vop-lesson-bookmark-pill-meta{font-size:10.5px;color:var(--theme-muted,#5f7b9c);font-weight:700}
+.vop-lesson-resume-btn-group{display:flex;align-items:center;gap:6px}
+.vop-lesson-card .vop-lesson-resume-btn{background:#094794;color:#fff;box-shadow:0 3px 10px rgba(9,71,148,.18)}
+.vop-lesson-card .vop-lesson-resume-btn:hover{background:#06346e}
+.vop-lesson-card .vop-lesson-restart-btn{
+  display:inline-flex;align-items:center;justify-content:center;min-height:42px;padding:10px 12px;
+  border:1px solid var(--theme-border,#d2dfed);border-radius:10px;background:var(--theme-surface-soft,#f4f8fc);
+  color:var(--theme-muted,#526f8e);font-size:11px;font-weight:750;cursor:pointer;transition:background .15s ease,color .15s ease
+}
+.vop-lesson-card .vop-lesson-restart-btn:hover{background:var(--theme-surface-elevated,#e4edf7);color:var(--theme-title,#1c4475)}
 .vop-lesson-card button:focus-visible{outline:3px solid #f1bd4f;outline-offset:3px}
 @media(max-width:900px){.vop-lessons-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:767px){

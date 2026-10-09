@@ -6,6 +6,7 @@ import type {
   ChurchOrganization,
   Conference,
   CustomLanguage,
+  CustomHeroSlide,
   District,
   RadioBroadcast, RadioPlaylist, MinistryEvent,
   Union,
@@ -66,6 +67,9 @@ export function emptySettings(): AppSettings {
       contactWhatsAppNumbers: [],
       socialLinks: {},
     },
+    heroSlides: [],
+    heroSliderAutoplaySeconds: 6,
+    heroSliderIncludeDefaultSlides: true,
   };
 }
 
@@ -103,6 +107,9 @@ function normalizeSettings(data: Record<string, unknown>): AppSettings {
       ...base.detailPages,
       ...detail,
     },
+    heroSlides: Array.isArray(data.heroSlides) ? (data.heroSlides as CustomHeroSlide[]) : base.heroSlides,
+    heroSliderAutoplaySeconds: typeof data.heroSliderAutoplaySeconds === 'number' ? data.heroSliderAutoplaySeconds : 6,
+    heroSliderIncludeDefaultSlides: data.heroSliderIncludeDefaultSlides !== false,
   } as AppSettings;
 }
 

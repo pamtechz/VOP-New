@@ -1,13 +1,14 @@
 import React, { useMemo } from 'react';
 import type { DiscoverGuide, Lesson, User } from '../../types';
 import {
-  ArrowLeft, Award, BookOpen, CheckCircle2, ChevronRight, Clock,
-  FileQuestion, Lock, Trophy,
+  ArrowLeft, Award, BookOpen, Bookmark, CheckCircle2, ChevronRight, Clock,
+  FileQuestion, Lock, Play, Trophy,
 } from 'lucide-react';
 import { getStoredGuides, getStoredSettings } from '../../services/storage';
 import { getTranslation, getUiLocale } from '../../services/i18n';
 import { calculateCurriculumProgress } from '../../services/progress';
 import { isLessonUnlocked, lessonIsComplete, lessonScoreForDisplay } from '../../services/lessonProgress';
+import { resolveLessonResumeBookmark } from '../../services/lessonBookmark';
 import './guide-sections.css';
 
 interface DiscoverGuideViewProps {
@@ -211,7 +212,11 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
                   ?attachedAssessments(lesson,'chapter',chapter.id):[];
                 const lessonTests=chapterIndex===chapters.length-1&&sectionIndex===chapter.sections.length-1
                   ?attachedAssessments(lesson,'lesson'):[];
-                return <article className={'vop-section-study-card '+(completed?'completed':!unlocked?'locked':'')} key={lesson.id+':'+section.id}>
+                const lessonBookmark = resolveLessonResumeBookmark(guide, lesson, currentUser, threshold);
+                const isBookmarkedSection = Boolean(
+                  unlocked && !completed && lessonBookmark?.hasBookmark && lessonBookmark.sectionId === section.id
+                );
+                return <article className={'vop-section-study-card '+(completed?'completed':!unlocked?'locked':isBookmarkedSection?'has-bookmark':'')} key={lesson.id+':'+section.id}>
                   <button type="button" className="vop-section-study-main"
                     disabled={!unlocked}
                     onClick={()=>unlocked&&onSelectLesson(lesson,actualIndex)}
@@ -220,6 +225,17 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
                     <span className="vop-section-study-copy">
                       <small>{t('guide.section','Section')} {sectionNumber}{!unlocked?' · '+t('guide.locked','Locked'):''}</small>
                       <strong>{section.title}</strong>
+                      {isBookmarkedSection && lessonBookmark && (
+                        <span
+                          className="vop-section-bookmark-tag"
+                          role="button"
+                          tabIndex={0}
+                          onClick={(e)=>{e.stopPropagation();onSelectLesson(lesson,lessonBookmark.pageIndex);}}
+                          title={`Resume reading at Page ${lessonBookmark.pageNumber}`}
+                        >
+                          <Bookmark size={11} fill="currentColor"/> Current reading bookmark (Page {lessonBookmark.pageNumber})
+                        </span>
+                      )}
                       <em>{!unlocked?t('guide.complete_prev_unlock','Complete previous lesson to unlock'):(chapter.title+(lesson.title?' · '+lesson.title:''))}</em>
                     </span>
                     <ChevronRight size={19}/>
@@ -239,11 +255,33 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
                 </article>;
               }));
             }
+            const bookmark = resolveLessonResumeBookmark(guide, lesson, currentUser, threshold);
+            const hasResume = Boolean(unlocked && !completed && bookmark?.hasBookmark);
             const lessonTests=attachedAssessments(lesson,'lesson');
-            return [<article className={'vop-section-study-card vop-lesson-study-card '+(completed?'completed':!unlocked?'locked':'')} key={lesson.id}>
+            return [<article className={'vop-section-study-card vop-lesson-study-card '+(completed?'completed':!unlocked?'locked':hasResume?'has-bookmark':'')} key={lesson.id}>
+              {hasResume && bookmark && (
+                <div className="vop-guide-lesson-resume-strip">
+                  <div className="vop-guide-lesson-resume-copy">
+                    <Bookmark size={13} fill="currentColor" className="text-amber-500"/>
+                    <span>
+                      Resume: <strong>{bookmark.sectionTitle ? `Section: “${bookmark.sectionTitle}”` : `Page ${bookmark.pageNumber}`}</strong>
+                      <small> (Page {bookmark.pageNumber} of {bookmark.totalPages} · {bookmark.progressPercent}% read)</small>
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    className="vop-guide-lesson-resume-jump-btn"
+                    onClick={(e) => { e.stopPropagation(); onSelectLesson(lesson, bookmark.pageIndex); }}
+                    title={`Jump directly to Page ${bookmark.pageNumber}`}
+                  >
+                    <Play size={12} fill="currentColor"/>
+                    <span>Resume (p. {bookmark.pageNumber})</span>
+                  </button>
+                </div>
+              )}
               <button type="button" className="vop-section-study-main"
                 disabled={!unlocked}
-                onClick={()=>unlocked&&onSelectLesson(lesson)}
+                onClick={()=>unlocked&&onSelectLesson(lesson, hasResume && bookmark ? bookmark.pageIndex : 0)}
                 aria-disabled={!unlocked}>
                 <span className="vop-section-study-marker">{completed?<CheckCircle2 size={24}/>:!unlocked?<Lock size={22}/>:lessonIndex+1}</span>
                 <span className="vop-section-study-copy">
