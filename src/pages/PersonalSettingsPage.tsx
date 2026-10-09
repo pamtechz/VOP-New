@@ -9,6 +9,8 @@ import { hasTrustedOfflineDeviceConsent, setTrustedOfflineDeviceConsent } from '
 import { hasAdminPortalAccess } from '../services/portalAccess';
 import './personalSettings.css';
 import { appConfirm } from '../components/layout/AppDialog';
+
+const uiT = (key: string, fallback: string) => getTranslation(key, getUiLocale(), undefined, fallback, 'PersonalSettingsPage');
 import { LocalizationParticipation } from '../components/localization/LocalizationParticipation';
 import { persistThemePreference } from '../services/themePreference';
 import {
@@ -269,9 +271,9 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
               }
               onNavigate ? onNavigate('admin') : onBack();
             }}
-            title="Open administration workspace"
+            title={uiT('personal_settings.open_administration_workspace',"Open administration workspace")}
           >
-            <ShieldCheck size={14}/> <span>Admin Operations</span>
+            <ShieldCheck size={14}/> <span>{uiT('personal_settings.admin_operations',"Admin Operations")}</span>
           </button>
         )}
         <button className="vop-secondary" type="button" onClick={onBack}>{t('common.back','Back')}</button>
@@ -279,7 +281,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
     </div>
     {message && <div className="vop-personal-message vop-card" role="status">{message}</div>}
     {busy ? <div className="vop-personal-loading vop-card" role="status">Loading your settings…</div> : <>
-      <div className="vop-personal-tabs" role="tablist" aria-label="Personal settings sections">
+      <div className="vop-personal-tabs" role="tablist" aria-label={uiT('personal_settings.personal_settings_sections',"Personal settings sections")}>
         {personalTabs.map(tab => (
           <button
             key={tab.id}
@@ -300,8 +302,8 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
           <div className="vop-personal-tab-pane">
             {isAdmin && (
               <section className="vop-personal-card vop-card">
-                <h2><ShieldCheck size={19}/> Admin Operations & Tools</h2>
-                <p>Quickly access core administrative tools and workspaces:</p>
+                <h2><ShieldCheck size={19}/>{uiT('personal_settings.admin_operations_and_tools',"Admin Operations & Tools")}</h2>
+                <p>{uiT('personal_settings.quickly_access_core_administrative_tools_and_workspaces',"Quickly access core administrative tools and workspaces:")}</p>
                 <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(170px, 1fr))',gap:8,marginTop:2}}>
                   <button type="button" className="vop-secondary" style={{justifyContent:'flex-start'}} onClick={() => { if (currentUser.uid) { try { sessionStorage.setItem('vop-admin-tab-v1:' + currentUser.uid, 'dashboard'); } catch {} } onNavigate ? onNavigate('admin') : onBack(); }}>
                     <LayoutDashboard size={14}/> Dashboard
@@ -324,7 +326,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
 
             <section className="vop-personal-card vop-card">
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:8}}>
-                <h2><UserRound size={19}/> Account</h2>
+                <h2><UserRound size={19}/>{uiT('personal_settings.account',"Account")}</h2>
                 <span className={'vop-chip ' + (currentUser.accountType === 'organization' || currentUser.organizationId ? 'vop-account-type-org' : 'vop-account-type-personal')} style={{fontSize:11.5,fontWeight:750,padding:'4px 10px',borderRadius:6}}>
                   {currentUser.accountType === 'organization' || currentUser.organizationId ? 'Organisation Account' : 'Personal Account'}
                 </span>
@@ -332,11 +334,11 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
               <p>{currentUser.displayName} · {currentUser.email}</p>
               {currentUser.accountType === 'organization' || currentUser.organizationId ? (
                 <div style={{margin:'8px 0',padding:'10px 12px',borderRadius:8,background:'var(--theme-surface-soft,#f0f5ff)',border:'1px solid #c7d9fc',fontSize:12,color:'#1e3a8a'}}>
-                  <strong>Organisation Account Status:</strong> A personal account can manage an organisation account. Immediately an account has been assigned to an organisation, it assumes the organisation account type while retaining your personal identity and credentials.
+                  <strong>{uiT('personal_settings.organisation_account_status',"Organisation Account Status:")}</strong> A personal account can manage an organisation account. Immediately an account has been assigned to an organisation, it assumes the organisation account type while retaining your personal identity and credentials.
                 </div>
               ) : (
                 <div style={{margin:'8px 0',padding:'10px 12px',borderRadius:8,background:'var(--theme-surface-soft,#f8fafc)',border:'1px solid #e2e8f0',fontSize:12,color:'#475569'}}>
-                  <strong>Personal Account Status:</strong> Personal accounts are separate from organisation accounts. If your account is assigned to an organisation, it will immediately assume the Organisation Account type.
+                  <strong>{uiT('personal_settings.personal_account_status',"Personal Account Status:")}</strong> Personal accounts are separate from organisation accounts. If your account is assigned to an organisation, it will immediately assume the Organisation Account type.
                 </div>
               )}
               <small>{organizationAccount?'Your organization assignment and permissions are managed separately and cannot be changed here.':'Your role, organization, permissions and learning records are managed separately and cannot be changed here.'}</small>
@@ -347,7 +349,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
               <p>{isGoogleAccount ? 'You signed up with Google. You can set a password to also sign in directly using your email address without requiring a current password.' : 'Update your sign-in password to keep your account protected.'}</p>
               {isGoogleAccount && (
                 <div className="vop-personal-notice info" role="status">
-                  <span>Signed in via Google. No current password is required.</span>
+                  <span>{uiT('personal_settings.signed_in_via_google_no_current_password_is_required',"Signed in via Google. No current password is required.")}</span>
                 </div>
               )}
               {passwordMessage && (
@@ -363,13 +365,13 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
               <form onSubmit={handlePasswordChange} style={{display:'grid',gap:12,marginTop:2}}>
                 {!isGoogleAccount && (
                   <label>
-                    <span>Current password</span>
+                    <span>{uiT('personal_settings.current_password',"Current password")}</span>
                     <div style={{position:'relative',display:'flex',alignItems:'center'}}>
                       <input
                         type={showCurrentPassword ? 'text' : 'password'}
                         value={currentPassword}
                         onChange={e => setCurrentPassword(e.target.value)}
-                        placeholder="Enter your current password"
+                        placeholder={uiT('personal_settings.enter_your_current_password',"Enter your current password")}
                         autoComplete="current-password"
                         disabled={passwordBusy}
                         style={{paddingRight:36}}
@@ -394,7 +396,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
                       type={showNewPassword ? 'text' : 'password'}
                       value={newPassword}
                       onChange={e => setNewPassword(e.target.value)}
-                      placeholder="At least 6 characters"
+                      placeholder={uiT('personal_settings.at_least_6_characters',"At least 6 characters")}
                       autoComplete="new-password"
                       disabled={passwordBusy}
                       style={{paddingRight:36}}
@@ -465,8 +467,8 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
         {activeTab === 'interface' && (
           <div className="vop-personal-tab-pane">
             <section className="vop-personal-card vop-card">
-              <h2><Globe2 size={19}/> Interface</h2>
-              <label>Theme<select value={settings.theme === 'dark' ? 'dark' : 'light'} onChange={e => { const theme=e.target.value as 'light'|'dark'; patch('theme',theme); persistThemePreference(theme); }}><option value="light">Light (default)</option><option value="dark">Dark</option></select></label>
+              <h2><Globe2 size={19}/>{uiT('personal_settings.interface',"Interface")}</h2>
+              <label>{uiT('personal_settings.theme',"Theme")}<select value={settings.theme === 'dark' ? 'dark' : 'light'} onChange={e => { const theme=e.target.value as 'light'|'dark'; patch('theme',theme); persistThemePreference(theme); }}><option value="light">{uiT('personal_settings.light_default',"Light (default)")}</option><option value="dark">{uiT('personal_settings.dark',"Dark")}</option></select></label>
               <label>{t('settings.ui_language', 'Interface language')}<select value={settings.uiLocale || getUiLocale()} onChange={e => { patch('uiLocale', e.target.value); setUiLocale(e.target.value); }}>
                 {uiLocales.map(language => <option key={language.code} value={language.code}>{language.name} · {language.nativeName || language.code}</option>)}
               </select></label>
@@ -476,10 +478,10 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
               </select></label>}
             </section>
             {!organizationAccount&&<section className="vop-personal-card vop-card">
-              <h2><BookOpen size={19}/> Offline study on this device</h2>
-              <label className="vop-personal-toggle"><input type="checkbox" checked={trustedDevice} onChange={e => void changeTrustedDevice(e.target.checked)}/> Remember previously opened study materials for offline reading</label>
-              <small>Use only on a private device. Cached course material can remain accessible to someone using the same browser after sign-out. Lesson completion while offline is saved as pending, not as an official result, until the server verifies it.</small>
-              <small>Reload while online after changing this option. For complete removal of previously cached content, clear the browser’s site data.</small>
+              <h2><BookOpen size={19}/>{uiT('personal_settings.offline_study_on_this_device',"Offline study on this device")}</h2>
+              <label className="vop-personal-toggle"><input type="checkbox" checked={trustedDevice} onChange={e => void changeTrustedDevice(e.target.checked)}/>{uiT('personal_settings.remember_previously_opened_study_materials_for_offline_reading',"Remember previously opened study materials for offline reading")}</label>
+              <small>{uiT('personal_settings.use_only_on_a_private_device_cached_course_material_can_remain_accessible_to_someone_using',"Use only on a private device. Cached course material can remain accessible to someone using the same browser after sign-out. Lesson completion while offline is saved as pending, not as an official result, until the server verifies it.")}</small>
+              <small>{uiT('personal_settings.reload_while_online_after_changing_this_option_for_complete_removal_of_previously_cached_c',"Reload while online after changing this option. For complete removal of previously cached content, clear the browser’s site data.")}</small>
             </section>}
             {!organizationAccount&&<LocalizationParticipation/>}
           </div>
@@ -488,7 +490,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
         {activeTab === 'notifications' && (
           <div className="vop-personal-tab-pane">
             <section className="vop-personal-card vop-card">
-              <h2><Bell size={19}/> Notifications</h2>
+              <h2><Bell size={19}/>{uiT('personal_settings.notifications',"Notifications")}</h2>
               {(['enabled','email','announcements','certificates'] as const).map(key => <label key={key} className="vop-personal-toggle"><input type="checkbox" checked={settings.notifications?.[key] !== false} onChange={e => patch('notifications', { ...settings.notifications, [key]: e.target.checked })}/>{key === 'enabled' ? 'Enable notifications' : key.charAt(0).toUpperCase()+key.slice(1)+' notifications'}</label>)}
               {notificationCapabilities&&!notificationCapabilities.email.available&&<small role="status">
                 Email delivery is not currently available from this VOP deployment. Your preference is saved and will be enforced when the administrator enables and configures the mail provider.
@@ -500,7 +502,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
         {activeTab === 'accessibility' && (
           <div className="vop-personal-tab-pane">
             <section className="vop-personal-card vop-card">
-              <h2><Accessibility size={19}/> Accessibility</h2>
+              <h2><Accessibility size={19}/>{uiT('personal_settings.accessibility',"Accessibility")}</h2>
               {(['reducedMotion','largeText','highContrast'] as const).map(key => <label key={key}><input type="checkbox" checked={Boolean(settings.accessibility?.[key])} onChange={e => {
                 const accessibility={ ...settings.accessibility, [key]: e.target.checked };
                 patch('accessibility', accessibility);
@@ -513,19 +515,19 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
         {activeTab === 'security' && (
           <div className="vop-personal-tab-pane">
             <section className="vop-personal-card vop-card">
-              <h2><Fingerprint size={19}/> Passkeys & device verification</h2>
-              {!passkeyCapable?<p>This browser or connection does not support secure passkey sign-in.</p>:<>
+              <h2><Fingerprint size={19}/>{uiT('personal_settings.passkeys_and_device_verification',"Passkeys & device verification")}</h2>
+              {!passkeyCapable?<p>{uiT('personal_settings.this_browser_or_connection_does_not_support_secure_passkey_sign_in',"This browser or connection does not support secure passkey sign-in.")}</p>:<>
                 <p>{platformBiometric
                   ?'Enable a passkey after signing in once. Your device can then verify you using fingerprint, face recognition, PIN or screen lock.'
                   :'Enable a passkey after signing in once. The available verification method is controlled by your device or passkey provider.'}</p>
-                <small>VOP stores a public-key credential only. Biometric data remains on your device and is not uploaded to VOP or Firebase.</small>
+                <small>{uiT('personal_settings.vop_stores_a_public_key_credential_only_biometric_data_remains_on_your_device_and_is_not_u',"VOP stores a public-key credential only. Biometric data remains on your device and is not uploaded to VOP or Firebase.")}</small>
                 <button type="button" className="vop-primary" disabled={passkeyBusy} onClick={()=>void enablePasskey()}>
                   <Fingerprint size={17}/>{passkeyBusy?'Please wait…':'Enable passkey on this device'}
                 </button>
                 {passkeys.length>0&&<div style={{display:'grid',gap:8,marginTop:12}}>
                   {passkeys.map(item=><div key={item.id} className="vop-setting-row">
                     <div><div className="vop-setting-name">{item.label||'Passkey'}</div><div className="vop-setting-help">Added {item.createdAt?new Date(item.createdAt).toLocaleDateString():'to this account'}</div></div>
-                    <button type="button" className="vop-secondary danger" disabled={passkeyBusy} onClick={()=>void removePasskey(item)}><Trash2 size={15}/>Remove</button>
+                    <button type="button" className="vop-secondary danger" disabled={passkeyBusy} onClick={()=>void removePasskey(item)}><Trash2 size={15}/>{uiT('personal_settings.remove',"Remove")}</button>
                   </div>)}
                 </div>}
                 <p style={{marginTop:16,fontSize:13,color:'var(--text-muted,#64748b)'}}>
@@ -546,25 +548,25 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
         {activeTab === 'privacy' && (
           <div className="vop-personal-tab-pane">
             <section className="vop-personal-card vop-card">
-              <h2><ShieldCheck size={19}/> Privacy & account data</h2>
-              <label>Profile visibility<select value={settings.privacy?.profileVisibility || 'organization'} onChange={e => patch('privacy', { ...settings.privacy, profileVisibility: e.target.value as 'private' | 'organization' })}><option value="organization">My organization</option><option value="private">Private</option></select></label>
+              <h2><ShieldCheck size={19}/>{uiT('personal_settings.privacy_and_account_data',"Privacy & account data")}</h2>
+              <label>{uiT('personal_settings.profile_visibility',"Profile visibility")}<select value={settings.privacy?.profileVisibility || 'organization'} onChange={e => patch('privacy', { ...settings.privacy, profileVisibility: e.target.value as 'private' | 'organization' })}><option value="organization">{uiT('personal_settings.my_organization',"My organization")}</option><option value="private">{uiT('personal_settings.private',"Private")}</option></select></label>
               <div style={{display:'flex',gap:8,flexWrap:'wrap',marginTop:10}}>
-                <button type="button" className="vop-secondary" disabled={privacyBusy} onClick={()=>void downloadMyData()}><Download size={16}/>Export my data</button>
-                <a className="vop-secondary" href="/privacy">Privacy Policy</a>
-                <a className="vop-secondary" href="/terms">Terms of Service</a>
+                <button type="button" className="vop-secondary" disabled={privacyBusy} onClick={()=>void downloadMyData()}><Download size={16}/>{uiT('personal_settings.export_my_data',"Export my data")}</button>
+                <a className="vop-secondary" href="/privacy">{uiT('personal_settings.privacy_policy',"Privacy Policy")}</a>
+                <a className="vop-secondary" href="/terms">{uiT('personal_settings.terms_of_service',"Terms of Service")}</a>
               </div>
               {accountLifecycle&&['requested','processing','blocked'].includes(accountLifecycle.status)?<div className="vop-setting-list" style={{marginTop:12}}>
                 <div className="vop-setting-row"><div><div className="vop-setting-name">Deletion status: {accountLifecycle.status}</div><div className="vop-setting-help">
                   {accountLifecycle.scheduledFor?'Scheduled for '+new Date(accountLifecycle.scheduledFor).toLocaleDateString()+'. ':''}
                   {accountLifecycle.reason||'Your account remains recoverable until the grace period ends.'}
                 </div></div></div>
-                {accountLifecycle.status!=='processing'&&<button type="button" className="vop-secondary" disabled={privacyBusy} onClick={()=>void undoDeletionRequest()}><RotateCcw size={16}/>Cancel deletion request</button>}
+                {accountLifecycle.status!=='processing'&&<button type="button" className="vop-secondary" disabled={privacyBusy} onClick={()=>void undoDeletionRequest()}><RotateCcw size={16}/>{uiT('personal_settings.cancel_deletion_request',"Cancel deletion request")}</button>}
               </div>:<div style={{display:'grid',gap:8,marginTop:12}}>
-                <strong>Request account deletion</strong>
-                <small>A 30-day recovery period applies. Organization owners, Super Admins and mentors with active learner assignments must transfer those responsibilities first. Some certificate, financial and audit records are retained or pseudonymized under the Privacy Policy.</small>
-                <label>Optional reason<textarea value={deletionReason} maxLength={500} onChange={e=>setDeletionReason(e.target.value)} placeholder="Optional"/></label>
-                <label>Type DELETE MY ACCOUNT to confirm<input value={deletionConfirmation} autoComplete="off" onChange={e=>setDeletionConfirmation(e.target.value)}/></label>
-                <button type="button" className="vop-secondary danger" disabled={privacyBusy||deletionConfirmation!=='DELETE MY ACCOUNT'} onClick={()=>void submitDeletionRequest()}><Trash2 size={16}/>Request account deletion</button>
+                <strong>{uiT('personal_settings.request_account_deletion',"Request account deletion")}</strong>
+                <small>{uiT('personal_settings.a_30_day_recovery_period_applies_organization_owners_super_admins_and_mentors_with_active',"A 30-day recovery period applies. Organization owners, Super Admins and mentors with active learner assignments must transfer those responsibilities first. Some certificate, financial and audit records are retained or pseudonymized under the Privacy Policy.")}</small>
+                <label>{uiT('personal_settings.optional_reason',"Optional reason")}<textarea value={deletionReason} maxLength={500} onChange={e=>setDeletionReason(e.target.value)} placeholder={uiT('personal_settings.optional',"Optional")}/></label>
+                <label>{uiT('personal_settings.type_delete_my_account_to_confirm',"Type DELETE MY ACCOUNT to confirm")}<input value={deletionConfirmation} autoComplete="off" onChange={e=>setDeletionConfirmation(e.target.value)}/></label>
+                <button type="button" className="vop-secondary danger" disabled={privacyBusy||deletionConfirmation!=='DELETE MY ACCOUNT'} onClick={()=>void submitDeletionRequest()}><Trash2 size={16}/>{uiT('personal_settings.request_account_deletion',"Request account deletion")}</button>
               </div>}
             </section>
           </div>

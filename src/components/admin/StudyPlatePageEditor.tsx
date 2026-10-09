@@ -36,11 +36,14 @@ import {
 import { studyPlatePlainText, type StudyPlateDocument, type StudyPlateLeaf } from '../../../shared/studyPlateDocument';
 import { isSafeHttpsMediaUrl, resolveMediaSource } from '../../../shared/mediaSources';
 import { parseScriptureTokens } from '../../services/scriptureLookup';
+import { getTranslation, getUiLocale } from '../../services/i18n';
 import { auth } from '../../lib/firebase';
 import { MediaPlayer } from '../media/MediaPlayer';
 import { ModalLayer } from '../layout/ModalLayer';
 import './plate-authoring.css';
 import './plate-ribbon.css';
+
+const uiT = (key: string, fallback: string) => getTranslation(key, getUiLocale(), undefined, fallback, 'StudyPlatePageEditor');
 
 function ImageElement({element,children,...props}:PlateElementProps){
   const image=element as {url?:unknown;alt?:unknown};
@@ -50,7 +53,7 @@ function ImageElement({element,children,...props}:PlateElementProps){
     <span contentEditable={false}>
     {isSafeHttpsMediaUrl(url)
       ? <img className="vop-plate-image" src={url} alt={alt} loading="lazy"/>
-      : <span className="vop-plate-error">Invalid image URL</span>}
+      : <span className="vop-plate-error">{uiT('admin.study_plate_editor.invalid_image_url',"Invalid image URL")}</span>}
     </span>
     {children}
   </PlateElement>;
@@ -104,15 +107,15 @@ function SectionPageElement({element,children,...props}:PlateElementProps){
   return <PlateElement as="div" element={element} {...props}
     className="vop-plate-section-marker" data-vop-section-id={marker.id}>
     <span contentEditable={false} className="vop-plate-section-marker-copy">
-      <span className="vop-plate-section-marker-tag"><Layers3 size={13}/> SECTION / LEARNER PAGE</span>
+      <span className="vop-plate-section-marker-tag"><Layers3 size={13}/>{uiT('admin.study_plate_editor.section_learner_page',"SECTION / LEARNER PAGE")}</span>
       <div className="vop-plate-section-marker-title-row">
         <input
           type="text"
           className="vop-plate-section-marker-title-input"
           value={title}
-          placeholder="Rename section / learner page…"
-          aria-label="Section title"
-          title="Click to rename this section"
+          placeholder={uiT('admin.study_plate_editor.rename_section_learner_page',"Rename section / learner page…")}
+          aria-label={uiT('admin.study_plate_editor.section_title',"Section title")}
+          title={uiT('admin.study_plate_editor.click_to_rename_this_section',"Click to rename this section")}
           onChange={e=>setTitle(e.target.value)}
           onBlur={e=>commitTitle(e.target.value)}
           onKeyDown={e=>{
@@ -125,7 +128,7 @@ function SectionPageElement({element,children,...props}:PlateElementProps){
         />
         <Edit3 size={14} className="vop-plate-section-marker-edit-icon" aria-hidden="true"/>
       </div>
-      <small>Everything below belongs to this page until the next section boundary.</small>
+      <small>{uiT('admin.study_plate_editor.everything_below_belongs_to_this_page_until_the_next_section_boundary',"Everything below belongs to this page until the next section boundary.")}</small>
     </span>
     <span className="vop-plate-section-marker-void">{children}</span>
   </PlateElement>;
@@ -941,7 +944,7 @@ export function StudyPlatePageEditor({
   return <div className="vop-plate-page-editor vop-plate-continuous-editor" data-chapter={chapterId}>
     <div className="vop-plate-workspace-fixed-top">
       {/* Authentic MS Word-Style Tabbed Authoring Ribbon & Toolbar */}
-      <div className="vop-plate-toolbar vop-plate-toolbar-unified vop-ms-word-ribbon" role="toolbar" aria-label="Study document formatting">
+      <div className="vop-plate-toolbar vop-plate-toolbar-unified vop-ms-word-ribbon" role="toolbar" aria-label={uiT('admin.study_plate_editor.study_document_formatting',"Study document formatting")}>
         {/* Top Ribbon Tabs: Home, Insert, Scripture & Layout */}
         <div className="vop-word-ribbon-tabs" role="tablist">
           <button
@@ -978,17 +981,17 @@ export function StudyPlatePageEditor({
           {activeRibbonTab === 'home' && (
             <div className="vop-word-ribbon-row">
               {/* 1. Clipboard Group */}
-              <div className="vop-word-group" aria-label="Clipboard">
+              <div className="vop-word-group" aria-label={uiT('admin.study_plate_editor.clipboard',"Clipboard")}>
                 <div className="vop-word-group-content">
-                  <button type="button" title="Undo (Ctrl+Z)" aria-label="Undo"
+                  <button type="button" title={uiT('admin.study_plate_editor.undo_ctrl_z',"Undo (Ctrl+Z)")} aria-label={uiT('admin.study_plate_editor.undo',"Undo")}
                     onMouseDown={event=>event.preventDefault()} onClick={()=>command(()=>editor.tf.undo())}><Undo2 size={16}/></button>
-                  <button type="button" title="Redo (Ctrl+Y)" aria-label="Redo"
+                  <button type="button" title={uiT('admin.study_plate_editor.redo_ctrl_y',"Redo (Ctrl+Y)")} aria-label={uiT('admin.study_plate_editor.redo',"Redo")}
                     onMouseDown={event=>event.preventDefault()} onClick={()=>command(()=>editor.tf.redo())}><Redo2 size={16}/></button>
-                  <button type="button" title="Paste text from clipboard (Ctrl+V)" aria-label="Paste"
+                  <button type="button" title={uiT('admin.study_plate_editor.paste_text_from_clipboard_ctrl_v',"Paste text from clipboard (Ctrl+V)")} aria-label={uiT('admin.study_plate_editor.paste',"Paste")}
                     onMouseDown={event=>{event.preventDefault();rememberSelection();}} onClick={handlePaste}><Clipboard size={16} color="#2563eb"/></button>
-                  <button type="button" title="Cut selection to clipboard (Ctrl+X)" aria-label="Cut"
+                  <button type="button" title={uiT('admin.study_plate_editor.cut_selection_to_clipboard_ctrl_x',"Cut selection to clipboard (Ctrl+X)")} aria-label={uiT('admin.study_plate_editor.cut',"Cut")}
                     onMouseDown={event=>{event.preventDefault();rememberSelection();}} onClick={handleCut}><Scissors size={15}/></button>
-                  <button type="button" title="Copy selection to clipboard (Ctrl+C)" aria-label="Copy"
+                  <button type="button" title={uiT('admin.study_plate_editor.copy_selection_to_clipboard_ctrl_c',"Copy selection to clipboard (Ctrl+C)")} aria-label={uiT('admin.study_plate_editor.copy',"Copy")}
                     onMouseDown={event=>{event.preventDefault();rememberSelection();}} onClick={handleCopy}><Copy size={15}/></button>
                   <button type="button" className={`vop-toolbar-btn ${formatPainter?'format-painter-active':''}`}
                     title={formatPainter?'Format painter active (click to apply or cancel)':'Format painter: copy formatting'}
@@ -996,15 +999,15 @@ export function StudyPlatePageEditor({
                     <Paintbrush size={15} color={formatPainter?'#d97706':'#475569'}/>
                   </button>
                 </div>
-                <div className="vop-word-group-label">Clipboard</div>
+                <div className="vop-word-group-label">{uiT('admin.study_plate_editor.clipboard',"Clipboard")}</div>
               </div>
 
               {/* 2. Styles Group */}
-              <div className="vop-word-group" aria-label="Styles">
+              <div className="vop-word-group" aria-label={uiT('admin.study_plate_editor.styles',"Styles")}>
                 <div className="vop-word-group-content">
-                  <label className="vop-plate-block-style" title="Paragraph style">
+                  <label className="vop-plate-block-style" title={uiT('admin.study_plate_editor.paragraph_style',"Paragraph style")}>
                     <Type size={16} aria-hidden="true"/>
-                    <select aria-label="Paragraph style" defaultValue="" onChange={event=>{
+                    <select aria-label={uiT('admin.study_plate_editor.paragraph_style',"Paragraph style")} defaultValue="" onChange={event=>{
                       const value=event.target.value;
                       contentCommand(()=>{
                         if(value==='p')editor.tf.toggleBlock('p');
@@ -1015,30 +1018,30 @@ export function StudyPlatePageEditor({
                       });
                       event.currentTarget.value='';
                     }}>
-                      <option value="">Text Style</option>
-                      <option value="p">Paragraph</option>
-                      <option value="h1">Heading 1</option>
-                      <option value="h2">Heading 2</option>
-                      <option value="h3">Heading 3</option>
-                      <option value="blockquote">Quote</option>
+                      <option value="">{uiT('admin.study_plate_editor.text_style',"Text Style")}</option>
+                      <option value="p">{uiT('admin.study_plate_editor.paragraph',"Paragraph")}</option>
+                      <option value="h1">{uiT('admin.study_plate_editor.heading_1',"Heading 1")}</option>
+                      <option value="h2">{uiT('admin.study_plate_editor.heading_2',"Heading 2")}</option>
+                      <option value="h3">{uiT('admin.study_plate_editor.heading_3',"Heading 3")}</option>
+                      <option value="blockquote">{uiT('admin.study_plate_editor.quote',"Quote")}</option>
                     </select>
                     <ChevronDown size={14} aria-hidden="true"/>
                   </label>
                 </div>
-                <div className="vop-word-group-label">Styles</div>
+                <div className="vop-word-group-label">{uiT('admin.study_plate_editor.styles',"Styles")}</div>
               </div>
 
               {/* 3. Font Group */}
-              <div className="vop-word-group" aria-label="Font options">
+              <div className="vop-word-group" aria-label={uiT('admin.study_plate_editor.font_options',"Font options")}>
                 <div className="vop-word-group-content">
                   <select
                     className="vop-ribbon-select-light vop-ribbon-font-family"
-                    title="Font Family (including Advent Sans)"
-                    aria-label="Font Family"
+                    title={uiT('admin.study_plate_editor.font_family_including_advent_sans',"Font Family (including Advent Sans)")}
+                    aria-label={uiT('admin.study_plate_editor.font_family',"Font Family")}
                     value={currentFontFamily}
                     onChange={e => handleSetFontFamily(e.target.value)}
                   >
-                    <option value="">Arial</option>
+                    <option value="">{uiT('admin.study_plate_editor.arial',"Arial")}</option>
                     {FONT_FAMILIES.map(f => (
                       <option key={f.value} value={f.value}>{f.label}</option>
                     ))}
@@ -1046,8 +1049,8 @@ export function StudyPlatePageEditor({
 
                   <select
                     className="vop-ribbon-select-light vop-ribbon-font-size"
-                    title="Font Size"
-                    aria-label="Font Size"
+                    title={uiT('admin.study_plate_editor.font_size',"Font Size")}
+                    aria-label={uiT('admin.study_plate_editor.font_size',"Font Size")}
                     value={currentFontSize}
                     onChange={e => handleSetFontSize(e.target.value)}
                   >
@@ -1057,30 +1060,30 @@ export function StudyPlatePageEditor({
                     ))}
                   </select>
 
-                  <button type="button" title="Increase Font Size" onMouseDown={event=>{event.preventDefault();rememberSelection();}} onClick={handleGrowFont}>
+                  <button type="button" title={uiT('admin.study_plate_editor.increase_font_size',"Increase Font Size")} onMouseDown={event=>{event.preventDefault();rememberSelection();}} onClick={handleGrowFont}>
                     <Type size={14}/><span style={{fontSize:'8px',fontWeight:800}}>▲</span>
                   </button>
-                  <button type="button" title="Decrease Font Size" onMouseDown={event=>{event.preventDefault();rememberSelection();}} onClick={handleShrinkFont}>
+                  <button type="button" title={uiT('admin.study_plate_editor.decrease_font_size',"Decrease Font Size")} onMouseDown={event=>{event.preventDefault();rememberSelection();}} onClick={handleShrinkFont}>
                     <Type size={14}/><span style={{fontSize:'8px',fontWeight:800}}>▼</span>
                   </button>
 
                   {/* Change Case Dropdown */}
                   <div className="vop-ribbon-menu-wrapper">
-                    <button type="button" title="Change Case" onMouseDown={event=>{event.preventDefault();rememberSelection();}}
+                    <button type="button" title={uiT('admin.study_plate_editor.change_case',"Change Case")} onMouseDown={event=>{event.preventDefault();rememberSelection();}}
                       onClick={()=>setActiveDropdown(activeDropdown==='case'?null:'case')}>
                       <CaseSensitive size={15}/><ChevronDown size={10}/>
                     </button>
                     {activeDropdown==='case' && (
                       <div className="vop-ribbon-popover-light" onMouseDown={e=>e.preventDefault()}>
-                        <button type="button" className="vop-ribbon-popover-item-light" onClick={()=>changeCase('sentence')}>Sentence case.</button>
-                        <button type="button" className="vop-ribbon-popover-item-light" onClick={()=>changeCase('lower')}>lowercase</button>
-                        <button type="button" className="vop-ribbon-popover-item-light" onClick={()=>changeCase('upper')}>UPPERCASE</button>
-                        <button type="button" className="vop-ribbon-popover-item-light" onClick={()=>changeCase('title')}>Capitalize Each Word</button>
+                        <button type="button" className="vop-ribbon-popover-item-light" onClick={()=>changeCase('sentence')}>{uiT('admin.study_plate_editor.sentence_case',"Sentence case.")}</button>
+                        <button type="button" className="vop-ribbon-popover-item-light" onClick={()=>changeCase('lower')}>{uiT('admin.study_plate_editor.lowercase',"lowercase")}</button>
+                        <button type="button" className="vop-ribbon-popover-item-light" onClick={()=>changeCase('upper')}>{uiT('admin.study_plate_editor.uppercase',"UPPERCASE")}</button>
+                        <button type="button" className="vop-ribbon-popover-item-light" onClick={()=>changeCase('title')}>{uiT('admin.study_plate_editor.capitalize_each_word',"Capitalize Each Word")}</button>
                       </div>
                     )}
                   </div>
 
-                  <button type="button" title="Clear All Formatting" onMouseDown={event=>{event.preventDefault();rememberSelection();}} onClick={handleClearFormatting}>
+                  <button type="button" title={uiT('admin.study_plate_editor.clear_all_formatting',"Clear All Formatting")} onMouseDown={event=>{event.preventDefault();rememberSelection();}} onClick={handleClearFormatting}>
                     <Eraser size={15} color="#e11d48"/>
                   </button>
 
@@ -1089,38 +1092,38 @@ export function StudyPlatePageEditor({
                   {toolbarButton('Underline',<Underline size={16}/>,()=>editor.tf.toggleMark('underline'))}
                   {toolbarButton('Strikethrough',<Strikethrough size={16}/>,()=>editor.tf.toggleMark('strikethrough'))}
                   {toolbarButton('Inline code',<Code2 size={16}/>,()=>editor.tf.toggleMark('code'))}
-                  <button type="button" title="Subscript (x₂)" onMouseDown={event=>{event.preventDefault();rememberSelection();}} onClick={toggleSubscript}>
+                  <button type="button" title={uiT('admin.study_plate_editor.subscript_x',"Subscript (x₂)")} onMouseDown={event=>{event.preventDefault();rememberSelection();}} onClick={toggleSubscript}>
                     <Subscript size={15}/>
                   </button>
-                  <button type="button" title="Superscript (x²)" onMouseDown={event=>{event.preventDefault();rememberSelection();}} onClick={toggleSuperscript}>
+                  <button type="button" title={uiT('admin.study_plate_editor.superscript_x',"Superscript (x²)")} onMouseDown={event=>{event.preventDefault();rememberSelection();}} onClick={toggleSuperscript}>
                     <Superscript size={15}/>
                   </button>
 
                   {/* Text Effects */}
                   <div className="vop-ribbon-menu-wrapper">
-                    <button type="button" title="Text Effects & Shadow" onMouseDown={event=>{event.preventDefault();rememberSelection();}}
+                    <button type="button" title={uiT('admin.study_plate_editor.text_effects_and_shadow',"Text Effects & Shadow")} onMouseDown={event=>{event.preventDefault();rememberSelection();}}
                       onClick={()=>setActiveDropdown(activeDropdown==='effects'?null:'effects')}>
                       <Sparkles size={15} color="#0284c7"/><ChevronDown size={10}/>
                     </button>
                     {activeDropdown==='effects' && (
                       <div className="vop-ribbon-popover-light" onMouseDown={e=>e.preventDefault()}>
-                        <button type="button" className="vop-ribbon-popover-item-light" onClick={()=>applyTextEffect(null)}>None (Standard)</button>
-                        <button type="button" className="vop-ribbon-popover-item-light" onClick={()=>applyTextEffect('1px 1px 3px rgba(0,0,0,0.4)')}>Subtle Shadow</button>
-                        <button type="button" className="vop-ribbon-popover-item-light" onClick={()=>applyTextEffect('0 0 6px rgba(59,130,246,0.6)')}>Blue Glow</button>
-                        <button type="button" className="vop-ribbon-popover-item-light" onClick={()=>applyTextEffect('0 0 8px rgba(245,158,11,0.6)')}>Gold Glow</button>
+                        <button type="button" className="vop-ribbon-popover-item-light" onClick={()=>applyTextEffect(null)}>{uiT('admin.study_plate_editor.none_standard',"None (Standard)")}</button>
+                        <button type="button" className="vop-ribbon-popover-item-light" onClick={()=>applyTextEffect('1px 1px 3px rgba(0,0,0,0.4)')}>{uiT('admin.study_plate_editor.subtle_shadow',"Subtle Shadow")}</button>
+                        <button type="button" className="vop-ribbon-popover-item-light" onClick={()=>applyTextEffect('0 0 6px rgba(59,130,246,0.6)')}>{uiT('admin.study_plate_editor.blue_glow',"Blue Glow")}</button>
+                        <button type="button" className="vop-ribbon-popover-item-light" onClick={()=>applyTextEffect('0 0 8px rgba(245,158,11,0.6)')}>{uiT('admin.study_plate_editor.gold_glow',"Gold Glow")}</button>
                       </div>
                     )}
                   </div>
 
                   {/* Highlight Color */}
                   <div className="vop-ribbon-menu-wrapper">
-                    <button type="button" title="Text Highlight Color" onMouseDown={event=>{event.preventDefault();rememberSelection();}}
+                    <button type="button" title={uiT('admin.study_plate_editor.text_highlight_color',"Text Highlight Color")} onMouseDown={event=>{event.preventDefault();rememberSelection();}}
                       onClick={()=>setActiveDropdown(activeDropdown==='highlight'?null:'highlight')}>
                       <Highlighter size={15} color="#ca8a04"/><ChevronDown size={10}/>
                     </button>
                     {activeDropdown==='highlight' && (
                       <div className="vop-ribbon-popover-light" onMouseDown={e=>e.preventDefault()}>
-                        <div style={{fontSize:'10px',color:'#64748b',padding:'2px 6px',fontWeight:700}}>HIGHLIGHT COLOR</div>
+                        <div style={{fontSize:'10px',color:'#64748b',padding:'2px 6px',fontWeight:700}}>{uiT('admin.study_plate_editor.highlight_color',"HIGHLIGHT COLOR")}</div>
                         <div className="vop-ribbon-color-grid">
                           {['#fef08a','#bbf7d0','#a5f3fc','#fbcfe8','#fed7aa'].map(c=>(
                             <div key={c} className="vop-ribbon-color-swatch" style={{background:c}} onClick={()=>setHighlightColor(c)} title={c}/>
@@ -1135,26 +1138,26 @@ export function StudyPlatePageEditor({
 
                   {/* Full MS Office Font Color Palette */}
                   <div className="vop-ribbon-menu-wrapper">
-                    <button type="button" title="Font Color (MS Office Palette)" onMouseDown={event=>{event.preventDefault();rememberSelection();}}
+                    <button type="button" title={uiT('admin.study_plate_editor.font_color_ms_office_palette',"Font Color (MS Office Palette)")} onMouseDown={event=>{event.preventDefault();rememberSelection();}}
                       onClick={()=>setActiveDropdown(activeDropdown==='color'?null:'color')}>
                       <Palette size={15} color="#dc2626"/><ChevronDown size={10}/>
                     </button>
                     {activeDropdown==='color' && (
                       <div className="vop-ribbon-popover-light vop-office-color-popover" onMouseDown={e=>e.preventDefault()}>
-                        <div style={{fontSize:'10px',color:'#475569',padding:'2px 6px',fontWeight:700}}>MS OFFICE THEME COLORS</div>
+                        <div style={{fontSize:'10px',color:'#475569',padding:'2px 6px',fontWeight:700}}>{uiT('admin.study_plate_editor.ms_office_theme_colors',"MS OFFICE THEME COLORS")}</div>
                         <div className="vop-ribbon-color-grid vop-office-grid">
                           {OFFICE_THEME_COLORS.map(c=>(
                             <div key={c} className="vop-ribbon-color-swatch" style={{background:c}} onClick={()=>setFontColor(c)} title={c}/>
                           ))}
                         </div>
-                        <div style={{fontSize:'10px',color:'#475569',padding:'4px 6px 2px',fontWeight:700}}>STANDARD COLORS</div>
+                        <div style={{fontSize:'10px',color:'#475569',padding:'4px 6px 2px',fontWeight:700}}>{uiT('admin.study_plate_editor.standard_colors',"STANDARD COLORS")}</div>
                         <div className="vop-ribbon-color-grid">
                           {OFFICE_STANDARD_COLORS.map(c=>(
                             <div key={c} className="vop-ribbon-color-swatch" style={{background:c}} onClick={()=>setFontColor(c)} title={c}/>
                           ))}
                         </div>
                         <div className="vop-office-custom-color">
-                          <label htmlFor="vop-font-custom-hex">Custom Color:</label>
+                          <label htmlFor="vop-font-custom-hex">{uiT('admin.study_plate_editor.custom_color',"Custom Color:")}</label>
                           <input id="vop-font-custom-hex" type="color" onChange={e=>setFontColor(e.target.value)}/>
                         </div>
                         <button type="button" className="vop-ribbon-popover-item-light" onClick={()=>setFontColor('')}>
@@ -1164,36 +1167,36 @@ export function StudyPlatePageEditor({
                     )}
                   </div>
                 </div>
-                <div className="vop-word-group-label">Font</div>
+                <div className="vop-word-group-label">{uiT('admin.study_plate_editor.font',"Font")}</div>
               </div>
 
               {/* 4. Paragraph Group */}
-              <div className="vop-word-group" aria-label="Paragraph options">
+              <div className="vop-word-group" aria-label={uiT('admin.study_plate_editor.paragraph_options',"Paragraph options")}>
                 <div className="vop-word-group-content">
                   {toolbarButton('Bullet list',<List size={17}/>,()=>editor.tf.ul.toggle())}
                   {toolbarButton('Numbered list',<ListOrdered size={17}/>,()=>editor.tf.ol.toggle())}
-                  <button type="button" title="Decrease Indent" onMouseDown={event=>{event.preventDefault();rememberSelection();}} onClick={()=>adjustIndent(-1)}>
+                  <button type="button" title={uiT('admin.study_plate_editor.decrease_indent',"Decrease Indent")} onMouseDown={event=>{event.preventDefault();rememberSelection();}} onClick={()=>adjustIndent(-1)}>
                     <Outdent size={16}/>
                   </button>
-                  <button type="button" title="Increase Indent" onMouseDown={event=>{event.preventDefault();rememberSelection();}} onClick={()=>adjustIndent(1)}>
+                  <button type="button" title={uiT('admin.study_plate_editor.increase_indent',"Increase Indent")} onMouseDown={event=>{event.preventDefault();rememberSelection();}} onClick={()=>adjustIndent(1)}>
                     <Indent size={16}/>
                   </button>
-                  <button type="button" title="Align Left" onMouseDown={event=>{event.preventDefault();rememberSelection();}} onClick={()=>setAlign('left')}>
+                  <button type="button" title={uiT('admin.study_plate_editor.align_left',"Align Left")} onMouseDown={event=>{event.preventDefault();rememberSelection();}} onClick={()=>setAlign('left')}>
                     <AlignLeft size={16}/>
                   </button>
-                  <button type="button" title="Align Center" onMouseDown={event=>{event.preventDefault();rememberSelection();}} onClick={()=>setAlign('center')}>
+                  <button type="button" title={uiT('admin.study_plate_editor.align_center',"Align Center")} onMouseDown={event=>{event.preventDefault();rememberSelection();}} onClick={()=>setAlign('center')}>
                     <AlignCenter size={16}/>
                   </button>
-                  <button type="button" title="Align Right" onMouseDown={event=>{event.preventDefault();rememberSelection();}} onClick={()=>setAlign('right')}>
+                  <button type="button" title={uiT('admin.study_plate_editor.align_right',"Align Right")} onMouseDown={event=>{event.preventDefault();rememberSelection();}} onClick={()=>setAlign('right')}>
                     <AlignRight size={16}/>
                   </button>
-                  <button type="button" title="Justify" onMouseDown={event=>{event.preventDefault();rememberSelection();}} onClick={()=>setAlign('justify')}>
+                  <button type="button" title={uiT('admin.study_plate_editor.justify',"Justify")} onMouseDown={event=>{event.preventDefault();rememberSelection();}} onClick={()=>setAlign('justify')}>
                     <AlignJustify size={16}/>
                   </button>
 
                   {/* Line Spacing */}
                   <div className="vop-ribbon-menu-wrapper">
-                    <button type="button" title="Line Spacing (1.0, 1.15, 1.5, 2.0)" onMouseDown={event=>{event.preventDefault();rememberSelection();}}
+                    <button type="button" title={uiT('admin.study_plate_editor.line_spacing_1_0_1_15_1_5_2_0',"Line Spacing (1.0, 1.15, 1.5, 2.0)")} onMouseDown={event=>{event.preventDefault();rememberSelection();}}
                       onClick={()=>setActiveDropdown(activeDropdown==='spacing'?null:'spacing')}>
                       <UnfoldVertical size={15}/><ChevronDown size={10}/>
                     </button>
@@ -1209,45 +1212,45 @@ export function StudyPlatePageEditor({
 
                   {/* Shading */}
                   <div className="vop-ribbon-menu-wrapper">
-                    <button type="button" title="Paragraph Background Shading" onMouseDown={event=>{event.preventDefault();rememberSelection();}}
+                    <button type="button" title={uiT('admin.study_plate_editor.paragraph_background_shading',"Paragraph Background Shading")} onMouseDown={event=>{event.preventDefault();rememberSelection();}}
                       onClick={()=>setActiveDropdown(activeDropdown==='shading'?null:'shading')}>
                       <PaintBucket size={15} color="#0284c7"/><ChevronDown size={10}/>
                     </button>
                     {activeDropdown==='shading' && (
                       <div className="vop-ribbon-popover-light" onMouseDown={e=>e.preventDefault()}>
-                        <button type="button" className="vop-ribbon-popover-item-light" onClick={()=>setBlockShading('')}>None</button>
-                        <button type="button" className="vop-ribbon-popover-item-light" onClick={()=>setBlockShading('#eff6ff')}>Soft Blue Tint</button>
-                        <button type="button" className="vop-ribbon-popover-item-light" onClick={()=>setBlockShading('#fffbeb')}>Soft Amber Tint</button>
-                        <button type="button" className="vop-ribbon-popover-item-light" onClick={()=>setBlockShading('#f0fdf4')}>Soft Green Tint</button>
-                        <button type="button" className="vop-ribbon-popover-item-light" onClick={()=>setBlockShading('#f8fafc')}>Soft Gray Box</button>
+                        <button type="button" className="vop-ribbon-popover-item-light" onClick={()=>setBlockShading('')}>{uiT('admin.study_plate_editor.none',"None")}</button>
+                        <button type="button" className="vop-ribbon-popover-item-light" onClick={()=>setBlockShading('#eff6ff')}>{uiT('admin.study_plate_editor.soft_blue_tint',"Soft Blue Tint")}</button>
+                        <button type="button" className="vop-ribbon-popover-item-light" onClick={()=>setBlockShading('#fffbeb')}>{uiT('admin.study_plate_editor.soft_amber_tint',"Soft Amber Tint")}</button>
+                        <button type="button" className="vop-ribbon-popover-item-light" onClick={()=>setBlockShading('#f0fdf4')}>{uiT('admin.study_plate_editor.soft_green_tint',"Soft Green Tint")}</button>
+                        <button type="button" className="vop-ribbon-popover-item-light" onClick={()=>setBlockShading('#f8fafc')}>{uiT('admin.study_plate_editor.soft_gray_box',"Soft Gray Box")}</button>
                       </div>
                     )}
                   </div>
 
                   {/* Borders */}
                   <div className="vop-ribbon-menu-wrapper">
-                    <button type="button" title="Block Borders" onMouseDown={event=>{event.preventDefault();rememberSelection();}}
+                    <button type="button" title={uiT('admin.study_plate_editor.block_borders',"Block Borders")} onMouseDown={event=>{event.preventDefault();rememberSelection();}}
                       onClick={()=>setActiveDropdown(activeDropdown==='borders'?null:'borders')}>
                       <Square size={15}/><ChevronDown size={10}/>
                     </button>
                     {activeDropdown==='borders' && (
                       <div className="vop-ribbon-popover-light" onMouseDown={e=>e.preventDefault()}>
-                        <button type="button" className="vop-ribbon-popover-item-light" onClick={()=>setBlockBorder('')}>None</button>
-                        <button type="button" className="vop-ribbon-popover-item-light" onClick={()=>setBlockBorder('#2563eb')}>Blue Accent Border</button>
-                        <button type="button" className="vop-ribbon-popover-item-light" onClick={()=>setBlockBorder('#f59e0b')}>Gold Accent Border</button>
-                        <button type="button" className="vop-ribbon-popover-item-light" onClick={()=>setBlockBorder('#cbd5e1')}>Light Box Border</button>
+                        <button type="button" className="vop-ribbon-popover-item-light" onClick={()=>setBlockBorder('')}>{uiT('admin.study_plate_editor.none',"None")}</button>
+                        <button type="button" className="vop-ribbon-popover-item-light" onClick={()=>setBlockBorder('#2563eb')}>{uiT('admin.study_plate_editor.blue_accent_border',"Blue Accent Border")}</button>
+                        <button type="button" className="vop-ribbon-popover-item-light" onClick={()=>setBlockBorder('#f59e0b')}>{uiT('admin.study_plate_editor.gold_accent_border',"Gold Accent Border")}</button>
+                        <button type="button" className="vop-ribbon-popover-item-light" onClick={()=>setBlockBorder('#cbd5e1')}>{uiT('admin.study_plate_editor.light_box_border',"Light Box Border")}</button>
                       </div>
                     )}
                   </div>
 
-                  <button type="button" title="Sort selected lines alphabetically" onMouseDown={event=>{event.preventDefault();rememberSelection();}} onClick={sortLinesAlphabetically}>
+                  <button type="button" title={uiT('admin.study_plate_editor.sort_selected_lines_alphabetically',"Sort selected lines alphabetically")} onMouseDown={event=>{event.preventDefault();rememberSelection();}} onClick={sortLinesAlphabetically}>
                     <ArrowUpDown size={15}/>
                   </button>
-                  <button type="button" className={showPilcrow?'active':''} title="Show/Hide Paragraph Marks (¶)" onMouseDown={event=>{event.preventDefault();rememberSelection();}} onClick={()=>setShowPilcrow(!showPilcrow)}>
+                  <button type="button" className={showPilcrow?'active':''} title={uiT('admin.study_plate_editor.show_hide_paragraph_marks',"Show/Hide Paragraph Marks (¶)")} onMouseDown={event=>{event.preventDefault();rememberSelection();}} onClick={()=>setShowPilcrow(!showPilcrow)}>
                     <Pilcrow size={15}/>
                   </button>
                 </div>
-                <div className="vop-word-group-label">Paragraph</div>
+                <div className="vop-word-group-label">{uiT('admin.study_plate_editor.paragraph',"Paragraph")}</div>
               </div>
             </div>
           )}
@@ -1256,24 +1259,24 @@ export function StudyPlatePageEditor({
           {activeRibbonTab === 'insert' && (
             <div className="vop-word-ribbon-row">
               {/* 1. Tables & Callouts Group */}
-              <div className="vop-word-group" aria-label="Tables & Callouts">
+              <div className="vop-word-group" aria-label={uiT('admin.study_plate_editor.tables_and_callouts',"Tables & Callouts")}>
                 <div className="vop-word-group-content">
                   {/* Table Builder Dropdown */}
                   <div className="vop-ribbon-menu-wrapper">
                     <button
                       type="button"
                       className="vop-plate-scripture-btn"
-                      title="Insert HTML table into lesson"
+                      title={uiT('admin.study_plate_editor.insert_html_table_into_lesson',"Insert HTML table into lesson")}
                       onMouseDown={event => { event.preventDefault(); rememberSelection(); }}
                       onClick={() => setActiveDropdown(activeDropdown === 'table' ? null : 'table')}
                     >
                       <Table size={16} color="#2563eb" />
-                      <span>Insert Table</span>
+                      <span>{uiT('admin.study_plate_editor.insert_table',"Insert Table")}</span>
                       <ChevronDown size={11} />
                     </button>
                     {activeDropdown === 'table' && (
                       <div className="vop-ribbon-popover-light vop-table-builder-popover" onMouseDown={e => e.preventDefault()}>
-                        <div style={{ fontSize: '10px', color: '#475569', padding: '2px 6px', fontWeight: 700 }}>GRID SELECTION</div>
+                        <div style={{ fontSize: '10px', color: '#475569', padding: '2px 6px', fontWeight: 700 }}>{uiT('admin.study_plate_editor.grid_selection',"GRID SELECTION")}</div>
                         <div className="vop-table-grid-options">
                           <button type="button" onClick={() => insertTable(2, 2)}>2 × 2 Table</button>
                           <button type="button" onClick={() => insertTable(3, 3)}>3 × 3 Table</button>
@@ -1289,12 +1292,12 @@ export function StudyPlatePageEditor({
                     <button
                       type="button"
                       className="vop-plate-scripture-btn"
-                      title="Insert interactive callout / note box"
+                      title={uiT('admin.study_plate_editor.insert_interactive_callout_note_box',"Insert interactive callout / note box")}
                       onMouseDown={event => { event.preventDefault(); rememberSelection(); }}
                       onClick={() => setActiveDropdown(activeDropdown === 'callout' ? null : 'callout')}
                     >
                       <MessageSquareQuote size={16} color="#059669" />
-                      <span>Callout Box</span>
+                      <span>{uiT('admin.study_plate_editor.callout_box',"Callout Box")}</span>
                       <ChevronDown size={11} />
                     </button>
                     {activeDropdown === 'callout' && (
@@ -1307,22 +1310,22 @@ export function StudyPlatePageEditor({
                     )}
                   </div>
                 </div>
-                <div className="vop-word-group-label">Tables & Callouts</div>
+                <div className="vop-word-group-label">{uiT('admin.study_plate_editor.tables_and_callouts',"Tables & Callouts")}</div>
               </div>
 
               {/* 2. Media & Links Group */}
-              <div className="vop-word-group" aria-label="Media & Links">
+              <div className="vop-word-group" aria-label={uiT('admin.study_plate_editor.media_and_links',"Media & Links")}>
                 <div className="vop-word-group-content">
                   {toolbarButton('Quotation block',<Quote size={17}/>,()=>editor.tf.blockquote.toggle())}
-                  <button type="button" title="Link" aria-label="Link"
+                  <button type="button" title={uiT('admin.study_plate_editor.link',"Link")} aria-label={uiT('admin.study_plate_editor.link',"Link")}
                     onMouseDown={event=>{event.preventDefault();rememberSelection();}} onClick={()=>openInsert('link')}><Link2 size={17}/></button>
-                  <button type="button" title="Image" aria-label="Image"
+                  <button type="button" title={uiT('admin.study_plate_editor.image',"Image")} aria-label={uiT('admin.study_plate_editor.image',"Image")}
                     onMouseDown={event=>{event.preventDefault();rememberSelection();}} onClick={()=>openInsert('image')}><ImagePlus size={17}/></button>
-                  <button type="button" title="Insert approved audio or video" aria-label="Insert approved audio or video"
+                  <button type="button" title={uiT('admin.study_plate_editor.insert_approved_audio_or_video',"Insert approved audio or video")} aria-label={uiT('admin.study_plate_editor.insert_approved_audio_or_video',"Insert approved audio or video")}
                     disabled={mediaResolving} onMouseDown={event=>{event.preventDefault();rememberSelection();}} onClick={()=>openInsert('media')}>
                     {mediaResolving?<LoaderCircle className="vop-plate-spin" size={17}/>:<Film size={17}/>}</button>
                 </div>
-                <div className="vop-word-group-label">Media & Links</div>
+                <div className="vop-word-group-label">{uiT('admin.study_plate_editor.media_and_links',"Media & Links")}</div>
               </div>
             </div>
           )}
@@ -1331,38 +1334,38 @@ export function StudyPlatePageEditor({
           {activeRibbonTab === 'scripture' && (
             <div className="vop-word-ribbon-row">
               {/* 1. Scripture Group */}
-              <div className="vop-word-group" aria-label="Scripture">
+              <div className="vop-word-group" aria-label={uiT('admin.study_plate_editor.scripture',"Scripture")}>
                 <div className="vop-word-group-content">
                   <button
                     type="button"
                     className="vop-plate-scripture-btn vop-plate-scripture-highlight"
-                    title="Mark selected text or insert Bible verse with version"
+                    title={uiT('admin.study_plate_editor.mark_selected_text_or_insert_bible_verse_with_version',"Mark selected text or insert Bible verse with version")}
                     onMouseDown={event => { event.preventDefault(); rememberSelection(); }}
                     onClick={openBibleVerseModal}
                   >
                     <BookOpen size={16} color="#d97706" />
-                    <span>Bible Verse & Translation</span>
+                    <span>{uiT('admin.study_plate_editor.bible_verse_and_translation',"Bible Verse & Translation")}</span>
                     <span className="vop-plate-scripture-badge">{verseVersion || 'NKJV'}</span>
                   </button>
                 </div>
-                <div className="vop-word-group-label">Scripture</div>
+                <div className="vop-word-group-label">{uiT('admin.study_plate_editor.scripture',"Scripture")}</div>
               </div>
 
               {/* 2. Page Boundaries Group */}
-              <div className="vop-word-group" aria-label="Page Boundaries">
+              <div className="vop-word-group" aria-label={uiT('admin.study_plate_editor.page_boundaries',"Page Boundaries")}>
                 <div className="vop-word-group-content">
                   <button type="button" className="vop-plate-insert-section-btn"
-                    title="Insert a new learner section/page at current cursor position"
+                    title={uiT('admin.study_plate_editor.insert_a_new_learner_section_page_at_current_cursor_position',"Insert a new learner section/page at current cursor position")}
                     onMouseDown={event=>{event.preventDefault();rememberSelection();}} onClick={()=>insertSectionAtCursor()}>
-                    <Layers3 size={15}/><span>Insert section</span>
+                    <Layers3 size={15}/><span>{uiT('admin.study_plate_editor.insert_section',"Insert section")}</span>
                   </button>
                   <button type="button" className="vop-plate-section-break"
-                    title="Mark the current paragraph as the start of a learner section/page"
+                    title={uiT('admin.study_plate_editor.mark_the_current_paragraph_as_the_start_of_a_learner_section_page',"Mark the current paragraph as the start of a learner section/page")}
                     onMouseDown={event=>{event.preventDefault();rememberSelection();}} onClick={markSection}>
-                    <Scissors size={16}/><span>Start section</span>
+                    <Scissors size={16}/><span>{uiT('admin.study_plate_editor.start_section',"Start section")}</span>
                   </button>
                 </div>
-                <div className="vop-word-group-label">Page Boundaries</div>
+                <div className="vop-word-group-label">{uiT('admin.study_plate_editor.page_boundaries',"Page Boundaries")}</div>
               </div>
             </div>
           )}
@@ -1370,40 +1373,40 @@ export function StudyPlatePageEditor({
 
         {/* Overflow / More Menu */}
         <details ref={moreRef} className="vop-plate-more">
-          <summary title="More document actions" aria-label="More document actions"
+          <summary title={uiT('admin.study_plate_editor.more_document_actions',"More document actions")} aria-label={uiT('admin.study_plate_editor.more_document_actions',"More document actions")}
             onMouseDown={()=>rememberSelection()}>
             <MoreVertical size={17}/>
           </summary>
-          <div role="menu" aria-label="Additional study editing actions">
+          <div role="menu" aria-label={uiT('admin.study_plate_editor.additional_study_editing_actions',"Additional study editing actions")}>
             <button type="button" role="menuitem" onMouseDown={menuMouseDown}
               onClick={()=>menuAction(()=>insertSectionAtCursor())}>
               <Layers3 size={15}/> Insert section at cursor
             </button>
             <button type="button" role="menuitem" onMouseDown={menuMouseDown}
-              onClick={()=>menuAction(markSection)}><Scissors size={15}/> Mark paragraph as section</button>
+              onClick={()=>menuAction(markSection)}><Scissors size={15}/>{uiT('admin.study_plate_editor.mark_paragraph_as_section',"Mark paragraph as section")}</button>
             <button type="button" role="menuitem" onMouseDown={menuMouseDown}
-              onClick={()=>menuAction(()=>openInsert('link'))}><Link2 size={15}/> Insert link</button>
+              onClick={()=>menuAction(()=>openInsert('link'))}><Link2 size={15}/>{uiT('admin.study_plate_editor.insert_link',"Insert link")}</button>
             <button type="button" role="menuitem" onMouseDown={menuMouseDown}
-              onClick={()=>menuAction(()=>openInsert('image'))}><ImagePlus size={15}/> Insert image</button>
+              onClick={()=>menuAction(()=>openInsert('image'))}><ImagePlus size={15}/>{uiT('admin.study_plate_editor.insert_image',"Insert image")}</button>
             <button type="button" role="menuitem" disabled={mediaResolving} onMouseDown={menuMouseDown}
-              onClick={()=>menuAction(()=>openInsert('media'))}><Film size={15}/> Insert audio / video</button>
+              onClick={()=>menuAction(()=>openInsert('media'))}><Film size={15}/>{uiT('admin.study_plate_editor.insert_audio_video',"Insert audio / video")}</button>
             <button type="button" role="menuitem" onMouseDown={menuMouseDown}
-              onClick={()=>menuAction(openBibleVerseModal)}><BookOpen size={15} color="#d97706"/> Tag / Insert Bible verse</button>
+              onClick={()=>menuAction(openBibleVerseModal)}><BookOpen size={15} color="#d97706"/>{uiT('admin.study_plate_editor.tag_insert_bible_verse',"Tag / Insert Bible verse")}</button>
             <button type="button" role="menuitem" onMouseDown={menuMouseDown}
-              onClick={()=>menuAction(()=>insertTable(3, 3))}><Table size={15}/> Insert 3x3 table</button>
+              onClick={()=>menuAction(()=>insertTable(3, 3))}><Table size={15}/>{uiT('admin.study_plate_editor.insert_3x3_table',"Insert 3x3 table")}</button>
             <button type="button" role="menuitem" onMouseDown={menuMouseDown}
-              onClick={()=>menuAction(()=>insertCallout('info'))}><MessageSquareQuote size={15}/> Key takeaway callout</button>
+              onClick={()=>menuAction(()=>insertCallout('info'))}><MessageSquareQuote size={15}/>{uiT('admin.study_plate_editor.key_takeaway_callout',"Key takeaway callout")}</button>
             <button type="button" role="menuitem" onMouseDown={menuMouseDown}
-              onClick={()=>menuAction(()=>editor.tf.blockquote.toggle())}><Quote size={15}/> Toggle quote block</button>
+              onClick={()=>menuAction(()=>editor.tf.blockquote.toggle())}><Quote size={15}/>{uiT('admin.study_plate_editor.toggle_quote_block',"Toggle quote block")}</button>
             <button type="button" role="menuitem" onMouseDown={menuMouseDown}
-              onClick={()=>menuAction(()=>editor.tf.toggleMark('code'))}><Code2 size={15}/> Toggle inline code</button>
+              onClick={()=>menuAction(()=>editor.tf.toggleMark('code'))}><Code2 size={15}/>{uiT('admin.study_plate_editor.toggle_inline_code',"Toggle inline code")}</button>
             <button type="button" role="menuitem" onMouseDown={menuMouseDown}
-              onClick={()=>menuAction(insertParagraphAfter)}>Add paragraph after current block</button>
+              onClick={()=>menuAction(insertParagraphAfter)}>{uiT('admin.study_plate_editor.add_paragraph_after_current_block',"Add paragraph after current block")}</button>
             {canAttachQuiz && onQuiz && <>
               <button type="button" role="menuitem" onMouseDown={menuMouseDown}
-                onClick={()=>menuAction(()=>attachQuiz('section'))}>Quiz for current section</button>
+                onClick={()=>menuAction(()=>attachQuiz('section'))}>{uiT('admin.study_plate_editor.quiz_for_current_section',"Quiz for current section")}</button>
               <button type="button" role="menuitem" onMouseDown={menuMouseDown}
-                onClick={()=>menuAction(()=>attachQuiz('block'))}>Quiz for current block</button>
+                onClick={()=>menuAction(()=>attachQuiz('block'))}>{uiT('admin.study_plate_editor.quiz_for_current_block',"Quiz for current block")}</button>
             </>}
           </div>
         </details>
@@ -1416,10 +1419,10 @@ export function StudyPlatePageEditor({
       <form className="vop-plate-insert-dialog" role="dialog" aria-modal="true"
         aria-labelledby="vop-plate-insert-title" onSubmit={event=>{event.preventDefault();void submitInsert();}}>
         <div className="vop-plate-insert-head">
-          <div><small>INSERT CONTENT</small><h4 id="vop-plate-insert-title">
+          <div><small>{uiT('admin.study_plate_editor.insert_content',"INSERT CONTENT")}</small><h4 id="vop-plate-insert-title">
             {insertKind==='link'?'Link':insertKind==='image'?'Image':'Audio / video'}
           </h4></div>
-          <button type="button" aria-label="Close insert dialog" disabled={mediaResolving}
+          <button type="button" aria-label={uiT('admin.study_plate_editor.close_insert_dialog',"Close insert dialog")} disabled={mediaResolving}
             onClick={closeInsert}>×</button>
         </div>
         <label>Public HTTPS URL
@@ -1428,12 +1431,12 @@ export function StudyPlatePageEditor({
         </label>
         {insertKind==='link'&&<label>Link text
           <input value={insertText} onChange={event=>setInsertText(event.target.value)}
-            placeholder="Text learners will see"/>
+            placeholder={uiT('admin.study_plate_editor.text_learners_will_see',"Text learners will see")}/>
         </label>}
         {insertKind==='image'&&<label>Alternative text
           <textarea rows={2} maxLength={300} value={insertAlt}
             onChange={event=>setInsertAlt(event.target.value)}
-            placeholder="Describe the image for screen-reader users. Leave blank only if decorative."/>
+            placeholder={uiT('admin.study_plate_editor.describe_the_image_for_screen_reader_users_leave_blank_only_if_decorative',"Describe the image for screen-reader users. Leave blank only if decorative.")}/>
           <small>{insertAlt.length}/300 characters</small>
         </label>}
         {insertKind==='media'&&<p className="vop-plate-insert-help">
@@ -1442,7 +1445,7 @@ export function StudyPlatePageEditor({
         </p>}
         {insertError&&<p className="vop-plate-insert-error" role="alert">{insertError}</p>}
         <div className="vop-plate-insert-actions">
-          <button type="button" className="vop-secondary" disabled={mediaResolving} onClick={closeInsert}>Cancel</button>
+          <button type="button" className="vop-secondary" disabled={mediaResolving} onClick={closeInsert}>{uiT('admin.study_plate_editor.cancel',"Cancel")}</button>
           <button type="submit" className="vop-primary" disabled={mediaResolving||!insertUrl.trim()}>
             {mediaResolving?<><LoaderCircle className="vop-plate-spin" size={15}/> Validating…</>:'Insert'}
           </button>
@@ -1469,11 +1472,11 @@ export function StudyPlatePageEditor({
             <div className="vop-bible-verse-dialog-head">
               <h3 id="vop-bible-verse-title">
                 <BookOpen size={20} color="#2563eb" />
-                <span>Mark Bible Verse & Version</span>
+                <span>{uiT('admin.study_plate_editor.mark_bible_verse_and_version',"Mark Bible Verse & Version")}</span>
               </h3>
               <button
                 type="button"
-                aria-label="Close Bible verse dialog"
+                aria-label={uiT('admin.study_plate_editor.close_bible_verse_dialog',"Close Bible verse dialog")}
                 onClick={() => setBibleVerseOpen(false)}
               >
                 ×
@@ -1481,29 +1484,29 @@ export function StudyPlatePageEditor({
             </div>
 
             <div className="vop-bible-verse-field">
-              <label htmlFor="vop-verse-text-input">Passage Text / Quote</label>
+              <label htmlFor="vop-verse-text-input">{uiT('admin.study_plate_editor.passage_text_quote',"Passage Text / Quote")}</label>
               <textarea
                 id="vop-verse-text-input"
                 rows={3}
                 value={verseText}
                 onChange={e => setVerseText(e.target.value)}
-                placeholder="Selected passage text from your lesson..."
+                placeholder={uiT('admin.study_plate_editor.selected_passage_text_from_your_lesson',"Selected passage text from your lesson...")}
               />
             </div>
 
             <div className="vop-bible-verse-field">
-              <label htmlFor="vop-verse-ref-input">Scripture Reference</label>
+              <label htmlFor="vop-verse-ref-input">{uiT('admin.study_plate_editor.scripture_reference',"Scripture Reference")}</label>
               <input
                 id="vop-verse-ref-input"
                 type="text"
                 value={verseReference}
                 onChange={e => setVerseReference(e.target.value)}
-                placeholder="e.g. John 3:16, Genesis 1:1, Exodus 20:8-11..."
+                placeholder={uiT('admin.study_plate_editor.e_g_john_3_16_genesis_1_1_exodus_20_8_11',"e.g. John 3:16, Genesis 1:1, Exodus 20:8-11...")}
               />
             </div>
 
             <div className="vop-bible-verse-field">
-              <label htmlFor="vop-verse-version-select">Bible Version / Translation</label>
+              <label htmlFor="vop-verse-version-select">{uiT('admin.study_plate_editor.bible_version_translation',"Bible Version / Translation")}</label>
               <select
                 id="vop-verse-version-select"
                 value={verseVersion}
@@ -1533,13 +1536,13 @@ export function StudyPlatePageEditor({
                   style={{ marginTop: '6px' }}
                   value={customVersion}
                   onChange={e => setCustomVersion(e.target.value)}
-                  placeholder="Enter translation abbreviation (e.g. NASB, AMP)..."
+                  placeholder={uiT('admin.study_plate_editor.enter_translation_abbreviation_e_g_nasb_amp',"Enter translation abbreviation (e.g. NASB, AMP)...")}
                 />
               )}
             </div>
 
             <div className="vop-bible-verse-field">
-              <label>Presentation Style</label>
+              <label>{uiT('admin.study_plate_editor.presentation_style',"Presentation Style")}</label>
               <div style={{ display: 'flex', gap: '16px', fontSize: '0.85rem' }}>
                 <label style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontWeight: 600 }}>
                   <input
@@ -1549,7 +1552,7 @@ export function StudyPlatePageEditor({
                     checked={verseStyle === 'inline'}
                     onChange={() => setVerseStyle('inline')}
                   />
-                  <span>In-Text Verse (Interactive tag with version pill)</span>
+                  <span>{uiT('admin.study_plate_editor.in_text_verse_interactive_tag_with_version_pill',"In-Text Verse (Interactive tag with version pill)")}</span>
                 </label>
                 <label style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontWeight: 600 }}>
                   <input
@@ -1559,7 +1562,7 @@ export function StudyPlatePageEditor({
                     checked={verseStyle === 'quote'}
                     onChange={() => setVerseStyle('quote')}
                   />
-                  <span>Scripture Blockquote (Quotation with citation)</span>
+                  <span>{uiT('admin.study_plate_editor.scripture_blockquote_quotation_with_citation',"Scripture Blockquote (Quotation with citation)")}</span>
                 </label>
               </div>
             </div>
@@ -1611,7 +1614,7 @@ export function StudyPlatePageEditor({
     }}>
       <div className="vop-plate-paper">
         <PlateContent className={`vop-plate-editable ${showPilcrow ? 'vop-show-pilcrow' : ''}`}
-          aria-label="Edit study chapter" spellCheck
+          aria-label={uiT('admin.study_plate_editor.edit_study_chapter',"Edit study chapter")} spellCheck
           onKeyDown={event=>{
             const modifier=event.ctrlKey||event.metaKey;
             if(modifier&&event.key.toLowerCase()==='k'){
@@ -1624,7 +1627,7 @@ export function StudyPlatePageEditor({
               event.preventDefault();markSection();
             }
           }}
-          placeholder="Write naturally in one continuous document. To create the next learner page, place the cursor in the paragraph that should begin it and choose Start section."/>
+          placeholder={uiT('admin.study_plate_editor.write_naturally_in_one_continuous_document_to_create_the_next_learner_page_place_the_curso',"Write naturally in one continuous document. To create the next learner page, place the cursor in the paragraph that should begin it and choose Start section.")}/>
       </div>
     </Plate>
     <div className="vop-plate-editor-foot">

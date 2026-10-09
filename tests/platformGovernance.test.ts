@@ -687,7 +687,7 @@ test('free subscription plans never enter the positive-amount payment pipeline',
   assert.match(workspace,/Activate free plan/);
   assert.match(workspace,/action:'activateFreePlan'/);
   assert.match(workspace,/const freePlan=Number\(plan\.priceUsd\?\?plan\.price\?\?0\)===0/);
-  assert.match(workspace,/>Free<\/strong>/);
+  assert.match(workspace,/billing\.subscription\.free/);
 });
 
 test('all organization creation paths attach the default free subscription',()=>{

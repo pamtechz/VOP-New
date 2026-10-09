@@ -4,12 +4,15 @@ import {
   Pencil, Phone, Plus, RefreshCw, Search, Trash2, UserCheck, UserPlus, Users, X,
 } from 'lucide-react';
 import { auth } from '../lib/firebase';
+import { getTranslation, getUiLocale } from '../services/i18n';
 import type { User } from '../types';
 import { ModalLayer } from '../components/layout/ModalLayer';
 import { ShimmerList } from '../components/layout/Shimmer';
 import { appConfirm } from '../components/layout/AppDialog';
 import { ViewModeToggle, type AdminViewMode } from '../components/admin/ViewModeToggle';
 import './candidate-management.css';
+
+const candidateT = (key: string, fallback: string) => getTranslation(key, getUiLocale(), undefined, fallback, 'CandidateEnrollment');
 
 type Course={id:string;title?:string;language?:string;published?:boolean;archived?:boolean};
 type Organization={id:string;name:string;status?:string};
@@ -303,22 +306,22 @@ export default function CandidateEnrollment({currentUser}:{currentUser:User}){
     <div className="vop-page-head">
       <div className="vop-heading"><div className="vop-heading-icon"><GraduationCap size={30}/></div>
         <div>
-          <h1>Candidates</h1>
+          <h1>{candidateT('admin.candidates.title','Candidates')}</h1>
           <p>{!isSuperAdmin?`Managing candidates enrolled in ${currentOrgName}.`:'View and manage candidates across organizations and assign belonging.'}</p>
         </div>
       </div>
       <div className="vop-reference-actions">
         <button className="vop-secondary" type="button" disabled={loading} onClick={()=>void refresh()}><RefreshCw size={16}/>{loading?'Refreshing…':'Refresh'}</button>
-        <button className="vop-primary" type="button" onClick={()=>{if(!isSuperAdmin)setOrganizationId(userOrgId);setEnrollOpen(true)}}><UserPlus size={17}/>Add candidate</button>
+        <button className="vop-primary" type="button" onClick={()=>{if(!isSuperAdmin)setOrganizationId(userOrgId);setEnrollOpen(true)}}><UserPlus size={17}/>{candidateT('admin.candidates.add','Add candidate')}</button>
       </div>
     </div>
 
     <div className="vop-candidate-metrics">
-      <div><span><Users size={19}/></span><div><small>Total candidates</small><strong>{candidates.length}</strong></div></div>
-      <div><span><UserCheck size={19}/></span><div><small>Active</small><strong>{activeCount}</strong></div></div>
-      <div><span><GraduationCap size={19}/></span><div><small>Graduated</small><strong>{graduatedCount}</strong></div></div>
-      <div><span><CalendarDays size={19}/></span><div><small>Baptism scheduled</small><strong>{scheduledBaptismCount}</strong></div></div>
-      <div><span><Droplets size={19}/></span><div><small>Baptized</small><strong>{baptismCount}</strong></div></div>
+      <div><span><Users size={19}/></span><div><small>{candidateT('admin.candidates.total','Total candidates')}</small><strong>{candidates.length}</strong></div></div>
+      <div><span><UserCheck size={19}/></span><div><small>{candidateT('admin.candidates.active','Active')}</small><strong>{activeCount}</strong></div></div>
+      <div><span><GraduationCap size={19}/></span><div><small>{candidateT('admin.candidates.graduated','Graduated')}</small><strong>{graduatedCount}</strong></div></div>
+      <div><span><CalendarDays size={19}/></span><div><small>{candidateT('admin.candidates.baptism_scheduled','Baptism scheduled')}</small><strong>{scheduledBaptismCount}</strong></div></div>
+      <div><span><Droplets size={19}/></span><div><small>{candidateT('admin.candidates.baptized','Baptized')}</small><strong>{baptismCount}</strong></div></div>
     </div>
 
     {message&&<div className="vop-toast"><Check size={16}/>{message}</div>}
@@ -326,18 +329,18 @@ export default function CandidateEnrollment({currentUser}:{currentUser:User}){
 
     <section className="vop-card vop-candidate-list-card">
       <div className="vop-candidate-toolbar">
-        <div className="vop-search"><Search size={18}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search candidate, email, organization…"/></div>
+        <div className="vop-search"><Search size={18}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder={candidateT('admin.candidates.search','Search candidate, email, organization…')}/></div>
         {isSuperAdmin&&(
-          <select className="vop-filter" value={selectedOrgFilter} onChange={e=>setSelectedOrgFilter(e.target.value)} title="Filter candidates by organization">
-            <option value="">All organizations</option>
+          <select className="vop-filter" value={selectedOrgFilter} onChange={e=>setSelectedOrgFilter(e.target.value)} title={candidateT('admin.candidates.filter_organization','Filter candidates by organization')}>
+            <option value="">{candidateT('admin.candidates.all_organizations','All organizations')}</option>
             {organizations.map(o=><option key={o.id} value={o.id}>{o.name}</option>)}
           </select>
         )}
         <select className="vop-filter" value={status} onChange={e=>setStatus(e.target.value as typeof status)}>
-          <option value="all">All candidates</option><option value="active">Active</option>
+          <option value="all">{candidateT('admin.candidates.all','All candidates')}</option><option value="active">Active</option>
           <option value="graduating">Graduating</option><option value="graduated">Graduated</option><option value="scheduled">Baptism scheduled</option><option value="baptized">Baptized</option>
         </select>
-        <ViewModeToggle value={viewMode} onChange={setViewMode} label="Candidate list view"/>
+        <ViewModeToggle value={viewMode} onChange={setViewMode} label={candidateT('admin.candidates.list_view','Candidate list view')}/>
       </div>
       {loading&&candidates.length===0?<div className="vop-candidate-table-wrap"><ShimmerList rows={7} compact label="Loading candidates"/></div>
         :rows.length===0?<div className="vop-candidate-table-wrap"><div className="vop-empty">No candidates match this view.</div></div>

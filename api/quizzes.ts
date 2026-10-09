@@ -19,6 +19,10 @@ function safeId(value: unknown) {
   if (!/^[A-Za-z0-9_-]{1,120}$/.test(id)) throw new Error('A valid quiz or content ID is required.');
   return id;
 }
+function optionalSafeId(value: unknown) {
+  const id = String(value || '').trim();
+  return id ? safeId(id) : '';
+}
 function canManageQuizTenant(ctx: Context) {
   return ctx.isSuperAdmin || ctx.tenantType === 'hierarchy' || ['owner','admin','editor','teacher'].includes(String(ctx.membership.role || ''));
 }
@@ -50,8 +54,8 @@ async function resolveAttachment(ctx: Context, data: Record<string, unknown>) {
   if (!['lesson','guide','chapter','section','block','program','all'].includes(String(attachmentType))) {
     throw new Error('Attach a quiz to a program, guide, lesson, chapter, section or block.');
   }
-  const guideId = safeId(data.guideId);
-  const programId = safeId(data.programId);
+  const guideId = optionalSafeId(data.guideId);
+  const programId = optionalSafeId(data.programId);
   let guideRef = guideId ? ctx.db.doc(`guides/${guideId}`) : null;
   let guideSnap = guideRef ? await guideRef.get() : null;
   let programRef = programId ? ctx.db.doc(`programs/${programId}`) : null;

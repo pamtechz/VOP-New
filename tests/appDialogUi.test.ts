@@ -49,6 +49,6 @@ test('management lists keep useful height while their menus are portaled',()=>{
 
 test('Curriculum Studio popup errors use a top-layer modal',()=>{
   const page=read('src/pages/CurriculumManager.tsx');
-  assert.match(page,/AppAlertDialog message=\{error\} title="Curriculum Studio"/);
+  assert.match(page,/AppAlertDialog message=\{error\} title=\{tx\('admin\.curriculum\.curriculum_studio',["']Curriculum Studio["']\)\}/);
   assert.doesNotMatch(page,/vop-reference-alert/);
 });

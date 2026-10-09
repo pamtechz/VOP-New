@@ -2,7 +2,10 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Check, CreditCard, Gauge, RefreshCw, RotateCcw, ShieldCheck, Sparkles, XCircle, Zap } from 'lucide-react';
 import type { User } from '../../types';
 import { auth } from '../../lib/firebase';
+import { getTranslation, getUiLocale } from '../../services/i18n';
 import { appConfirm, appPrompt } from '../layout/AppDialog';
+
+const uiT = (key: string, fallback: string) => getTranslation(key, getUiLocale(), undefined, fallback, 'SubscriptionWorkspace');
 import {
   SUBSCRIPTION_FEATURES, SUBSCRIPTION_QUOTAS,
   subscriptionIntervalLabel, subscriptionQuotaLimit, subscriptionStatusLabel,
@@ -268,7 +271,7 @@ export default function SubscriptionWorkspace({
   };
 
   if (!isSuperAdmin && !selfService) {
-    return <div className="vop-payment-empty">Subscription administration is available to the institution’s authorized administrators.</div>;
+    return <div className="vop-payment-empty">{uiT('billing.subscription.subscription_administration_is_available_to_the_institution_s_authorized_administrators',"Subscription administration is available to the institution’s authorized administrators.")}</div>;
   }
 
   const isFreePlatformMode = overview?.subscriptionsEnabled === false;
@@ -285,8 +288,8 @@ export default function SubscriptionWorkspace({
     <div className="vop-subscription-workspace">
       <section className="vop-subscription-toolbar">
         <div>
-          <span className="vop-page-kicker">Subscription Management</span>
-          <h2>Plan, subscription & usage</h2>
+          <span className="vop-page-kicker">{uiT('billing.subscription.subscription_management',"Subscription Management")}</span>
+          <h2>{uiT('billing.subscription.plan_subscription_and_usage',"Plan, subscription & usage")}</h2>
           <p>
             {focusSection === 'usage'
               ? 'Monitor live institutional capacity, resource consumption, and platform quota limits.'
@@ -296,9 +299,9 @@ export default function SubscriptionWorkspace({
         <div className="vop-subscription-toolbar-actions">
           {isSuperAdmin && (
             <label>
-              <span>Target Institution</span>
+              <span>{uiT('billing.subscription.target_institution',"Target Institution")}</span>
               <select value={billingTargetKey} onChange={event => setBillingTargetKey(event.target.value)}>
-                <option value="">Choose institution</option>
+                <option value="">{uiT('billing.subscription.choose_institution',"Choose institution")}</option>
                 {billingTenants.map(item => (
                   <option key={item.type + ':' + item.id} value={item.type + ':' + item.id}>
                     {item.name} · {item.type}
@@ -334,7 +337,7 @@ export default function SubscriptionWorkspace({
       )}
 
       {!selectedTarget ? (
-        <div className="vop-payment-empty">Choose an institution to view its subscription details and consumption.</div>
+        <div className="vop-payment-empty">{uiT('billing.subscription.choose_an_institution_to_view_its_subscription_details_and_consumption',"Choose an institution to view its subscription details and consumption.")}</div>
       ) : loading && !overview ? (
         <div className="vop-payment-empty">Loading subscription details…</div>
       ) : overview && (
@@ -345,7 +348,7 @@ export default function SubscriptionWorkspace({
                 <article className="vop-subscription-current">
                   <div className="vop-subscription-card-head">
                     <div>
-                      <span className="vop-card-kicker">Current Plan</span>
+                      <span className="vop-card-kicker">{uiT('billing.subscription.current_plan',"Current Plan")}</span>
                       <h3>{isFreePlatformMode ? 'Free Platform Mode' : currentPlanName}</h3>
                     </div>
                     <span className={'vop-subscription-status ' + (isFreePlatformMode ? 'active' : active ? 'active' : 'inactive')}>
@@ -357,19 +360,19 @@ export default function SubscriptionWorkspace({
 
                   <dl className="vop-subscription-meta-list">
                     <div>
-                      <dt>Billing Interval</dt>
+                      <dt>{uiT('billing.subscription.billing_interval',"Billing Interval")}</dt>
                       <dd>{isFreePlatformMode ? 'Perpetual free' : currentPlan || subscription.planInterval ? subscriptionIntervalLabel(subscription.planInterval || currentPlan?.interval) : '—'}</dd>
                     </div>
                     <div>
-                      <dt>Current Term Ends</dt>
+                      <dt>{uiT('billing.subscription.current_term_ends',"Current Term Ends")}</dt>
                       <dd>{isFreePlatformMode ? 'No expiry' : formatDate(subscription.currentPeriodEnd)}</dd>
                     </div>
                     <div>
-                      <dt>Activation Method</dt>
+                      <dt>{uiT('billing.subscription.activation_method',"Activation Method")}</dt>
                       <dd>{isFreePlatformMode ? 'Platform Switch (Free Mode)' : reasonLabel(subscription.activationSource)}</dd>
                     </div>
                     <div>
-                      <dt>Billing Currency</dt>
+                      <dt>{uiT('billing.subscription.billing_currency',"Billing Currency")}</dt>
                       <dd>{isFreePlatformMode ? 'Free' : String(subscription.billingCurrency || overview.billingProfile?.billingCurrency || currentPlan?.billingCurrency || 'USD')}</dd>
                     </div>
                   </dl>
@@ -378,7 +381,7 @@ export default function SubscriptionWorkspace({
                     <div className="vop-subscription-warning info">
                       <Sparkles size={18} />
                       <div>
-                        <strong>Subscriptions Switched Off Globally</strong>
+                        <strong>{uiT('billing.subscription.subscriptions_switched_off_globally',"Subscriptions Switched Off Globally")}</strong>
                         <span>The Super Admin has disabled the subscription module. All institutional features are 100% free with quotas regulated by platform usage controls.</span>
                       </div>
                     </div>
@@ -388,8 +391,8 @@ export default function SubscriptionWorkspace({
                         <div className="vop-subscription-warning">
                           <AlertTriangle size={18} />
                           <div>
-                            <strong>Free version active</strong>
-                            <span>Your institution is operating on the free tier. Upgrade to increase capacity limits.</span>
+                            <strong>{uiT('billing.subscription.free_version_active',"Free version active")}</strong>
+                            <span>{uiT('billing.subscription.your_institution_is_operating_on_the_free_tier_upgrade_to_increase_capacity_limits',"Your institution is operating on the free tier. Upgrade to increase capacity limits.")}</span>
                           </div>
                         </div>
                       )}
@@ -397,7 +400,7 @@ export default function SubscriptionWorkspace({
                         <div className="vop-subscription-warning danger">
                           <AlertTriangle size={18} />
                           <div>
-                            <strong>Paid Access Suspended</strong>
+                            <strong>{uiT('billing.subscription.paid_access_suspended',"Paid Access Suspended")}</strong>
                             <span>{reasonLabel(overview.billingSuspendedReason)}</span>
                           </div>
                         </div>
@@ -406,7 +409,7 @@ export default function SubscriptionWorkspace({
                         <div className="vop-subscription-warning">
                           <AlertTriangle size={18} />
                           <div>
-                            <strong>Cancellation Scheduled</strong>
+                            <strong>{uiT('billing.subscription.cancellation_scheduled',"Cancellation Scheduled")}</strong>
                             <span>Subscription remains active until {formatDate(subscription.currentPeriodEnd)}.</span>
                           </div>
                         </div>
@@ -455,8 +458,8 @@ export default function SubscriptionWorkspace({
                 <article className="vop-subscription-entitlements">
                   <div className="vop-subscription-card-head">
                     <div>
-                      <span className="vop-card-kicker">Included Features</span>
-                      <h3>Plan entitlements</h3>
+                      <span className="vop-card-kicker">{uiT('billing.subscription.included_features',"Included Features")}</span>
+                      <h3>{uiT('billing.subscription.plan_entitlements',"Plan entitlements")}</h3>
                     </div>
                     <ShieldCheck size={22} className="vop-head-icon" />
                   </div>
@@ -484,8 +487,8 @@ export default function SubscriptionWorkspace({
               <section className="vop-subscription-usage-section">
                 <div className="vop-subscription-section-head">
                   <div>
-                    <span className="vop-card-kicker">Live Capacity</span>
-                    <h3>Usage against plan limits</h3>
+                    <span className="vop-card-kicker">{uiT('billing.subscription.live_capacity',"Live Capacity")}</span>
+                    <h3>{uiT('billing.subscription.usage_against_plan_limits',"Usage against plan limits")}</h3>
                     <p>
                       {isFreePlatformMode
                         ? 'Enforced in real-time under platform usage controls configured by the Super Admin.'
@@ -499,8 +502,8 @@ export default function SubscriptionWorkspace({
                   <div className="vop-subscription-warning info" style={{ marginBottom: 16 }}>
                     <Sparkles size={18} />
                     <div>
-                      <strong>Platform Usage Controls in Effect</strong>
-                      <span>The subscription module is switched off. Resources (lessons, quizzes, seats, etc.) are governed by the platform limits configured by the Super Admin.</span>
+                      <strong>{uiT('billing.subscription.platform_usage_controls_in_effect',"Platform Usage Controls in Effect")}</strong>
+                      <span>{uiT('billing.subscription.the_subscription_module_is_switched_off_resources_lessons_quizzes_seats_etc_are_governed_b',"The subscription module is switched off. Resources (lessons, quizzes, seats, etc.) are governed by the platform limits configured by the Super Admin.")}</span>
                     </div>
                   </div>
                 )}
@@ -545,7 +548,7 @@ export default function SubscriptionWorkspace({
               <section className="vop-subscription-plans-section">
                 <div className="vop-subscription-section-head">
                   <div>
-                    <span className="vop-card-kicker">Plan Catalog</span>
+                    <span className="vop-card-kicker">{uiT('billing.subscription.plan_catalog',"Plan Catalog")}</span>
                     <h3>{isSuperAdmin ? 'Available Plans for Institution' : 'Upgrade, Downgrade or Renew'}</h3>
                     <p>
                       {isSuperAdmin
@@ -559,8 +562,8 @@ export default function SubscriptionWorkspace({
                   <div className="vop-subscription-warning info" style={{ marginBottom: 16 }}>
                     <Sparkles size={18} />
                     <div>
-                      <strong>Subscription Catalog Bypassed</strong>
-                      <span>The subscription module is switched off globally. All features are free and plans do not need to be purchased.</span>
+                      <strong>{uiT('billing.subscription.subscription_catalog_bypassed',"Subscription Catalog Bypassed")}</strong>
+                      <span>{uiT('billing.subscription.the_subscription_module_is_switched_off_globally_all_features_are_free_and_plans_do_not_ne',"The subscription module is switched off globally. All features are free and plans do not need to be purchased.")}</span>
                     </div>
                   </div>
                 )}
@@ -580,7 +583,7 @@ export default function SubscriptionWorkspace({
                             <span className="vop-plan-tag">{subscriptionIntervalLabel(plan.interval)}</span>
                             <h4>{planTitle}</h4>
                           </div>
-                          {isCurrent && <span className="vop-subscription-current-chip">Current Plan</span>}
+                          {isCurrent && <span className="vop-subscription-current-chip">{uiT('billing.subscription.current_plan',"Current Plan")}</span>}
                         </header>
 
                         <p className="vop-plan-desc">{plan.description && plan.description.toLowerCase() !== planTitle.toLowerCase() ? plan.description : 'Institutional subscription package'}</p>
@@ -588,7 +591,7 @@ export default function SubscriptionWorkspace({
                         <div className="vop-subscription-price">
                           {freePlan ? (
                             <>
-                              <strong>Free</strong>
+                              <strong>{uiT('billing.subscription.free',"Free")}</strong>
                               <span className="vop-price-sub"> / forever</span>
                             </>
                           ) : (
@@ -600,7 +603,7 @@ export default function SubscriptionWorkspace({
                           )}
                         </div>
 
-                        <div className="vop-plan-section-title">Quotas & Capacity</div>
+                        <div className="vop-plan-section-title">{uiT('billing.subscription.quotas_and_capacity',"Quotas & Capacity")}</div>
                         <div className="vop-subscription-plan-limits">
                           {SUBSCRIPTION_QUOTAS.slice(0, 4).map(definition => {
                             const limit = subscriptionQuotaLimit(plan.quotas, definition.key);
@@ -612,7 +615,7 @@ export default function SubscriptionWorkspace({
                           })}
                         </div>
 
-                        <div className="vop-plan-section-title">Included Features</div>
+                        <div className="vop-plan-section-title">{uiT('billing.subscription.included_features',"Included Features")}</div>
                         <div className="vop-subscription-feature-summary">
                           {enabledFeatures.map(feature => (
                             <span key={feature.key}>
@@ -657,7 +660,7 @@ export default function SubscriptionWorkspace({
                     );
                   })}
                 </div>
-                {!planOptions.length && <div className="vop-payment-empty">No active subscription plans are available.</div>}
+                {!planOptions.length && <div className="vop-payment-empty">{uiT('billing.subscription.no_active_subscription_plans_are_available',"No active subscription plans are available.")}</div>}
               </section>
             );
 

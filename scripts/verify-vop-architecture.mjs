@@ -61,9 +61,12 @@ const checks = [
   ['api_handlers/admin/account.ts', ['runDailyOperationalMaintenance','processDueAccountDeletions']],
   ['server/billing.ts', ['fetchFrankfurterRate','refreshPlatformFxRate','quoteAmountForCurrency','quoteSubscriptionPlanForTenant','fxRates']],
   ['server/payments/core.ts', ['createCheckout','verifyAndApplyPayment','fulfilPaidPayment','adminRequestRefund','adminCompleteManualRefund','reconcilePendingRefunds','processProviderWebhook','loadPaymentByProviderTransactionId','reconcilePendingPayments','paymentLocks','paymentReceipts','paymentRefunds','requireSuperAdminFinanceControl','requireInstitutionalSubscriptionConsumer','billingTenantSubscriptionRef','selectProviderForMethod','consumerPaymentQuotes','paymentCountryCode','quoteAmountForCurrency','providerSettlementCurrency','providerSettlementCountry','scopedTransactionProjection']],
-  ['api/payments.ts', ["name.startsWith('webhooks/')",'getPaymentProvider','callbackMethods','reconcile-cron','admin/payable-items','admin/reconcile','admin/refunds']],
+  ['server/payments/pciCompliance.ts', ['assertPciDssCompliance','PROHIBITED_CARD_FIELDS','passesLuhnCheck','redactCardNumbers']],
+  ['api/payments.ts', ["name.startsWith('webhooks/')",'getPaymentProvider','callbackMethods','assertPciDssCompliance(req.body)','assertPciDssCompliance(req.query)','reconcile-cron','admin/payable-items','admin/reconcile','admin/refunds']],
   ['src/pages/PaymentsPage.tsx', ['Payments & Billing','Subscription packages','methodQuotes','startPaymentCheckout','verifyPayment']],
   ['src/pages/PaymentManagement.tsx', ['Payments & Billing','Pay & receipts','Plans & subscriptions','SubscriptionWorkspace','Payable items','Providers','Reconciliation','isSuperAdmin']],
+  ['src/components/admin/HeroSliderManager.tsx', ['settings.heroSlides','heroSliderAutoplaySeconds','heroSliderIncludeDefaultSlides','onUpdateSettings','appConfirm']],
+  ['src/components/home/HomeDashboard.tsx', ['settings.heroSlides','settings.heroSliderAutoplaySeconds','settings.heroSliderIncludeDefaultSlides']],
   ['src/components/admin/SubscriptionWorkspace.tsx', ['Plan, subscription & usage','Usage against plan limits','Plan entitlements','Cancel at period end','Assign manually']],
   ['shared/subscriptions.ts', ['SUBSCRIPTION_QUOTAS','SUBSCRIPTION_FEATURES','normalizeSubscriptionQuotas','subscriptionQuotaLimit']],
 

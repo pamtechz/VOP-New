@@ -17,6 +17,8 @@ import { parseScriptureTokens } from '../../services/scriptureLookup';
 import './lesson-reader-audio.css';
 import './lesson-reader-page.css';
 
+const uiT = (key: string, fallback: string) => getTranslation(key, getUiLocale(), undefined, fallback, 'LessonReaderModal');
+
 interface LessonReaderModalProps {
   lesson: Lesson;
   guide: DiscoverGuide;
@@ -623,7 +625,7 @@ export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({
               </button>
 
               <div className="vop-lesson-page-progress-pill">
-                <span>Page <strong>{currentPageIndex + 1}</strong> of <strong>{pages.length}</strong></span>
+                <span>{uiT('lesson.reader.page',"Page")}<strong>{currentPageIndex + 1}</strong> of <strong>{pages.length}</strong></span>
                 <span>·</span>
                 <strong>{progressPercent}%</strong>
               </div>

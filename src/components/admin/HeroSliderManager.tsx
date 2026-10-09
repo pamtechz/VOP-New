@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import type { CustomHeroSlide, HeroSlideIcon } from '../../types';
 import type { ExtendedAppSettings } from '../../services/adminFirestore';
+import { getTranslation, getUiLocale } from '../../services/i18n';
+import { appConfirm } from '../layout/AppDialog';
 import {
   Sparkles, Plus, Edit2, Copy, Trash2, ArrowUp, ArrowDown, Check,
   BookOpen, HeartHandshake, Radio, Award, Clock3, Target, Bookmark,
@@ -9,6 +11,8 @@ import {
   CalendarDays, Image as ImageIcon, X
 } from 'lucide-react';
 import './hero-slider-manager.css';
+
+const uiT = (key: string, fallback: string) => getTranslation(key, getUiLocale(), undefined, fallback, 'HeroSliderManager');
 
 export interface HeroSliderManagerProps {
   settings: ExtendedAppSettings;
@@ -235,19 +239,26 @@ export const HeroSliderManager: React.FC<HeroSliderManagerProps> = ({
     onToast?.('Slide duplicated.');
   };
 
-  const handleDelete = (slideId: string) => {
-    if (window.confirm('Are you sure you want to delete this slide?')) {
-      const remaining = slides.filter(s => s.id !== slideId);
-      updateSlides(remaining);
-      onToast?.('Slide deleted.');
-    }
+  const handleDelete = async (slideId: string) => {
+    const confirmed=await appConfirm(
+      uiT('admin.hero_slider.confirm_delete','Are you sure you want to delete this slide?'),
+      {
+        title:uiT('admin.hero_slider.delete_slide','Delete slide'),
+        confirmLabel:uiT('common.delete','Delete'),
+        tone:'danger',
+      },
+    );
+    if (!confirmed) return;
+    const remaining = slides.filter(s => s.id !== slideId);
+    updateSlides(remaining);
+    onToast?.(uiT('admin.hero_slider.slide_deleted','Slide deleted.'));
   };
 
   const handleSaveModal = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingSlide) return;
     if (!editingSlide.title.trim()) {
-      alert('Please enter a slide title.');
+      onToast?.(uiT('admin.hero_slider.enter_slide_title','Please enter a slide title.'));
       return;
     }
 
@@ -302,7 +313,7 @@ export const HeroSliderManager: React.FC<HeroSliderManagerProps> = ({
             <Sliders size={22} color="var(--vop-orange)" />
             Homepage Hero Carousel Manager
           </h2>
-          <p>Create, customize, reorder, and schedule banner slides with action buttons shown on the learner homepage.</p>
+          <p>{uiT('admin.hero_slider.create_customize_reorder_and_schedule_banner_slides_with_action_buttons_shown_on_the_learn',"Create, customize, reorder, and schedule banner slides with action buttons shown on the learner homepage.")}</p>
           <div className="vop-hsm-badges">
             <span className="vop-hsm-pill">
               Total slides: <strong>{slides.length}</strong>
@@ -322,7 +333,7 @@ export const HeroSliderManager: React.FC<HeroSliderManagerProps> = ({
               onClick={() => setTemplateMenuOpen(!templateMenuOpen)}
             >
               <Layout size={16} />
-              <span>Presets & Templates</span>
+              <span>{uiT('admin.hero_slider.presets_and_templates',"Presets & Templates")}</span>
             </button>
             {templateMenuOpen && (
               <div
@@ -373,7 +384,7 @@ export const HeroSliderManager: React.FC<HeroSliderManagerProps> = ({
 
           <button type="button" className="vop-primary" onClick={handleOpenAdd}>
             <Plus size={16} />
-            <span>Add Slide</span>
+            <span>{uiT('admin.hero_slider.add_slide',"Add Slide")}</span>
           </button>
 
           {onSave && (
@@ -389,8 +400,8 @@ export const HeroSliderManager: React.FC<HeroSliderManagerProps> = ({
       <div className="vop-hsm-config-card">
         <div className="vop-hsm-config-item">
           <div>
-            <h4>Include Dynamic Study & Resume Slides</h4>
-            <p>Show student resume bookmarks and curriculum cards alongside custom slides.</p>
+            <h4>{uiT('admin.hero_slider.include_dynamic_study_and_resume_slides',"Include Dynamic Study & Resume Slides")}</h4>
+            <p>{uiT('admin.hero_slider.show_student_resume_bookmarks_and_curriculum_cards_alongside_custom_slides',"Show student resume bookmarks and curriculum cards alongside custom slides.")}</p>
           </div>
           <button
             type="button"
@@ -425,8 +436,8 @@ export const HeroSliderManager: React.FC<HeroSliderManagerProps> = ({
 
         <div className="vop-hsm-config-item">
           <div>
-            <h4>Autoplay Rotation Duration</h4>
-            <p>Interval before cycling automatically to the next slide.</p>
+            <h4>{uiT('admin.hero_slider.autoplay_rotation_duration',"Autoplay Rotation Duration")}</h4>
+            <p>{uiT('admin.hero_slider.interval_before_cycling_automatically_to_the_next_slide',"Interval before cycling automatically to the next slide.")}</p>
           </div>
           <select
             className="vop-hsm-select"
@@ -455,7 +466,7 @@ export const HeroSliderManager: React.FC<HeroSliderManagerProps> = ({
                 type="button"
                 className="vop-hsm-icon-btn"
                 onClick={() => setPreviewActiveIndex(i => (i - 1 + previewSlides.length) % previewSlides.length)}
-                aria-label="Previous preview slide"
+                aria-label={uiT('admin.hero_slider.previous_preview_slide',"Previous preview slide")}
               >
                 <ChevronLeft size={16} />
               </button>
@@ -463,7 +474,7 @@ export const HeroSliderManager: React.FC<HeroSliderManagerProps> = ({
                 type="button"
                 className="vop-hsm-icon-btn"
                 onClick={() => setPreviewActiveIndex(i => (i + 1) % previewSlides.length)}
-                aria-label="Next preview slide"
+                aria-label={uiT('admin.hero_slider.next_preview_slide',"Next preview slide")}
               >
                 <ChevronRight size={16} />
               </button>
@@ -570,24 +581,24 @@ export const HeroSliderManager: React.FC<HeroSliderManagerProps> = ({
         <div className="vop-section-title" style={{ marginBottom: 18 }}>
           <div>
             <h3>Configured Slides ({slides.length})</h3>
-            <p>Manage order, enable/disable status, and configure call-to-action buttons for each slide.</p>
+            <p>{uiT('admin.hero_slider.manage_order_enable_disable_status_and_configure_call_to_action_buttons_for_each_slide',"Manage order, enable/disable status, and configure call-to-action buttons for each slide.")}</p>
           </div>
         </div>
 
         {slides.length === 0 ? (
           <div className="vop-empty" style={{ padding: '48px 20px', textAlign: 'center' }}>
             <Sparkles size={40} color="var(--vop-blue)" style={{ margin: '0 auto 12px' }} />
-            <h4 style={{ margin: 0, fontSize: 16 }}>No custom slides created yet</h4>
+            <h4 style={{ margin: 0, fontSize: 16 }}>{uiT('admin.hero_slider.no_custom_slides_created_yet',"No custom slides created yet")}</h4>
             <p style={{ color: 'var(--vop-muted)', maxWidth: 450, margin: '6px auto 18px' }}>
               Add custom slides to present banners, invitations, or featured topics on the student homepage, or load one of our pre-built templates.
             </p>
             <div style={{ display: 'flex', justifyContent: 'center', gap: 10 }}>
               <button type="button" className="vop-primary" onClick={handleOpenAdd}>
                 <Plus size={16} />
-                <span>Create First Slide</span>
+                <span>{uiT('admin.hero_slider.create_first_slide',"Create First Slide")}</span>
               </button>
               <button type="button" className="vop-secondary" onClick={() => handleLoadTemplate(TEMPLATES[0])}>
-                <span>Load Welcome Template</span>
+                <span>{uiT('admin.hero_slider.load_welcome_template',"Load Welcome Template")}</span>
               </button>
             </div>
           </div>
@@ -606,7 +617,7 @@ export const HeroSliderManager: React.FC<HeroSliderManagerProps> = ({
                         className="vop-hsm-icon-btn"
                         onClick={() => handleMoveUp(index)}
                         disabled={isFirst}
-                        aria-label="Move slide up"
+                        aria-label={uiT('admin.hero_slider.move_slide_up',"Move slide up")}
                       >
                         <ArrowUp size={14} />
                       </button>
@@ -615,7 +626,7 @@ export const HeroSliderManager: React.FC<HeroSliderManagerProps> = ({
                         className="vop-hsm-icon-btn"
                         onClick={() => handleMoveDown(index)}
                         disabled={isLast}
-                        aria-label="Move slide down"
+                        aria-label={uiT('admin.hero_slider.move_slide_down',"Move slide down")}
                       >
                         <ArrowDown size={14} />
                       </button>
@@ -718,18 +729,18 @@ export const HeroSliderManager: React.FC<HeroSliderManagerProps> = ({
                       type="button"
                       className="vop-secondary"
                       onClick={() => handleOpenEdit(slide)}
-                      title="Edit slide"
+                      title={uiT('admin.hero_slider.edit_slide',"Edit slide")}
                       style={{ padding: '7px 12px', fontSize: 13 }}
                     >
                       <Edit2 size={14} />
-                      <span>Edit</span>
+                      <span>{uiT('admin.hero_slider.edit',"Edit")}</span>
                     </button>
 
                     <button
                       type="button"
                       className="vop-secondary"
                       onClick={() => handleDuplicate(slide)}
-                      title="Duplicate slide"
+                      title={uiT('admin.hero_slider.duplicate_slide',"Duplicate slide")}
                       style={{ padding: '7px 10px', fontSize: 13 }}
                     >
                       <Copy size={14} />
@@ -738,8 +749,8 @@ export const HeroSliderManager: React.FC<HeroSliderManagerProps> = ({
                     <button
                       type="button"
                       className="vop-secondary"
-                      onClick={() => handleDelete(slide.id)}
-                      title="Delete slide"
+                      onClick={() => void handleDelete(slide.id)}
+                      title={uiT('admin.hero_slider.delete_slide',"Delete slide")}
                       style={{ padding: '7px 10px', fontSize: 13, color: '#ef4444' }}
                     >
                       <Trash2 size={14} />
@@ -823,27 +834,27 @@ export const HeroSliderManager: React.FC<HeroSliderManagerProps> = ({
                       required
                       value={editingSlide.title}
                       onChange={e => setEditingSlide({ ...editingSlide, title: e.target.value })}
-                      placeholder="e.g. Discover Truth for Today’s World"
+                      placeholder={uiT('admin.hero_slider.e_g_discover_truth_for_today_s_world',"e.g. Discover Truth for Today’s World")}
                     />
                   </div>
 
                   <div className="vop-field">
-                    <label>Kicker / Category Tag</label>
+                    <label>{uiT('admin.hero_slider.kicker_category_tag',"Kicker / Category Tag")}</label>
                     <input
                       type="text"
                       value={editingSlide.kicker || ''}
                       onChange={e => setEditingSlide({ ...editingSlide, kicker: e.target.value })}
-                      placeholder="e.g. Voice of Prophecy, Bible Study, Youth"
+                      placeholder={uiT('admin.hero_slider.e_g_voice_of_prophecy_bible_study_youth',"e.g. Voice of Prophecy, Bible Study, Youth")}
                     />
                   </div>
 
                   <div className="vop-field">
-                    <label>Badge Tag</label>
+                    <label>{uiT('admin.hero_slider.badge_tag',"Badge Tag")}</label>
                     <input
                       type="text"
                       value={editingSlide.badge || ''}
                       onChange={e => setEditingSlide({ ...editingSlide, badge: e.target.value })}
-                      placeholder="e.g. Featured, New, Community, Special"
+                      placeholder={uiT('admin.hero_slider.e_g_featured_new_community_special',"e.g. Featured, New, Community, Special")}
                     />
                   </div>
                 </div>
@@ -855,7 +866,7 @@ export const HeroSliderManager: React.FC<HeroSliderManagerProps> = ({
                     required
                     value={editingSlide.description}
                     onChange={e => setEditingSlide({ ...editingSlide, description: e.target.value })}
-                    placeholder="Enter the full description or message displayed inside this hero slide."
+                    placeholder={uiT('admin.hero_slider.enter_the_full_description_or_message_displayed_inside_this_hero_slide',"Enter the full description or message displayed inside this hero slide.")}
                   />
                 </div>
 
@@ -866,20 +877,20 @@ export const HeroSliderManager: React.FC<HeroSliderManagerProps> = ({
                     Slide Visual Image (from Link / URL)
                   </h4>
                   <div className="vop-field">
-                    <label>Image Web Address (Link / URL)</label>
+                    <label>{uiT('admin.hero_slider.image_web_address_link_url',"Image Web Address (Link / URL)")}</label>
                     <div style={{ display: 'flex', gap: 8 }}>
                       <input
                         type="url"
                         value={editingSlide.imageUrl || ''}
                         onChange={e => setEditingSlide({ ...editingSlide, imageUrl: e.target.value })}
-                        placeholder="https://... direct image link (PNG, JPG, WebP)"
+                        placeholder={uiT('admin.hero_slider.https_direct_image_link_png_jpg_webp',"https://... direct image link (PNG, JPG, WebP)")}
                       />
                       {editingSlide.imageUrl && (
                         <button
                           type="button"
                           className="vop-secondary"
                           onClick={() => setEditingSlide({ ...editingSlide, imageUrl: '' })}
-                          title="Clear image link"
+                          title={uiT('admin.hero_slider.clear_image_link',"Clear image link")}
                           style={{ padding: '0 12px' }}
                         >
                           <X size={15} />
@@ -892,7 +903,7 @@ export const HeroSliderManager: React.FC<HeroSliderManagerProps> = ({
                     <div className="vop-hsm-image-preview-bar">
                       <img src={editingSlide.imageUrl} alt="" onError={e => { (e.target as HTMLElement).style.display = 'none'; }} />
                       <div style={{ minWidth: 0, flex: 1 }}>
-                        <strong style={{ fontSize: 13, color: 'var(--vop-text)' }}>Active Image Link</strong>
+                        <strong style={{ fontSize: 13, color: 'var(--vop-text)' }}>{uiT('admin.hero_slider.active_image_link',"Active Image Link")}</strong>
                         <p style={{ margin: '2px 0 0', fontSize: 11, color: 'var(--vop-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                           {editingSlide.imageUrl}
                         </p>
@@ -940,7 +951,7 @@ export const HeroSliderManager: React.FC<HeroSliderManagerProps> = ({
                   </p>
                   <div className="vop-hsm-schedule-grid">
                     <div className="vop-field">
-                      <label>Display Start Date & Time</label>
+                      <label>{uiT('admin.hero_slider.display_start_date_and_time',"Display Start Date & Time")}</label>
                       <input
                         type="datetime-local"
                         value={toDatetimeLocal(editingSlide.startDate)}
@@ -948,7 +959,7 @@ export const HeroSliderManager: React.FC<HeroSliderManagerProps> = ({
                       />
                     </div>
                     <div className="vop-field">
-                      <label>Display Expiration Date & Time</label>
+                      <label>{uiT('admin.hero_slider.display_expiration_date_and_time',"Display Expiration Date & Time")}</label>
                       <input
                         type="datetime-local"
                         value={toDatetimeLocal(editingSlide.endDate)}
@@ -975,7 +986,7 @@ export const HeroSliderManager: React.FC<HeroSliderManagerProps> = ({
 
                 {/* Icon Selection */}
                 <div className="vop-field">
-                  <label>Slide Icon</label>
+                  <label>{uiT('admin.hero_slider.slide_icon',"Slide Icon")}</label>
                   <div className="vop-hsm-icons-grid">
                     {ICON_OPTIONS.map(item => (
                       <button
@@ -993,7 +1004,7 @@ export const HeroSliderManager: React.FC<HeroSliderManagerProps> = ({
 
                 {/* Gradient Selection */}
                 <div className="vop-field">
-                  <label>Background Gradient</label>
+                  <label>{uiT('admin.hero_slider.background_gradient',"Background Gradient")}</label>
                   <div className="vop-hsm-gradients-grid">
                     {GRADIENT_PRESETS.map(preset => (
                       <button
@@ -1009,13 +1020,13 @@ export const HeroSliderManager: React.FC<HeroSliderManagerProps> = ({
                     ))}
                   </div>
                   <div style={{ marginTop: 8 }}>
-                    <small style={{ color: 'var(--vop-muted)' }}>Or custom CSS gradient:</small>
+                    <small style={{ color: 'var(--vop-muted)' }}>{uiT('admin.hero_slider.or_custom_css_gradient',"Or custom CSS gradient:")}</small>
                     <input
                       type="text"
                       style={{ marginTop: 4 }}
                       value={editingSlide.gradient || ''}
                       onChange={e => setEditingSlide({ ...editingSlide, gradient: e.target.value })}
-                      placeholder="linear-gradient(...)"
+                      placeholder={uiT('admin.hero_slider.linear_gradient',"linear-gradient(...)")}
                     />
                   </div>
                 </div>
@@ -1028,16 +1039,16 @@ export const HeroSliderManager: React.FC<HeroSliderManagerProps> = ({
                       Primary Action (Button 1)
                     </h4>
                     <div className="vop-field">
-                      <label>Button Label</label>
+                      <label>{uiT('admin.hero_slider.button_label',"Button Label")}</label>
                       <input
                         type="text"
                         value={editingSlide.primaryActionLabel || ''}
                         onChange={e => setEditingSlide({ ...editingSlide, primaryActionLabel: e.target.value })}
-                        placeholder="e.g. Start Lessons"
+                        placeholder={uiT('admin.hero_slider.e_g_start_lessons',"e.g. Start Lessons")}
                       />
                     </div>
                     <div className="vop-field">
-                      <label>Destination Route or URL</label>
+                      <label>{uiT('admin.hero_slider.destination_route_or_url',"Destination Route or URL")}</label>
                       <select
                         value={DESTINATION_PRESETS.some(p => p.value === editingSlide.primaryActionTarget) ? editingSlide.primaryActionTarget : 'custom'}
                         onChange={e => {
@@ -1046,7 +1057,7 @@ export const HeroSliderManager: React.FC<HeroSliderManagerProps> = ({
                           }
                         }}
                       >
-                        <option value="">None</option>
+                        <option value="">{uiT('admin.hero_slider.none',"None")}</option>
                         {DESTINATION_PRESETS.map(p => (
                           <option key={p.value} value={p.value}>{p.label}</option>
                         ))}
@@ -1058,7 +1069,7 @@ export const HeroSliderManager: React.FC<HeroSliderManagerProps> = ({
                           style={{ marginTop: 6 }}
                           value={editingSlide.primaryActionTarget || ''}
                           onChange={e => setEditingSlide({ ...editingSlide, primaryActionTarget: e.target.value })}
-                          placeholder="e.g. https://... or custom route"
+                          placeholder={uiT('admin.hero_slider.e_g_https_or_custom_route',"e.g. https://... or custom route")}
                         />
                       )}
                     </div>
@@ -1070,16 +1081,16 @@ export const HeroSliderManager: React.FC<HeroSliderManagerProps> = ({
                       Secondary Action (Button 2)
                     </h4>
                     <div className="vop-field">
-                      <label>Button Label</label>
+                      <label>{uiT('admin.hero_slider.button_label',"Button Label")}</label>
                       <input
                         type="text"
                         value={editingSlide.secondaryActionLabel || ''}
                         onChange={e => setEditingSlide({ ...editingSlide, secondaryActionLabel: e.target.value })}
-                        placeholder="e.g. Learn More"
+                        placeholder={uiT('admin.hero_slider.e_g_learn_more',"e.g. Learn More")}
                       />
                     </div>
                     <div className="vop-field">
-                      <label>Destination Route or URL</label>
+                      <label>{uiT('admin.hero_slider.destination_route_or_url',"Destination Route or URL")}</label>
                       <select
                         value={DESTINATION_PRESETS.some(p => p.value === editingSlide.secondaryActionTarget) ? editingSlide.secondaryActionTarget : 'custom'}
                         onChange={e => {
@@ -1088,7 +1099,7 @@ export const HeroSliderManager: React.FC<HeroSliderManagerProps> = ({
                           }
                         }}
                       >
-                        <option value="">None</option>
+                        <option value="">{uiT('admin.hero_slider.none',"None")}</option>
                         {DESTINATION_PRESETS.map(p => (
                           <option key={p.value} value={p.value}>{p.label}</option>
                         ))}
@@ -1100,7 +1111,7 @@ export const HeroSliderManager: React.FC<HeroSliderManagerProps> = ({
                           style={{ marginTop: 6 }}
                           value={editingSlide.secondaryActionTarget || ''}
                           onChange={e => setEditingSlide({ ...editingSlide, secondaryActionTarget: e.target.value })}
-                          placeholder="e.g. https://... or custom route"
+                          placeholder={uiT('admin.hero_slider.e_g_https_or_custom_route',"e.g. https://... or custom route")}
                         />
                       )}
                     </div>
@@ -1109,8 +1120,8 @@ export const HeroSliderManager: React.FC<HeroSliderManagerProps> = ({
 
                 <div className="vop-setting-row" style={{ marginTop: 8 }}>
                   <div>
-                    <div className="vop-setting-name">Enable this slide</div>
-                    <div className="vop-setting-help">When active, this slide appears in the student portal hero carousel.</div>
+                    <div className="vop-setting-name">{uiT('admin.hero_slider.enable_this_slide',"Enable this slide")}</div>
+                    <div className="vop-setting-help">{uiT('admin.hero_slider.when_active_this_slide_appears_in_the_student_portal_hero_carousel',"When active, this slide appears in the student portal hero carousel.")}</div>
                   </div>
                   <button
                     type="button"
@@ -1150,7 +1161,7 @@ export const HeroSliderManager: React.FC<HeroSliderManagerProps> = ({
                 </button>
                 <button type="submit" className="vop-primary">
                   <Check size={16} />
-                  <span>Save Slide</span>
+                  <span>{uiT('admin.hero_slider.save_slide',"Save Slide")}</span>
                 </button>
               </div>
             </form>

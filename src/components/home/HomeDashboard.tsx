@@ -10,6 +10,8 @@ import { lessonIsComplete } from '../../services/lessonProgress';
 import { getActiveGuideBookmark } from '../../services/lessonBookmark';
 import './hero-slider.css';
 
+const uiT = (key: string, fallback: string) => getTranslation(key, getUiLocale(), undefined, fallback, 'HomeDashboard');
+
 interface HomeDashboardProps {
   currentUser: User;
   guides: DiscoverGuide[];
@@ -340,7 +342,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
       {/* Hero Slider */}
       <section
         className="vop-hero-slider"
-        aria-label="Bible study highlights"
+        aria-label={uiT('home.dashboard.bible_study_highlights',"Bible study highlights")}
         onMouseEnter={() => setPaused(true)}
         onMouseLeave={() => setPaused(false)}
         onTouchStart={handleTouchStart}
@@ -379,7 +381,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
                   {slide.progress !== undefined && (
                     <div className="vop-hero-progress-wrap">
                       <div className="vop-hero-progress-labels">
-                        <span>Current Guide Progress</span>
+                        <span>{uiT('home.dashboard.current_guide_progress',"Current Guide Progress")}</span>
                         <strong>{slide.progress}%</strong>
                       </div>
                       <div className="vop-hero-progress-track">
@@ -441,7 +443,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
             <button
               type="button"
               className="vop-hero-nav prev"
-              aria-label="Previous slide"
+              aria-label={uiT('home.dashboard.previous_slide',"Previous slide")}
               onClick={prevSlide}
             >
               <ChevronLeft size={20} />
@@ -449,7 +451,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
             <button
               type="button"
               className="vop-hero-nav next"
-              aria-label="Next slide"
+              aria-label={uiT('home.dashboard.next_slide',"Next slide")}
               onClick={nextSlide}
             >
               <ChevronRight size={20} />
@@ -475,10 +477,10 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
 
       {/* Metrics */}
       <section className="vop-home-metrics">
-        <div><span><Target size={15}/> Overall progress</span><strong>{currentUser.progress.discoverProgress || 0}%</strong><small>Across your study journey</small></div>
-        <div><span><BookOpen size={15}/> Lessons completed</span><strong>{completedLessons}</strong><small>Keep building your knowledge</small></div>
-        <div><span><Award size={15}/> Guides completed</span><strong>{currentUser.progress.completedGuidesCount}</strong><small>Certificates become available as eligible</small></div>
-        <div><span><TrendingUp size={15}/> Current path</span><strong>{primaryPercent}%</strong><small>{primaryGuide?.title || 'Choose a guide to begin'}</small></div>
+        <div><span><Target size={15}/>{uiT('home.dashboard.overall_progress',"Overall progress")}</span><strong>{currentUser.progress.discoverProgress || 0}%</strong><small>{uiT('home.dashboard.across_your_study_journey',"Across your study journey")}</small></div>
+        <div><span><BookOpen size={15}/>{uiT('home.dashboard.lessons_completed',"Lessons completed")}</span><strong>{completedLessons}</strong><small>{uiT('home.dashboard.keep_building_your_knowledge',"Keep building your knowledge")}</small></div>
+        <div><span><Award size={15}/>{uiT('home.dashboard.guides_completed',"Guides completed")}</span><strong>{currentUser.progress.completedGuidesCount}</strong><small>{uiT('home.dashboard.certificates_become_available_as_eligible',"Certificates become available as eligible")}</small></div>
+        <div><span><TrendingUp size={15}/>{uiT('home.dashboard.current_path',"Current path")}</span><strong>{primaryPercent}%</strong><small>{primaryGuide?.title || 'Choose a guide to begin'}</small></div>
       </section>
 
       {/* Next Lesson / Continue Studying */}
@@ -496,7 +498,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
                 : 'Your next lesson'}
             </h2>
           </div>
-          {primaryGuide && <button type="button" onClick={() => onSelectGuide(primaryGuide)}>Open guide <ArrowRight size={15}/></button>}
+          {primaryGuide && <button type="button" onClick={() => onSelectGuide(primaryGuide)}>{uiT('home.dashboard.open_guide',"Open guide")}<ArrowRight size={15}/></button>}
         </div>
         {primaryGuide ? (
           <div className="vop-home-resume-wrapper">
@@ -541,13 +543,13 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
                 )}
                 <div className="vop-home-progress">
                   <div>
-                    <span>Guide progress</span>
+                    <span>{uiT('home.dashboard.guide_progress',"Guide progress")}</span>
                     <b>{primaryPercent}%</b>
                   </div>
                   <i><em style={{width: primaryPercent + '%'}}/></i>
                 </div>
               </div>
-              <div className="vop-home-resume-play" title="Resume reading">
+              <div className="vop-home-resume-play" title={uiT('home.dashboard.resume_reading',"Resume reading")}>
                 <Play size={20} fill="currentColor"/>
               </div>
             </button>
@@ -567,21 +569,21 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
                   onClick={() => onSelectGuide(primaryGuide)}
                 >
                   <BookOpen size={14}/>
-                  <span>View guide outline</span>
+                  <span>{uiT('home.dashboard.view_guide_outline',"View guide outline")}</span>
                 </button>
               </div>
             )}
           </div>
         ) : (
-          <div className="vop-home-empty"><BookOpen size={30}/><h3>No study guide available yet</h3><p>Choose another language or check back when new lessons are published.</p></div>
+          <div className="vop-home-empty"><BookOpen size={30}/><h3>{uiT('home.dashboard.no_study_guide_available_yet',"No study guide available yet")}</h3><p>{uiT('home.dashboard.choose_another_language_or_check_back_when_new_lessons_are_published',"Choose another language or check back when new lessons are published.")}</p></div>
         )}
       </section>
 
       {/* Guides Library */}
       <section className="vop-home-guides">
         <div className="vop-home-section-head">
-          <div><span className="vop-home-eyebrow">Bible study library</span><h2>Discover guides</h2></div>
-          <label className="vop-home-language"><Languages size={15}/><select value={languageFilter} onChange={e=>setLanguageFilter(e.target.value)}><option value="all">All languages</option>{languageOptions.map(language=><option key={language.code} value={language.code}>{language.nativeName || language.name}</option>)}</select></label>
+          <div><span className="vop-home-eyebrow">{uiT('home.dashboard.bible_study_library',"Bible study library")}</span><h2>{uiT('home.dashboard.discover_guides',"Discover guides")}</h2></div>
+          <label className="vop-home-language"><Languages size={15}/><select value={languageFilter} onChange={e=>setLanguageFilter(e.target.value)}><option value="all">{uiT('home.dashboard.all_languages',"All languages")}</option>{languageOptions.map(language=><option key={language.code} value={language.code}>{language.nativeName || language.name}</option>)}</select></label>
         </div>
         {filteredGuides.length ? <div className="vop-home-guide-grid">{filteredGuides.map(guide => {
           const done = guide.lessons.filter(lesson => isCompleted(guide,lesson)).length;
@@ -595,7 +597,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
             <div className="vop-home-guide-body">
               <div className="vop-home-guide-meta">
                 <span>Guide {guide.discoverNumber}</span>
-                {complete ? <b><CheckCircle2 size={13}/> Completed</b> : <small>{done ? 'In progress' : 'Ready to start'}</small>}
+                {complete ? <b><CheckCircle2 size={13}/>{uiT('home.dashboard.completed',"Completed")}</b> : <small>{done ? 'In progress' : 'Ready to start'}</small>}
               </div>
               <h3>{guide.title}</h3>
               <p>{guide.description}</p>
@@ -610,7 +612,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
               </div>
             </div>
           </button>;
-        })}</div> : <div className="vop-home-empty"><BookOpen size={30}/><h3>No guides match your language</h3><p>Try another language filter.</p></div>}
+        })}</div> : <div className="vop-home-empty"><BookOpen size={30}/><h3>{uiT('home.dashboard.no_guides_match_your_language',"No guides match your language")}</h3><p>{uiT('home.dashboard.try_another_language_filter',"Try another language filter.")}</p></div>}
       </section>
 
       <footer className="vop-home-footer"><img src="/assets/vop_logo_2.png" alt="Voice of Prophecy"/><div><strong>{settings.appName || 'Voice of Prophecy'}</strong><span>{settings.appTagline?.trim() || settings.copyrightText || 'Bible study, discipleship and hope.'}</span></div></footer>
