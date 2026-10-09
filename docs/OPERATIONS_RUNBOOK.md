@@ -163,3 +163,15 @@ For production incidents:
 ## Current production prerequisite
 
 As of the operations implementation, VOP production has Firebase Admin credentials and the protected cron secret configured, but no `FIRESTORE_BACKUP_BUCKET` environment variable. Therefore managed backup automation must remain reported as **not configured** until the Cloud Storage destination and IAM grants are completed.
+
+## Production deployment provenance
+
+VOP production should be deployed from reviewed pull-request merges, not direct pushes to `main`.
+
+Vercel's Ignored Build Step must be configured as:
+
+`node scripts/vercel-production-gate.mjs`
+
+For Preview deployments the script allows the build. A Production deployment from any branch other than `main` is denied. For Production `main`, it queries GitHub for pull requests associated with `VERCEL_GIT_COMMIT_SHA` and allows the build only when the exact SHA is the merge result of a closed, merged PR targeting `main`. GitHub lookup failure, timeout, repository mismatch, a direct commit, or an unrelated PR fails closed and causes Vercel to ignore the deployment.
+
+This is a deployment backstop, not a replacement for GitHub branch protection. Protect `main` in GitHub and require the hosted verification/validation checks before merge.
