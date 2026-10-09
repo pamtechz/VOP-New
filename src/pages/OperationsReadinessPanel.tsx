@@ -98,7 +98,7 @@ export default function OperationsReadinessPanel(){
       </button>
     </div>
 
-    {error&&<div role="alert" className="vop-payment-alert danger" style={{marginBottom:12}}>
+    {error&&<div role="alert" style={{marginBottom:12,display:'flex',alignItems:'center',gap:8,padding:'12px 14px',border:'1px solid #fecaca',borderRadius:10,background:'#fff1f2',color:'#9f1239'}}> 
       <AlertTriangle size={17}/>{error}
     </div>}
 
