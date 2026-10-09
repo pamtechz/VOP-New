@@ -16,7 +16,7 @@ const uiT = (key: string, fallback: string) => getTranslation(key, getUiLocale()
 export interface HeroSliderManagerProps {
   settings: ExtendedAppSettings;
   onUpdateSettings: (nextSettings: ExtendedAppSettings) => void;
-  onSave?: () =>{uiT('admin.hero_slider.promise',"Promise")}<void>;
+  onSave?: () => Promise<void>;
   isSaving?: boolean;
   onToast?: (message: string) => void;
 }
