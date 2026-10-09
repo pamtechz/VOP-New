@@ -1202,7 +1202,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
           <div className="vop-setting-row"><div><div className="vop-setting-name">Offline service worker</div><div className="vop-setting-help">Reports whether this browser can run the installed PWA service worker.</div></div><span className={'vop-status '+('serviceWorker' in navigator?'enabled':'disabled')}>{'serviceWorker' in navigator?'Supported':'Unsupported'}</span></div>
           <div className="vop-setting-row"><div><div className="vop-setting-name">Browser notifications</div><div className="vop-setting-help">In-app notifications work independently; this reports browser notification capability only.</div></div><span className={'vop-status '+('Notification' in window?'enabled':'disabled')}>{'Notification' in window?'Supported':'Unsupported'}</span></div>
         </div>
-        <React.Suspense fallback={<div className="vop-setting-row" role="status">Loading operational readiness…</div>}>
+        <React.Suspense fallback={<AdminPanelLoading/>}>
           <OperationsReadinessPanel/>
         </React.Suspense>
       </div>}
