@@ -1078,7 +1078,7 @@ export default async function handler(req: Request, res: Response) {
         const organizationIds = ctx.tenantType === 'hierarchy' ? await accessibleOrganizationIds(ctx) : (ctx.organizationId ? [ctx.organizationId] : []);
         if (!organizationIds.length) return res.status(200).json({ ok: true, items: [] });
         const snapshots = await Promise.all(organizationIds.map(orgId => ctx.db.collection(collection).where('organizationId','==',orgId).get()));
-        const items = snapshots.flatMap(snap => snap.docs.map(d => ({
+        const items: Array<Record<string, unknown>> = snapshots.flatMap(snap => snap.docs.map(d => ({
           id:d.id,
           ...d.data(),
           canEdit: ctx.isSuperAdmin || (canEditCanonicalContent(ctx, d.data()) && !platformStewardedResource(d.data())),
