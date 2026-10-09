@@ -413,8 +413,8 @@ function LearnerPreview({ editor, guideTitle, onClose }: { editor: EditorState; 
                     if(block.type==='heading')return <h3 key={block.id}>{block.text}</h3>;
                     if(block.type==='quote')return <blockquote key={block.id}>{block.text}</blockquote>;
                     if(block.type==='image'&&block.src)return <img key={block.id} src={block.src} alt=""/>;
-                    if(block.type==='video'&&block.src)return <MediaPlayer key={block.id} src={block.src} title="Video" kind="video"/>;
-                    if(block.type==='audio'&&block.src)return <MediaPlayer key={block.id} src={block.src} title="Audio" kind="audio"/>;
+                    if(block.type==='video'&&block.src)return <MediaPlayer key={block.id} src={block.src} title={tx('admin.curriculum.video',"Video")} kind="video"/>;
+                    if(block.type==='audio'&&block.src)return <MediaPlayer key={block.id} src={block.src} title={tx('admin.curriculum.audio',"Audio")} kind="audio"/>;
                     return <p key={block.id}>{block.text}</p>;
                   })}
               </div>}
@@ -422,13 +422,13 @@ function LearnerPreview({ editor, guideTitle, onClose }: { editor: EditorState; 
                 if (block.type === 'heading') return <h2 key={block.id}>{renderMarkedText(block.text || '')}</h2>;
                 if (block.type === 'quote') return <blockquote key={block.id}>{renderMarkedText(block.text || '')}</blockquote>;
                 if (block.type === 'image' && block.src) return <img key={block.id} src={block.src} alt="" />;
-                if (block.type === 'video' && block.src) return <MediaPlayer key={block.id} src={block.src} title="Lesson video" kind="video"/>;
-                if (block.type === 'audio' && block.src) return <MediaPlayer key={block.id} src={block.src} title="Lesson audio" kind="audio"/>;
+                if (block.type === 'video' && block.src) return <MediaPlayer key={block.id} src={block.src} title={tx('admin.curriculum.lesson_video',"Lesson video")} kind="video"/>;
+                if (block.type === 'audio' && block.src) return <MediaPlayer key={block.id} src={block.src} title={tx('admin.curriculum.lesson_audio',"Lesson audio")} kind="audio"/>;
                 return <p key={block.id}>{renderMarkedText(block.text || '')}</p>;
               })}
               {!authoredPages.length&&!pages.length && editor.content && <p>{renderMarkedText(editor.content)}</p>}
-              {page === 0 && editor.videoUrl && <MediaPlayer src={editor.videoUrl} title="Lesson video" kind="video" />}
-              {page === 0 && editor.audioUrl && <MediaPlayer src={editor.audioUrl} title="Lesson audio" kind="audio" />}
+              {page === 0 && editor.videoUrl && <MediaPlayer src={editor.videoUrl} title={tx('admin.curriculum.lesson_video',"Lesson video")} kind="video" />}
+              {page === 0 && editor.audioUrl && <MediaPlayer src={editor.audioUrl} title={tx('admin.curriculum.lesson_audio',"Lesson audio")} kind="audio" />}
             </div>}
             {section === 1 && editor.bibleReferences && <div className="vop-preview-list">{editor.bibleReferences.split('\n').filter(Boolean).map(item => <div key={item}>{item}</div>)}</div>}
             {section === sections.length - 1 && sections.includes('Quiz') && <div className="vop-preview-quiz">{editor.questions.map((question, index) => <div key={index}><strong>{index + 1}. {question.question}</strong>{question.options.map((option, optionIndex) => <span key={optionIndex} className={question.answer === optionIndex ? 'correct' : ''}>{String.fromCharCode(65 + optionIndex)}. {option}</span>)}</div>)}</div>}
@@ -1098,7 +1098,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
     }
   };
 
-  const deleteLesson = async (lessonId: string, guideId = selectedGuideId, title = 'this lesson') => {
+  const deleteLesson = async (lessonId: string, guideId = selectedGuideId, title={tx('admin.curriculum.this_lesson',"this lesson")}) => {
     if (!await appConfirm(tx('curriculum.confirmDeleteLesson', `Permanently delete "${title}"? All associated learner progress and records for this lesson will be removed.`), {
       title: 'Delete lesson',
       confirmLabel: 'Delete lesson',
@@ -1185,9 +1185,9 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
         <div className="vop-fullpage-lesson-editor">
           <div style={{display:'none'}} aria-hidden="true">
             <div className="vop-plate-review-mode">
-              <div><strong>Plate continuous document mode</strong></div>
+              <div><strong>{tx('admin.curriculum.plate_continuous_document_mode',"Plate continuous document mode")}</strong></div>
             </div>
-            <div className="vop-lesson-tab-panel">content</div>
+            <div className="vop-lesson-tab-panel">{tx('admin.curriculum.content',"content")}</div>
           </div>
           <PlateCurriculumAuthoringReview
             onBack={leaveEditor}
@@ -1245,7 +1245,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
                   <span>Lesson Title *</span>
                   <input
                     value={editor.title}
-                    placeholder="e.g. Lesson title"
+                    placeholder={tx('admin.curriculum.e_g_lesson_title',"e.g. Lesson title")}
                     onChange={e => setEditor(prev => prev ? { ...prev, title: e.target.value } : prev)}
                   />
                 </label>
@@ -1282,7 +1282,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
                 </label>
 
                 <label className="vop-plate-header-field">
-                  <span>Season / Quarter</span>
+                  <span>{tx('admin.curriculum.season_quarter',"Season / Quarter")}</span>
                   <select
                     value={editor.season}
                     onChange={e => setEditor(prev => prev ? { ...prev, season: e.target.value } : prev)}
@@ -1293,7 +1293,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
                 </label>
 
                 <label className="vop-plate-header-field">
-                  <span>Language</span>
+                  <span>{tx('admin.curriculum.language',"Language")}</span>
                   <select
                     value={editor.language}
                     onChange={e => setEditor(prev => prev ? { ...prev, language: e.target.value } : prev)}
@@ -1327,19 +1327,19 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
                 {autoSaveStatus === 'saved' && (
                   <>
                     <CheckCircle size={13} />
-                    <span>Draft saved locally</span>
+                    <span>{tx('admin.curriculum.draft_saved_locally',"Draft saved locally")}</span>
                   </>
                 )}
                 {autoSaveStatus === 'dirty' && (
                   <>
                     <Save size={13} />
-                    <span>Unsaved changes</span>
+                    <span>{tx('admin.curriculum.unsaved_changes',"Unsaved changes")}</span>
                   </>
                 )}
                 {autoSaveStatus === 'idle' && (
                   <>
                     <Save size={13} />
-                    <span>Auto-save active</span>
+                    <span>{tx('admin.curriculum.auto_save_active',"Auto-save active")}</span>
                   </>
                 )}
               </span>
@@ -1350,7 +1350,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
                   <div className="vop-draft-recovery-info">
                     <Sparkles size={18} />
                     <div>
-                      <strong>Unsaved local draft found</strong>
+                      <strong>{tx('admin.curriculum.unsaved_local_draft_found',"Unsaved local draft found")}</strong>
                       <span>
                         Found a local auto-saved draft from {new Date(recoverableDraft.savedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })} ({formatDate(recoverableDraft.savedAt)}). Would you like to restore it?
                       </span>
@@ -1369,7 +1369,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
             }
           />
           {message && <div className="vop-toast">{message}</div>}
-          {error && <AppAlertDialog message={error} title="Curriculum Studio" onClose={() => setError('')}/>}
+          {error && <AppAlertDialog message={error} title={tx('admin.curriculum.curriculum_studio',"Curriculum Studio")} onClose={() => setError('')}/>}
         </div>
       );
     }
@@ -1381,7 +1381,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
             <div className="vop-draft-recovery-info">
               <Sparkles size={18} />
               <div>
-                <strong>Unsaved local draft found</strong>
+                <strong>{tx('admin.curriculum.unsaved_local_draft_found',"Unsaved local draft found")}</strong>
                 <span>
                   Found a local auto-saved draft from {new Date(recoverableDraft.savedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })} ({formatDate(recoverableDraft.savedAt)}). Would you like to restore it?
                 </span>
@@ -1405,7 +1405,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
         <div className="vop-reference-editor-head">
           <div className="vop-reference-editor-title">
             <div className="vop-reference-editor-thumb">{editor.imageUrl ? <img src={editor.imageUrl} alt="" /> : <FileText size={25}/>}</div>
-            <div><h1>{tx('curriculum.lessonEditor', 'Lesson Editor')}</h1><p>Author each chapter as one continuous Plate document. Mark paragraphs as section boundaries to define the pages learners will navigate.</p></div>
+            <div><h1>{tx('curriculum.lessonEditor', 'Lesson Editor')}</h1><p>{tx('admin.curriculum.author_each_chapter_as_one_continuous_plate_document_mark_paragraphs_as_section_boundaries',"Author each chapter as one continuous Plate document. Mark paragraphs as section boundaries to define the pages learners will navigate.")}</p></div>
           </div>
           <div className="vop-reference-actions">
             <button className="vop-primary" type="button" onClick={() => setEditorTab('content')}>
@@ -1488,14 +1488,14 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
                 {editor.imageUrl
                   ? <img src={editor.imageUrl} alt="Lesson featured image preview"/>
                   : <div className="vop-lesson-featured-placeholder"><ImageIcon size={24}/>
-                      <span>No featured image selected</span></div>}
+                      <span>{tx('admin.curriculum.no_featured_image_selected',"No featured image selected")}</span></div>}
               </div>
               <div className="vop-field">
                 <label htmlFor="vop-lesson-featured-url">{tx('curriculum.featuredImageUrl','Featured image URL')}</label>
                 <input id="vop-lesson-featured-url" type="url" value={editor.imageUrl}
-                  placeholder="https://..."
+                  placeholder={tx('admin.curriculum.https',"https://...")}
                   onChange={event=>setEditor({...editor,imageUrl:event.target.value})}/>
-                <small className="vop-field-help">The featured image is used in study listings and the lesson preview. Only use trusted public HTTPS images.</small>
+                <small className="vop-field-help">{tx('admin.curriculum.the_featured_image_is_used_in_study_listings_and_the_lesson_preview_only_use_trusted_publi',"The featured image is used in study listings and the lesson preview. Only use trusted public HTTPS images.")}</small>
               </div>
               {editor.imageUrl&&<button className="vop-secondary vop-remove-button" type="button"
                 onClick={()=>setEditor({...editor,imageUrl:''})}><Trash2 size={16}/>
@@ -1503,10 +1503,10 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
             </section>}
 
             {editorTab === 'media' && <div className="vop-form-grid vop-reference-single-column vop-lesson-tab-panel">
-              <div className="vop-field"><label>Import public media from a trusted source</label>
-                <input type="url" placeholder="Paste a public WordPress, YouTube, TikTok, Instagram, Facebook, Umtu or direct media link" value={mediaSourceInput} onChange={e=>setMediaSourceInput(e.target.value)} />
+              <div className="vop-field"><label>{tx('admin.curriculum.import_public_media_from_a_trusted_source',"Import public media from a trusted source")}</label>
+                <input type="url" placeholder={tx('admin.curriculum.paste_a_public_wordpress_youtube_tiktok_instagram_facebook_umtu_or_direct_media_link',"Paste a public WordPress, YouTube, TikTok, Instagram, Facebook, Umtu or direct media link")} value={mediaSourceInput} onChange={e=>setMediaSourceInput(e.target.value)} />
                 <button className="vop-secondary" type="button" disabled={mediaResolving || !mediaSourceInput.trim()} onClick={()=>void resolvePastedMedia()}>{mediaResolving ? <><LoaderCircle className="spin" size={15}/> Checking source…</> : 'Add media'}</button>
-                <small className="vop-field-help">Public provider embeds are used where available; trusted pages may expose direct media. No login-only or DRM-protected material is extracted.</small>
+                <small className="vop-field-help">{tx('admin.curriculum.public_provider_embeds_are_used_where_available_trusted_pages_may_expose_direct_media_no_l',"Public provider embeds are used where available; trusted pages may expose direct media. No login-only or DRM-protected material is extracted.")}</small>
               </div>
               <div className="vop-field"><label>{tx('curriculum.audioUrl', 'Audio URL')}</label><div className="vop-input-with-icon"><Volume2 size={18}/><input value={editor.audioUrl} onChange={e => setEditor({...editor,audioUrl:e.target.value})}/></div></div>
               <div className="vop-field"><label>{tx('curriculum.videoUrl', 'Video URL')}</label><div className="vop-input-with-icon"><Video size={18}/><input value={editor.videoUrl} onChange={e => setEditor({...editor,videoUrl:e.target.value})}/></div></div>
@@ -1518,7 +1518,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
             {editorTab === 'notes' && <div className="vop-lesson-tab-panel"><div className="vop-field"><label>{tx('curriculum.teacherNotes', 'Teacher Notes')}</label><textarea value={editor.teacherNotes} onChange={e => setEditor({...editor,teacherNotes:e.target.value})}/></div></div>}
 
             {editorTab === 'settings' && <div className="vop-form-grid vop-reference-single-column vop-lesson-tab-panel vop-lesson-settings-panel">
-              <div className="vop-field"><label>{tx('common.sharing', 'Sharing')}</label><select value={editor.sharingScope} onChange={e => setEditor({...editor,sharingScope:e.target.value as EditorState['sharingScope']})}><option value="private">{tx('common.private', 'Private')}</option><option value="organization">{tx('curriculum.organizationOnly', 'Organization only')}</option><option value="shared">{tx('common.shared', 'Shared')}</option></select><small>Shared lessons can be consumed by other organizations. Canonical editing remains restricted to the owning organization and VOP Super Admin.</small></div>
+              <div className="vop-field"><label>{tx('common.sharing', 'Sharing')}</label><select value={editor.sharingScope} onChange={e => setEditor({...editor,sharingScope:e.target.value as EditorState['sharingScope']})}><option value="private">{tx('common.private', 'Private')}</option><option value="organization">{tx('curriculum.organizationOnly', 'Organization only')}</option><option value="shared">{tx('common.shared', 'Shared')}</option></select><small>{tx('admin.curriculum.shared_lessons_can_be_consumed_by_other_organizations_canonical_editing_remains_restricted',"Shared lessons can be consumed by other organizations. Canonical editing remains restricted to the owning organization and VOP Super Admin.")}</small></div>
               <div className="vop-field"><label>{tx('curriculum.estimatedMinutes', 'Estimated Minutes')}</label><input type="number" min="1" value={editor.estimatedMinutes} onChange={e => setEditor({...editor,estimatedMinutes:Number(e.target.value)})}/></div>
               <div className="vop-field"><label>{tx('common.tags', 'Tags')}</label><input value={editor.tags} onChange={e => setEditor({...editor,tags:e.target.value})}/></div>
               <div className="vop-setting-row"><div><div className="vop-setting-name">{tx('curriculum.publicationStatus', 'Publication status')}</div><div className="vop-setting-help">{tx('curriculum.publicationHelp', 'Publishing is validated against the selected guide.')}</div></div><select value={editor.published ? 'published' : 'draft'} onChange={e => setEditor({...editor,published:e.target.value==='published'})}><option value="draft">{tx('common.draft', 'Draft')}</option><option value="published">{tx('common.published', 'Published')}</option></select></div>
@@ -1527,7 +1527,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
 
         </div>
         {message && <div className="vop-toast">{message}</div>}
-        {error && <AppAlertDialog message={error} title="Curriculum Studio" onClose={() => setError('')}/>}
+        {error && <AppAlertDialog message={error} title={tx('admin.curriculum.curriculum_studio',"Curriculum Studio")} onClose={() => setError('')}/>}
       </div>
     );
   }
@@ -1570,8 +1570,8 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
           <div className="vop-learning-path-info-banner">
             <Layers size={22}/>
             <div>
-              <strong>What is a Learning Path?</strong>
-              <p>A Learning Path is a curated multi-course roadmap designed to guide learners toward a specific spiritual or educational milestone (e.g., <em>Baptismal Preparation Path</em>, <em>New Believer Discipleship Journey</em>, or <em>Bible Instructor Certification</em>). While a Study Track (Tier 2) groups booklets by topic, a Learning Path chains multiple tracks and prerequisite guides into a single ordered progression.</p>
+              <strong>{tx('admin.curriculum.what_is_a_learning_path',"What is a Learning Path?")}</strong>
+              <p>{tx('admin.curriculum.a_learning_path_is_a_curated_multi_course_roadmap_designed_to_guide_learners_toward_a_spec',"A Learning Path is a curated multi-course roadmap designed to guide learners toward a specific spiritual or educational milestone (e.g.,")}<em>{tx('admin.curriculum.baptismal_preparation_path',"Baptismal Preparation Path")}</em>, <em>{tx('admin.curriculum.new_believer_discipleship_journey',"New Believer Discipleship Journey")}</em>, or <em>{tx('admin.curriculum.bible_instructor_certification',"Bible Instructor Certification")}</em>). While a Study Track (Tier 2) groups booklets by topic, a Learning Path chains multiple tracks and prerequisite guides into a single ordered progression.</p>
             </div>
           </div>
         )}
@@ -1671,11 +1671,11 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
             </div>
             <div className="vop-reference-actions">
               <button className="vop-primary" type="button" onClick={()=>openNewLesson(selectedGuideId)}>
-                <Plus size={17}/> Create lesson</button>
+                <Plus size={17}/>{tx('admin.curriculum.create_lesson',"Create lesson")}</button>
               <button className="vop-secondary" type="button" onClick={()=>{
                 setQuizPlacement({guideId:selectedGuideId,kind:'final_exam'});
                 setTab('quizzes');onTabChange?.('quizzes');
-              }}><CircleHelp size={17}/> Create final exam</button>
+              }}><CircleHelp size={17}/>{tx('admin.curriculum.create_final_exam',"Create final exam")}</button>
               <button className="vop-secondary" type="button" disabled={loading} onClick={()=>void load()}>
                 {loading ? <LoaderCircle className="spin" size={16}/> : <RefreshCw size={16}/>} {loading ? 'Refreshing…' : 'Refresh'}</button>
             </div>
@@ -1691,8 +1691,8 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
             :programContext?.entryMode==='sections'&&moduleLessons.some(item=>item.type!=='Test')
               ?<div className={'vop-admin-section-first'+(loading?' vop-refreshing vop-shimmer-overlay':'')}>
                 <div className="vop-admin-direct-sections-head">
-                  <div><span>SECTION-FIRST COURSE</span><h3>Learner pages in reading order</h3>
-                    <p>The lesson remains the progress/certification owner, but it is not an extra navigation step in this course.</p></div>
+                  <div><span>{tx('admin.curriculum.section_first_course',"SECTION-FIRST COURSE")}</span><h3>{tx('admin.curriculum.learner_pages_in_reading_order',"Learner pages in reading order")}</h3>
+                    <p>{tx('admin.curriculum.the_lesson_remains_the_progress_certification_owner_but_it_is_not_an_extra_navigation_step',"The lesson remains the progress/certification owner, but it is not an extra navigation step in this course.")}</p></div>
                   <span>{moduleLessons.filter(item=>item.type!=='Test').reduce((total,item)=>
                     total+(Array.isArray(item.chapters)
                       ?(item.chapters as CurriculumChapter[]).reduce((count,chapter)=>count+chapter.sections.length,0):0),0)} pages</span>
@@ -1756,15 +1756,15 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
                   {item.type!=='Test' && item.canEdit!==false && (
                     <button type="button" className="vop-secondary vop-actions-delete" disabled={saving}
                       onClick={()=>void deleteLesson(String(item.id), selectedGuideId, String(item.title||'Untitled lesson'))}
-                      title="Delete lesson" style={{color:'var(--danger,#c5221f)'}}>
+                      title={tx('admin.curriculum.delete_lesson',"Delete lesson")} style={{color:'var(--danger,#c5221f)'}}>
                       {saving && deletingLessonId === String(item.id) ? <LoaderCircle className="spin" size={16}/> : <Trash2 size={16}/>}
                     </button>
                   )}
                 </div>
               </article>)
             :<div className="vop-empty"><BookOpen size={30}/>
-              <h3>This guide has no lessons yet</h3><p>Create a lesson, then build its chapters and authored section pages.</p>
-              <button className="vop-primary" type="button" onClick={()=>openNewLesson(selectedGuideId)}><Plus size={17}/> Create first lesson</button>
+              <h3>{tx('admin.curriculum.this_guide_has_no_lessons_yet',"This guide has no lessons yet")}</h3><p>{tx('admin.curriculum.create_a_lesson_then_build_its_chapters_and_authored_section_pages',"Create a lesson, then build its chapters and authored section pages.")}</p>
+              <button className="vop-primary" type="button" onClick={()=>openNewLesson(selectedGuideId)}><Plus size={17}/>{tx('admin.curriculum.create_first_lesson',"Create first lesson")}</button>
             </div>}
           </div>
         </section>
@@ -1772,8 +1772,8 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
         <section className="vop-guide-first">
           <div className="vop-module-workspace-head">
             <div><span className="vop-module-eyebrow">TIER 3 · INDEPENDENT LESSONS</span>
-              <h2>Select a Study Guide to Author Lessons</h2>
-              <p>In the VOP correspondence framework, independent lessons belong to a parent Study Guide (Module). Choose an existing guide below to author its lessons, chapters, and section pages, or create a new guide.</p>
+              <h2>{tx('admin.curriculum.select_a_study_guide_to_author_lessons',"Select a Study Guide to Author Lessons")}</h2>
+              <p>{tx('admin.curriculum.in_the_vop_correspondence_framework_independent_lessons_belong_to_a_parent_study_guide_mod',"In the VOP correspondence framework, independent lessons belong to a parent Study Guide (Module). Choose an existing guide below to author its lessons, chapters, and section pages, or create a new guide.")}</p>
             </div>
             <button className="vop-primary" type="button" onClick={()=>{setTab('guides');onTabChange?.('guides');}}>
               <Plus size={18}/> Create new study guide
@@ -1790,8 +1790,8 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
             </button>)}
             {editableGuides.length === 0 && <div className="vop-empty vop-empty-hero">
               <BookOpen size={32}/>
-              <h3>No Study Guides Available</h3>
-              <p>Lessons are housed within Study Guides (Tier 3 modules). Create your first guide to begin authoring lessons.</p>
+              <h3>{tx('admin.curriculum.no_study_guides_available',"No Study Guides Available")}</h3>
+              <p>{tx('admin.curriculum.lessons_are_housed_within_study_guides_tier_3_modules_create_your_first_guide_to_begin_aut',"Lessons are housed within Study Guides (Tier 3 modules). Create your first guide to begin authoring lessons.")}</p>
               <button className="vop-primary" type="button" onClick={()=>{setTab('guides');onTabChange?.('guides');}}>
                 <Plus size={16}/> Create Study Guide
               </button>
@@ -1801,7 +1801,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
       )}
 
       {message && <div className="vop-toast">{message}</div>}
-      {error && <AppAlertDialog message={error} title="Curriculum Studio" onClose={() => setError('')}/>} 
+      {error && <AppAlertDialog message={error} title={tx('admin.curriculum.curriculum_studio',"Curriculum Studio")} onClose={() => setError('')}/>} 
 
       {lessonModuleRequiredModalOpen && (
         <div className="vop-dialog-overlay" role="dialog" aria-modal="true" style={{
@@ -1821,12 +1821,12 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
                 <BookOpen size={24}/>
               </div>
               <div>
-                <span className="vop-module-eyebrow" style={{fontSize:11,fontWeight:800,color:'var(--brand-orange,#d97706)'}}>TIER 3 PARENT CONTAINER REQUIRED</span>
-                <h3 style={{margin:0,fontSize:18,fontWeight:800}}>Select an Owning Study Guide (Module)</h3>
+                <span className="vop-module-eyebrow" style={{fontSize:11,fontWeight:800,color:'var(--brand-orange,#d97706)'}}>{tx('admin.curriculum.tier_3_parent_container_required',"TIER 3 PARENT CONTAINER REQUIRED")}</span>
+                <h3 style={{margin:0,fontSize:18,fontWeight:800}}>{tx('admin.curriculum.select_an_owning_study_guide_module',"Select an Owning Study Guide (Module)")}</h3>
               </div>
             </div>
             <p style={{margin:'0 0 14px',color:'var(--theme-text-muted,#64748b)',fontSize:13,lineHeight:1.5}}>
-              In the Voice of Prophecy correspondence curriculum, lessons cannot exist independently—they must belong to an owning <strong>Study Guide (Module)</strong>. Pick an available module below to author lessons inside it, or create a new module.
+              In the Voice of Prophecy correspondence curriculum, lessons cannot exist independently—they must belong to an owning <strong>{tx('admin.curriculum.study_guide_module',"Study Guide (Module)")}</strong>. Pick an available module below to author lessons inside it, or create a new module.
             </p>
             {editableGuides.length > 0 ? (
               <div style={{marginBottom:18,overflowY:'auto',flex:1,maxHeight:260,display:'flex',flexDirection:'column',gap:8,paddingRight:4}}>
@@ -1872,7 +1872,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
               </div>
             )}
             <div style={{display:'flex',justifyContent:'flex-end',gap:10,flexWrap:'wrap',paddingTop:8,borderTop:'1px solid var(--theme-border,#f1f5f9)'}}>
-              <button className="vop-secondary" type="button" onClick={() => setLessonModuleRequiredModalOpen(false)}>Cancel</button>
+              <button className="vop-secondary" type="button" onClick={() => setLessonModuleRequiredModalOpen(false)}>{tx('admin.curriculum.cancel',"Cancel")}</button>
               <button className="vop-primary" type="button" onClick={() => {
                 setLessonModuleRequiredModalOpen(false);
                 setTab('guides');
