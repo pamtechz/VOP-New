@@ -56,6 +56,7 @@ const checks = [
   ['server/passkeys.ts', ['signPasskeyChallenge','verifyPasskeyChallenge','validateAuthenticatorData','verifyPasskeyAssertion','Passkey did not complete fingerprint, face, PIN, or device verification']],
   ['server/operations.ts', ['runDailyOperationalMaintenance','operationalHealth','backupOutputPrefix','exportDocuments','operationsBackupRuns','operationalAlerts','purgeExpiredServerRecords','passkeyChallenges','authRateLimits','FIRESTORE_BACKUP_BUCKET','backupRpoHours:24','backupStaleAfterHours:36']],
   ['api_handlers/admin/health.ts', ['Operational health check failed','Only the VOP Super Admin can view detailed operational health','X-Request-Id']],
+  ['scripts/vercel-production-gate.mjs', ['VERCEL_GIT_COMMIT_SHA','VERCEL_GIT_COMMIT_REF','merge_commit_sha','merged_at','production commit is not a verified merged PR result','return result.allow?1:0']],
   ['scripts/firestore-restore.mjs', ['importDocuments','VOP_FIRESTORE_RESTORE_CONFIRM','VOP_FIRESTORE_RESTORE_SOURCE_CONFIRMED','--apply','--status']],
   ['server/accountLifecycle.ts', ['ACCOUNT_RETENTION_POLICY','passkeyCredentials','passkeyChallenges','passkeys:','processAccountDeletion']],
   ['api_handlers/admin/account.ts', ['runDailyOperationalMaintenance','processDueAccountDeletions']],
