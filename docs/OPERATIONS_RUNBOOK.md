@@ -172,6 +172,6 @@ Vercel's Ignored Build Step must be configured as:
 
 `node scripts/vercel-production-gate.mjs`
 
-For Preview/non-`main` deployments the script allows the build. For Production `main`, it queries GitHub for pull requests associated with `VERCEL_GIT_COMMIT_SHA` and allows the build only when the exact SHA is the merge result of a closed, merged PR targeting `main`. GitHub lookup failure, timeout, repository mismatch, a direct commit, or an unrelated PR fails closed and causes Vercel to ignore the deployment.
+For Preview deployments the script allows the build. A Production deployment from any branch other than `main` is denied. For Production `main`, it queries GitHub for pull requests associated with `VERCEL_GIT_COMMIT_SHA` and allows the build only when the exact SHA is the merge result of a closed, merged PR targeting `main`. GitHub lookup failure, timeout, repository mismatch, a direct commit, or an unrelated PR fails closed and causes Vercel to ignore the deployment.
 
 This is a deployment backstop, not a replacement for GitHub branch protection. Protect `main` in GitHub and require the hosted verification/validation checks before merge.
