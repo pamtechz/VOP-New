@@ -1098,7 +1098,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
     }
   };
 
-  const deleteLesson = async (lessonId: string, guideId = selectedGuideId, title={tx('admin.curriculum.this_lesson',"this lesson")}) => {
+  const deleteLesson = async (lessonId: string, guideId = selectedGuideId, title='this lesson') => {
     if (!await appConfirm(tx('curriculum.confirmDeleteLesson', `Permanently delete "${title}"? All associated learner progress and records for this lesson will be removed.`), {
       title: 'Delete lesson',
       confirmLabel: 'Delete lesson',
