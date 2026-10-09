@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import type { CustomHeroSlide, HeroSlideIcon } from '../../types';
 import type { ExtendedAppSettings } from '../../services/adminFirestore';
 import { getTranslation, getUiLocale } from '../../services/i18n';
+import { appConfirm } from '../layout/AppDialog';
 import {
   Sparkles, Plus, Edit2, Copy, Trash2, ArrowUp, ArrowDown, Check,
   BookOpen, HeartHandshake, Radio, Award, Clock3, Target, Bookmark,
@@ -238,19 +239,26 @@ export const HeroSliderManager: React.FC<HeroSliderManagerProps> = ({
     onToast?.('Slide duplicated.');
   };
 
-  const handleDelete = (slideId: string) => {
-    if (window.confirm('Are you sure you want to delete this slide?')) {
-      const remaining = slides.filter(s => s.id !== slideId);
-      updateSlides(remaining);
-      onToast?.('Slide deleted.');
-    }
+  const handleDelete = async (slideId: string) => {
+    const confirmed=await appConfirm(
+      uiT('admin.hero_slider.confirm_delete','Are you sure you want to delete this slide?'),
+      {
+        title:uiT('admin.hero_slider.delete_slide','Delete slide'),
+        confirmLabel:uiT('common.delete','Delete'),
+        tone:'danger',
+      },
+    );
+    if (!confirmed) return;
+    const remaining = slides.filter(s => s.id !== slideId);
+    updateSlides(remaining);
+    onToast?.(uiT('admin.hero_slider.slide_deleted','Slide deleted.'));
   };
 
   const handleSaveModal = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingSlide) return;
     if (!editingSlide.title.trim()) {
-      alert('Please enter a slide title.');
+      onToast?.(uiT('admin.hero_slider.enter_slide_title','Please enter a slide title.'));
       return;
     }
 
@@ -741,7 +749,7 @@ export const HeroSliderManager: React.FC<HeroSliderManagerProps> = ({
                     <button
                       type="button"
                       className="vop-secondary"
-                      onClick={() => handleDelete(slide.id)}
+                      onClick={() => void handleDelete(slide.id)}
                       title={uiT('admin.hero_slider.delete_slide',"Delete slide")}
                       style={{ padding: '7px 10px', fontSize: 13, color: '#ef4444' }}
                     >
