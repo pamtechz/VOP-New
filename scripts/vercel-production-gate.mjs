@@ -25,8 +25,11 @@ export async function evaluateProductionDeployment({
   fetchImpl=globalThis.fetch,
 }={}){
   const context=productionGitContext(env);
-  if(!context.production||context.ref!==MAIN_BRANCH){
-    return {allow:true,reason:'non-production-main',context};
+  if(!context.production){
+    return {allow:true,reason:'non-production',context};
+  }
+  if(context.ref!==MAIN_BRANCH){
+    return {allow:false,reason:'production deployments must originate from main',context};
   }
 
   if(context.provider!=='github'){
