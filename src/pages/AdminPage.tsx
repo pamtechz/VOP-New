@@ -48,6 +48,7 @@ const PersonalSettingsPage=React.lazy(()=>import('./PersonalSettingsPage').then(
 const CertificatesPage=React.lazy(()=>import('./CertificatesPage'));
 const AboutPage=React.lazy(()=>import('./AboutPage').then(module=>({default:module.AboutPage})));
 const OrganizationAccountProfilePage=React.lazy(()=>import('./OrganizationAccountProfilePage'));
+const OperationsReadinessPanel=React.lazy(()=>import('./OperationsReadinessPanel'));
 const AdminPanelLoading=()=> <RouteShimmer label="Loading this workspace"/>;
 
 interface AdminPageProps {
@@ -1201,6 +1202,9 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
           <div className="vop-setting-row"><div><div className="vop-setting-name">Offline service worker</div><div className="vop-setting-help">Reports whether this browser can run the installed PWA service worker.</div></div><span className={'vop-status '+('serviceWorker' in navigator?'enabled':'disabled')}>{'serviceWorker' in navigator?'Supported':'Unsupported'}</span></div>
           <div className="vop-setting-row"><div><div className="vop-setting-name">Browser notifications</div><div className="vop-setting-help">In-app notifications work independently; this reports browser notification capability only.</div></div><span className={'vop-status '+('Notification' in window?'enabled':'disabled')}>{'Notification' in window?'Supported':'Unsupported'}</span></div>
         </div>
+        <React.Suspense fallback={<AdminPanelLoading/>}>
+          <OperationsReadinessPanel/>
+        </React.Suspense>
       </div>}
 
       {isSuperAdmin && settingsSubtab === 'security' && <form className="vop-card vop-form-card" onSubmit={saveSettings}>

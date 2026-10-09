@@ -23,11 +23,17 @@ export default async function handler(req:Request,res:Response){
   const now=new Date();
   try{
     const db=getAdminDb();
-    const databaseCheck=await Promise.race([
-      db.doc('system/operations').get().then(()=>true),
-      new Promise<boolean>((_,reject)=>setTimeout(()=>reject(new Error('Database health check timed out.')),5000)),
-    ]);
-    if(!databaseCheck)throw new Error('Database health check failed.');
+    let timeout:ReturnType<typeof setTimeout>|undefined;
+    try{
+      await Promise.race([
+        db.doc('system/operations').get(),
+        new Promise<never>((_,reject)=>{
+          timeout=setTimeout(()=>reject(new Error('Database health check timed out.')),5000);
+        }),
+      ]);
+    }finally{
+      if(timeout)clearTimeout(timeout);
+    }
     const detailed=value(req.query?.detail)==='1'||value(req.query?.detail).toLowerCase()==='true';
     if(!detailed){
       return res.status(200).json({
