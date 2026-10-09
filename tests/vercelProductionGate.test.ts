@@ -12,11 +12,16 @@ const baseEnv={
   VERCEL_GIT_COMMIT_SHA:sha,
 };
 
-test('production gate ignores preview and non-main deployments without network lookup',async()=>{
+test('production gate allows preview but rejects production non-main deployments without network lookup',async()=>{
   let calls=0;
   const fetchImpl=async()=>{calls++;throw new Error('should not run');};
   assert.equal((await evaluateProductionDeployment({env:{...baseEnv,VERCEL_ENV:'preview'},fetchImpl})).allow,true);
-  assert.equal((await evaluateProductionDeployment({env:{...baseEnv,VERCEL_GIT_COMMIT_REF:'feature/test'},fetchImpl})).allow,true);
+  assert.equal((await evaluateProductionDeployment({env:{...baseEnv,VERCEL_ENV:'preview',VERCEL_GIT_COMMIT_REF:'feature/test'},fetchImpl})).allow,true);
+  const nonMain=await evaluateProductionDeployment({env:{...baseEnv,VERCEL_GIT_COMMIT_REF:'feature/test'},fetchImpl});
+  assert.equal(nonMain.allow,false);
+  assert.match(nonMain.reason,/must originate from main/);
+  const absentRef=await evaluateProductionDeployment({env:{...baseEnv,VERCEL_GIT_COMMIT_REF:''},fetchImpl});
+  assert.equal(absentRef.allow,false);
   assert.equal(calls,0);
 });
 
