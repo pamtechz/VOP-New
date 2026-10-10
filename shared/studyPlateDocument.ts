@@ -32,6 +32,8 @@ export type StudyPlateNode = {
   backgroundColor?:string;
   borderColor?:string;
   calloutType?:'info'|'warning'|'tip'|'reflection';
+  colWidths?:number[];
+  rowHeight?:number;
   children:Array<StudyPlateNode|StudyPlateLeaf>;
 };
 export type StudyPlateDocument=StudyPlateNode[];
@@ -126,6 +128,15 @@ export function normalizeStudyPlateDocument(raw:unknown):StudyPlateDocument {
     if(typeof node.backgroundColor==='string'&&node.backgroundColor.length<=50){
       element.backgroundColor=node.backgroundColor;
     }
+    if(type==='table' && Array.isArray(node.colWidths)
+       &&node.colWidths.length>0&&node.colWidths.length<=12
+       &&node.colWidths.every(v=>typeof v==='number'&&Number.isFinite(v)&&v>=64&&v<=640)){
+      element.colWidths=node.colWidths.map(v=>Math.round(v as number));
+    }
+    if(type==='tr'&&typeof node.rowHeight==='number'
+       &&Number.isFinite(node.rowHeight)&&node.rowHeight>=32&&node.rowHeight<=480){
+      element.rowHeight=Math.round(node.rowHeight);
+    }
     if(typeof node.borderColor==='string'&&node.borderColor.length<=50){
       element.borderColor=node.borderColor;
     }
@@ -163,10 +174,18 @@ export function normalizeStudyPlateDocument(raw:unknown):StudyPlateDocument {
       throw new Error('List items must contain list text or nested lists.');
     if(type==='lic'&&children.some(child=>'type' in child))
       throw new Error('List item content must contain text only.');
-    if(type==='table'&&children.some(child=>!('type' in child)||child.type!=='tr'))
+    if(type==='table'&&(children.length>20||children.some(child=>!('type' in child)||child.type!=='tr')))
       throw new Error('Unsupported table structure: Table containers must contain table rows.');
-    if(type==='tr'&&children.some(child=>!('type' in child)||!['th','td'].includes(child.type)))
-      throw new Error('Unsupported table row structure: Table rows must contain table header or data cells.');
+    if(type==='tr'&&(children.length>12||children.some(child=>!('type' in child)||!['th','td'].includes(child.type))))
+      throw new Error('Unsupported table row structure: Table rows must contain at most 12 header or data cells.');
+    if(type==='table') {
+      const tableRows=children as StudyPlateNode[];
+      const count=tableRows[0]?.children.length;
+      if(!count||tableRows.some(row=>row.children.length!==count))
+        throw new Error('All table rows must have the same number of columns.');
+      if(element.colWidths && element.colWidths.length!==count)
+        throw new Error('Saved table widths must match the number of columns.');
+    }
     return element;
   };
   return raw.map(node=>normalize(node,0,true) as StudyPlateNode);

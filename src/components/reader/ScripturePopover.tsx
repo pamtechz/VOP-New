@@ -1,17 +1,22 @@
 import React, { useEffect, useState } from 'react';
 import { X, BookOpen, Volume2, VolumeX, Copy, Check, LoaderCircle, Sparkles } from 'lucide-react';
 import { lookupScriptureVerse, type ScriptureLookupResult } from '../../services/scriptureLookup';
+import {getTranslation,getUiLocale} from '../../services/i18n';
+const uiT=(key:string,fallback:string)=>getTranslation(key,getUiLocale(),undefined,fallback,'ScripturePopover');
 import './lesson-reader-audio.css';
 
 interface ScripturePopoverProps {
   reference: string;
+  passageText?: string;
+  passageTranslation?: string;
   onClose: () => void;
 }
 
-export const ScripturePopover: React.FC<ScripturePopoverProps> = ({ reference, onClose }) => {
+export const ScripturePopover: React.FC<ScripturePopoverProps> = ({ reference, passageText, passageTranslation, onClose }) => {
   const [result, setResult] = useState<{ ref: string; data: ScriptureLookupResult } | null>(null);
   const [copied, setCopied] = useState(false);
   const [isSpeakingVerse, setIsSpeakingVerse] = useState(false);
+  const [retryCount,setRetryCount]=useState(0);
 
   const loading = !result || result.ref !== reference;
   const data = result?.ref === reference ? result.data : null;
@@ -22,7 +27,15 @@ export const ScripturePopover: React.FC<ScripturePopoverProps> = ({ reference, o
       window.speechSynthesis.cancel();
     }
 
-    lookupScriptureVerse(reference)
+    // The author's text is authoritative; do not replace Bemba verses with
+    // a translation chosen silently by an online service.
+    const supplied=passageText?.trim();
+    const lookup=supplied
+      ?Promise.resolve<ScriptureLookupResult>({
+        reference,text:supplied,translation:passageTranslation?.trim()||'Study text',source:'curated',
+      })
+      :lookupScriptureVerse(reference);
+    lookup
       .then(res => {
         if (!cancelled) {
           setResult({ ref: reference, data: res });
@@ -34,8 +47,8 @@ export const ScripturePopover: React.FC<ScripturePopoverProps> = ({ reference, o
             ref: reference,
             data: {
               reference,
-              text: `"${reference}" is referenced in this study. Read this passage in your Bible or connect to the internet to load online details.`,
-              translation: 'Bible Citation',
+              text: '',
+              translation: '',
               source: 'fallback',
             },
           });
@@ -48,7 +61,7 @@ export const ScripturePopover: React.FC<ScripturePopoverProps> = ({ reference, o
         window.speechSynthesis.cancel();
       }
     };
-  }, [reference]);
+  }, [reference,passageText,passageTranslation,retryCount]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -59,7 +72,7 @@ export const ScripturePopover: React.FC<ScripturePopoverProps> = ({ reference, o
   }, [onClose]);
 
   const handleCopy = async () => {
-    if (!data) return;
+    if (!data?.text) return;
     try {
       const formatted = `"${data.text}"\n— ${data.reference} (${data.translation})`;
       await navigator.clipboard.writeText(formatted);
@@ -71,7 +84,7 @@ export const ScripturePopover: React.FC<ScripturePopoverProps> = ({ reference, o
   };
 
   const handleToggleSpeakVerse = () => {
-    if (!data || !('speechSynthesis' in window)) return;
+    if (!data?.text || !('speechSynthesis' in window)) return;
     if (isSpeakingVerse) {
       window.speechSynthesis.cancel();
       setIsSpeakingVerse(false);
@@ -88,7 +101,7 @@ export const ScripturePopover: React.FC<ScripturePopoverProps> = ({ reference, o
     setIsSpeakingVerse(true);
   };
 
-  const sourceLabel = data?.source === 'curated'
+  const sourceLabel = passageText?.trim() ? uiT('reader.scripture.author_citation','Lesson author citation') : data?.source === 'curated'
     ? 'Voice of Prophecy Core Scripture'
     : data?.source === 'cached'
     ? 'Cached Scripture Passage'
@@ -135,15 +148,21 @@ export const ScripturePopover: React.FC<ScripturePopoverProps> = ({ reference, o
               <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>Loading scripture passage...</span>
             </div>
           ) : (
-            <>
-              <p className="vop-scripture-quote-text">
-                “{data?.text}”
-              </p>
-            </>
+            data?.text?.trim() ? (
+                <p className="vop-scripture-quote-text">“{data.text}”</p>
+              ) : (
+                <div className="vop-scripture-unavailable" role="status">
+                  <p>{uiT('reader.scripture.unavailable','Full Scripture text is not available for this reference right now.')}</p>
+                  <p>{uiT('reader.scripture.retry_or_consult','You can retry the online lookup or consult this reference in your Bible.')} <strong>{reference}</strong></p>
+                  <button type="button" className="vop-scripture-action-btn" onClick={()=>setRetryCount(n=>n+1)}>
+                    {uiT('reader.scripture.retry_lookup','Retry Scripture lookup')}
+                  </button>
+                </div>
+              )
           )}
         </div>
 
-        {!loading && data && (
+        {!loading && data?.text?.trim() && (
           <footer className="vop-scripture-modal-footer">
             <span className="vop-scripture-source-tag">
               <Sparkles size={13} color="#2563eb" />

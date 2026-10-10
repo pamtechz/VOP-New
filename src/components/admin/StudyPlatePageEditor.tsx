@@ -35,11 +35,12 @@ import {
 } from '../../../shared/studyPlateAuthoring';
 import { studyPlatePlainText, type StudyPlateDocument, type StudyPlateLeaf } from '../../../shared/studyPlateDocument';
 import { isSafeHttpsMediaUrl, resolveMediaSource } from '../../../shared/mediaSources';
-import { parseScriptureTokens } from '../../services/scriptureLookup';
+import { parseScriptureTokens,lookupScriptureVerse,normalizeScriptureReference } from '../../services/scriptureLookup';
 import { getTranslation, getUiLocale } from '../../services/i18n';
 import { auth } from '../../lib/firebase';
 import { MediaPlayer } from '../media/MediaPlayer';
 import { ModalLayer } from '../layout/ModalLayer';
+import {StudyTablePlugin,StudyRowPlugin,StudyHeaderCellPlugin,StudyCellPlugin} from './StudyEditableTable';
 import './plate-authoring.css';
 import './plate-ribbon.css';
 
@@ -199,28 +200,12 @@ function ParagraphElement({ element, children, ...props }: PlateElementProps) {
   );
 }
 
-/* Editable Plate elements keep persisted tables and callouts WYSIWYG. */
-function StudyTableElement({element,children,...props}:PlateElementProps){
-  return <PlateElement as="table" element={element} className="vop-plate-author-table" {...props}>
-    <tbody>{children}</tbody>
-  </PlateElement>;
-}
-function StudyRowElement({element,children,...props}:PlateElementProps){
-  return <PlateElement as="tr" element={element} {...props}>{children}</PlateElement>;
-}
-function StudyCellElement({element,children,...props}:PlateElementProps){
-  return <PlateElement as={element.type==='th'?'th':'td'} element={element} {...props}>{children}</PlateElement>;
-}
 function StudyCalloutElement({element,children,...props}:PlateElementProps){
   const value=(element as {calloutType?:unknown}).calloutType;
   const kind=['info','tip','warning','reflection'].includes(String(value))?String(value):'info';
   return <PlateElement as="aside" element={element}
     className={'vop-plate-author-callout vop-plate-author-callout-'+kind} {...props}>{children}</PlateElement>;
 }
-const StudyTablePlugin=createPlatePlugin({key:'studyTable',node:{isElement:true,type:'table'}}).withComponent(StudyTableElement);
-const StudyRowPlugin=createPlatePlugin({key:'studyRow',node:{isElement:true,type:'tr'}}).withComponent(StudyRowElement);
-const StudyHeaderCellPlugin=createPlatePlugin({key:'studyHeaderCell',node:{isElement:true,type:'th'}}).withComponent(StudyCellElement);
-const StudyCellPlugin=createPlatePlugin({key:'studyCell',node:{isElement:true,type:'td'}}).withComponent(StudyCellElement);
 const StudyCalloutPlugin=createPlatePlugin({key:'studyCallout',node:{isElement:true,type:'callout'}}).withComponent(StudyCalloutElement);
 
 const plugins=[
@@ -300,12 +285,15 @@ export function StudyPlatePageEditor({
     blockProps: Record<string, unknown>;
   } | null>(null);
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
+  const [tableRows,setTableRows]=useState(3);
+  const [tableColumns,setTableColumns]=useState(3);
   const [showPilcrow, setShowPilcrow] = useState(false);
   const [activeRibbonTab, setActiveRibbonTab] = useState<'home' | 'insert' | 'scripture'>('home');
   const [,refreshSelectionState]=useState(0);
 
   // In-text Bible verse states
   const [bibleVerseOpen, setBibleVerseOpen] = useState(false);
+  const [verseResolving,setVerseResolving]=useState(false);
   const [verseText, setVerseText] = useState('');
   const [verseReference, setVerseReference] = useState('');
   const [verseVersion, setVerseVersion] = useState('NKJV');
@@ -876,11 +864,15 @@ export function StudyPlatePageEditor({
   };
 
   const insertTable = (rows = 3, cols = 3) => {
+    // Bounds mirror the schema and protect Firestore document size.
+    rows=Math.max(1,Math.min(20,Math.round(rows)));
+    cols=Math.max(1,Math.min(12,Math.round(cols)));
     let inserted=false;
     contentCommand(() => {
       const tableNode={
         type:'table',
         id:freshId('block'),
+        colWidths:Array.from({length:cols},()=>145),
         children:Array.from({length:rows},()=>({
           type:'tr',
           children:Array.from({length:cols},()=>({
@@ -957,43 +949,61 @@ export function StudyPlatePageEditor({
     setBibleVerseOpen(true);
   };
 
-  const applyBibleVerse = () => {
+  const applyBibleVerse = async () => {
     const ref = verseReference.trim();
-    const ver = (verseVersion === 'CUSTOM' ? customVersion.trim() : verseVersion).toUpperCase() || 'NKJV';
-    if (!ref && !verseText.trim()) {
-      onNotify?.('Please enter a scripture reference or verse text.');
-      return;
+    let verse=verseText.trim();
+    let version=(verseVersion==='CUSTOM'?customVersion.trim():verseVersion).toUpperCase()||'NKJV';
+    if(!ref&&!verse){onNotify?.('Please enter a Scripture reference or passage text.');return;}
+    if(!editor.selection)restoreSelection();
+    if(!contentSelection()){onNotify?.('Place the cursor in lesson text before inserting Scripture.');return;}
+    // When only a reference was selected/typed, resolve actual text before
+    // insertion. A bare citation must never be stored as a fabricated verse.
+    const citationOnly=Boolean(ref)&&normalizeScriptureReference(verse)
+      .toLowerCase()===normalizeScriptureReference(ref).toLowerCase();
+    if(!verse||citationOnly){
+      setVerseResolving(true);
+      try{
+        const found=await lookupScriptureVerse(ref);
+        if(!found.text.trim()){
+          onNotify?.('Scripture could not be fetched. Paste the passage text or retry with internet access.');
+          return;
+        }
+        verse=found.text.trim();
+        version=found.translation||version; // Never label KJV text as NKJV/Bemba.
+      }catch{
+        onNotify?.('Scripture lookup unavailable. Paste the complete verse text to continue.');
+        return;
+      }finally{setVerseResolving(false);}
     }
-
-    contentCommand(() => {
-      if (verseStyle === 'quote') {
-        const quoteText = `“${verseText.trim()}” — ${ref || 'Scripture'} (${ver})`;
+    restoreSelection();
+    contentCommand(()=>{
+      if(verseStyle==='quote'){
         editor.tf.insertNodes({
-          type: 'blockquote',
-          borderColor: '#f59e0b',
-          backgroundColor: '#fffbeb',
-          children: [{
-            text: quoteText,
-            scriptureRef: ref,
-            bibleVersion: ver,
-            isScriptureVerse: true,
+          type:'blockquote',
+          borderColor:'#f59e0b',backgroundColor:'#fffbeb',
+          children:[{
+            text:verse,scriptureRef:ref||undefined,
+            bibleVersion:version,isScriptureVerse:true,italic:true,
           }],
         });
-      } else {
-        const sel = activeSelection();
-        const currentStr = sel ? editor.api.string(sel) : '';
-        if (verseText.trim() && verseText.trim() !== currentStr) {
-          editor.tf.insertText(verseText.trim());
+      }else{
+        const selected=activeSelection();
+        const currentStr=selected?editor.api.string(selected):'';
+        if(verse!==currentStr){
+          editor.tf.insertNodes({
+            text:verse,scriptureRef:ref||undefined,
+            bibleVersion:version,isScriptureVerse:true,italic:true,
+          } as never);
+        }else{
+          editor.tf.addMark('scriptureRef',ref||currentStr);
+          editor.tf.addMark('bibleVersion',version);
+          editor.tf.addMark('isScriptureVerse',true);
+          editor.tf.addMark('italic',true);
         }
-        editor.tf.addMark('scriptureRef', ref || currentStr);
-        editor.tf.addMark('bibleVersion', ver);
-        editor.tf.addMark('isScriptureVerse', true);
-        editor.tf.addMark('italic', true);
       }
     });
-
     setBibleVerseOpen(false);
-    onNotify?.(`Marked as Bible verse ${ref ? ref + ' ' : ''}(${ver}).`);
+    onNotify?.('Scripture passage inserted: '+(ref||'Selected passage')+' ('+version+').');
   };
 
   const removeBibleVerseMark = () => {
@@ -1374,6 +1384,17 @@ export function StudyPlatePageEditor({
                           <button type="button" onClick={() => insertTable(4, 3)}>4 × 3 Table</button>
                           <button type="button" onClick={() => insertTable(5, 4)}>5 × 4 Table</button>
                         </div>
+                        <div className="vop-table-builder-custom">
+                          <strong>{uiT('admin.study_plate_editor.custom_table_size','Custom table size')}</strong>
+                          <label>{uiT('admin.study_plate_editor.rows','Rows')} <input type="number" min={1} max={20} step={1} value={tableRows}
+                            onChange={event=>setTableRows(Number(event.target.value)||1)}/></label>
+                          <label>{uiT('admin.study_plate_editor.columns','Columns')} <input type="number" min={1} max={12} step={1} value={tableColumns}
+                            onChange={event=>setTableColumns(Number(event.target.value)||1)}/></label>
+                          <button type="button" onClick={()=>insertTable(tableRows,tableColumns)}>
+                            <Table size={14}/> Insert {Math.min(20,Math.max(1,tableRows))} × {Math.min(12,Math.max(1,tableColumns))} table
+                          </button>
+                          <small>{uiT('admin.study_plate_editor.table_editing_help','After inserting, click a cell to add or remove rows and columns. Drag cell borders to resize.')}</small>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -1678,9 +1699,10 @@ export function StudyPlatePageEditor({
                 <button
                   type="button"
                   className="vop-primary"
-                  onClick={applyBibleVerse}
+                  disabled={verseResolving}
+                  onClick={()=>{void applyBibleVerse();}}
                 >
-                  Apply Verse & Version
+                  {verseResolving?'Fetching Scripture…':'Apply Verse & Version'}
                 </button>
               </div>
             </div>

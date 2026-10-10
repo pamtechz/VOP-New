@@ -50,7 +50,7 @@ export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({
   const [narrationStatus, setNarrationStatus] = useState<'idle' | 'playing' | 'paused'>('idle');
   const [narrationRate, setNarrationRate] = useState<NarrationPlaybackRate>(1.0);
   const [showNarrationBar, setShowNarrationBar] = useState(false);
-  const [selectedScriptureRef, setSelectedScriptureRef] = useState<string | null>(null);
+  const [selectedScriptureRef, setSelectedScriptureRef] = useState<{reference:string;passageText?:string;passageTranslation?:string}|null>(null);
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const [notice, setNotice] = useState('');
   const [decision, setDecision] = useState<string>('accept');
@@ -237,7 +237,7 @@ export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({
           className="vop-scripture-ref-btn"
           onClick={(e) => {
             e.stopPropagation();
-            setSelectedScriptureRef(token.reference || token.text);
+            setSelectedScriptureRef({reference:token.reference || token.text});
           }}
           title={`View scripture: ${token.reference || token.text}`}
           aria-label={`View scripture: ${token.reference || token.text}`}
@@ -400,7 +400,7 @@ export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({
                 {currentPageIndex===0&&lesson.media?.audioUrl&&<MediaPlayer src={lesson.media.audioUrl} title={lesson.title+' audio'} kind="audio"/>}
                 {currentSection.document
                   ? <StudyPlateContent document={currentSection.document}
-                      onScriptureClick={(ref) => setSelectedScriptureRef(ref)}
+                      onScriptureClick={(reference,passageText,passageTranslation) => setSelectedScriptureRef({reference,passageText,passageTranslation})}
                       afterBlock={blockId=>assessmentLinks('block',blockId)}/>
                   : currentSection.blocks.map(block=><React.Fragment key={block.id}>
                   {block.type==='heading'&&<h4 className="vop-structured-reader-heading">{renderScriptureText(block.text)}</h4>}
@@ -474,7 +474,7 @@ export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({
                       className="vop-reader-quote-action-btn"
                       onClick={() => {
                         if (currentPage.scriptureQuote?.reference) {
-                          setSelectedScriptureRef(currentPage.scriptureQuote.reference);
+                          setSelectedScriptureRef({reference:currentPage.scriptureQuote.reference,passageText:currentPage.scriptureQuote.text});
                         }
                       }}
                       aria-label={`Explore passage ${currentPage.scriptureQuote.reference}`}
@@ -648,7 +648,9 @@ export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({
           {/* Interactive Scripture Popover Modal */}
           {selectedScriptureRef && (
             <ScripturePopover
-              reference={selectedScriptureRef}
+              reference={selectedScriptureRef.reference}
+              passageText={selectedScriptureRef.passageText}
+              passageTranslation={selectedScriptureRef.passageTranslation}
               onClose={() => setSelectedScriptureRef(null)}
             />
           )}

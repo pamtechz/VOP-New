@@ -290,3 +290,77 @@
 [data-theme="dark"] .vop-plate-editable .vop-plate-author-callout-tip{background:#133c32;color:#dcfce7}
 [data-theme="dark"] .vop-plate-editable .vop-plate-author-callout-warning{background:#4a2e17;color:#ffedd5}
 [data-theme="dark"] .vop-plate-editable .vop-plate-author-callout-reflection{background:#342148;color:#f3e8ff}
+
+
+/* The ribbon must stick with its entire tab and command panel, not just the
+   inner toolbar: the chapter paper is the independently scrolling region. */
+.vop-plate-page-editor .vop-plate-workspace-fixed-top {
+  position: sticky;
+  top: var(--vop-plate-toolbar-top,var(--vop-plate-sticky-top,76px));
+  z-index: 90;
+  background: var(--bg-card,#fff);
+  isolation: isolate;
+}
+.vop-plate-page-editor .vop-plate-workspace-fixed-top > .vop-ms-word-ribbon {
+  position: relative !important;
+  top: auto !important;
+  z-index: 1;
+}
+@media (min-width:861px) {
+  .vop-plate-document-pane .vop-plate-workspace-fixed-top { top: 0; }
+}
+.vop-plate-editable .vop-scripture-unavailable {
+  padding:12px;border:1px solid #dbe5f1;border-radius:8px;
+}
+
+
+/* Contextual Word-style table editing. Controls are editor-only and do not
+   become part of learner documents or Firestore's canonical study schema. */
+.vop-plate-editable .vop-plate-author-table-wrap{display:block;min-width:0;margin:12px 0;position:relative}
+.vop-plate-editable .vop-plate-table-tools{
+  display:flex;align-items:center;gap:4px;flex-wrap:wrap;
+  padding:6px;border:1px solid #d5e0ef;border-radius:7px 7px 0 0;
+  background:#f3f7fd;font:inherit;font-size:11px;color:#38577f;
+}
+.vop-plate-editable .vop-plate-table-tools-label{display:flex;align-items:center;gap:4px;font-weight:750;margin-right:6px}
+.vop-plate-editable .vop-plate-table-tools button{
+  display:inline-flex;align-items:center;gap:3px;min-height:27px;
+  padding:3px 7px;border:1px solid #d7e3f1;border-radius:5px;
+  background:#fff;color:#19446e;font-size:11px;font-weight:620;cursor:pointer;
+}
+.vop-plate-editable .vop-plate-table-tools button:hover{background:#e5f0ff;border-color:#9ec2f4}
+.vop-plate-editable .vop-plate-table-tools button:disabled{opacity:.38;cursor:not-allowed}
+.vop-plate-editable .vop-table-tool-divider{width:1px;height:21px;background:#cedaea;margin:0 4px}
+.vop-plate-editable .vop-plate-author-table-scroll{overflow-x:auto;max-width:100%;overscroll-behavior-x:contain}
+.vop-plate-editable .vop-plate-author-table{
+  table-layout:fixed;border-collapse:collapse;margin:0;
+  min-width:0;max-width:none;width:max-content;
+}
+.vop-plate-editable .vop-plate-author-table td,
+.vop-plate-editable .vop-plate-author-table th{position:relative;box-sizing:border-box}
+.vop-plate-editable .vop-plate-col-resizer{
+  position:absolute;top:0;right:-4px;height:100%;width:9px;
+  cursor:col-resize;z-index:8;touch-action:none;
+  border-right:2px solid transparent;
+}
+.vop-plate-editable .vop-plate-row-resizer{
+  position:absolute;bottom:-4px;left:0;width:100%;height:9px;
+  cursor:row-resize;z-index:9;touch-action:none;
+  border-bottom:2px solid transparent;
+}
+.vop-plate-editable :is(.vop-plate-col-resizer,.vop-plate-row-resizer):hover{
+  border-color:#2563eb;background:rgba(59,130,246,.18)
+}
+.vop-plate-editable .vop-plate-author-table-wrap:focus-within .vop-plate-table-tools{
+  border-color:#8cb9f2;
+}
+@media(max-width:650px){
+  .vop-plate-editable .vop-plate-table-tools{flex-wrap:nowrap;overflow-x:auto}
+  .vop-plate-editable .vop-plate-table-tools :is(button,span){flex:none}
+}
+[data-theme="dark"] .vop-plate-editable .vop-plate-table-tools{
+  background:#1b314c;border-color:#39516d;color:#c3d7ef
+}
+[data-theme="dark"] .vop-plate-editable .vop-plate-table-tools button{
+  color:#e2efff;background:#1d3857;border-color:#365b83
+}

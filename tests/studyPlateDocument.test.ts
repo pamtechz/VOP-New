@@ -453,3 +453,61 @@ test('ribbon state reflects the actual Plate selection rather than stale empty s
   assert.match(editor,/const activeStyleNode=nodes\(\)\[selectedIndex\(\)\]/);
   assert.doesNotMatch(editor,/event\.currentTarget\.value='';/);
 });
+
+
+test('custom-size Plate tables preserve canonical widths and heights without losing their stable block IDs',()=>{
+  const table=normalizeStudyPlateDocument([{
+    id:'table-lesson',type:'table',colWidths:[120,184,142],
+    children:[
+      {type:'tr',rowHeight:55,children:[
+        {type:'td',children:[{type:'p',children:[{text:'First'}]}]},
+        {type:'td',children:[{type:'p',children:[{text:'Second'}]}]},
+        {type:'td',children:[{type:'p',children:[{text:'Third'}]}]},
+      ]},
+      {type:'tr',rowHeight:79,children:[
+        {type:'td',children:[{type:'p',children:[{text:'Fourth'}]}]},
+        {type:'td',children:[{type:'p',children:[{text:'Fifth'}]}]},
+        {type:'td',children:[{type:'p',children:[{text:'Sixth'}]}]},
+      ]},
+    ],
+  }]);
+  assert.equal(table[0].id,'table-lesson');
+  assert.deepEqual(table[0].colWidths,[120,184,142]);
+  assert.deepEqual(table[0].children.map(row=>row.rowHeight),[55,79]);
+  assert.match(studyPlatePlainText(table),/Sixth/);
+  assert.throws(()=>normalizeStudyPlateDocument([
+    {id:'invalid-widths',type:'table',colWidths:[80],children:[
+      {type:'tr',children:[
+        {type:'td',children:[{text:'A'}]},
+        {type:'td',children:[{text:'B'}]},
+      ]},
+    ]},
+  ]),/widths must match/);
+  assert.throws(()=>normalizeStudyPlateDocument([
+    {id:'uneven',type:'table',children:[
+      {type:'tr',children:[{type:'td',children:[{text:'A'}]}]},
+      {type:'tr',children:[{type:'td',children:[{text:'B'}]},{type:'td',children:[{text:'C'}]}]},
+    ]},
+  ]),/same number of columns/);
+});
+
+test('ribbon remains sticky and contextual table operations use bounded Plate transforms',()=>{
+  const editor=read('src/components/admin/StudyPlatePageEditor.tsx');
+  const table=read('src/components/admin/StudyEditableTable.tsx');
+  const css=read('src/components/admin/plate-authoring.css');
+  const learner=read('src/components/reader/StudyPlateContent.tsx');
+  assert.match(css,/\.vop-plate-workspace-fixed-top\s*\{[\s\S]*position:\s*sticky/);
+  assert.match(css,/\.vop-plate-document-pane \.vop-plate-workspace-fixed-top \{ top: 0; \}/);
+  assert.match(editor,/setTableRows/);
+  assert.match(editor,/setTableColumns/);
+  assert.match(editor,/colWidths:Array\.from/);
+  assert.match(table,/const MAX_ROWS=20/);
+  assert.match(table,/const MAX_COLS=12/);
+  assert.match(table,/editor\.tf\.insertNodes\(/);
+  assert.match(table,/editor\.tf\.removeNodes\(/);
+  assert.match(table,/editor\.tf\.setNodes\(\{colWidths:widths\}/);
+  assert.match(table,/editor\.tf\.setNodes\(\{rowHeight:/);
+  assert.match(table,/window\.addEventListener\('pointermove',move\)/);
+  assert.match(learner,/node\.colWidths\.reduce/);
+  assert.match(learner,/node\.rowHeight/);
+});

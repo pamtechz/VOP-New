@@ -43,7 +43,7 @@ const BIBLE_BOOKS: BibleBookMeta[] = [
   { canonical: 'Nehemiah', aliases: ['neh', 'ne'] },
   { canonical: 'Esther', aliases: ['esth', 'est', 'es'] },
   { canonical: 'Job', aliases: ['jb'] },
-  { canonical: 'Psalms', aliases: ['psalm', 'psalms', 'ps', 'psa', 'pss'] },
+  { canonical: 'Psalms', aliases: ['psalm', 'psalms', 'ps', 'psa', 'pss', 'amalumbo', 'masalimo', 'salimo', 'zaburi'] },
   { canonical: 'Proverbs', aliases: ['prov', 'prv', 'pr', 'pro'] },
   { canonical: 'Ecclesiastes', aliases: ['eccles', 'eccl', 'ecc', 'ec'] },
   { canonical: 'Song of Solomon', aliases: ['song of songs', 'song', 'canticles', 'sos', 'ss'] },
@@ -216,6 +216,12 @@ export const CURATED_SCRIPTURES: Record<string, { reference: string; text: strin
     text: 'For the Lord himself shall descend from heaven with a shout, with the voice of the archangel, and with the trump of God: and the dead in Christ shall rise first: Then we which are alive and remain shall be caught up together with them in the clouds, to meet the Lord in the air: and so shall we ever be with the Lord.',
     translation: 'KJV',
   },
+  // Public-domain KJV text for the localized citation Amalumbo 139:14.
+  'psalms 139:14': {
+    reference: 'Psalms 139:14',
+    text: 'I will praise thee; for I am fearfully and wonderfully made: marvellous are thy works; and that my soul knoweth right well.',
+    translation: 'KJV',
+  },
   'psalms 23:1': {
     reference: 'Psalms 23:1',
     text: 'The LORD is my shepherd; I shall not want.',
@@ -375,8 +381,9 @@ export function resolveBibleBook(rawBook: string): string | null {
  * Normalizes a raw Bible reference into standard format, e.g. "Jn 3:16" -> "John 3:16"
  */
 export function normalizeScriptureReference(rawRef: string): string {
-  const match = rawRef.trim().match(/^((?:[123]\s*)?[A-Za-z]+(?:\.|\b))\s+(\d{1,3}):(\d{1,3})(?:-(\d{1,3}))?$/i);
-  if (!match) return rawRef.trim();
+  const cleanedRef=rawRef.trim().replace(/^[“"'‘]+|[.”"'’\s]+$/g,'');
+  const match = cleanedRef.match(/^((?:[123]\s*)?[A-Za-z]+(?:\.|\b))\s+(\d{1,3}):(\d{1,3})(?:-(\d{1,3}))?$/i);
+  if (!match) return cleanedRef;
   const [, rawBook, chapter, startVerse, endVerse] = match;
   const canonicalBook = resolveBibleBook(rawBook);
   if (!canonicalBook) return rawRef.trim();
@@ -535,11 +542,12 @@ export async function lookupScriptureVerse(rawReference: string): Promise<Script
     }
   }
 
-  // 4. Fallback for un-cached references when offline
+  // Never pass explanatory text off as scripture. The reader offers retry and
+  // the canonical reference instead of displaying a fabricated quotation.
   return {
     reference: normalized,
-    text: `"${normalized}" is cited in this study. Read this passage in your personal Bible or connect to the internet to view the full scripture text.`,
-    translation: 'Bible Citation',
+    text: '',
+    translation: '',
     source: 'fallback',
   };
 }

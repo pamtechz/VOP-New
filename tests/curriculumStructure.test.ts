@@ -617,3 +617,28 @@ test('13. enhanced audio narration extracts full rich plate document and interac
   assert.match(studyPlateContentCode, /onScriptureClick/);
   assert.match(studyPlateContentCode, /parseScriptureTokens/);
 });
+
+
+test('Bemba Psalms citations resolve to actual Scripture and author-supplied text flows to the reader',async()=>{
+  const {normalizeScriptureReference,lookupScriptureVerse,parseScriptureTokens}
+    =await server.ssrLoadModule('/src/services/scriptureLookup.ts') as typeof import('../src/services/scriptureLookup.ts');
+  assert.equal(normalizeScriptureReference('Amalumbo 139:14.'),'Psalms 139:14');
+  assert.equal(normalizeScriptureReference('Masalimo 139:14'),'Psalms 139:14');
+  assert.equal(parseScriptureTokens('Amalumbo 139:14')[0].reference,'Psalms 139:14');
+  const verse=await lookupScriptureVerse('Amalumbo 139:14.');
+  assert.equal(verse.translation,'KJV');
+  assert.match(verse.text,/fearfully and wonderfully made/);
+  assert.doesNotMatch(verse.text,/is cited in this study/);
+  const fs=await import('node:fs');
+  const popover=fs.readFileSync('src/components/reader/ScripturePopover.tsx','utf8');
+  const lesson=fs.readFileSync('src/components/reader/LessonReaderModal.tsx','utf8');
+  const plate=fs.readFileSync('src/components/reader/StudyPlateContent.tsx','utf8');
+  const author=fs.readFileSync('src/components/admin/StudyPlatePageEditor.tsx','utf8');
+  assert.match(popover,/passageText\?: string/);
+  assert.match(popover,/Full Scripture text is not available/);
+  assert.match(popover,/Retry Scripture lookup/);
+  assert.match(lesson,/passageText=\{selectedScriptureRef\.passageText\}/);
+  assert.match(plate,/onScriptureClick\(ref,isReferenceOnly\?'':written,leaf\.bibleVersion\)/);
+  assert.match(author,/await lookupScriptureVerse\(ref\)/);
+  assert.match(author,/Never label KJV text as NKJV\/Bemba/);
+});

@@ -7,7 +7,7 @@ import { BookOpen } from 'lucide-react';
 import './study-plate.css';
 import './lesson-reader-audio.css';
 
-function leafContent(leaf: StudyPlateLeaf, key: string, onScriptureClick?: (reference: string) => void): React.ReactNode {
+function leafContent(leaf: StudyPlateLeaf, key: string, onScriptureClick?: (reference: string, passageText?: string, translation?: string) => void): React.ReactNode {
   let value: React.ReactNode = leaf.text;
 
   // Render explicitly marked Bible verse with version tag
@@ -21,7 +21,12 @@ function leafContent(leaf: StudyPlateLeaf, key: string, onScriptureClick?: (refe
         className="vop-scripture-ref-btn vop-scripture-verse-tagged"
         onClick={(e) => {
           e.stopPropagation();
-          onScriptureClick(ref);
+          // Only treat text longer than a bare reference as an author-supplied
+          // verse. Plain citations should use the Bible lookup instead.
+          const written=leaf.text.trim();
+          const isReferenceOnly=written.replace(/[“”"'‘’.\s]/g,'').toLowerCase()
+            ===ref.replace(/[“”"'‘’.\s]/g,'').toLowerCase();
+          onScriptureClick(ref,isReferenceOnly?'':written,leaf.bibleVersion);
         }}
         title={`View Scripture: ${ref}${ver}`}
         aria-label={`View Scripture: ${ref}${ver}`}
@@ -86,7 +91,7 @@ function leafContent(leaf: StudyPlateLeaf, key: string, onScriptureClick?: (refe
   return <React.Fragment key={key}>{value}</React.Fragment>;
 }
 
-function renderNode(node: StudyPlateNode | StudyPlateLeaf, key: string, onScriptureClick?: (reference: string) => void): React.ReactNode {
+function renderNode(node: StudyPlateNode | StudyPlateLeaf, key: string, onScriptureClick?: (reference: string, passageText?: string, translation?: string) => void): React.ReactNode {
   if ('text' in node) return leafContent(node, key, onScriptureClick);
   const children = node.children.map((item, index) => renderNode(item, key + '-' + index, onScriptureClick));
 
@@ -115,8 +120,11 @@ function renderNode(node: StudyPlateNode | StudyPlateLeaf, key: string, onScript
     case 'ol': return <ol key={key} style={hasStyle ? nodeStyle : undefined}>{children}</ol>;
     case 'li': return <li key={key} style={hasStyle ? nodeStyle : undefined}>{children}</li>;
     case 'lic': return <span key={key} style={hasStyle ? nodeStyle : undefined}>{children}</span>;
-    case 'table': return <div key={key} className="vop-study-table-wrapper"><table className="vop-study-table" style={hasStyle ? nodeStyle : undefined}><tbody>{children}</tbody></table></div>;
-    case 'tr': return <tr key={key}>{children}</tr>;
+    case 'table': return <div key={key} className="vop-study-table-wrapper"><table className="vop-study-table"
+      style={{...nodeStyle,...(node.colWidths?.length?{width:node.colWidths.reduce((sum,n)=>sum+n,0)}:{})}}>
+      {node.colWidths?.length&&<colgroup>{node.colWidths.map((width,index)=><col key={index} style={{width}}/>)}</colgroup>}
+      <tbody>{children}</tbody></table></div>;
+    case 'tr': return <tr key={key} style={node.rowHeight?{height:node.rowHeight}:undefined}>{children}</tr>;
     case 'th': return <th key={key} style={hasStyle ? nodeStyle : undefined}>{children}</th>;
     case 'td': return <td key={key} style={hasStyle ? nodeStyle : undefined}>{children}</td>;
     case 'callout': return <div key={key} className={`vop-study-callout vop-callout-${node.calloutType || 'info'}`} style={hasStyle ? nodeStyle : undefined}>{children}</div>;
@@ -139,7 +147,7 @@ function renderNode(node: StudyPlateNode | StudyPlateLeaf, key: string, onScript
 export function StudyPlateContent({ document, afterBlock, onScriptureClick }: {
   document: StudyPlateDocument;
   afterBlock?: (anchorId: string) => React.ReactNode;
-  onScriptureClick?: (reference: string) => void;
+  onScriptureClick?: (reference: string, passageText?: string, translation?: string) => void;
 }) {
   // Treat learner-readable Firestore records as untrusted, including older
   // records written before the API enforced document validation. A malformed
