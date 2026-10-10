@@ -76,7 +76,7 @@ class VopApi {
       final value = jsonDecode(response.body);
       final data = value is Map ? Map<String, dynamic>.from(value) : <String, dynamic>{};
       if (response.statusCode == 401 && !retried) {
-        return _execute(path, method, body, query, retried: true);
+        return await _execute(path, method, body, query, retried: true);
       }
       if (response.statusCode < 200 || response.statusCode >= 300 ||
           data['ok'] == false) {
