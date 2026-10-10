@@ -78,8 +78,8 @@ function StudyTableElement({element,children,...props}:PlateElementProps) {
     const colIndex=Array.from((row as HTMLTableRowElement).cells).indexOf(cell as HTMLTableCellElement);
     if(rowIndex>=0&&colIndex>=0)setActiveCell({row:rowIndex,col:colIndex});
   };
-  return <PlateElement as="div" element={element} className="vop-plate-author-table-wrap" {...props}
-    onClickCapture={trackClick}>
+  return <PlateElement as="div" element={element} className="vop-plate-author-table-wrap" {...props}>
+    <div onClickCapture={trackClick}>
     <div className="vop-plate-table-tools" contentEditable={false} role="toolbar" aria-label="Table editing">
       <span className="vop-plate-table-tools-label"><Rows3 size={13}/> Table layout</span>
       <button type="button" title="Add row above selected cell" onMouseDown={e=>e.preventDefault()} onClick={()=>execute('rowAbove')} disabled={rowCount>=MAX_ROWS}><Plus size={12}/> Row above</button>
@@ -95,6 +95,7 @@ function StudyTableElement({element,children,...props}:PlateElementProps) {
         <colgroup>{widths.map((width,index)=><col key={index} style={{width}}/>)}</colgroup>
         <tbody>{children}</tbody>
       </table>
+    </div>
     </div>
   </PlateElement>;
 }
@@ -165,7 +166,7 @@ function StudyCellElement({element,children,...props}:PlateElementProps) {
   const count=rows?.children[0]?.children.length||1;
   return <PlateElement as={element.type==='th'?'th':'td'} element={element} {...props}>
     {children}
-    {rowIndex===0&&columnIndex<count-1&&
+    {columnIndex<count-1&&
       <span contentEditable={false} className="vop-plate-col-resizer" role="separator" aria-label={'Resize column '+(columnIndex+1)}
         aria-orientation="vertical" onPointerDown={e=>drag(e,'column')}/>}
     {columnIndex===0&&<span contentEditable={false} className="vop-plate-row-resizer" role="separator"
