@@ -216,6 +216,12 @@ export const CURATED_SCRIPTURES: Record<string, { reference: string; text: strin
     text: 'For the Lord himself shall descend from heaven with a shout, with the voice of the archangel, and with the trump of God: and the dead in Christ shall rise first: Then we which are alive and remain shall be caught up together with them in the clouds, to meet the Lord in the air: and so shall we ever be with the Lord.',
     translation: 'KJV',
   },
+  // Public-domain KJV text for the localized citation Amalumbo 139:14.
+  'psalms 139:14': {
+    reference: 'Psalms 139:14',
+    text: 'I will praise thee; for I am fearfully and wonderfully made: marvellous are thy works; and that my soul knoweth right well.',
+    translation: 'KJV',
+  },
   'psalms 23:1': {
     reference: 'Psalms 23:1',
     text: 'The LORD is my shepherd; I shall not want.',
