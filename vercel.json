@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/api/mobile",
+      "destination": "/api/admin?__vopRoute=mobile"
+    },
+    {
       "source": "/api/account",
       "destination": "/api/admin?__vopRoute=account"
     },
