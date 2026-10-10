@@ -14,7 +14,7 @@ $values = @{}
 Get-Content $EnvFile | ForEach-Object {
     $line = $_.Trim()
     if ($line -and !$line.StartsWith("#") -and $line.Contains("=")) {
-        $parts = $line.Split("=",2)
+        $parts = $line -split '=', 2
         $values[$parts[0].Trim()] = $parts[1].Trim()
     }
 }
@@ -28,7 +28,7 @@ foreach ($key in $keys) {
         throw "Missing $key in $EnvFile"
     }
 }
-if (!(Test-Path "android/app/src/main/AndroidManifest.xml")) {
+if (!(Test-Path "android/settings.gradle.kts") -and !(Test-Path "android/settings.gradle")) {
     flutter create --platforms=android --org com.sda --project-name vop .
     if ($LASTEXITCODE -ne 0) { throw "Native Android scaffold generation failed." }
 }
