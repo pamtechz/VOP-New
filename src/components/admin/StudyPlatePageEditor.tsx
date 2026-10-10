@@ -286,6 +286,22 @@ export function StudyPlatePageEditor({
     blockProps: Record<string, unknown>;
   } | null>(null);
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
+  useEffect(()=>{
+    if(!activeDropdown)return;
+    const onOutside=(event:PointerEvent)=>{
+      if(event.target instanceof Element&&!event.target.closest('.vop-ribbon-menu-wrapper'))
+        setActiveDropdown(null);
+    };
+    const onEscape=(event:KeyboardEvent)=>{
+      if(event.key==='Escape')setActiveDropdown(null);
+    };
+    document.addEventListener('pointerdown',onOutside);
+    document.addEventListener('keydown',onEscape);
+    return ()=>{
+      document.removeEventListener('pointerdown',onOutside);
+      document.removeEventListener('keydown',onEscape);
+    };
+  },[activeDropdown]);
   const [tableRows,setTableRows]=useState(3);
   const [tableColumns,setTableColumns]=useState(3);
   const [showPilcrow, setShowPilcrow] = useState(false);
@@ -1376,6 +1392,7 @@ export function StudyPlatePageEditor({
                       className="vop-plate-scripture-btn"
                       title={uiT('admin.study_plate_editor.insert_table_into_lesson',"Insert an editable table into the lesson")}
                       onMouseDown={event => { event.preventDefault(); rememberSelection(); }}
+                      aria-expanded={activeDropdown==='table'}
                       onClick={() => setActiveDropdown(activeDropdown === 'table' ? null : 'table')}
                     >
                       <Table size={16} color="#2563eb" />
