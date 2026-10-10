@@ -629,3 +629,302 @@
   align-items: center;
   gap: 8px;
 }
+
+
+/* Production ribbon layout: keep Word-like commands in stable two-row groups.
+   The former flex-wrap placed FONT and PARAGRAPH on separate, mostly empty
+   ribbon lines at laptop widths. Scope all rules to the Plate editor. */
+.vop-plate-page-editor .vop-ms-word-ribbon {
+  --ribbon-ink: #26374b;
+  --ribbon-stroke: #d7e0eb;
+  --ribbon-hover: #eaf2ff;
+  position: sticky;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: 100%;
+  min-width: 0;
+  padding: 0 !important;
+  background: var(--bg-card, #fff) !important;
+  border: 1px solid var(--ribbon-stroke) !important;
+  border-radius: 10px 10px 0 0 !important;
+  box-shadow: 0 2px 8px rgba(16, 39, 66, .07) !important;
+}
+.vop-plate-page-editor .vop-word-ribbon-tabs {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: flex-start;
+  width: 100%;
+  gap: 3px;
+  padding: 5px 46px 0 10px;
+  min-height: 39px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  background: #f5f7fb;
+}
+.vop-plate-page-editor .vop-word-ribbon-tab {
+  flex: none;
+  padding: 7px 13px 8px;
+  min-height: 33px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 550;
+  white-space: nowrap;
+}
+.vop-plate-page-editor .vop-word-ribbon-tab.active {
+  font-weight: 750;
+  border-bottom: 2px solid #2563eb;
+}
+.vop-plate-page-editor .vop-word-ribbon-content {
+  flex: 0 0 auto;
+  width: 100%;
+  min-width: 0;
+  padding: 5px 8px 4px;
+}
+.vop-plate-page-editor .vop-word-ribbon-row {
+  display: flex;
+  flex-flow: row nowrap;
+  width: 100%;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 0;
+}
+.vop-plate-page-editor .vop-word-group {
+  min-width: 0;
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: space-between;
+  padding: 4px 9px 2px;
+  border-right: 1px solid var(--ribbon-stroke);
+}
+.vop-plate-page-editor .vop-word-group-content {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 3px;
+  min-height: 66px;
+}
+.vop-plate-page-editor .vop-word-group-label {
+  margin: 2px 0 0;
+  min-height: 14px;
+  line-height: 14px;
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 550;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.vop-plate-page-editor .vop-word-group-content :where(button:not(.vop-plate-scripture-btn):not(.vop-plate-insert-section-btn):not(.vop-plate-section-break)) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  min-width: 30px;
+  width: 30px;
+  height: 29px;
+  min-height: 29px;
+  padding: 0 3px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ribbon-ink);
+  vertical-align: middle;
+  cursor: pointer;
+}
+.vop-plate-page-editor .vop-word-group-content :where(button:not(.vop-plate-scripture-btn):not(.vop-plate-insert-section-btn):not(.vop-plate-section-break)):hover {
+  background: var(--ribbon-hover);
+  border-color: #c7d9f7;
+}
+.vop-plate-page-editor .vop-word-group-content :where(button.active,button[aria-pressed="true"]) {
+  background: #dceafe !important;
+  color: #1d4ed8 !important;
+  border-color: #a8c8f6 !important;
+}
+.vop-plate-page-editor .vop-ribbon-menu-wrapper { position: relative; flex: none; }
+.vop-plate-page-editor .vop-ribbon-menu-wrapper > button {
+  white-space: nowrap;
+}
+.vop-plate-page-editor [data-ribbon-tab="home"] .vop-word-group:nth-child(1) .vop-word-group-content {
+  display: grid;
+  grid-template-columns: repeat(3, 30px);
+  grid-template-rows: repeat(2, 30px);
+  gap: 3px;
+}
+.vop-plate-page-editor [data-ribbon-tab="home"] .vop-word-group:nth-child(2) .vop-word-group-content {
+  width: 170px;
+}
+.vop-plate-page-editor [data-ribbon-tab="home"] .vop-word-group:nth-child(2) .vop-plate-block-style {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--ribbon-stroke);
+  border-radius: 5px;
+  background: var(--bg-card, #fff);
+}
+.vop-plate-page-editor [data-ribbon-tab="home"] .vop-word-group:nth-child(3) .vop-word-group-content {
+  display: grid;
+  grid-template-columns: repeat(12, 30px);
+  grid-template-rows: repeat(2, 30px);
+  align-content: center;
+  gap: 3px;
+}
+.vop-plate-page-editor .vop-ribbon-font-family {
+  grid-column: span 6;
+  width: 100%;
+}
+.vop-plate-page-editor .vop-ribbon-font-size {
+  grid-column: span 3;
+  width: 100%;
+}
+.vop-plate-page-editor .vop-ribbon-select-light {
+  height: 29px;
+  border-color: var(--ribbon-stroke);
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 500;
+  min-width: 0;
+  color: var(--ribbon-ink);
+}
+.vop-plate-page-editor [data-ribbon-tab="home"] .vop-word-group:nth-child(4) .vop-word-group-content {
+  display: grid;
+  grid-template-columns: repeat(7, 30px);
+  grid-template-rows: repeat(2, 30px);
+  align-content: center;
+  gap: 3px;
+}
+.vop-plate-page-editor .vop-ribbon-popover-light {
+  width: max-content;
+  max-width: min(280px, calc(100vw - 32px));
+  min-width: 155px;
+  padding: 7px;
+  border-color: var(--ribbon-stroke);
+  box-shadow: 0 12px 30px rgba(15, 23, 42, .18);
+}
+.vop-plate-page-editor .vop-ribbon-popover-light .vop-ribbon-popover-item-light {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  height: auto;
+  min-height: 30px;
+  padding: 7px 9px;
+  justify-content: flex-start;
+  white-space: nowrap;
+  text-align: left;
+}
+.vop-plate-page-editor .vop-office-color-popover { width: 258px; }
+.vop-plate-page-editor .vop-ribbon-color-grid { display: grid; grid-template-columns: repeat(5, 21px); gap: 5px; padding: 5px; }
+.vop-plate-page-editor .vop-office-grid { grid-template-columns: repeat(10, 18px) !important; }
+.vop-plate-page-editor .vop-ribbon-color-swatch {
+  display: block !important;
+  min-width: 19px !important;
+  width: 19px !important;
+  height: 19px !important;
+  min-height: 19px !important;
+  padding: 0 !important;
+  border: 1px solid #94a3b8 !important;
+  border-radius: 3px !important;
+}
+.vop-plate-page-editor .vop-ribbon-color-swatch:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+.vop-plate-page-editor .vop-ms-word-ribbon > .vop-plate-more {
+  position: absolute;
+  top: 7px;
+  right: 8px;
+  margin: 0;
+  z-index: 160;
+}
+.vop-plate-page-editor .vop-ms-word-ribbon > .vop-plate-more > summary {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+}
+.vop-plate-page-editor .vop-ms-word-ribbon .vop-ribbon-popover-light {
+  color: #25364c;
+  background: #fff;
+}
+.vop-plate-page-editor .vop-ms-word-ribbon button:focus-visible,
+.vop-plate-page-editor .vop-ms-word-ribbon select:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+/* Keep groups intact rather than wrapping individual commands around the page.
+   Small screens scroll through ribbon groups like the Office compact ribbon. */
+@media (max-width: 1110px) {
+  .vop-plate-page-editor .vop-word-ribbon-content {
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
+  }
+  .vop-plate-page-editor .vop-word-ribbon-row { width: max-content; min-width: 100%; }
+  .vop-plate-page-editor .vop-ribbon-menu-wrapper .vop-ribbon-popover-light {
+    position: fixed;
+    left: min(12px, 3vw);
+    top: calc(var(--vop-plate-toolbar-top, 76px) + 130px);
+    max-height: 52vh;
+    overflow-y: auto;
+  }
+}
+[data-theme="dark"] .vop-plate-page-editor .vop-ms-word-ribbon {
+  --ribbon-ink: #e2e8f0;
+  --ribbon-stroke: #344760;
+  --ribbon-hover: #203a60;
+  background: #142238 !important;
+}
+[data-theme="dark"] .vop-plate-page-editor .vop-word-ribbon-tabs { background: #1a2c45; }
+[data-theme="dark"] .vop-plate-page-editor .vop-word-group-label { color: #aec0d5; }
+[data-theme="dark"] .vop-plate-page-editor .vop-ribbon-select-light,
+[data-theme="dark"] .vop-plate-page-editor .vop-plate-block-style,
+[data-theme="dark"] .vop-plate-page-editor .vop-plate-block-style select {
+  color: #e2e8f0;
+  background: #142238;
+}
+[data-theme="dark"] .vop-plate-page-editor .vop-ribbon-popover-light {
+  background: #1b2f49 !important;
+  color: #f1f5f9 !important;
+}
+[data-theme="dark"] .vop-plate-page-editor .vop-ribbon-popover-item-light { color: #f1f5f9; }
+[data-theme="dark"] .vop-plate-page-editor .vop-ribbon-popover-item-light:hover { background: #244568; }
+@media (prefers-reduced-motion: reduce) {
+  .vop-plate-page-editor .vop-word-ribbon-tab { transition: none; }
+}
+
+
+/* The curriculum editor is frequently narrower than its browser viewport
+   because the chapter outline and admin navigation occupy columns.
+   Always provide horizontal access to groups, not just at a viewport breakpoint. */
+.vop-plate-page-editor .vop-ms-word-ribbon { backdrop-filter: none !important; }
+.vop-plate-page-editor .vop-word-ribbon-content {
+  overflow-x: auto;
+  overflow-y: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+}
+.vop-plate-page-editor .vop-word-ribbon-row {
+  width: max-content;
+  min-width: 100%;
+}
+/* Popovers are positioned using their trigger's viewport rectangle, so
+   scrolling the ribbon never clips the case/color/spacing menus. */
+.vop-plate-page-editor .vop-ribbon-menu-wrapper .vop-ribbon-popover-light {
+  position: fixed;
+  left: var(--vop-ribbon-menu-left, 12px);
+  top: var(--vop-ribbon-menu-top, 180px);
+  max-height: min(55vh, 420px);
+  overflow-y: auto;
+  z-index: 200;
+}
+.vop-plate-page-editor .vop-word-group-content button.format-painter-active {
+  background: #ffedd5 !important;
+  color: #9a3412 !important;
+  border: 1px solid #fb923c !important;
+  animation: none;
+}
+[data-theme="dark"] .vop-plate-page-editor .vop-word-group-content button.format-painter-active {
+  background: #55321d !important;
+  color: #fed7aa !important;
+}

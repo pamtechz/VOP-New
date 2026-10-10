@@ -16,6 +16,7 @@ export type StudyPlateLeaf = {
   fontSize?:string;
   color?:string;
   backgroundColor?:string;
+  textShadow?:string;
   scriptureRef?:string;
   bibleVersion?:string;
   isScriptureVerse?:boolean;
@@ -43,6 +44,11 @@ const record=(value:unknown):Record<string,unknown>|null=>
 const maxNodes=320;
 const maxChars=40000;
 const maxDepth=7;
+const allowedTextShadows=new Set([
+  '1px 1px 3px rgba(0,0,0,0.4)',
+  '0 0 6px rgba(59,130,246,0.6)',
+  '0 0 8px rgba(245,158,11,0.6)',
+]);
 
 function safeLink(url:unknown):string {
   const raw=String(url||'').trim();
@@ -81,6 +87,7 @@ export function normalizeStudyPlateDocument(raw:unknown):StudyPlateDocument {
         if(typeof node.fontSize==='string'&&node.fontSize.length<=30)leaf.fontSize=node.fontSize;
         if(typeof node.color==='string'&&node.color.length<=50)leaf.color=node.color;
         if(typeof node.backgroundColor==='string'&&node.backgroundColor.length<=50)leaf.backgroundColor=node.backgroundColor;
+        if(typeof node.textShadow==='string'&&allowedTextShadows.has(node.textShadow))leaf.textShadow=node.textShadow;
         if(typeof node.scriptureRef==='string'&&node.scriptureRef.length<=120)leaf.scriptureRef=node.scriptureRef;
         if(typeof node.bibleVersion==='string'&&node.bibleVersion.length<=50)leaf.bibleVersion=node.bibleVersion;
         if(node.isScriptureVerse===true)leaf.isScriptureVerse=true;

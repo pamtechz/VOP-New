@@ -382,3 +382,74 @@ test('guide editor persists a learner navigation preference without changing cou
   assert.match(view,/completedStudyLessons/);
   assert.match(view,/const isFinal=/);
 });
+
+
+test('Word-like ribbon keeps its groups compact and formatting actions remain real editor operations',()=>{
+  const editor=read('src/components/admin/StudyPlatePageEditor.tsx');
+  const css=read('src/components/admin/plate-ribbon.css');
+  const source=read('shared/studyPlateDocument.ts');
+  const reader=read('src/components/reader/StudyPlateContent.tsx');
+  assert.match(editor,/data-ribbon-tab=\{activeRibbonTab\}/);
+  assert.match(css,/grid-template-columns: repeat\(12, 30px\)/);
+  assert.match(css,/grid-template-columns: repeat\(7, 30px\)/);
+  assert.match(css,/\.vop-word-ribbon-row\s*\{[\s\S]*?flex-flow: row nowrap/);
+  assert.match(editor,/StudyTablePlugin,StudyRowPlugin,StudyHeaderCellPlugin,StudyCellPlugin,StudyCalloutPlugin/);
+  assert.match(editor,/children:\[\{type:'p',children:\[\{text:''\}\]\}\]/);
+  assert.match(editor,/onMouseUp=\{\(\)=>\{if\(formatPainter\)/);
+  assert.match(editor,/Formatting applied to the selected content/);
+  assert.match(editor,/aria-pressed=\{Boolean\(formatPainter\)\}/);
+  assert.match(editor,/type="button" className="vop-ribbon-color-swatch"/);
+  assert.match(source,/allowedTextShadows/);
+  assert.match(reader,/leafStyle\.textShadow = leaf\.textShadow/);
+});
+
+test('editor tables, callouts and allowlisted text effects survive canonical validation',()=>{
+  const d=normalizeStudyPlateDocument([
+    {id:'table-one',type:'table',children:[
+      {type:'tr',children:[
+        {type:'td',children:[{type:'p',children:[{text:'Faith'}]}]},
+        {type:'td',children:[{type:'p',children:[{text:'Hope'}]}]},
+      ]},
+      {type:'tr',children:[
+        {type:'td',children:[{type:'p',children:[{text:'Grace'}]}]},
+        {type:'td',children:[{type:'p',children:[{text:'Love'}]}]},
+      ]},
+    ]},
+    {id:'callout-one',type:'callout',calloutType:'reflection',children:[
+      {text:'Read John 3:16',bold:true,textShadow:'0 0 6px rgba(59,130,246,0.6)'},
+    ]},
+  ]);
+  assert.deepEqual(d.map(node=>node.type),['table','callout']);
+  assert.equal(d[0].children[0].type,'tr');
+  assert.equal(d[1].calloutType,'reflection');
+  assert.equal((d[1].children[0] as {textShadow?:string}).textShadow,'0 0 6px rgba(59,130,246,0.6)');
+  assert.match(studyPlatePlainText(d),/Grace/);
+  const invalid=normalizeStudyPlateDocument([
+    {id:'callout-two',type:'callout',children:[{text:'Untrusted effect',textShadow:'url(unsafe)'}]},
+  ]);
+  assert.equal('textShadow' in invalid[0].children[0],false);
+});
+
+
+test('Format Painter applies existing text and viewport-anchored ribbon menus survive narrow workspaces',()=>{
+  const editor=read('src/components/admin/StudyPlatePageEditor.tsx');
+  const css=read('src/components/admin/plate-ribbon.css');
+  assert.match(editor,/if\(!expanded\)editor\.tf\.select\(\[index\]\)/);
+  assert.match(editor,/if\(!expanded\)editor\.tf\.select\(selection\)/);
+  assert.match(editor,/isStudyPlateSectionMarker\(node\)/);
+  assert.match(editor,/onClickCapture=\{placeRibbonMenu\}/);
+  assert.match(editor,/getBoundingClientRect\(\)/);
+  assert.match(css,/\.vop-word-ribbon-content\s*\{[\s\S]*?overflow-x:\s*auto/);
+  assert.match(css,/\.vop-ribbon-menu-wrapper \.vop-ribbon-popover-light\s*\{[\s\S]*?position:\s*fixed/);
+  assert.match(css,/backdrop-filter:\s*none\s*!important/);
+});
+
+
+test('ribbon state reflects the actual Plate selection rather than stale empty selectors',()=>{
+  const editor=read('src/components/admin/StudyPlatePageEditor.tsx');
+  assert.match(editor,/value=\{currentBlockStyle\}/);
+  assert.match(editor,/onSelect=\{\(\)=>\{rememberSelection\(\);refreshSelectionState/);
+  assert.match(editor,/aria-pressed=\{pressed\}/);
+  assert.match(editor,/const activeStyleNode=nodes\(\)\[selectedIndex\(\)\]/);
+  assert.doesNotMatch(editor,/event\.currentTarget\.value='';/);
+});

@@ -161,6 +161,7 @@ function FormattedLeaf({ leaf, children, ...props }: any) {
   const style: React.CSSProperties = {};
   if (typedLeaf.color) style.color = typedLeaf.color;
   if (typedLeaf.backgroundColor) style.backgroundColor = typedLeaf.backgroundColor;
+  if (typedLeaf.textShadow) style.textShadow = typedLeaf.textShadow;
   if (typedLeaf.fontFamily) style.fontFamily = typedLeaf.fontFamily;
   if (typedLeaf.fontSize) style.fontSize = typedLeaf.fontSize;
 
@@ -198,6 +199,30 @@ function ParagraphElement({ element, children, ...props }: PlateElementProps) {
   );
 }
 
+/* Editable Plate elements keep persisted tables and callouts WYSIWYG. */
+function StudyTableElement({element,children,...props}:PlateElementProps){
+  return <PlateElement as="table" element={element} className="vop-plate-author-table" {...props}>
+    <tbody>{children}</tbody>
+  </PlateElement>;
+}
+function StudyRowElement({element,children,...props}:PlateElementProps){
+  return <PlateElement as="tr" element={element} {...props}>{children}</PlateElement>;
+}
+function StudyCellElement({element,children,...props}:PlateElementProps){
+  return <PlateElement as={element.type==='th'?'th':'td'} element={element} {...props}>{children}</PlateElement>;
+}
+function StudyCalloutElement({element,children,...props}:PlateElementProps){
+  const value=(element as {calloutType?:unknown}).calloutType;
+  const kind=['info','tip','warning','reflection'].includes(String(value))?String(value):'info';
+  return <PlateElement as="aside" element={element}
+    className={'vop-plate-author-callout vop-plate-author-callout-'+kind} {...props}>{children}</PlateElement>;
+}
+const StudyTablePlugin=createPlatePlugin({key:'studyTable',node:{isElement:true,type:'table'}}).withComponent(StudyTableElement);
+const StudyRowPlugin=createPlatePlugin({key:'studyRow',node:{isElement:true,type:'tr'}}).withComponent(StudyRowElement);
+const StudyHeaderCellPlugin=createPlatePlugin({key:'studyHeaderCell',node:{isElement:true,type:'th'}}).withComponent(StudyCellElement);
+const StudyCellPlugin=createPlatePlugin({key:'studyCell',node:{isElement:true,type:'td'}}).withComponent(StudyCellElement);
+const StudyCalloutPlugin=createPlatePlugin({key:'studyCallout',node:{isElement:true,type:'callout'}}).withComponent(StudyCalloutElement);
+
 const plugins=[
   BoldPlugin,ItalicPlugin,UnderlinePlugin,StrikethroughPlugin,CodePlugin,
   StudyFormatPlugin,
@@ -220,6 +245,7 @@ const plugins=[
     render:{as:'a'},
   }),
   SectionPagePlugin,StudyImagePlugin,StudyVideoPlugin,StudyAudioPlugin,
+  StudyTablePlugin,StudyRowPlugin,StudyHeaderCellPlugin,StudyCellPlugin,StudyCalloutPlugin,
 ];
 
 type QuizAnchor={type:'section'|'block';id:string};
@@ -276,6 +302,7 @@ export function StudyPlatePageEditor({
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const [showPilcrow, setShowPilcrow] = useState(false);
   const [activeRibbonTab, setActiveRibbonTab] = useState<'home' | 'insert' | 'scripture'>('home');
+  const [,refreshSelectionState]=useState(0);
 
   // In-text Bible verse states
   const [bibleVerseOpen, setBibleVerseOpen] = useState(false);
@@ -562,6 +589,9 @@ export function StudyPlatePageEditor({
   const currentMarks = ((editor.selection ? editor.api.marks() : null) || {}) as Record<string, string>;
   const currentFontFamily = currentMarks.fontFamily || '';
   const currentFontSize = currentMarks.fontSize || '';
+  const activeStyleNode=nodes()[selectedIndex()];
+  const currentBlockStyle=activeStyleNode && ['p','h1','h2','h3','blockquote'].includes(activeStyleNode.type)
+    ?activeStyleNode.type:'p';
 
   const handleCopy = async () => {
     if (!editor.selection) restoreSelection();
@@ -626,7 +656,64 @@ export function StudyPlatePageEditor({
       if (currentBlock.borderColor) blockProps.borderColor = currentBlock.borderColor;
     }
     setFormatPainter({ marks: { ...marks }, blockProps });
-    onNotify?.('Format copied. Select text or click another block to paint.');
+    onNotify?.('Format copied. Select target text or click a paragraph to apply.');
+  };
+
+  const applyFormatPainter = () => {
+    if (!formatPainter) return;
+    const selection=editor.selection;
+    const index=selection?.anchor.path[0]??-1;
+    const value=nodes();
+    if (!selection || index<0 || isStudyPlateSectionMarker(value[index])) return;
+    const expanded=selection.anchor.offset!==selection.focus.offset
+      ||selection.anchor.path.join('.')!==selection.focus.path.join('.');
+    const activeBlock=value[index];
+    // A simple click should paint the existing paragraph, not only the
+    // formatting of text typed after an empty/collapsed caret.
+    if (!expanded && !['p','h1','h2','h3','blockquote','callout'].includes(activeBlock?.type||'')) {
+      onNotify?.('Select the text inside the table or media block to apply formatting.');
+      return;
+    }
+    const paint=formatPainter;
+    const markKeys=['bold','italic','underline','strikethrough','code','subscript','superscript',
+      'fontFamily','fontSize','color','backgroundColor','textShadow'] as const;
+    const first=Math.min(selection.anchor.path[0],selection.focus.path[0]);
+    const last=Math.max(selection.anchor.path[0],selection.focus.path[0]);
+    command(()=>{
+      if(!expanded)editor.tf.select([index]);
+      for(const mark of markKeys) {
+        const markValue=paint.marks[mark];
+        if(markValue===undefined||markValue===null||markValue===false)editor.tf.removeMark(mark);
+        else editor.tf.addMark(mark,markValue);
+      }
+      // Selection may cover several paragraphs. Never rewrite section
+      // boundaries or stable IDs while transferring paragraph formatting.
+      for(let i=first;i<=last;i++) {
+        const node=value[i];
+        if(!node || isStudyPlateSectionMarker(node) || ['img','audio','video','table'].includes(node.type))continue;
+        editor.tf.setNodes({
+          align:paint.blockProps.align,indent:paint.blockProps.indent,
+          lineHeight:paint.blockProps.lineHeight,backgroundColor:paint.blockProps.backgroundColor,
+          borderColor:paint.blockProps.borderColor,
+        } as never,{at:[i]});
+      }
+      if(!expanded)editor.tf.select(selection);
+    });
+    setFormatPainter(null);
+    rememberSelection();
+    onNotify?.('Formatting applied to the selected content.');
+  };
+
+  // Ribbon menus are viewport anchored, because the ribbon's command groups
+  // scroll horizontally when the authoring pane is narrower than the screen.
+  const placeRibbonMenu=(event:React.MouseEvent<HTMLDivElement>)=>{
+    const element=event.currentTarget;
+    const trigger=element.querySelector('button');
+    if(!trigger)return;
+    const rect=trigger.getBoundingClientRect();
+    element.style.setProperty('--vop-ribbon-menu-left',
+      Math.max(8,Math.min(rect.left,window.innerWidth-292))+'px');
+    element.style.setProperty('--vop-ribbon-menu-top',Math.min(rect.bottom+5,window.innerHeight-96)+'px');
   };
 
   const handleSetFontFamily = (font: string) => {
@@ -685,7 +772,7 @@ export function StudyPlatePageEditor({
       const marksToRemove = [
         'bold', 'italic', 'underline', 'strikethrough', 'code',
         'subscript', 'superscript', 'color', 'backgroundColor',
-        'fontFamily', 'fontSize', 'scriptureRef', 'bibleVersion', 'isScriptureVerse',
+        'fontFamily', 'fontSize', 'textShadow', 'scriptureRef', 'bibleVersion', 'isScriptureVerse',
       ];
       marksToRemove.forEach(mark => editor.tf.removeMark(mark));
       const index = selectedIndex();
@@ -789,30 +876,24 @@ export function StudyPlatePageEditor({
   };
 
   const insertTable = (rows = 3, cols = 3) => {
+    let inserted=false;
     contentCommand(() => {
-      const headerRow = {
-        type: 'tr',
-        children: Array.from({ length: cols }, (_, c) => ({
-          type: 'th',
-          children: [{ text: `Header ${c + 1}` }],
+      const tableNode={
+        type:'table',
+        id:freshId('block'),
+        children:Array.from({length:rows},()=>({
+          type:'tr',
+          children:Array.from({length:cols},()=>({
+            type:'td',
+            children:[{type:'p',children:[{text:''}]}],
+          })),
         })),
-      };
-      const dataRows = Array.from({ length: Math.max(1, rows - 1) }, (_, r) => ({
-        type: 'tr',
-        children: Array.from({ length: cols }, (_, c) => ({
-          type: 'td',
-          children: [{ text: `Cell ${r + 1}-${c + 1}` }],
-        })),
-      }));
-      const tableNode = {
-        type: 'table',
-        id: freshId('block'),
-        children: [headerRow, ...dataRows],
       };
       editor.tf.insertNodes(tableNode as never);
+      inserted=true;
     });
     setActiveDropdown(null);
-    onNotify?.(`Inserted ${rows}×${cols} table into lesson.`);
+    if(inserted)onNotify?.('Inserted '+rows+'×'+cols+' editable table.');
   };
 
   const insertCallout = (kind: 'info' | 'warning' | 'tip' | 'reflection') => {
@@ -925,12 +1006,20 @@ export function StudyPlatePageEditor({
     onNotify?.('Scripture verse mark removed.');
   };
 
-  const toolbarButton=(label:string,icon:React.ReactNode,handler:()=>void,disabled=false)=>
-    <button type="button" title={label} aria-label={label} disabled={disabled}
+  const toolbarButton=(label:string,icon:React.ReactNode,handler:()=>void,disabled=false)=>{
+    const marks:Record<string,string>={
+      Bold:'bold',Italic:'italic',Underline:'underline',
+      Strikethrough:'strikethrough','Inline code':'code',
+    };
+    const mark=marks[label];
+    const pressed=mark?Boolean(currentMarks[mark]):undefined;
+    return <button type="button" title={label} aria-label={label} disabled={disabled}
+      aria-pressed={pressed} className={pressed?'active':undefined}
       onMouseDown={event=>{event.preventDefault();rememberSelection();}}
       onClick={()=>contentCommand(handler)}>
       {icon}
     </button>;
+  };
 
   const contentNodes=useMemo(()=>
     authoringValue.filter(node=>!isStudyPlateSectionMarker(node)) as StudyPlateDocument,
@@ -976,7 +1065,7 @@ export function StudyPlatePageEditor({
           </button>
         </div>
 
-        <div className="vop-word-ribbon-content">
+        <div className="vop-word-ribbon-content" data-ribbon-tab={activeRibbonTab} role="tabpanel" aria-label={activeRibbonTab==='home'?'Home formatting tools':activeRibbonTab==='insert'?'Insert tools':'Scripture and layout tools'}>
           {/* TAB 1: HOME (Clipboard, Styles, Font, Paragraph) */}
           {activeRibbonTab === 'home' && (
             <div className="vop-word-ribbon-row">
@@ -993,7 +1082,7 @@ export function StudyPlatePageEditor({
                     onMouseDown={event=>{event.preventDefault();rememberSelection();}} onClick={handleCut}><Scissors size={15}/></button>
                   <button type="button" title={uiT('admin.study_plate_editor.copy_selection_to_clipboard_ctrl_c',"Copy selection to clipboard (Ctrl+C)")} aria-label={uiT('admin.study_plate_editor.copy',"Copy")}
                     onMouseDown={event=>{event.preventDefault();rememberSelection();}} onClick={handleCopy}><Copy size={15}/></button>
-                  <button type="button" className={`vop-toolbar-btn ${formatPainter?'format-painter-active':''}`}
+                  <button type="button" className={`vop-toolbar-btn ${formatPainter?'format-painter-active':''}`} aria-pressed={Boolean(formatPainter)}
                     title={formatPainter?'Format painter active (click to apply or cancel)':'Format painter: copy formatting'}
                     onMouseDown={event=>{event.preventDefault();rememberSelection();}} onClick={handleFormatPainter}>
                     <Paintbrush size={15} color={formatPainter?'#d97706':'#475569'}/>
@@ -1007,8 +1096,9 @@ export function StudyPlatePageEditor({
                 <div className="vop-word-group-content">
                   <label className="vop-plate-block-style" title={uiT('admin.study_plate_editor.paragraph_style',"Paragraph style")}>
                     <Type size={16} aria-hidden="true"/>
-                    <select aria-label={uiT('admin.study_plate_editor.paragraph_style',"Paragraph style")} defaultValue="" onChange={event=>{
+                    <select aria-label={uiT('admin.study_plate_editor.paragraph_style',"Paragraph style")} value={currentBlockStyle} onMouseDown={rememberSelection} onChange={event=>{
                       const value=event.target.value;
+                      restoreSelection();
                       contentCommand(()=>{
                         if(value==='p')editor.tf.toggleBlock('p');
                         else if(value==='h1')editor.tf.h1.toggle();
@@ -1016,7 +1106,6 @@ export function StudyPlatePageEditor({
                         else if(value==='h3')editor.tf.h3.toggle();
                         else if(value==='blockquote')editor.tf.blockquote.toggle();
                       });
-                      event.currentTarget.value='';
                     }}>
                       <option value="">{uiT('admin.study_plate_editor.text_style',"Text Style")}</option>
                       <option value="p">{uiT('admin.study_plate_editor.paragraph',"Paragraph")}</option>
@@ -1039,7 +1128,8 @@ export function StudyPlatePageEditor({
                     title={uiT('admin.study_plate_editor.font_family_including_advent_sans',"Font Family (including Advent Sans)")}
                     aria-label={uiT('admin.study_plate_editor.font_family',"Font Family")}
                     value={currentFontFamily}
-                    onChange={e => handleSetFontFamily(e.target.value)}
+                    onMouseDown={rememberSelection}
+                    onChange={e => { restoreSelection(); handleSetFontFamily(e.target.value); }}
                   >
                     <option value="">{uiT('admin.study_plate_editor.arial',"Arial")}</option>
                     {FONT_FAMILIES.map(f => (
@@ -1052,7 +1142,8 @@ export function StudyPlatePageEditor({
                     title={uiT('admin.study_plate_editor.font_size',"Font Size")}
                     aria-label={uiT('admin.study_plate_editor.font_size',"Font Size")}
                     value={currentFontSize}
-                    onChange={e => handleSetFontSize(e.target.value)}
+                    onMouseDown={rememberSelection}
+                    onChange={e => { restoreSelection(); handleSetFontSize(e.target.value); }}
                   >
                     <option value="">11 pt</option>
                     {FONT_SIZES.map(s => (
@@ -1068,7 +1159,7 @@ export function StudyPlatePageEditor({
                   </button>
 
                   {/* Change Case Dropdown */}
-                  <div className="vop-ribbon-menu-wrapper">
+                  <div className="vop-ribbon-menu-wrapper" onClickCapture={placeRibbonMenu}>
                     <button type="button" title={uiT('admin.study_plate_editor.change_case',"Change Case")} onMouseDown={event=>{event.preventDefault();rememberSelection();}}
                       onClick={()=>setActiveDropdown(activeDropdown==='case'?null:'case')}>
                       <CaseSensitive size={15}/><ChevronDown size={10}/>
@@ -1100,7 +1191,7 @@ export function StudyPlatePageEditor({
                   </button>
 
                   {/* Text Effects */}
-                  <div className="vop-ribbon-menu-wrapper">
+                  <div className="vop-ribbon-menu-wrapper" onClickCapture={placeRibbonMenu}>
                     <button type="button" title={uiT('admin.study_plate_editor.text_effects_and_shadow',"Text Effects & Shadow")} onMouseDown={event=>{event.preventDefault();rememberSelection();}}
                       onClick={()=>setActiveDropdown(activeDropdown==='effects'?null:'effects')}>
                       <Sparkles size={15} color="#0284c7"/><ChevronDown size={10}/>
@@ -1116,7 +1207,7 @@ export function StudyPlatePageEditor({
                   </div>
 
                   {/* Highlight Color */}
-                  <div className="vop-ribbon-menu-wrapper">
+                  <div className="vop-ribbon-menu-wrapper" onClickCapture={placeRibbonMenu}>
                     <button type="button" title={uiT('admin.study_plate_editor.text_highlight_color',"Text Highlight Color")} onMouseDown={event=>{event.preventDefault();rememberSelection();}}
                       onClick={()=>setActiveDropdown(activeDropdown==='highlight'?null:'highlight')}>
                       <Highlighter size={15} color="#ca8a04"/><ChevronDown size={10}/>
@@ -1126,7 +1217,7 @@ export function StudyPlatePageEditor({
                         <div style={{fontSize:'10px',color:'#64748b',padding:'2px 6px',fontWeight:700}}>{uiT('admin.study_plate_editor.highlight_color',"HIGHLIGHT COLOR")}</div>
                         <div className="vop-ribbon-color-grid">
                           {['#fef08a','#bbf7d0','#a5f3fc','#fbcfe8','#fed7aa'].map(c=>(
-                            <div key={c} className="vop-ribbon-color-swatch" style={{background:c}} onClick={()=>setHighlightColor(c)} title={c}/>
+                            <button key={c} type="button" className="vop-ribbon-color-swatch" style={{background:c}} onClick={()=>setHighlightColor(c)} aria-label={'Highlight '+c} title={'Highlight '+c}/>
                           ))}
                         </div>
                         <button type="button" className="vop-ribbon-popover-item-light" onClick={()=>setHighlightColor('')}>
@@ -1137,7 +1228,7 @@ export function StudyPlatePageEditor({
                   </div>
 
                   {/* Full MS Office Font Color Palette */}
-                  <div className="vop-ribbon-menu-wrapper">
+                  <div className="vop-ribbon-menu-wrapper" onClickCapture={placeRibbonMenu}>
                     <button type="button" title={uiT('admin.study_plate_editor.font_color_ms_office_palette',"Font Color (MS Office Palette)")} onMouseDown={event=>{event.preventDefault();rememberSelection();}}
                       onClick={()=>setActiveDropdown(activeDropdown==='color'?null:'color')}>
                       <Palette size={15} color="#dc2626"/><ChevronDown size={10}/>
@@ -1147,13 +1238,13 @@ export function StudyPlatePageEditor({
                         <div style={{fontSize:'10px',color:'#475569',padding:'2px 6px',fontWeight:700}}>{uiT('admin.study_plate_editor.ms_office_theme_colors',"MS OFFICE THEME COLORS")}</div>
                         <div className="vop-ribbon-color-grid vop-office-grid">
                           {OFFICE_THEME_COLORS.map(c=>(
-                            <div key={c} className="vop-ribbon-color-swatch" style={{background:c}} onClick={()=>setFontColor(c)} title={c}/>
+                            <button key={c} type="button" className="vop-ribbon-color-swatch" style={{background:c}} onClick={()=>setFontColor(c)} aria-label={'Font color '+c} title={'Font color '+c}/>
                           ))}
                         </div>
                         <div style={{fontSize:'10px',color:'#475569',padding:'4px 6px 2px',fontWeight:700}}>{uiT('admin.study_plate_editor.standard_colors',"STANDARD COLORS")}</div>
                         <div className="vop-ribbon-color-grid">
                           {OFFICE_STANDARD_COLORS.map(c=>(
-                            <div key={c} className="vop-ribbon-color-swatch" style={{background:c}} onClick={()=>setFontColor(c)} title={c}/>
+                            <button key={c} type="button" className="vop-ribbon-color-swatch" style={{background:c}} onClick={()=>setFontColor(c)} aria-label={'Font color '+c} title={'Font color '+c}/>
                           ))}
                         </div>
                         <div className="vop-office-custom-color">
@@ -1195,7 +1286,7 @@ export function StudyPlatePageEditor({
                   </button>
 
                   {/* Line Spacing */}
-                  <div className="vop-ribbon-menu-wrapper">
+                  <div className="vop-ribbon-menu-wrapper" onClickCapture={placeRibbonMenu}>
                     <button type="button" title={uiT('admin.study_plate_editor.line_spacing_1_0_1_15_1_5_2_0',"Line Spacing (1.0, 1.15, 1.5, 2.0)")} onMouseDown={event=>{event.preventDefault();rememberSelection();}}
                       onClick={()=>setActiveDropdown(activeDropdown==='spacing'?null:'spacing')}>
                       <UnfoldVertical size={15}/><ChevronDown size={10}/>
@@ -1211,7 +1302,7 @@ export function StudyPlatePageEditor({
                   </div>
 
                   {/* Shading */}
-                  <div className="vop-ribbon-menu-wrapper">
+                  <div className="vop-ribbon-menu-wrapper" onClickCapture={placeRibbonMenu}>
                     <button type="button" title={uiT('admin.study_plate_editor.paragraph_background_shading',"Paragraph Background Shading")} onMouseDown={event=>{event.preventDefault();rememberSelection();}}
                       onClick={()=>setActiveDropdown(activeDropdown==='shading'?null:'shading')}>
                       <PaintBucket size={15} color="#0284c7"/><ChevronDown size={10}/>
@@ -1228,7 +1319,7 @@ export function StudyPlatePageEditor({
                   </div>
 
                   {/* Borders */}
-                  <div className="vop-ribbon-menu-wrapper">
+                  <div className="vop-ribbon-menu-wrapper" onClickCapture={placeRibbonMenu}>
                     <button type="button" title={uiT('admin.study_plate_editor.block_borders',"Block Borders")} onMouseDown={event=>{event.preventDefault();rememberSelection();}}
                       onClick={()=>setActiveDropdown(activeDropdown==='borders'?null:'borders')}>
                       <Square size={15}/><ChevronDown size={10}/>
@@ -1262,7 +1353,7 @@ export function StudyPlatePageEditor({
               <div className="vop-word-group" aria-label={uiT('admin.study_plate_editor.tables_and_callouts',"Tables & Callouts")}>
                 <div className="vop-word-group-content">
                   {/* Table Builder Dropdown */}
-                  <div className="vop-ribbon-menu-wrapper">
+                  <div className="vop-ribbon-menu-wrapper" onClickCapture={placeRibbonMenu}>
                     <button
                       type="button"
                       className="vop-plate-scripture-btn"
@@ -1288,7 +1379,7 @@ export function StudyPlatePageEditor({
                   </div>
 
                   {/* Callout / Takeaway Box Dropdown */}
-                  <div className="vop-ribbon-menu-wrapper">
+                  <div className="vop-ribbon-menu-wrapper" onClickCapture={placeRibbonMenu}>
                     <button
                       type="button"
                       className="vop-plate-scripture-btn"
@@ -1615,6 +1706,9 @@ export function StudyPlatePageEditor({
       <div className="vop-plate-paper">
         <PlateContent className={`vop-plate-editable ${showPilcrow ? 'vop-show-pilcrow' : ''}`}
           aria-label={uiT('admin.study_plate_editor.edit_study_chapter',"Edit study chapter")} spellCheck
+          onSelect={()=>{rememberSelection();refreshSelectionState(v=>v+1);}}
+          onMouseUp={()=>{if(formatPainter)window.requestAnimationFrame(applyFormatPainter);}}
+          onKeyUp={event=>{if(formatPainter&&(event.shiftKey||(event.key.toLowerCase()==='a'&&(event.ctrlKey||event.metaKey))))window.requestAnimationFrame(applyFormatPainter);}}
           onKeyDown={event=>{
             const modifier=event.ctrlKey||event.metaKey;
             if(modifier&&event.key.toLowerCase()==='k'){
