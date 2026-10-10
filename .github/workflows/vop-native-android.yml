@@ -1,0 +1,49 @@
+name: VOP native Android
+
+on:
+  pull_request:
+    paths:
+      - 'native_android/**'
+      - '.github/workflows/vop-native-android.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'native_android/**'
+      - '.github/workflows/vop-native-android.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  flutter-android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Generate native Gradle scaffold
+        run: |
+          flutter create --platforms=android --org com.sda --project-name vop native_android
+      - name: Install Dart dependencies
+        working-directory: native_android
+        run: flutter pub get
+      - name: Analyze Flutter
+        working-directory: native_android
+        run: flutter analyze --no-pub
+      - name: Run native widget tests
+        working-directory: native_android
+        run: flutter test --no-pub
+      - name: Build native Android debug APK
+        working-directory: native_android
+        run: |
+          flutter build apk --debug --no-pub             --dart-define=VOP_API_BASE_URL=https://vopafrica.vercel.app             --dart-define=VOP_FIREBASE_API_KEY=android-ci-placeholder             --dart-define=VOP_FIREBASE_ANDROID_APP_ID=1:123456789:android:ciplaceholder             --dart-define=VOP_FIREBASE_SENDER_ID=123456789             --dart-define=VOP_FIREBASE_PROJECT_ID=voiceofprophecy
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vop-native-debug-apk
+          path: native_android/build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
+          retention-days: 5
