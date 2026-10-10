@@ -567,3 +567,18 @@ test('maximum custom table dimensions remain valid canonical learner content',()
   assert.equal(normalized[0].children[0].rowHeight,35);
   assert.match(studyPlatePlainText(normalized),/20-12/);
 });
+
+
+test('table picker keyboard, anchored viewport geometry and Escape/outside closing are guarded',()=>{
+  const editor=read('src/components/admin/StudyPlatePageEditor.tsx');
+  const picker=read('src/components/admin/StudyTableInsertPicker.tsx');
+  assert.match(picker,/const navigateGrid=/);
+  assert.match(picker,/tabIndex=\{row===gridFocus\.row&&col===gridFocus\.col\?0:-1\}/);
+  assert.match(picker,/onKeyDown=\{event=>navigateGrid\(event,row,col\)\}/);
+  assert.match(editor,/data-ribbon-menu="table"/);
+  assert.match(editor,/const isTable=element\.dataset\.ribbonMenu==='table'/);
+  assert.match(editor,/Math\.min\(isTable\?360:292,window\.innerWidth-24\)/);
+  assert.match(editor,/document\.addEventListener\('pointerdown',onOutside\)/);
+  assert.match(editor,/document\.addEventListener\('keydown',onEscape\)/);
+  assert.match(editor,/aria-expanded=\{activeDropdown==='table'\}/);
+});
