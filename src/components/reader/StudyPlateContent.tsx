@@ -120,13 +120,21 @@ function renderNode(node: StudyPlateNode | StudyPlateLeaf, key: string, onScript
     case 'ol': return <ol key={key} style={hasStyle ? nodeStyle : undefined}>{children}</ol>;
     case 'li': return <li key={key} style={hasStyle ? nodeStyle : undefined}>{children}</li>;
     case 'lic': return <span key={key} style={hasStyle ? nodeStyle : undefined}>{children}</span>;
-    case 'table': return <div key={key} className="vop-study-table-wrapper"><table className="vop-study-table"
+    case 'table': return <div key={key} className="vop-study-table-wrapper"><table className={`vop-study-table vop-study-table-${node.tableStyle||'grid'}`}
       style={{...nodeStyle,...(node.colWidths?.length?{width:node.colWidths.reduce((sum,n)=>sum+n,0)}:{})}}>
       {node.colWidths?.length&&<colgroup>{node.colWidths.map((width,index)=><col key={index} style={{width}}/>)}</colgroup>}
       <tbody>{children}</tbody></table></div>;
     case 'tr': return <tr key={key} style={node.rowHeight?{height:node.rowHeight}:undefined}>{children}</tr>;
-    case 'th': return <th key={key} style={hasStyle ? nodeStyle : undefined}>{children}</th>;
-    case 'td': return <td key={key} style={hasStyle ? nodeStyle : undefined}>{children}</td>;
+    case 'th':
+    case 'td': {
+      if(node.covered)return null;
+      const cellStyle={...nodeStyle};
+      if(node.borderColor){delete cellStyle.borderLeft;cellStyle.border='1px solid '+node.borderColor;}
+      const attrs={rowSpan:node.rowSpan||1,colSpan:node.colSpan||1,style:cellStyle};
+      return node.type==='th'
+        ?<th key={key} {...attrs} scope="col">{children}</th>
+        :<td key={key} {...attrs}>{children}</td>;
+    }
     case 'callout': return <div key={key} className={`vop-study-callout vop-callout-${node.calloutType || 'info'}`} style={hasStyle ? nodeStyle : undefined}>{children}</div>;
     case 'a': return node.url && isSafeHttpsMediaUrl(node.url)
       ? <a key={key} href={node.url} target="_blank" rel="noopener noreferrer" style={hasStyle ? nodeStyle : undefined}>{children}</a>
