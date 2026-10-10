@@ -1,0 +1,10 @@
+include: package:flutter_lints/flutter.yaml
+analyzer:
+  errors:
+    invalid_assignment: error
+    missing_required_param: error
+    dead_code: warning
+linter:
+  rules:
+    avoid_print: true
+    always_declare_return_types: true
