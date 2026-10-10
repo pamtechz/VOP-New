@@ -37,10 +37,12 @@ jobs:
       - name: Run native widget tests
         working-directory: native_android
         run: flutter test --no-pub
+      - name: Prepare public VOP Firebase Android client config
+        working-directory: native_android
+        run: python3 tool/prepare_public_config.py
       - name: Build native Android debug APK
         working-directory: native_android
-        run: |
-          flutter build apk --debug --no-pub             --dart-define=VOP_API_BASE_URL=https://vopafrica.vercel.app             --dart-define=VOP_FIREBASE_API_KEY=android-ci-placeholder             --dart-define=VOP_FIREBASE_ANDROID_APP_ID=1:123456789:android:ciplaceholder             --dart-define=VOP_FIREBASE_SENDER_ID=123456789             --dart-define=VOP_FIREBASE_PROJECT_ID=voiceofprophecy
+        run: flutter build apk --debug --no-pub --dart-define-from-file=android-public-config.json
       - uses: actions/upload-artifact@v4
         with:
           name: vop-native-debug-apk
