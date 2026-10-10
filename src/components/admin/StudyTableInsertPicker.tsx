@@ -21,6 +21,20 @@ export function StudyTableInsertPicker({rows,columns,onRowsChange,onColumnsChang
   const [gridFocus,setGridFocus]=useState<{row:number;col:number}>({row:1,col:1});
   const selected=hover||gridFocus;
   const insert=(r:number,c:number)=>onInsert(clampTableSize(r,MAX_STUDY_TABLE_ROWS),clampTableSize(c,MAX_STUDY_TABLE_COLUMNS));
+  const navigateGrid=(event:React.KeyboardEvent<HTMLButtonElement>,row:number,col:number)=>{
+    const deltas:Record<string,[number,number]>={
+      ArrowUp:[-1,0],ArrowDown:[1,0],ArrowLeft:[0,-1],ArrowRight:[0,1],
+      Home:[0,1-col],End:[0,GRID_COLS-col],
+    };
+    const delta=deltas[event.key];
+    if(!delta)return;
+    event.preventDefault();
+    const nextRow=Math.max(1,Math.min(GRID_ROWS,row+delta[0]));
+    const nextCol=Math.max(1,Math.min(GRID_COLS,col+delta[1]));
+    setGridFocus({row:nextRow,col:nextCol});
+    const cells=event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('.vop-study-table-grid-cell');
+    cells?.[(nextRow-1)*GRID_COLS+nextCol-1]?.focus();
+  };
   return <section className="vop-study-table-picker" aria-label={uiT('admin.study_table.insert_options','Insert table options')}>
     <div className="vop-study-table-picker-title">{uiT('admin.study_table.hover_select','Select table size')}</div>
     <div className="vop-study-table-grid" role="group"
@@ -33,6 +47,8 @@ export function StudyTableInsertPicker({rows,columns,onRowsChange,onColumnsChang
           className={'vop-study-table-grid-cell'+(active?' selected':'')}
           onMouseEnter={()=>setHover({row,col})}
           onFocus={()=>setGridFocus({row,col})}
+          tabIndex={row===gridFocus.row&&col===gridFocus.col?0:-1}
+          onKeyDown={event=>navigateGrid(event,row,col)}
           onClick={()=>insert(row,col)}
           title={row+' × '+col}
           aria-label={uiT('admin.study_table.grid_size','Insert table')+' '+row+' × '+col}
