@@ -1,8 +1,13 @@
-import React, {useRef,useState} from 'react';
+import React, {useContext,useMemo,useRef,useState} from 'react';
 import {PlateElement,createPlatePlugin,useEditorRef,type PlateElementProps} from 'platejs/react';
-import {Columns3,Rows3,Plus,Minus,Trash2,AlignJustify,PanelTop,Maximize2} from 'lucide-react';
+import {Columns3,Rows3,Plus,Minus,Trash2,AlignJustify,PanelTop,Maximize2,Merge,Split,Copy,ClipboardPaste,PaintBucket} from 'lucide-react';
+import type {StudyPlateNode} from '../../../shared/studyPlateDocument';
+import {tableRect,tableAnchorAt,tableHasMerges,mergeStudyCells,splitStudyCell,formatStudyCells,studyCellsToTsv,pasteStudyCellsTsv,type StudyCellPoint,type StudyCellRect} from '../../../shared/studyTableOperations';
 import {getTranslation,getUiLocale} from '../../services/i18n';
 const uiT=(key:string,fallback:string)=>getTranslation(key,getUiLocale(),undefined,fallback,'StudyEditableTable');
+type TableSelection={rect:StudyCellRect;pick:(point:StudyCellPoint,extend:boolean)=>void};
+const TableSelectionContext=React.createContext<TableSelection|null>(null);
+const samePoint=(a:StudyCellPoint,b:StudyCellPoint)=>a.row===b.row&&a.col===b.col;
 
 /** Plate authoring table actions. All changes use Slate transforms so the
  * normal lesson persistence, undo stack and section/block IDs remain intact. */
@@ -33,10 +38,66 @@ function StudyTableElement({element,children,...props}:PlateElementProps) {
   const node=element as unknown as TableElement;
   const rowCount=node.children.length;
   const colCount=node.children[0]?.children.length||1;
-  const [activeCell,setActiveCell]=useState({row:0,col:0});
+  const [activeCell,setActiveCell]=useState<StudyCellPoint>({row:0,col:0});
+  const [selectionStart,setSelectionStart]=useState<StudyCellPoint>({row:0,col:0});
+  const [status,setStatus]=useState('');
+  const selectionRect=tableRect(selectionStart,activeCell);
+  const isMulti=selectionRect.top!==selectionRect.bottom||selectionRect.left!==selectionRect.right;
+  const merged=tableHasMerges(node as unknown as StudyPlateNode);
+  const pick=(point:StudyCellPoint,extend:boolean)=>{
+    if(!extend)setSelectionStart(point);
+    setActiveCell(point);
+    setStatus('');
+  };
+  const selectionContext=useMemo<TableSelection>(()=>({rect:selectionRect,pick}),
+    // The state container must re-render consumers when the selected region moves.
+    [selectionRect.top,selectionRect.left,selectionRect.bottom,selectionRect.right]);
   const widths=widthList(node);
   const locate=()=>editor.api.findPath(element);
   const selection={row:clamp(activeCell.row,0,rowCount-1),col:clamp(activeCell.col,0,colCount-1)};
+  const result=(action:()=>void)=>{
+    try{action();setStatus('');}
+    catch(error){setStatus(error instanceof Error?error.message:'Unable to modify this table.');}
+  };
+  const replaceTable=(next:StudyPlateNode,point:StudyCellPoint)=>{
+    const path=locate();
+    if(!path)return;
+    // Preserve the table's stable top-level block ID and rich child content.
+    editor.tf.removeNodes({at:path});
+    editor.tf.insertNodes(next as never,{at:path});
+    setSelectionStart(point);
+    setActiveCell(point);
+    focusCell(editor,path,point.row,point.col);
+  };
+  const mergeSelection=()=>result(()=>{
+    const next=mergeStudyCells(node as unknown as StudyPlateNode,selectionRect);
+    replaceTable(next,{row:selectionRect.top,col:selectionRect.left});
+  });
+  const splitCell=()=>result(()=>{
+    const point=tableAnchorAt(node as unknown as StudyPlateNode,selection.row,selection.col);
+    replaceTable(splitStudyCell(node as unknown as StudyPlateNode,point),point);
+  });
+  const applyCellFormat=(kind:'backgroundColor'|'borderColor'|'align',value:string)=>result(()=>{
+    const format=kind==='align'?{align:value as 'left'|'center'|'right'}
+      :kind==='backgroundColor'?{backgroundColor:value}:{borderColor:value};
+    replaceTable(formatStudyCells(node as unknown as StudyPlateNode,selectionRect,format),
+      {row:selectionRect.top,col:selectionRect.left});
+  });
+  const copyCells=async()=>{
+    try{
+      await navigator.clipboard.writeText(studyCellsToTsv(node as unknown as StudyPlateNode,selectionRect));
+      setStatus(uiT('admin.study_table.copied','Selected cells copied.'));
+    }catch{setStatus(uiT('admin.study_table.copy_failed','Clipboard access unavailable. Use Ctrl+C in the table.'));}
+  };
+  const pasteText=(value:string)=>result(()=>{
+    replaceTable(pasteStudyCellsTsv(node as unknown as StudyPlateNode,
+      {row:selectionRect.top,col:selectionRect.left},value),
+      {row:selectionRect.top,col:selectionRect.left});
+  });
+  const pasteCells=async()=>{
+    try{const content=await navigator.clipboard.readText();pasteText(content);}
+    catch{setStatus(uiT('admin.study_table.paste_failed','Clipboard access unavailable. Paste using your keyboard.'));}
+  };
   const execute=(kind:'rowAbove'|'rowBelow'|'removeRow'|'colBefore'|'colAfter'|'removeCol')=>{
     const path=locate();
     if(!path)return;
