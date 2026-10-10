@@ -41,6 +41,7 @@ import { auth } from '../../lib/firebase';
 import { MediaPlayer } from '../media/MediaPlayer';
 import { ModalLayer } from '../layout/ModalLayer';
 import {StudyTablePlugin,StudyRowPlugin,StudyHeaderCellPlugin,StudyCellPlugin} from './StudyEditableTable';
+import {StudyTableInsertPicker} from './StudyTableInsertPicker';
 import './plate-authoring.css';
 import './plate-ribbon.css';
 
@@ -1367,7 +1368,7 @@ export function StudyPlatePageEditor({
                     <button
                       type="button"
                       className="vop-plate-scripture-btn"
-                      title={uiT('admin.study_plate_editor.insert_html_table_into_lesson',"Insert HTML table into lesson")}
+                      title={uiT('admin.study_plate_editor.insert_table_into_lesson',"Insert an editable table into the lesson")}
                       onMouseDown={event => { event.preventDefault(); rememberSelection(); }}
                       onClick={() => setActiveDropdown(activeDropdown === 'table' ? null : 'table')}
                     >
@@ -1376,25 +1377,17 @@ export function StudyPlatePageEditor({
                       <ChevronDown size={11} />
                     </button>
                     {activeDropdown === 'table' && (
-                      <div className="vop-ribbon-popover-light vop-table-builder-popover" onMouseDown={e => e.preventDefault()}>
-                        <div style={{ fontSize: '10px', color: '#475569', padding: '2px 6px', fontWeight: 700 }}>{uiT('admin.study_plate_editor.grid_selection',"GRID SELECTION")}</div>
-                        <div className="vop-table-grid-options">
-                          <button type="button" onClick={() => insertTable(2, 2)}>2 × 2 Table</button>
-                          <button type="button" onClick={() => insertTable(3, 3)}>3 × 3 Table</button>
-                          <button type="button" onClick={() => insertTable(4, 3)}>4 × 3 Table</button>
-                          <button type="button" onClick={() => insertTable(5, 4)}>5 × 4 Table</button>
-                        </div>
-                        <div className="vop-table-builder-custom">
-                          <strong>{uiT('admin.study_plate_editor.custom_table_size','Custom table size')}</strong>
-                          <label>{uiT('admin.study_plate_editor.rows','Rows')} <input type="number" min={1} max={20} step={1} value={tableRows}
-                            onChange={event=>setTableRows(Number(event.target.value)||1)}/></label>
-                          <label>{uiT('admin.study_plate_editor.columns','Columns')} <input type="number" min={1} max={12} step={1} value={tableColumns}
-                            onChange={event=>setTableColumns(Number(event.target.value)||1)}/></label>
-                          <button type="button" onClick={()=>insertTable(tableRows,tableColumns)}>
-                            <Table size={14}/> Insert {Math.min(20,Math.max(1,tableRows))} × {Math.min(12,Math.max(1,tableColumns))} table
-                          </button>
-                          <small>{uiT('admin.study_plate_editor.table_editing_help','After inserting, click a cell to add or remove rows and columns. Drag cell borders to resize.')}</small>
-                        </div>
+                      <div className="vop-ribbon-popover-light vop-table-builder-popover" onMouseDown={event => {
+                          // Preserve caret when choosing a grid cell, but allow
+                          // focus and text selection inside custom number inputs.
+                          if (!(event.target instanceof Element)
+                            || !event.target.closest('input')) event.preventDefault();
+                        }}>
+                        <StudyTableInsertPicker
+                          rows={tableRows} columns={tableColumns}
+                          onRowsChange={setTableRows} onColumnsChange={setTableColumns}
+                          onInsert={insertTable}
+                        />
                       </div>
                     )}
                   </div>
