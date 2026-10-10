@@ -1,6 +1,8 @@
 import React, {useState} from 'react';
 import {PlateElement,createPlatePlugin,useEditorRef,type PlateElementProps} from 'platejs/react';
 import {Columns3,Rows3,Plus,Minus} from 'lucide-react';
+import {getTranslation,getUiLocale} from '../../services/i18n';
+const uiT=(key:string,fallback:string)=>getTranslation(key,getUiLocale(),undefined,fallback,'StudyEditableTable');
 
 /** Plate authoring table actions. All changes use Slate transforms so the
  * normal lesson persistence, undo stack and section/block IDs remain intact. */
@@ -80,15 +82,15 @@ function StudyTableElement({element,children,...props}:PlateElementProps) {
   };
   return <PlateElement as="div" element={element} className="vop-plate-author-table-wrap" {...props}>
     <div onClickCapture={trackClick}>
-    <div className="vop-plate-table-tools" contentEditable={false} role="toolbar" aria-label="Table editing">
-      <span className="vop-plate-table-tools-label"><Rows3 size={13}/> Table layout</span>
-      <button type="button" title="Add row above selected cell" onMouseDown={e=>e.preventDefault()} onClick={()=>execute('rowAbove')} disabled={rowCount>=MAX_ROWS}><Plus size={12}/> Row above</button>
-      <button type="button" title="Add row below selected cell" onMouseDown={e=>e.preventDefault()} onClick={()=>execute('rowBelow')} disabled={rowCount>=MAX_ROWS}><Plus size={12}/> Row below</button>
-      <button type="button" title="Remove selected row" onMouseDown={e=>e.preventDefault()} onClick={()=>execute('removeRow')} disabled={rowCount<=1}><Minus size={12}/> Row</button>
+    <div className="vop-plate-table-tools" contentEditable={false} role="toolbar" aria-label={uiT('admin.study_table.editing','Table editing')}>
+      <span className="vop-plate-table-tools-label"><Rows3 size={13}/> {uiT('admin.study_table.layout','Table layout')}</span>
+      <button type="button" title={uiT('admin.study_table.row_above_title','Add row above selected cell')} onMouseDown={e=>e.preventDefault()} onClick={()=>execute('rowAbove')} disabled={rowCount>=MAX_ROWS}><Plus size={12}/> {uiT('admin.study_table.row_above','Row above')}</button>
+      <button type="button" title={uiT('admin.study_table.row_below_title','Add row below selected cell')} onMouseDown={e=>e.preventDefault()} onClick={()=>execute('rowBelow')} disabled={rowCount>=MAX_ROWS}><Plus size={12}/> {uiT('admin.study_table.row_below','Row below')}</button>
+      <button type="button" title={uiT('admin.study_table.remove_row_title','Remove selected row')} onMouseDown={e=>e.preventDefault()} onClick={()=>execute('removeRow')} disabled={rowCount<=1}><Minus size={12}/> {uiT('admin.study_table.row','Row')}</button>
       <span className="vop-table-tool-divider"/>
-      <button type="button" title="Add column before selected cell" onMouseDown={e=>e.preventDefault()} onClick={()=>execute('colBefore')} disabled={colCount>=MAX_COLS}><Columns3 size={12}/> Before</button>
-      <button type="button" title="Add column after selected cell" onMouseDown={e=>e.preventDefault()} onClick={()=>execute('colAfter')} disabled={colCount>=MAX_COLS}><Columns3 size={12}/> After</button>
-      <button type="button" title="Remove selected column" onMouseDown={e=>e.preventDefault()} onClick={()=>execute('removeCol')} disabled={colCount<=1}><Minus size={12}/> Column</button>
+      <button type="button" title={uiT('admin.study_table.column_before_title','Add column before selected cell')} onMouseDown={e=>e.preventDefault()} onClick={()=>execute('colBefore')} disabled={colCount>=MAX_COLS}><Columns3 size={12}/> {uiT('admin.study_table.before','Before')}</button>
+      <button type="button" title={uiT('admin.study_table.column_after_title','Add column after selected cell')} onMouseDown={e=>e.preventDefault()} onClick={()=>execute('colAfter')} disabled={colCount>=MAX_COLS}><Columns3 size={12}/> {uiT('admin.study_table.after','After')}</button>
+      <button type="button" title={uiT('admin.study_table.remove_column_title','Remove selected column')} onMouseDown={e=>e.preventDefault()} onClick={()=>execute('removeCol')} disabled={colCount<=1}><Minus size={12}/> {uiT('admin.study_table.column','Column')}</button>
     </div>
     <div className="vop-plate-author-table-scroll">
       <table className="vop-plate-author-table" style={{width:widths.reduce((sum,width)=>sum+width,0)}}>
