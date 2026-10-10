@@ -302,6 +302,7 @@ export function StudyPlatePageEditor({
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const [showPilcrow, setShowPilcrow] = useState(false);
   const [activeRibbonTab, setActiveRibbonTab] = useState<'home' | 'insert' | 'scripture'>('home');
+  const [,refreshSelectionState]=useState(0);
 
   // In-text Bible verse states
   const [bibleVerseOpen, setBibleVerseOpen] = useState(false);
@@ -588,6 +589,9 @@ export function StudyPlatePageEditor({
   const currentMarks = ((editor.selection ? editor.api.marks() : null) || {}) as Record<string, string>;
   const currentFontFamily = currentMarks.fontFamily || '';
   const currentFontSize = currentMarks.fontSize || '';
+  const activeStyleNode=nodes()[selectedIndex()];
+  const currentBlockStyle=activeStyleNode && ['p','h1','h2','h3','blockquote'].includes(activeStyleNode.type)
+    ?activeStyleNode.type:'p';
 
   const handleCopy = async () => {
     if (!editor.selection) restoreSelection();
@@ -1002,12 +1006,20 @@ export function StudyPlatePageEditor({
     onNotify?.('Scripture verse mark removed.');
   };
 
-  const toolbarButton=(label:string,icon:React.ReactNode,handler:()=>void,disabled=false)=>
-    <button type="button" title={label} aria-label={label} disabled={disabled}
+  const toolbarButton=(label:string,icon:React.ReactNode,handler:()=>void,disabled=false)=>{
+    const marks:Record<string,string>={
+      Bold:'bold',Italic:'italic',Underline:'underline',
+      Strikethrough:'strikethrough','Inline code':'code',
+    };
+    const mark=marks[label];
+    const pressed=mark?Boolean(currentMarks[mark]):undefined;
+    return <button type="button" title={label} aria-label={label} disabled={disabled}
+      aria-pressed={pressed} className={pressed?'active':undefined}
       onMouseDown={event=>{event.preventDefault();rememberSelection();}}
       onClick={()=>contentCommand(handler)}>
       {icon}
     </button>;
+  };
 
   const contentNodes=useMemo(()=>
     authoringValue.filter(node=>!isStudyPlateSectionMarker(node)) as StudyPlateDocument,
@@ -1084,7 +1096,7 @@ export function StudyPlatePageEditor({
                 <div className="vop-word-group-content">
                   <label className="vop-plate-block-style" title={uiT('admin.study_plate_editor.paragraph_style',"Paragraph style")}>
                     <Type size={16} aria-hidden="true"/>
-                    <select aria-label={uiT('admin.study_plate_editor.paragraph_style',"Paragraph style")} defaultValue="" onMouseDown={rememberSelection} onChange={event=>{
+                    <select aria-label={uiT('admin.study_plate_editor.paragraph_style',"Paragraph style")} value={currentBlockStyle} onMouseDown={rememberSelection} onChange={event=>{
                       const value=event.target.value;
                       restoreSelection();
                       contentCommand(()=>{
@@ -1094,7 +1106,6 @@ export function StudyPlatePageEditor({
                         else if(value==='h3')editor.tf.h3.toggle();
                         else if(value==='blockquote')editor.tf.blockquote.toggle();
                       });
-                      event.currentTarget.value='';
                     }}>
                       <option value="">{uiT('admin.study_plate_editor.text_style',"Text Style")}</option>
                       <option value="p">{uiT('admin.study_plate_editor.paragraph',"Paragraph")}</option>
@@ -1695,6 +1706,7 @@ export function StudyPlatePageEditor({
       <div className="vop-plate-paper">
         <PlateContent className={`vop-plate-editable ${showPilcrow ? 'vop-show-pilcrow' : ''}`}
           aria-label={uiT('admin.study_plate_editor.edit_study_chapter',"Edit study chapter")} spellCheck
+          onSelect={()=>{rememberSelection();refreshSelectionState(v=>v+1);}}
           onMouseUp={()=>{if(formatPainter)window.requestAnimationFrame(applyFormatPainter);}}
           onKeyUp={event=>{if(formatPainter&&(event.shiftKey||(event.key.toLowerCase()==='a'&&(event.ctrlKey||event.metaKey))))window.requestAnimationFrame(applyFormatPainter);}}
           onKeyDown={event=>{
