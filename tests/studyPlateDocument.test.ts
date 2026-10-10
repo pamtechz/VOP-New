@@ -443,3 +443,13 @@ test('Format Painter applies existing text and viewport-anchored ribbon menus su
   assert.match(css,/\.vop-ribbon-menu-wrapper \.vop-ribbon-popover-light\s*\{[\s\S]*?position:\s*fixed/);
   assert.match(css,/backdrop-filter:\s*none\s*!important/);
 });
+
+
+test('ribbon state reflects the actual Plate selection rather than stale empty selectors',()=>{
+  const editor=read('src/components/admin/StudyPlatePageEditor.tsx');
+  assert.match(editor,/value=\{currentBlockStyle\}/);
+  assert.match(editor,/onSelect=\{\(\)=>\{rememberSelection\(\);refreshSelectionState/);
+  assert.match(editor,/aria-pressed=\{pressed\}/);
+  assert.match(editor,/const activeStyleNode=nodes\(\)\[selectedIndex\(\)\]/);
+  assert.doesNotMatch(editor,/event\.currentTarget\.value='';/);
+});
