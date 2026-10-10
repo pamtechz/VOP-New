@@ -11,7 +11,7 @@ const samePoint=(a:StudyCellPoint,b:StudyCellPoint)=>a.row===b.row&&a.col===b.co
 
 /** Plate authoring table actions. All changes use Slate transforms so the
  * normal lesson persistence, undo stack and section/block IDs remain intact. */
-type TableElement={type:string;id?:string;colWidths?:number[];children:Array<{type:string;rowHeight?:number;children:unknown[]}>};
+type TableElement={type:string;id?:string;colWidths?:number[];tableStyle?:'grid'|'banded'|'minimal';children:Array<{type:string;rowHeight?:number;children:unknown[]}>};
 const MAX_ROWS=20;
 const MAX_COLS=12;
 const MIN_COLUMN_WIDTH=64;
