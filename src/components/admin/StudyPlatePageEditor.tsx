@@ -700,9 +700,15 @@ export function StudyPlatePageEditor({
     const trigger=element.querySelector('button');
     if(!trigger)return;
     const rect=trigger.getBoundingClientRect();
-    element.style.setProperty('--vop-ribbon-menu-left',
-      Math.max(8,Math.min(rect.left,window.innerWidth-292))+'px');
-    element.style.setProperty('--vop-ribbon-menu-top',Math.min(rect.bottom+5,window.innerHeight-96)+'px');
+    const isTable=element.dataset.ribbonMenu==='table';
+    const width=Math.min(isTable?360:292,window.innerWidth-24);
+    const expectedHeight=isTable?Math.min(555,window.innerHeight*.72):Math.min(320,window.innerHeight*.52);
+    const left=Math.max(12,Math.min(rect.left,window.innerWidth-width-12));
+    let top=rect.bottom+5;
+    if(top+expectedHeight>window.innerHeight-10)
+      top=Math.max(12,rect.top-expectedHeight-5);
+    element.style.setProperty('--vop-ribbon-menu-left',left+'px');
+    element.style.setProperty('--vop-ribbon-menu-top',top+'px');
   };
 
   const handleSetFontFamily = (font: string) => {
@@ -1364,7 +1370,7 @@ export function StudyPlatePageEditor({
               <div className="vop-word-group" aria-label={uiT('admin.study_plate_editor.tables_and_callouts',"Tables & Callouts")}>
                 <div className="vop-word-group-content">
                   {/* Table Builder Dropdown */}
-                  <div className="vop-ribbon-menu-wrapper" onClickCapture={placeRibbonMenu}>
+                  <div className="vop-ribbon-menu-wrapper" data-ribbon-menu="table" onClickCapture={placeRibbonMenu}>
                     <button
                       type="button"
                       className="vop-plate-scripture-btn"
