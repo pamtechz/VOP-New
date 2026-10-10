@@ -652,7 +652,32 @@ export function StudyPlatePageEditor({
       if (currentBlock.borderColor) blockProps.borderColor = currentBlock.borderColor;
     }
     setFormatPainter({ marks: { ...marks }, blockProps });
-    onNotify?.('Format copied. Select text or click another block to paint.');
+    onNotify?.('Format copied. Select target text or click a paragraph to apply.');
+  };
+
+  const applyFormatPainter = () => {
+    if (!formatPainter) return;
+    const selection=editor.selection;
+    const index=selection?.anchor.path[0]??-1;
+    if (!selection || index<0 || isStudyPlateSectionMarker(nodes()[index])) return;
+    const paint=formatPainter;
+    const markKeys=['bold','italic','underline','strikethrough','code','subscript','superscript',
+      'fontFamily','fontSize','color','backgroundColor','textShadow'] as const;
+    command(()=>{
+      for (const mark of markKeys) {
+        const value=paint.marks[mark];
+        if (value===undefined||value===null||value===false) editor.tf.removeMark(mark);
+        else editor.tf.addMark(mark,value);
+      }
+      editor.tf.setNodes({
+        align:paint.blockProps.align,indent:paint.blockProps.indent,
+        lineHeight:paint.blockProps.lineHeight,backgroundColor:paint.blockProps.backgroundColor,
+        borderColor:paint.blockProps.borderColor,
+      } as never,{at:[index]});
+    });
+    setFormatPainter(null);
+    rememberSelection();
+    onNotify?.('Formatting applied to the selected content.');
   };
 
   const handleSetFontFamily = (font: string) => {
@@ -996,7 +1021,7 @@ export function StudyPlatePageEditor({
           </button>
         </div>
 
-        <div className="vop-word-ribbon-content">
+        <div className="vop-word-ribbon-content" data-ribbon-tab={activeRibbonTab} role="tabpanel" aria-label={activeRibbonTab==='home'?'Home formatting tools':activeRibbonTab==='insert'?'Insert tools':'Scripture and layout tools'}>
           {/* TAB 1: HOME (Clipboard, Styles, Font, Paragraph) */}
           {activeRibbonTab === 'home' && (
             <div className="vop-word-ribbon-row">
@@ -1013,7 +1038,7 @@ export function StudyPlatePageEditor({
                     onMouseDown={event=>{event.preventDefault();rememberSelection();}} onClick={handleCut}><Scissors size={15}/></button>
                   <button type="button" title={uiT('admin.study_plate_editor.copy_selection_to_clipboard_ctrl_c',"Copy selection to clipboard (Ctrl+C)")} aria-label={uiT('admin.study_plate_editor.copy',"Copy")}
                     onMouseDown={event=>{event.preventDefault();rememberSelection();}} onClick={handleCopy}><Copy size={15}/></button>
-                  <button type="button" className={`vop-toolbar-btn ${formatPainter?'format-painter-active':''}`}
+                  <button type="button" className={`vop-toolbar-btn ${formatPainter?'format-painter-active':''}`} aria-pressed={Boolean(formatPainter)}
                     title={formatPainter?'Format painter active (click to apply or cancel)':'Format painter: copy formatting'}
                     onMouseDown={event=>{event.preventDefault();rememberSelection();}} onClick={handleFormatPainter}>
                     <Paintbrush size={15} color={formatPainter?'#d97706':'#475569'}/>
@@ -1027,8 +1052,9 @@ export function StudyPlatePageEditor({
                 <div className="vop-word-group-content">
                   <label className="vop-plate-block-style" title={uiT('admin.study_plate_editor.paragraph_style',"Paragraph style")}>
                     <Type size={16} aria-hidden="true"/>
-                    <select aria-label={uiT('admin.study_plate_editor.paragraph_style',"Paragraph style")} defaultValue="" onChange={event=>{
+                    <select aria-label={uiT('admin.study_plate_editor.paragraph_style',"Paragraph style")} defaultValue="" onMouseDown={rememberSelection} onChange={event=>{
                       const value=event.target.value;
+                      restoreSelection();
                       contentCommand(()=>{
                         if(value==='p')editor.tf.toggleBlock('p');
                         else if(value==='h1')editor.tf.h1.toggle();
@@ -1059,7 +1085,8 @@ export function StudyPlatePageEditor({
                     title={uiT('admin.study_plate_editor.font_family_including_advent_sans',"Font Family (including Advent Sans)")}
                     aria-label={uiT('admin.study_plate_editor.font_family',"Font Family")}
                     value={currentFontFamily}
-                    onChange={e => handleSetFontFamily(e.target.value)}
+                    onMouseDown={rememberSelection}
+                    onChange={e => { restoreSelection(); handleSetFontFamily(e.target.value); }}
                   >
                     <option value="">{uiT('admin.study_plate_editor.arial',"Arial")}</option>
                     {FONT_FAMILIES.map(f => (
@@ -1072,7 +1099,8 @@ export function StudyPlatePageEditor({
                     title={uiT('admin.study_plate_editor.font_size',"Font Size")}
                     aria-label={uiT('admin.study_plate_editor.font_size',"Font Size")}
                     value={currentFontSize}
-                    onChange={e => handleSetFontSize(e.target.value)}
+                    onMouseDown={rememberSelection}
+                    onChange={e => { restoreSelection(); handleSetFontSize(e.target.value); }}
                   >
                     <option value="">11 pt</option>
                     {FONT_SIZES.map(s => (
@@ -1146,7 +1174,7 @@ export function StudyPlatePageEditor({
                         <div style={{fontSize:'10px',color:'#64748b',padding:'2px 6px',fontWeight:700}}>{uiT('admin.study_plate_editor.highlight_color',"HIGHLIGHT COLOR")}</div>
                         <div className="vop-ribbon-color-grid">
                           {['#fef08a','#bbf7d0','#a5f3fc','#fbcfe8','#fed7aa'].map(c=>(
-                            <div key={c} className="vop-ribbon-color-swatch" style={{background:c}} onClick={()=>setHighlightColor(c)} title={c}/>
+                            <button key={c} type="button" className="vop-ribbon-color-swatch" style={{background:c}} onClick={()=>setHighlightColor(c)} aria-label={'Highlight '+c} title={'Highlight '+c}/>
                           ))}
                         </div>
                         <button type="button" className="vop-ribbon-popover-item-light" onClick={()=>setHighlightColor('')}>
@@ -1167,13 +1195,13 @@ export function StudyPlatePageEditor({
                         <div style={{fontSize:'10px',color:'#475569',padding:'2px 6px',fontWeight:700}}>{uiT('admin.study_plate_editor.ms_office_theme_colors',"MS OFFICE THEME COLORS")}</div>
                         <div className="vop-ribbon-color-grid vop-office-grid">
                           {OFFICE_THEME_COLORS.map(c=>(
-                            <div key={c} className="vop-ribbon-color-swatch" style={{background:c}} onClick={()=>setFontColor(c)} title={c}/>
+                            <button key={c} type="button" className="vop-ribbon-color-swatch" style={{background:c}} onClick={()=>setFontColor(c)} aria-label={'Font color '+c} title={'Font color '+c}/>
                           ))}
                         </div>
                         <div style={{fontSize:'10px',color:'#475569',padding:'4px 6px 2px',fontWeight:700}}>{uiT('admin.study_plate_editor.standard_colors',"STANDARD COLORS")}</div>
                         <div className="vop-ribbon-color-grid">
                           {OFFICE_STANDARD_COLORS.map(c=>(
-                            <div key={c} className="vop-ribbon-color-swatch" style={{background:c}} onClick={()=>setFontColor(c)} title={c}/>
+                            <button key={c} type="button" className="vop-ribbon-color-swatch" style={{background:c}} onClick={()=>setFontColor(c)} aria-label={'Font color '+c} title={'Font color '+c}/>
                           ))}
                         </div>
                         <div className="vop-office-custom-color">
@@ -1635,6 +1663,8 @@ export function StudyPlatePageEditor({
       <div className="vop-plate-paper">
         <PlateContent className={`vop-plate-editable ${showPilcrow ? 'vop-show-pilcrow' : ''}`}
           aria-label={uiT('admin.study_plate_editor.edit_study_chapter',"Edit study chapter")} spellCheck
+          onMouseUp={()=>{if(formatPainter)window.requestAnimationFrame(applyFormatPainter);}}
+          onKeyUp={event=>{if(formatPainter&&event.shiftKey)window.requestAnimationFrame(applyFormatPainter);}}
           onKeyDown={event=>{
             const modifier=event.ctrlKey||event.metaKey;
             if(modifier&&event.key.toLowerCase()==='k'){
