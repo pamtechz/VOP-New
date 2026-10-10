@@ -290,3 +290,25 @@
 [data-theme="dark"] .vop-plate-editable .vop-plate-author-callout-tip{background:#133c32;color:#dcfce7}
 [data-theme="dark"] .vop-plate-editable .vop-plate-author-callout-warning{background:#4a2e17;color:#ffedd5}
 [data-theme="dark"] .vop-plate-editable .vop-plate-author-callout-reflection{background:#342148;color:#f3e8ff}
+
+
+/* The ribbon must stick with its entire tab and command panel, not just the
+   inner toolbar: the chapter paper is the independently scrolling region. */
+.vop-plate-page-editor .vop-plate-workspace-fixed-top {
+  position: sticky;
+  top: var(--vop-plate-toolbar-top,var(--vop-plate-sticky-top,76px));
+  z-index: 90;
+  background: var(--bg-card,#fff);
+  isolation: isolate;
+}
+.vop-plate-page-editor .vop-plate-workspace-fixed-top > .vop-ms-word-ribbon {
+  position: relative !important;
+  top: auto !important;
+  z-index: 1;
+}
+@media (min-width:861px) {
+  .vop-plate-document-pane .vop-plate-workspace-fixed-top { top: 0; }
+}
+.vop-plate-editable .vop-scripture-unavailable {
+  padding:12px;border:1px solid #dbe5f1;border-radius:8px;
+}
