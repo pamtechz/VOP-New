@@ -1,13 +1,12 @@
 import React, {useContext,useMemo,useRef,useState} from 'react';
 import {PlateElement,createPlatePlugin,useEditorRef,type PlateElementProps} from 'platejs/react';
 import {Columns3,Rows3,Plus,Minus,Trash2,AlignJustify,PanelTop,Maximize2,Merge,Split,Copy,ClipboardPaste,PaintBucket} from 'lucide-react';
-import type {StudyPlateNode} from '../../../shared/studyPlateDocument';
+import {normalizeStudyPlateDocument,type StudyPlateNode} from '../../../shared/studyPlateDocument';
 import {tableRect,tableAnchorAt,tableHasMerges,mergeStudyCells,splitStudyCell,formatStudyCells,studyCellsToTsv,pasteStudyCellsTsv,type StudyCellPoint,type StudyCellRect} from '../../../shared/studyTableOperations';
 import {getTranslation,getUiLocale} from '../../services/i18n';
 const uiT=(key:string,fallback:string)=>getTranslation(key,getUiLocale(),undefined,fallback,'StudyEditableTable');
 type TableSelection={rect:StudyCellRect;pick:(point:StudyCellPoint,extend:boolean)=>void};
 const TableSelectionContext=React.createContext<TableSelection|null>(null);
-const samePoint=(a:StudyCellPoint,b:StudyCellPoint)=>a.row===b.row&&a.col===b.col;
 
 /** Plate authoring table actions. All changes use Slate transforms so the
  * normal lesson persistence, undo stack and section/block IDs remain intact. */
@@ -62,9 +61,13 @@ function StudyTableElement({element,children,...props}:PlateElementProps) {
   const replaceTable=(next:StudyPlateNode,point:StudyCellPoint)=>{
     const path=locate();
     if(!path)return;
-    // Preserve the table's stable top-level block ID and rich child content.
-    editor.tf.removeNodes({at:path});
-    editor.tf.insertNodes(next as never,{at:path});
+    // Fail before touching the Slate tree when a transformed table is invalid.
+    // Group the replacement into a single undoable history batch.
+    normalizeStudyPlateDocument([next]);
+    editor.tf.withNewBatch(()=>{
+      editor.tf.removeNodes({at:path});
+      editor.tf.insertNodes(next as never,{at:path});
+    });
     setSelectionStart(point);
     setActiveCell(point);
     focusCell(editor,path,point.row,point.col);
