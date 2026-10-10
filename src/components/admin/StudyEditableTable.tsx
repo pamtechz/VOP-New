@@ -234,13 +234,13 @@ function StudyTableElement({element,children,...props}:PlateElementProps) {
       onPasteCapture={tablePaste}>
     <div className="vop-plate-table-tools" contentEditable={false} role="toolbar" aria-label={uiT('admin.study_table.editing','Table editing')}>
       <span className="vop-plate-table-tools-label"><Rows3 size={13}/> {uiT('admin.study_table.layout','Table layout')}</span>
-      <button type="button" title={uiT('admin.study_table.row_above_title','Add row above selected cell')} onMouseDown={e=>e.preventDefault()} onClick={()=>execute('rowAbove')} disabled={rowCount>=MAX_ROWS}><Plus size={12}/> {uiT('admin.study_table.row_above','Row above')}</button>
-      <button type="button" title={uiT('admin.study_table.row_below_title','Add row below selected cell')} onMouseDown={e=>e.preventDefault()} onClick={()=>execute('rowBelow')} disabled={rowCount>=MAX_ROWS}><Plus size={12}/> {uiT('admin.study_table.row_below','Row below')}</button>
-      <button type="button" title={uiT('admin.study_table.remove_row_title','Remove selected row')} onMouseDown={e=>e.preventDefault()} onClick={()=>execute('removeRow')} disabled={rowCount<=1}><Minus size={12}/> {uiT('admin.study_table.row','Row')}</button>
+      <button type="button" title={uiT('admin.study_table.row_above_title','Add row above selected cell')} onMouseDown={e=>e.preventDefault()} onClick={()=>execute('rowAbove')} disabled={rowCount>=MAX_ROWS||merged}><Plus size={12}/> {uiT('admin.study_table.row_above','Row above')}</button>
+      <button type="button" title={uiT('admin.study_table.row_below_title','Add row below selected cell')} onMouseDown={e=>e.preventDefault()} onClick={()=>execute('rowBelow')} disabled={rowCount>=MAX_ROWS||merged}><Plus size={12}/> {uiT('admin.study_table.row_below','Row below')}</button>
+      <button type="button" title={uiT('admin.study_table.remove_row_title','Remove selected row')} onMouseDown={e=>e.preventDefault()} onClick={()=>execute('removeRow')} disabled={rowCount<=1||merged}><Minus size={12}/> {uiT('admin.study_table.row','Row')}</button>
       <span className="vop-table-tool-divider"/>
-      <button type="button" title={uiT('admin.study_table.column_before_title','Add column before selected cell')} onMouseDown={e=>e.preventDefault()} onClick={()=>execute('colBefore')} disabled={colCount>=MAX_COLS}><Columns3 size={12}/> {uiT('admin.study_table.before','Before')}</button>
-      <button type="button" title={uiT('admin.study_table.column_after_title','Add column after selected cell')} onMouseDown={e=>e.preventDefault()} onClick={()=>execute('colAfter')} disabled={colCount>=MAX_COLS}><Columns3 size={12}/> {uiT('admin.study_table.after','After')}</button>
-      <button type="button" title={uiT('admin.study_table.remove_column_title','Remove selected column')} onMouseDown={e=>e.preventDefault()} onClick={()=>execute('removeCol')} disabled={colCount<=1}><Minus size={12}/> {uiT('admin.study_table.column','Column')}</button>
+      <button type="button" title={uiT('admin.study_table.column_before_title','Add column before selected cell')} onMouseDown={e=>e.preventDefault()} onClick={()=>execute('colBefore')} disabled={colCount>=MAX_COLS||merged}><Columns3 size={12}/> {uiT('admin.study_table.before','Before')}</button>
+      <button type="button" title={uiT('admin.study_table.column_after_title','Add column after selected cell')} onMouseDown={e=>e.preventDefault()} onClick={()=>execute('colAfter')} disabled={colCount>=MAX_COLS||merged}><Columns3 size={12}/> {uiT('admin.study_table.after','After')}</button>
+      <button type="button" title={uiT('admin.study_table.remove_column_title','Remove selected column')} onMouseDown={e=>e.preventDefault()} onClick={()=>execute('removeCol')} disabled={colCount<=1||merged}><Minus size={12}/> {uiT('admin.study_table.column','Column')}</button>
       <span className="vop-table-tool-divider"/>
       <button type="button" title={uiT('admin.study_table.header_title','Toggle first row as table header')}
         onMouseDown={e=>e.preventDefault()} onClick={()=>tableLayout('header')}>
@@ -251,13 +251,79 @@ function StudyTableElement({element,children,...props}:PlateElementProps) {
       <button type="button" title={uiT('admin.study_table.fit_title','Fit columns to page width')}
         onMouseDown={e=>e.preventDefault()} onClick={()=>tableLayout('fit')}>
         <Maximize2 size={12}/> {uiT('admin.study_table.fit','Fit to page')}</button>
+      <span className="vop-table-tool-divider"/>
+      <span className="vop-study-cell-selection-status" aria-live="polite">
+        {isMulti
+          ?uiT('admin.study_table.selected_region','Selected')+' '+(selectionRect.bottom-selectionRect.top+1)+' × '+(selectionRect.right-selectionRect.left+1)
+          :uiT('admin.study_table.cell','Cell')+' '+(selection.row+1)+':'+(selection.col+1)}
+      </span>
+      <button type="button" title={uiT('admin.study_table.merge_help','Shift-click a second cell, then merge the selected rectangle')}
+        disabled={!isMulti} onMouseDown={e=>e.preventDefault()} onClick={mergeSelection}>
+        <Merge size={12}/> {uiT('admin.study_table.merge','Merge cells')}</button>
+      <button type="button" disabled={!merged} title={uiT('admin.study_table.split_help','Restore the individual cells within a merged area')}
+        onMouseDown={e=>e.preventDefault()} onClick={splitCell}>
+        <Split size={12}/> {uiT('admin.study_table.split','Split cells')}</button>
+      <button type="button" title={uiT('admin.study_table.copy_cells','Copy selected cells as a table')}
+        onMouseDown={e=>e.preventDefault()} onClick={()=>{void copyCells();}}>
+        <Copy size={12}/> {uiT('admin.study_table.copy','Copy cells')}</button>
+      <button type="button" title={uiT('admin.study_table.paste_cells','Paste tabular clipboard content into selected cells')}
+        onMouseDown={e=>e.preventDefault()} onClick={()=>{void pasteCells();}}>
+        <ClipboardPaste size={12}/> {uiT('admin.study_table.paste','Paste cells')}</button>
+      <span className="vop-table-tool-divider"/>
+      <label className="vop-plate-cell-format-control">
+        <PaintBucket size={12}/>
+        <select defaultValue="" aria-label={uiT('admin.study_table.cell_shading','Cell shading')}
+          onChange={event=>{if(event.target.value)applyCellFormat('backgroundColor',event.target.value);event.target.value='';}}>
+          <option value="">{uiT('admin.study_table.shading','Shading')}</option>
+          <option value="#ffffff">{uiT('admin.study_table.white','White')}</option>
+          <option value="#e7f0ff">{uiT('admin.study_table.pale_blue','Pale blue')}</option>
+          <option value="#dcfce7">{uiT('admin.study_table.pale_green','Pale green')}</option>
+          <option value="#fef3c7">{uiT('admin.study_table.pale_yellow','Pale yellow')}</option>
+          <option value="#fee2e2">{uiT('admin.study_table.pale_red','Pale red')}</option>
+        </select>
+      </label>
+      <label className="vop-plate-cell-format-control">
+        <select defaultValue="" aria-label={uiT('admin.study_table.border_color','Cell border color')}
+          onChange={event=>{if(event.target.value)applyCellFormat('borderColor',event.target.value);event.target.value='';}}>
+          <option value="">{uiT('admin.study_table.borders','Borders')}</option>
+          <option value="#cbd5e1">{uiT('admin.study_table.grey','Grey')}</option>
+          <option value="#1d4ed8">{uiT('admin.study_table.blue','Blue')}</option>
+          <option value="#15803d">{uiT('admin.study_table.green','Green')}</option>
+          <option value="#dc2626">{uiT('admin.study_table.red','Red')}</option>
+          <option value="#111827">{uiT('admin.study_table.black','Black')}</option>
+        </select>
+      </label>
+      <label className="vop-plate-cell-format-control">
+        <select defaultValue="" aria-label={uiT('admin.study_table.cell_alignment','Cell text alignment')}
+          onChange={event=>{if(event.target.value)applyCellFormat('align',event.target.value);event.target.value='';}}>
+          <option value="">{uiT('admin.study_table.align','Align')}</option>
+          <option value="left">{uiT('admin.study_table.left','Left')}</option>
+          <option value="center">{uiT('admin.study_table.center','Center')}</option>
+          <option value="right">{uiT('admin.study_table.right','Right')}</option>
+        </select>
+      </label>
+      <label className="vop-plate-cell-format-control">
+        <select aria-label={uiT('admin.study_table.table_style','Table appearance')}
+          value={node.tableStyle||'grid'}
+          onChange={event=>{
+            const path=locate();
+            if(path)editor.tf.setNodes({tableStyle:event.target.value} as never,{at:path});
+          }}>
+          <option value="grid">{uiT('admin.study_table.grid','Grid')}</option>
+          <option value="banded">{uiT('admin.study_table.banded','Banded rows')}</option>
+          <option value="minimal">{uiT('admin.study_table.minimal','Minimal')}</option>
+        </select>
+      </label>
+      <span className="vop-table-tool-divider"/>
       <button type="button" className="vop-plate-table-delete"
         title={uiT('admin.study_table.delete_title','Delete entire table')}
         onMouseDown={e=>e.preventDefault()} onClick={()=>tableLayout('delete')}>
         <Trash2 size={12}/> {uiT('admin.study_table.delete','Delete table')}</button>
     </div>
+    {status&&<div className="vop-study-table-feedback" role="status">{status}</div>}
     <div className="vop-plate-author-table-scroll">
-      <table className="vop-plate-author-table" style={{width:widths.reduce((sum,width)=>sum+width,0)}}>
+      <table className={'vop-plate-author-table vop-plate-table-'+(node.tableStyle||'grid')}
+        style={{width:widths.reduce((sum,width)=>sum+width,0)}}>
         <colgroup>{widths.map((width,index)=><col key={index} style={{width}}/>)}</colgroup>
         <tbody>{children}</tbody>
       </table>
