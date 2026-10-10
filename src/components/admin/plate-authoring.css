@@ -364,3 +364,83 @@
 [data-theme="dark"] .vop-plate-editable .vop-plate-table-tools button{
   color:#e2efff;background:#1d3857;border-color:#365b83
 }
+
+
+/* Contextual cell selection and Word-style table formatting. These rules are
+   editor-only; the persisted document carries validated semantic properties. */
+.vop-plate-editable .vop-plate-author-table td.vop-study-cell-selected,
+.vop-plate-editable .vop-plate-author-table th.vop-study-cell-selected {
+  outline: 2px solid #2563eb;
+  outline-offset: -2px;
+  background-image: linear-gradient(rgba(37,99,235,.13),rgba(37,99,235,.13));
+}
+.vop-plate-editable .vop-study-cell-click-area {
+  min-height: 19px;
+  width: 100%;
+}
+.vop-plate-editable .vop-study-cell-selection-status {
+  flex: none;
+  align-self: center;
+  white-space: nowrap;
+  min-width: 72px;
+  padding: 3px 6px;
+  background: #eaf2ff;
+  border: 1px solid #c5dafa;
+  color: #1d4ed8;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 700;
+}
+.vop-plate-editable .vop-plate-cell-format-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+.vop-plate-editable .vop-plate-cell-format-control select {
+  font-size: 11px;
+  min-width: 78px;
+  max-width: 140px;
+  min-height: 28px;
+  padding: 3px 4px;
+  border: 1px solid #d0dceb;
+  border-radius: 5px;
+  background: #fff;
+  color: #19446e;
+}
+.vop-plate-editable .vop-study-table-feedback {
+  padding: 5px 9px;
+  border: 1px solid #fed7aa;
+  background: #fffbeb;
+  color: #92400e;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.vop-plate-editable .vop-plate-table-tools .vop-plate-table-delete {
+  color: #b42318;
+  border-color: #fecaca;
+}
+.vop-plate-editable .vop-plate-author-table.vop-plate-table-banded tbody tr:nth-child(even) td:not([style*="background-color"]) {
+  background: #eef4ff;
+}
+.vop-plate-editable .vop-plate-author-table.vop-plate-table-minimal td,
+.vop-plate-editable .vop-plate-author-table.vop-plate-table-minimal th {
+  border-left: 0;
+  border-right: 0;
+}
+.vop-plate-editable .vop-plate-author-table [role="separator"]:focus-visible {
+  outline: 2px solid #2563eb;
+  background: rgba(59,130,246,.12);
+}
+[data-theme="dark"] .vop-plate-editable .vop-study-cell-selection-status{
+  background:#19365b;color:#bfdbfe;border-color:#375b83;
+}
+[data-theme="dark"] .vop-plate-editable .vop-plate-cell-format-control select{
+  background:#1d3857;color:#eef6ff;border-color:#486b90;
+}
+[data-theme="dark"] .vop-plate-editable .vop-study-table-feedback{
+  background:#463018;color:#ffedd5;border-color:#995b2a;
+}
+[data-theme="dark"] .vop-plate-editable .vop-plate-author-table.vop-plate-table-banded tbody tr:nth-child(even) td{
+  background:#1d3959;
+}
