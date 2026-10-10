@@ -528,7 +528,7 @@ test('Word table picker is a real accessible grid, not broken 30px-wide preset t
   assert.doesNotMatch(editor,/<div className="vop-table-grid-options">/);
   assert.match(css,/\.vop-word-group-content \.vop-study-table-grid > \.vop-study-table-grid-cell\s*\{/);
   assert.match(css,/width: 100% !important/);
-  assert.match(css,/\.vop-word-group-content \.vop-table-builder-popover/);
+  assert.match(css,/\.vop-word-group-content \.vop-ribbon-menu-wrapper \.vop-table-builder-popover/);
   assert.match(editor,/closest\('input'\)/); // number fields remain focusable
 });
 
