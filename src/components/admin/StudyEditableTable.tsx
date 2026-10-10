@@ -338,6 +338,9 @@ function StudyRowElement({element,children,...props}:PlateElementProps){
 }
 function StudyCellElement({element,children,...props}:PlateElementProps) {
   const editor=useEditorRef();
+  const tableSelection=useContext(TableSelectionContext);
+  const cell=element as {type:string;colSpan?:number;rowSpan?:number;covered?:boolean;
+    backgroundColor?:string;borderColor?:string;align?:'left'|'right'|'center'};
   const drag=(event:React.PointerEvent<HTMLSpanElement>,axis:'column'|'row')=>{
     if(event.button!==0)return;
     event.preventDefault();event.stopPropagation();
@@ -426,15 +429,34 @@ function StudyCellElement({element,children,...props}:PlateElementProps) {
   const rowIndex=path?.[1]??0;
   const rows=(editor.children as unknown as TableElement[])[path?.[0]??-1];
   const count=rows?.children[0]?.children.length||1;
-  return <PlateElement as={element.type==='th'?'th':'td'} element={element} {...props}>
-    {children}
-    {columnIndex<count&&
+  const selected=Boolean(tableSelection
+    &&rowIndex>=tableSelection.rect.top&&rowIndex<=tableSelection.rect.bottom
+    &&columnIndex>=tableSelection.rect.left&&columnIndex<=tableSelection.rect.right);
+  const pickThis=(extend:boolean)=>tableSelection?.pick({row:rowIndex,col:columnIndex},extend);
+  const cellStyle:React.CSSProperties={
+    ...(cell.covered?{display:'none'}:{}),
+    ...(cell.backgroundColor?{backgroundColor:cell.backgroundColor}:{}),
+    ...(cell.borderColor?{border:'1px solid '+cell.borderColor}:{}),
+    ...(cell.align?{textAlign:cell.align}:{}),
+  };
+  // Extra native table attributes are forwarded to the DOM by PlateElement.
+  const spanAttrs={colSpan:cell.colSpan||1,rowSpan:cell.rowSpan||1} as Record<string,number>;
+  return <PlateElement as={element.type==='th'?'th':'td'} element={element} {...props}
+    {...spanAttrs} style={cellStyle} className={selected?'vop-study-cell-selected':undefined}>
+    <div className="vop-study-cell-click-area"
+      onMouseDownCapture={event=>{
+        if(event.shiftKey){event.preventDefault();pickThis(true);}
+      }}
+      onClickCapture={event=>{if(!event.shiftKey)pickThis(false);}}>
+      {children}
+    </div>
+    {!cell.covered&&columnIndex<count&&
       <span contentEditable={false} tabIndex={0} className="vop-plate-col-resizer" role="separator"
         aria-label={'Resize column '+(columnIndex+1)}
         aria-orientation="vertical" aria-valuemin={MIN_COLUMN_WIDTH}
         aria-valuemax={MAX_COLUMN_WIDTH} aria-valuenow={rows?widthList(rows)[columnIndex]:145}
         onKeyDown={event=>keyboardResize(event,'column')} onPointerDown={e=>drag(e,'column')}/>}
-    {columnIndex===0&&<span contentEditable={false} tabIndex={0} className="vop-plate-row-resizer" role="separator"
+    {!cell.covered&&columnIndex===0&&<span contentEditable={false} tabIndex={0} className="vop-plate-row-resizer" role="separator"
       aria-label={'Resize row '+(rowIndex+1)} aria-orientation="horizontal"
       aria-valuemin={MIN_ROW_HEIGHT} aria-valuemax={MAX_ROW_HEIGHT}
       aria-valuenow={rows?.children[rowIndex]?.rowHeight||40}
