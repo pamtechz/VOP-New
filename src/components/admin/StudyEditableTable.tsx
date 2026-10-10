@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useRef,useState} from 'react';
 import {PlateElement,createPlatePlugin,useEditorRef,type PlateElementProps} from 'platejs/react';
 import {Columns3,Rows3,Plus,Minus,Trash2,AlignJustify,PanelTop,Maximize2} from 'lucide-react';
 import {getTranslation,getUiLocale} from '../../services/i18n';
@@ -29,11 +29,11 @@ const widthList=(table:TableElement,tableWidth?:number)=>{
 
 function StudyTableElement({element,children,...props}:PlateElementProps) {
   const editor=useEditorRef();
+  const containerRef=useRef<HTMLDivElement>(null);
   const node=element as unknown as TableElement;
   const rowCount=node.children.length;
   const colCount=node.children[0]?.children.length||1;
   const [activeCell,setActiveCell]=useState({row:0,col:0});
-  const [selected,setSelected]=useState(false);
   const widths=widthList(node);
   const locate=()=>editor.api.findPath(element);
   const selection={row:clamp(activeCell.row,0,rowCount-1),col:clamp(activeCell.col,0,colCount-1)};
@@ -103,8 +103,8 @@ function StudyTableElement({element,children,...props}:PlateElementProps) {
     const original=widthList(current);
     const total=kind==='fit'
       ?Math.max(cols*MIN_COLUMN_WIDTH,Math.round(
-        document.querySelector('.vop-plate-author-table-wrap:focus-within .vop-plate-author-table-scroll')?.getBoundingClientRect().width
-        ||document.querySelector('.vop-plate-editable')?.getBoundingClientRect().width
+        containerRef.current?.querySelector('.vop-plate-author-table-scroll')?.getBoundingClientRect().width
+        ||containerRef.current?.getBoundingClientRect().width
         ||original.reduce((a,b)=>a+b,0)))
       :original.reduce((a,b)=>a+b,0);
     const even=clamp(Math.floor(total/cols),MIN_COLUMN_WIDTH,MAX_COLUMN_WIDTH);
@@ -112,7 +112,7 @@ function StudyTableElement({element,children,...props}:PlateElementProps) {
   };
   const tableKeyDown=(event:React.KeyboardEvent<HTMLDivElement>)=>{
     if(event.key!=='Tab'||event.altKey||event.ctrlKey||event.metaKey)return;
-    if(!(event.target instanceof Element)||!event.target.closest('td,th'))return;
+    if(!(event.target instanceof Element)||event.target.closest('[role="separator"]')||!event.target.closest('td,th'))return;
     const path=locate(), anchor=editor.selection?.anchor.path;
     if(!path||!anchor||anchor.length<path.length+3
       ||path.some((segment,index)=>anchor[index]!==segment))return;
@@ -143,10 +143,10 @@ function StudyTableElement({element,children,...props}:PlateElementProps) {
     if(!cell||!row||!table||!event.currentTarget.contains(table))return;
     const rowIndex=Array.from(table.rows).indexOf(row as HTMLTableRowElement);
     const colIndex=Array.from((row as HTMLTableRowElement).cells).indexOf(cell as HTMLTableCellElement);
-    if(rowIndex>=0&&colIndex>=0){setActiveCell({row:rowIndex,col:colIndex});setSelected(true);}
+    if(rowIndex>=0&&colIndex>=0)setActiveCell({row:rowIndex,col:colIndex});
   };
   return <PlateElement as="div" element={element} className="vop-plate-author-table-wrap" {...props}>
-    <div onClickCapture={trackClick} onKeyDownCapture={tableKeyDown} data-table-selected={selected}>
+    <div ref={containerRef} onClickCapture={trackClick} onKeyDownCapture={tableKeyDown}>
     <div className="vop-plate-table-tools" contentEditable={false} role="toolbar" aria-label={uiT('admin.study_table.editing','Table editing')}>
       <span className="vop-plate-table-tools-label"><Rows3 size={13}/> {uiT('admin.study_table.layout','Table layout')}</span>
       <button type="button" title={uiT('admin.study_table.row_above_title','Add row above selected cell')} onMouseDown={e=>e.preventDefault()} onClick={()=>execute('rowAbove')} disabled={rowCount>=MAX_ROWS}><Plus size={12}/> {uiT('admin.study_table.row_above','Row above')}</button>
