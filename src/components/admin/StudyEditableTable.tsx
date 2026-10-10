@@ -200,17 +200,19 @@ function StudyCellElement({element,children,...props}:PlateElementProps) {
     const from=axis==='column'?event.clientX:event.clientY;
     const widths=widthList(tableNode,table.getBoundingClientRect().width);
     const originalWidth=widths[col];
-    const originalNext=widths[col+1];
+    const originalNext=widths[col+1]??0;
+    const atRightEdge=col===widths.length-1;
     const tr=table.rows[row];
     const originalHeight=tableNode.children[row]?.rowHeight||tr?.getBoundingClientRect().height||40;
     const cols=table.querySelectorAll('col');
     const move=(e:PointerEvent)=>{
       const delta=(axis==='column'?e.clientX:e.clientY)-from;
       if(axis==='column'){
-        if(col>=widths.length-1)return;
-        const bounded=Math.max(MIN_COLUMN_WIDTH-originalWidth,Math.min(delta,originalNext-MIN_COLUMN_WIDTH));
+        const bounded=atRightEdge
+          ?clamp(originalWidth+delta,MIN_COLUMN_WIDTH,MAX_COLUMN_WIDTH)-originalWidth
+          :Math.max(MIN_COLUMN_WIDTH-originalWidth,Math.min(delta,originalNext-MIN_COLUMN_WIDTH));
         (cols[col] as HTMLElement).style.width=(originalWidth+bounded)+'px';
-        (cols[col+1] as HTMLElement).style.width=(originalNext-bounded)+'px';
+        if(!atRightEdge)(cols[col+1] as HTMLElement).style.width=(originalNext-bounded)+'px';
       } else if(tr)tr.style.height=clamp(originalHeight+delta,MIN_ROW_HEIGHT,MAX_ROW_HEIGHT)+'px';
     };
     const release=(e:PointerEvent)=>{
@@ -218,10 +220,12 @@ function StudyCellElement({element,children,...props}:PlateElementProps) {
       window.removeEventListener('pointerup',release);
       window.removeEventListener('pointercancel',cancel);
       const delta=(axis==='column'?e.clientX:e.clientY)-from;
-      if(axis==='column'&&col<widths.length-1){
-        const bounded=Math.max(MIN_COLUMN_WIDTH-originalWidth,Math.min(delta,originalNext-MIN_COLUMN_WIDTH));
+      if(axis==='column'){
+        const bounded=atRightEdge
+          ?clamp(originalWidth+delta,MIN_COLUMN_WIDTH,MAX_COLUMN_WIDTH)-originalWidth
+          :Math.max(MIN_COLUMN_WIDTH-originalWidth,Math.min(delta,originalNext-MIN_COLUMN_WIDTH));
         widths[col]=originalWidth+bounded;
-        widths[col+1]=originalNext-bounded;
+        if(!atRightEdge)widths[col+1]=originalNext-bounded;
         editor.tf.setNodes({colWidths:widths} as never,{at:tablePath});
       } else if(axis==='row'){
         editor.tf.setNodes({rowHeight:clamp(originalHeight+delta,MIN_ROW_HEIGHT,MAX_ROW_HEIGHT)} as never,{at:rowPath});
@@ -233,7 +237,7 @@ function StudyCellElement({element,children,...props}:PlateElementProps) {
       window.removeEventListener('pointercancel',cancel);
       if(axis==='column'){
         (cols[col] as HTMLElement).style.width=originalWidth+'px';
-        if(cols[col+1])(cols[col+1] as HTMLElement).style.width=originalNext+'px';
+        if(!atRightEdge&&cols[col+1])(cols[col+1] as HTMLElement).style.width=originalNext+'px';
       }else if(tr)tr.style.height=originalHeight+'px';
     };
     window.addEventListener('pointermove',move);
@@ -241,18 +245,48 @@ function StudyCellElement({element,children,...props}:PlateElementProps) {
     window.addEventListener('pointercancel',cancel);
   };
   const path=editor.api.findPath(element);
+  const keyboardResize=(event:React.KeyboardEvent<HTMLSpanElement>,axis:'column'|'row')=>{
+    const relevant=axis==='column'?['ArrowLeft','ArrowRight']:['ArrowUp','ArrowDown'];
+    if(!relevant.includes(event.key))return;
+    event.preventDefault();event.stopPropagation();
+    const cellPath=editor.api.findPath(element);
+    if(!cellPath||cellPath.length<3)return;
+    const table=(editor.children as unknown as TableElement[])[cellPath[0]];
+    if(!table)return;
+    const row=cellPath[1],col=cellPath[2];
+    const delta=(event.key==='ArrowLeft'||event.key==='ArrowUp'?-1:1)*(event.shiftKey?2:12);
+    if(axis==='row'){
+      const rowHeight=table.children[row].rowHeight||40;
+      editor.tf.setNodes({rowHeight:clamp(rowHeight+delta,MIN_ROW_HEIGHT,MAX_ROW_HEIGHT)} as never,
+        {at:[cellPath[0],row]});
+    }else{
+      const widths=widthList(table);
+      const next=widths[col+1];
+      const amount=next===undefined
+        ?clamp(widths[col]+delta,MIN_COLUMN_WIDTH,MAX_COLUMN_WIDTH)-widths[col]
+        :Math.max(MIN_COLUMN_WIDTH-widths[col],Math.min(delta,next-MIN_COLUMN_WIDTH));
+      widths[col]+=amount;
+      if(next!==undefined)widths[col+1]-=amount;
+      editor.tf.setNodes({colWidths:widths} as never,{at:[cellPath[0]]});
+    }
+  };
   const columnIndex=path?.[2]??0;
   const rowIndex=path?.[1]??0;
   const rows=(editor.children as unknown as TableElement[])[path?.[0]??-1];
   const count=rows?.children[0]?.children.length||1;
   return <PlateElement as={element.type==='th'?'th':'td'} element={element} {...props}>
     {children}
-    {columnIndex<count-1&&
-      <span contentEditable={false} className="vop-plate-col-resizer" role="separator" aria-label={'Resize column '+(columnIndex+1)}
-        aria-orientation="vertical" onPointerDown={e=>drag(e,'column')}/>}
-    {columnIndex===0&&<span contentEditable={false} className="vop-plate-row-resizer" role="separator"
+    {columnIndex<count&&
+      <span contentEditable={false} tabIndex={0} className="vop-plate-col-resizer" role="separator"
+        aria-label={'Resize column '+(columnIndex+1)}
+        aria-orientation="vertical" aria-valuemin={MIN_COLUMN_WIDTH}
+        aria-valuemax={MAX_COLUMN_WIDTH} aria-valuenow={rows?widthList(rows)[columnIndex]:145}
+        onKeyDown={event=>keyboardResize(event,'column')} onPointerDown={e=>drag(e,'column')}/>}
+    {columnIndex===0&&<span contentEditable={false} tabIndex={0} className="vop-plate-row-resizer" role="separator"
       aria-label={'Resize row '+(rowIndex+1)} aria-orientation="horizontal"
-      onPointerDown={e=>drag(e,'row')}/>}
+      aria-valuemin={MIN_ROW_HEIGHT} aria-valuemax={MAX_ROW_HEIGHT}
+      aria-valuenow={rows?.children[rowIndex]?.rowHeight||40}
+      onKeyDown={event=>keyboardResize(event,'row')} onPointerDown={e=>drag(e,'row')}/>}
   </PlateElement>;
 }
 export const StudyTablePlugin=createPlatePlugin({key:'studyTable',node:{isElement:true,type:'table'}}).withComponent(StudyTableElement);
