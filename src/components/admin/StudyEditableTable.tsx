@@ -101,6 +101,10 @@ function StudyTableElement({element,children,...props}:PlateElementProps) {
   const execute=(kind:'rowAbove'|'rowBelow'|'removeRow'|'colBefore'|'colAfter'|'removeCol')=>{
     const path=locate();
     if(!path)return;
+    if(merged){
+      setStatus(uiT('admin.study_table.split_before_resize','Split merged cells before changing the number of rows or columns.'));
+      return;
+    }
     const row=selection.row,col=selection.col;
     const current=(editor.children as unknown as TableElement[])[path[0]];
     const rows=current.children.length;
@@ -172,6 +176,12 @@ function StudyTableElement({element,children,...props}:PlateElementProps) {
     editor.tf.setNodes({colWidths:Array.from({length:cols},()=>even)} as never,{at:path});
   };
   const tableKeyDown=(event:React.KeyboardEvent<HTMLDivElement>)=>{
+    if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='c'&&isMulti){
+      event.preventDefault();void copyCells();return;
+    }
+    if(event.key==='Escape'&&isMulti){
+      setSelectionStart(selection);setActiveCell(selection);return;
+    }
     if(event.key!=='Tab'||event.altKey||event.ctrlKey||event.metaKey)return;
     if(!(event.target instanceof Element)||event.target.closest('[role="separator"]')||!event.target.closest('td,th'))return;
     const path=locate(), anchor=editor.selection?.anchor.path;
@@ -181,7 +191,11 @@ function StudyTableElement({element,children,...props}:PlateElementProps) {
     const row=anchor[path.length], col=anchor[path.length+1];
     const rowCount=table.children.length,colCount=table.children[0]?.children.length||1;
     if(row<0||row>=rowCount||col<0||col>=colCount)return;
-    const at=row*colCount+col+(event.shiftKey?-1:1);
+    let at=row*colCount+col+(event.shiftKey?-1:1);
+    const delta=event.shiftKey?-1:1;
+    while(at>=0&&at<rowCount*colCount&&
+      (table.children[Math.floor(at/colCount)].children[at%colCount] as {covered?:boolean}).covered)
+      at+=delta;
     if(at<0)return; // Shift+Tab on the first cell can leave the table.
     event.preventDefault();
     if(at>=rowCount*colCount){
@@ -193,11 +207,19 @@ function StudyTableElement({element,children,...props}:PlateElementProps) {
     }
     const nextRow=Math.floor(at/colCount),nextCol=at%colCount;
     setActiveCell({row:nextRow,col:nextCol});
+    setSelectionStart({row:nextRow,col:nextCol});
     focusCell(editor,path,nextRow,nextCol);
+  };
+  const tablePaste=(event:React.ClipboardEvent<HTMLDivElement>)=>{
+    if(!(event.target instanceof Element)||!event.target.closest('td,th'))return;
+    const text=event.clipboardData.getData('text/plain');
+    if((text.includes('\t')||text.includes('\n'))&&text.trim()){
+      event.preventDefault();pasteText(text);
+    }
   };
   const trackClick=(event:React.MouseEvent<HTMLDivElement>)=>{
     const target=event.target;
-    if(!(target instanceof Element))return;
+    if(!(target instanceof Element)||event.shiftKey||merged)return;
     const cell=target.closest('td,th');
     const row=cell?.parentElement;
     const table=cell?.closest('table');
@@ -207,7 +229,9 @@ function StudyTableElement({element,children,...props}:PlateElementProps) {
     if(rowIndex>=0&&colIndex>=0)setActiveCell({row:rowIndex,col:colIndex});
   };
   return <PlateElement as="div" element={element} className="vop-plate-author-table-wrap" {...props}>
-    <div ref={containerRef} onClickCapture={trackClick} onKeyDownCapture={tableKeyDown}>
+    <TableSelectionContext.Provider value={selectionContext}>
+    <div ref={containerRef} onClickCapture={trackClick} onKeyDownCapture={tableKeyDown}
+      onPasteCapture={tablePaste}>
     <div className="vop-plate-table-tools" contentEditable={false} role="toolbar" aria-label={uiT('admin.study_table.editing','Table editing')}>
       <span className="vop-plate-table-tools-label"><Rows3 size={13}/> {uiT('admin.study_table.layout','Table layout')}</span>
       <button type="button" title={uiT('admin.study_table.row_above_title','Add row above selected cell')} onMouseDown={e=>e.preventDefault()} onClick={()=>execute('rowAbove')} disabled={rowCount>=MAX_ROWS}><Plus size={12}/> {uiT('admin.study_table.row_above','Row above')}</button>
@@ -239,6 +263,7 @@ function StudyTableElement({element,children,...props}:PlateElementProps) {
       </table>
     </div>
     </div>
+    </TableSelectionContext.Provider>
   </PlateElement>;
 }
 function StudyRowElement({element,children,...props}:PlateElementProps){
