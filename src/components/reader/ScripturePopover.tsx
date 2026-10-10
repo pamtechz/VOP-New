@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { X, BookOpen, Volume2, VolumeX, Copy, Check, LoaderCircle, Sparkles } from 'lucide-react';
 import { lookupScriptureVerse, type ScriptureLookupResult } from '../../services/scriptureLookup';
+import {getTranslation,getUiLocale} from '../../services/i18n';
+const uiT=(key:string,fallback:string)=>getTranslation(key,getUiLocale(),undefined,fallback,'ScripturePopover');
 import './lesson-reader-audio.css';
 
 interface ScripturePopoverProps {
@@ -99,7 +101,7 @@ export const ScripturePopover: React.FC<ScripturePopoverProps> = ({ reference, p
     setIsSpeakingVerse(true);
   };
 
-  const sourceLabel = passageText?.trim() ? 'Lesson author citation' : data?.source === 'curated'
+  const sourceLabel = passageText?.trim() ? uiT('reader.scripture.author_citation','Lesson author citation') : data?.source === 'curated'
     ? 'Voice of Prophecy Core Scripture'
     : data?.source === 'cached'
     ? 'Cached Scripture Passage'
@@ -150,10 +152,10 @@ export const ScripturePopover: React.FC<ScripturePopoverProps> = ({ reference, p
                 <p className="vop-scripture-quote-text">“{data.text}”</p>
               ) : (
                 <div className="vop-scripture-unavailable" role="status">
-                  <p>Full Scripture text is not available for this reference right now.</p>
-                  <p>You can retry the online lookup or consult {reference} in your Bible.</p>
+                  <p>{uiT('reader.scripture.unavailable','Full Scripture text is not available for this reference right now.')}</p>
+                  <p>{uiT('reader.scripture.retry_or_consult','You can retry the online lookup or consult this reference in your Bible.')} <strong>{reference}</strong></p>
                   <button type="button" className="vop-scripture-action-btn" onClick={()=>setRetryCount(n=>n+1)}>
-                    Retry Scripture lookup
+                    {uiT('reader.scripture.retry_lookup','Retry Scripture lookup')}
                   </button>
                 </div>
               )
