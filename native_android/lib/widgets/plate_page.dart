@@ -77,7 +77,7 @@ class PlatePageView extends StatelessWidget {
       padding:const EdgeInsets.all(14),
       decoration:BoxDecoration(
         color:plateColor(data['backgroundColor'])
-          ??Theme.of(context).colorScheme.primaryContainer.withValues(alpha:.40),
+          ??Theme.of(context).colorScheme.primaryContainer.withOpacity(0.40),
         border:Border(left:BorderSide(color:plateColor(data['borderColor'])
           ??Theme.of(context).colorScheme.primary,width:4)),
         borderRadius:BorderRadius.circular(5)),
@@ -138,11 +138,11 @@ class _PlateTable extends StatelessWidget {
     final rawWidths=node['colWidths'] as List?;
     final widths=List<double>.generate(columns,(col){
       final value=rawWidths!=null&&col<rawWidths.length?rawWidths[col]:140;
-      return (value is num?value.toDouble():140).clamp(64.0,640.0);
+      return (value is num?value.toDouble():140.0).clamp(64.0,640.0).toDouble();
     });
     final heights=List<double>.generate(rows.length,(row){
       final value=rows[row]['rowHeight'];
-      return (value is num?value.toDouble():72).clamp(48.0,480.0);
+      return (value is num?value.toDouble():72.0).clamp(48.0,480.0).toDouble();
     });
     final totalWidth=widths.reduce((a,b)=>a+b);
     final totalHeight=heights.reduce((a,b)=>a+b);
@@ -154,8 +154,8 @@ class _PlateTable extends StatelessWidget {
       for(var c=0;c<row.length;c++){
         final cell=row[c];
         if(cell['covered']==true)continue;
-        final spanX=((cell['colSpan'] as num?)?.toInt()??1).clamp(1,columns-c);
-        final spanY=((cell['rowSpan'] as num?)?.toInt()??1).clamp(1,rows.length-r);
+        final spanX=((cell['colSpan'] as num?)?.toInt()??1).clamp(1,columns-c).toInt();
+        final spanY=((cell['rowSpan'] as num?)?.toInt()??1).clamp(1,rows.length-r).toInt();
         final isHeader=cell['type']=='th';
         final bg=plateColor(cell['backgroundColor'])
             ??(isHeader?Theme.of(context).colorScheme.primaryContainer:
