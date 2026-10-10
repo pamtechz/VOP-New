@@ -582,3 +582,120 @@ test('table picker keyboard, anchored viewport geometry and Escape/outside closi
   assert.match(editor,/document\.addEventListener\('keydown',onEscape\)/);
   assert.match(editor,/aria-expanded=\{activeDropdown==='table'\}/);
 });
+
+
+test('Word-style merge and split preserve every nonempty cell text and stable table ID',async()=>{
+  const {mergeStudyCells,splitStudyCell,tableRect,tableAnchorAt,tableHasMerges}
+    =await server.ssrLoadModule('/shared/studyTableOperations.ts') as typeof import('../shared/studyTableOperations.ts');
+  const original=normalizeStudyPlateDocument([{
+    id:'table-merge-test',type:'table',colWidths:[130,140,150],
+    children:Array.from({length:3},(_,r)=>({
+      type:'tr',children:Array.from({length:3},(_,c)=>({
+        type:'td',children:[{type:'p',children:[{text:'Cell-'+r+'-'+c}]}],
+      })),
+    })),
+  }])[0];
+  const merged=mergeStudyCells(original,tableRect({row:0,col:0},{row:1,col:1}));
+  const canonical=normalizeStudyPlateDocument([merged])[0];
+  assert.equal(canonical.id,'table-merge-test');
+  const row0=canonical.children[0] as import('../shared/studyPlateDocument.ts').StudyPlateNode;
+  const anchor=row0.children[0] as import('../shared/studyPlateDocument.ts').StudyPlateNode;
+  assert.equal(anchor.rowSpan,2);
+  assert.equal(anchor.colSpan,2);
+  assert.equal((row0.children[1] as import('../shared/studyPlateDocument.ts').StudyPlateNode).covered,true);
+  assert.equal(tableHasMerges(canonical),true);
+  assert.deepEqual(tableAnchorAt(canonical,1,1),{row:0,col:0});
+  for(const name of ['Cell-0-0','Cell-0-1','Cell-1-0','Cell-1-1','Cell-2-2'])
+    assert.ok(studyPlatePlainText([canonical]).includes(name),name+' preserved');
+  const split=normalizeStudyPlateDocument([splitStudyCell(canonical,{row:1,col:1})])[0];
+  assert.equal(tableHasMerges(split),false);
+  assert.equal(split.id,'table-merge-test');
+  assert.equal(split.children.length,3);
+  assert.throws(()=>mergeStudyCells(merged,{top:0,left:0,bottom:0,right:1}),/Split existing merged/);
+});
+
+test('table span validation prevents orphan covered cells, overlapping anchors and lost formatting',async()=>{
+  const {formatStudyCells,mergeStudyCells}=(await server.ssrLoadModule('/shared/studyTableOperations.ts')) as typeof import('../shared/studyTableOperations.ts');
+  const original=normalizeStudyPlateDocument([{
+    id:'grid',type:'table',tableStyle:'banded',children:[
+      {type:'tr',children:[
+        {type:'td',children:[{type:'p',children:[{text:'A'}]}]},
+        {type:'td',children:[{type:'p',children:[{text:'B'}]}]},
+      ]},
+      {type:'tr',children:[
+        {type:'td',children:[{type:'p',children:[{text:'C'}]}]},
+        {type:'td',children:[{type:'p',children:[{text:'D'}]}]},
+      ]},
+    ],
+  }])[0];
+  const styled=formatStudyCells(original,{top:0,left:0,bottom:0,right:1},
+    {backgroundColor:'#dcfce7',borderColor:'#1d4ed8',align:'center'});
+  const round=normalizeStudyPlateDocument([styled])[0];
+  const first=((round.children[0] as import('../shared/studyPlateDocument.ts').StudyPlateNode)
+    .children[0] as import('../shared/studyPlateDocument.ts').StudyPlateNode);
+  assert.equal(first.backgroundColor,'#dcfce7');
+  assert.equal(first.borderColor,'#1d4ed8');
+  assert.equal(first.align,'center');
+  assert.equal(round.tableStyle,'banded');
+  assert.equal(original.tableStyle,'banded');
+  assert.equal((original.children[0] as import('../shared/studyPlateDocument.ts').StudyPlateNode)
+    .children[0] && 'backgroundColor' in (original.children[0] as import('../shared/studyPlateDocument.ts').StudyPlateNode).children[0],false);
+  assert.throws(()=>normalizeStudyPlateDocument([{
+    ...original,children:[{type:'tr',children:[
+      {type:'td',covered:true,children:[{type:'p',children:[{text:''}]}]},
+      {type:'td',children:[{type:'p',children:[{text:'B'}]}]},
+    ]},original.children[1]],
+  }]),/covered cell has no valid merged anchor/i);
+  assert.throws(()=>normalizeStudyPlateDocument([{
+    ...original,children:[{type:'tr',children:[
+      {type:'td',colSpan:2,children:[{type:'p',children:[{text:'A'}]}]},
+      {type:'td',children:[{type:'p',children:[{text:'B'}]}]},
+    ]},original.children[1]],
+  }]),/coverage is inconsistent/i);
+  assert.throws(()=>formatStudyCells(original,{top:0,left:0,bottom:0,right:0},
+    {backgroundColor:'url(https://example.test)' }),/six-digit hex color/);
+  assert.throws(()=>mergeStudyCells(original,{top:0,left:0,bottom:0,right:0}),/two or more/);
+});
+
+test('TSV copy/paste preserves rectangular bounds and blocks edits through merged regions',async()=>{
+  const {studyCellsToTsv,pasteStudyCellsTsv,mergeStudyCells}=(await server.ssrLoadModule('/shared/studyTableOperations.ts')) as typeof import('../shared/studyTableOperations.ts');
+  const original=normalizeStudyPlateDocument([{
+    id:'grid-copy',type:'table',children:[
+      {type:'tr',children:[
+        {type:'td',children:[{type:'p',children:[{text:'One'}]}]},
+        {type:'td',children:[{type:'p',children:[{text:'Two'}]}]},
+      ]},
+      {type:'tr',children:[
+        {type:'td',children:[{type:'p',children:[{text:'Three'}]}]},
+        {type:'td',children:[{type:'p',children:[{text:'Four'}]}]},
+      ]},
+    ],
+  }])[0];
+  assert.equal(studyCellsToTsv(original,{top:0,left:0,bottom:1,right:1}),'One\tTwo\nThree\tFour');
+  const pasted=normalizeStudyPlateDocument([pasteStudyCellsTsv(original,{row:0,col:0},'X\tY\nZ\tW')])[0];
+  assert.equal(studyCellsToTsv(pasted,{top:0,left:0,bottom:1,right:1}),'X\tY\nZ\tW');
+  assert.equal(studyCellsToTsv(original,{top:0,left:0,bottom:0,right:0}),'One');
+  assert.throws(()=>pasteStudyCellsTsv(original,{row:1,col:1},'A\tB'),/outside the table/);
+  const merged=mergeStudyCells(original,{top:0,left:0,bottom:1,right:1});
+  assert.throws(()=>pasteStudyCellsTsv(merged,{row:0,col:0},'X'),/Split merged cells/);
+});
+
+test('merged table authoring controls and reader support semantic span properties',()=>{
+  const editor=read('src/components/admin/StudyEditableTable.tsx');
+  const reader=read('src/components/reader/StudyPlateContent.tsx');
+  const css=read('src/components/admin/plate-authoring.css');
+  assert.match(editor,/TableSelectionContext/);
+  assert.match(editor,/mergeStudyCells/);
+  assert.match(editor,/splitStudyCell/);
+  assert.match(editor,/tableRect/);
+  assert.match(editor,/tablePaste/);
+  assert.match(editor,/studyCellsToTsv/);
+  assert.match(editor,/pasteStudyCellsTsv/);
+  assert.match(editor,/applyCellFormat/);
+  assert.match(editor,/Shift-click/);
+  assert.match(editor,/onMouseDownCapture/);
+  assert.match(reader,/if\(node\.covered\)return null/);
+  assert.match(reader,/rowSpan:node\.rowSpan\|\|1/);
+  assert.match(reader,/colSpan:node\.colSpan\|\|1/);
+  assert.match(css,/vop-study-cell-selected/);
+});

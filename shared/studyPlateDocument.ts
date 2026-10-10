@@ -1,4 +1,5 @@
 import { isSafeHttpsMediaUrl, resolveMediaSource } from './mediaSources.js';
+import { validateStudyTableSpans } from './studyTableOperations.js';
 
 /** VOP's safe, portable subset of the Plate/Slate document schema.
  * This is a PUBLIC study document. Private quizzes/answer keys are never
@@ -34,6 +35,10 @@ export type StudyPlateNode = {
   calloutType?:'info'|'warning'|'tip'|'reflection';
   colWidths?:number[];
   rowHeight?:number;
+  colSpan?:number;
+  rowSpan?:number;
+  covered?:true;
+  tableStyle?:'grid'|'banded'|'minimal';
   children:Array<StudyPlateNode|StudyPlateLeaf>;
 };
 export type StudyPlateDocument=StudyPlateNode[];
@@ -137,6 +142,30 @@ export function normalizeStudyPlateDocument(raw:unknown):StudyPlateDocument {
        &&Number.isFinite(node.rowHeight)&&node.rowHeight>=32&&node.rowHeight<=480){
       element.rowHeight=Math.round(node.rowHeight);
     }
+    if(['td','th'].includes(type)){
+      for(const [key,max] of [['colSpan',12],['rowSpan',20]] as const){
+        const value=node[key];
+        if(value!==undefined){
+          if(typeof value!=='number'||!Number.isSafeInteger(value)||value<1||value>max)
+            throw new Error('Table cell span is invalid.');
+          element[key]=value;
+        }
+      }
+      if(node.covered!==undefined){
+        if(node.covered!==true)throw new Error('Table covered state is invalid.');
+        element.covered=true;
+      }
+      for(const field of ['backgroundColor','borderColor'] as const){
+        const color=node[field];
+        if(color!==undefined&&(typeof color!=='string'||!/^#[0-9a-f]{6}$/i.test(color)))
+          throw new Error('Table cell colors must use hexadecimal values.');
+      }
+    }
+    if(type==='table'&&node.tableStyle!==undefined){
+      if(!['grid','banded','minimal'].includes(String(node.tableStyle)))
+        throw new Error('Invalid table visual style.');
+      element.tableStyle=node.tableStyle as 'grid'|'banded'|'minimal';
+    }
     if(typeof node.borderColor==='string'&&node.borderColor.length<=50){
       element.borderColor=node.borderColor;
     }
@@ -185,6 +214,7 @@ export function normalizeStudyPlateDocument(raw:unknown):StudyPlateDocument {
         throw new Error('All table rows must have the same number of columns.');
       if(element.colWidths && element.colWidths.length!==count)
         throw new Error('Saved table widths must match the number of columns.');
+      validateStudyTableSpans(element);
     }
     return element;
   };

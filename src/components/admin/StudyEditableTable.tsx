@@ -1,12 +1,16 @@
-import React, {useRef,useState} from 'react';
+import React, {useContext,useMemo,useRef,useState} from 'react';
 import {PlateElement,createPlatePlugin,useEditorRef,type PlateElementProps} from 'platejs/react';
-import {Columns3,Rows3,Plus,Minus,Trash2,AlignJustify,PanelTop,Maximize2} from 'lucide-react';
+import {Columns3,Rows3,Plus,Minus,Trash2,AlignJustify,PanelTop,Maximize2,Merge,Split,Copy,ClipboardPaste,PaintBucket} from 'lucide-react';
+import {normalizeStudyPlateDocument,type StudyPlateNode} from '../../../shared/studyPlateDocument';
+import {tableRect,tableAnchorAt,tableHasMerges,mergeStudyCells,splitStudyCell,formatStudyCells,studyCellsToTsv,pasteStudyCellsTsv,type StudyCellPoint,type StudyCellRect} from '../../../shared/studyTableOperations';
 import {getTranslation,getUiLocale} from '../../services/i18n';
 const uiT=(key:string,fallback:string)=>getTranslation(key,getUiLocale(),undefined,fallback,'StudyEditableTable');
+type TableSelection={rect:StudyCellRect;pick:(point:StudyCellPoint,extend:boolean)=>void};
+const TableSelectionContext=React.createContext<TableSelection|null>(null);
 
 /** Plate authoring table actions. All changes use Slate transforms so the
  * normal lesson persistence, undo stack and section/block IDs remain intact. */
-type TableElement={type:string;id?:string;colWidths?:number[];children:Array<{type:string;rowHeight?:number;children:unknown[]}>};
+type TableElement={type:string;id?:string;colWidths?:number[];tableStyle?:'grid'|'banded'|'minimal';children:Array<{type:string;rowHeight?:number;children:unknown[]}>};
 const MAX_ROWS=20;
 const MAX_COLS=12;
 const MIN_COLUMN_WIDTH=64;
@@ -33,13 +37,77 @@ function StudyTableElement({element,children,...props}:PlateElementProps) {
   const node=element as unknown as TableElement;
   const rowCount=node.children.length;
   const colCount=node.children[0]?.children.length||1;
-  const [activeCell,setActiveCell]=useState({row:0,col:0});
+  const [activeCell,setActiveCell]=useState<StudyCellPoint>({row:0,col:0});
+  const [selectionStart,setSelectionStart]=useState<StudyCellPoint>({row:0,col:0});
+  const [status,setStatus]=useState('');
+  const selectionRect=tableRect(selectionStart,activeCell);
+  const isMulti=selectionRect.top!==selectionRect.bottom||selectionRect.left!==selectionRect.right;
+  const merged=tableHasMerges(node as unknown as StudyPlateNode);
+  const pick=(point:StudyCellPoint,extend:boolean)=>{
+    if(!extend)setSelectionStart(point);
+    setActiveCell(point);
+    setStatus('');
+  };
+  const selectionContext=useMemo<TableSelection>(()=>({rect:selectionRect,pick}),
+    // The state container must re-render consumers when the selected region moves.
+    [selectionRect.top,selectionRect.left,selectionRect.bottom,selectionRect.right]);
   const widths=widthList(node);
   const locate=()=>editor.api.findPath(element);
   const selection={row:clamp(activeCell.row,0,rowCount-1),col:clamp(activeCell.col,0,colCount-1)};
+  const result=(action:()=>void)=>{
+    try{action();setStatus('');}
+    catch(error){setStatus(error instanceof Error?error.message:'Unable to modify this table.');}
+  };
+  const replaceTable=(next:StudyPlateNode,point:StudyCellPoint)=>{
+    const path=locate();
+    if(!path)return;
+    // Fail before touching the Slate tree when a transformed table is invalid.
+    // Group the replacement into a single undoable history batch.
+    normalizeStudyPlateDocument([next]);
+    editor.tf.withNewBatch(()=>{
+      editor.tf.removeNodes({at:path});
+      editor.tf.insertNodes(next as never,{at:path});
+    });
+    setSelectionStart(point);
+    setActiveCell(point);
+    focusCell(editor,path,point.row,point.col);
+  };
+  const mergeSelection=()=>result(()=>{
+    const next=mergeStudyCells(node as unknown as StudyPlateNode,selectionRect);
+    replaceTable(next,{row:selectionRect.top,col:selectionRect.left});
+  });
+  const splitCell=()=>result(()=>{
+    const point=tableAnchorAt(node as unknown as StudyPlateNode,selection.row,selection.col);
+    replaceTable(splitStudyCell(node as unknown as StudyPlateNode,point),point);
+  });
+  const applyCellFormat=(kind:'backgroundColor'|'borderColor'|'align',value:string)=>result(()=>{
+    const format=kind==='align'?{align:value as 'left'|'center'|'right'}
+      :kind==='backgroundColor'?{backgroundColor:value}:{borderColor:value};
+    replaceTable(formatStudyCells(node as unknown as StudyPlateNode,selectionRect,format),
+      {row:selectionRect.top,col:selectionRect.left});
+  });
+  const copyCells=async()=>{
+    try{
+      await navigator.clipboard.writeText(studyCellsToTsv(node as unknown as StudyPlateNode,selectionRect));
+      setStatus(uiT('admin.study_table.copied','Selected cells copied.'));
+    }catch{setStatus(uiT('admin.study_table.copy_failed','Clipboard access unavailable. Use Ctrl+C in the table.'));}
+  };
+  const pasteText=(value:string)=>result(()=>{
+    replaceTable(pasteStudyCellsTsv(node as unknown as StudyPlateNode,
+      {row:selectionRect.top,col:selectionRect.left},value),
+      {row:selectionRect.top,col:selectionRect.left});
+  });
+  const pasteCells=async()=>{
+    try{const content=await navigator.clipboard.readText();pasteText(content);}
+    catch{setStatus(uiT('admin.study_table.paste_failed','Clipboard access unavailable. Paste using your keyboard.'));}
+  };
   const execute=(kind:'rowAbove'|'rowBelow'|'removeRow'|'colBefore'|'colAfter'|'removeCol')=>{
     const path=locate();
     if(!path)return;
+    if(merged){
+      setStatus(uiT('admin.study_table.split_before_resize','Split merged cells before changing the number of rows or columns.'));
+      return;
+    }
     const row=selection.row,col=selection.col;
     const current=(editor.children as unknown as TableElement[])[path[0]];
     const rows=current.children.length;
@@ -111,6 +179,12 @@ function StudyTableElement({element,children,...props}:PlateElementProps) {
     editor.tf.setNodes({colWidths:Array.from({length:cols},()=>even)} as never,{at:path});
   };
   const tableKeyDown=(event:React.KeyboardEvent<HTMLDivElement>)=>{
+    if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='c'&&isMulti){
+      event.preventDefault();void copyCells();return;
+    }
+    if(event.key==='Escape'&&isMulti){
+      setSelectionStart(selection);setActiveCell(selection);return;
+    }
     if(event.key!=='Tab'||event.altKey||event.ctrlKey||event.metaKey)return;
     if(!(event.target instanceof Element)||event.target.closest('[role="separator"]')||!event.target.closest('td,th'))return;
     const path=locate(), anchor=editor.selection?.anchor.path;
@@ -120,7 +194,11 @@ function StudyTableElement({element,children,...props}:PlateElementProps) {
     const row=anchor[path.length], col=anchor[path.length+1];
     const rowCount=table.children.length,colCount=table.children[0]?.children.length||1;
     if(row<0||row>=rowCount||col<0||col>=colCount)return;
-    const at=row*colCount+col+(event.shiftKey?-1:1);
+    let at=row*colCount+col+(event.shiftKey?-1:1);
+    const delta=event.shiftKey?-1:1;
+    while(at>=0&&at<rowCount*colCount&&
+      (table.children[Math.floor(at/colCount)].children[at%colCount] as {covered?:boolean}).covered)
+      at+=delta;
     if(at<0)return; // Shift+Tab on the first cell can leave the table.
     event.preventDefault();
     if(at>=rowCount*colCount){
@@ -132,11 +210,19 @@ function StudyTableElement({element,children,...props}:PlateElementProps) {
     }
     const nextRow=Math.floor(at/colCount),nextCol=at%colCount;
     setActiveCell({row:nextRow,col:nextCol});
+    setSelectionStart({row:nextRow,col:nextCol});
     focusCell(editor,path,nextRow,nextCol);
+  };
+  const tablePaste=(event:React.ClipboardEvent<HTMLDivElement>)=>{
+    if(!(event.target instanceof Element)||!event.target.closest('td,th'))return;
+    const text=event.clipboardData.getData('text/plain');
+    if((text.includes('\t')||text.includes('\n'))&&text.trim()){
+      event.preventDefault();pasteText(text);
+    }
   };
   const trackClick=(event:React.MouseEvent<HTMLDivElement>)=>{
     const target=event.target;
-    if(!(target instanceof Element))return;
+    if(!(target instanceof Element)||event.shiftKey||merged)return;
     const cell=target.closest('td,th');
     const row=cell?.parentElement;
     const table=cell?.closest('table');
@@ -146,16 +232,18 @@ function StudyTableElement({element,children,...props}:PlateElementProps) {
     if(rowIndex>=0&&colIndex>=0)setActiveCell({row:rowIndex,col:colIndex});
   };
   return <PlateElement as="div" element={element} className="vop-plate-author-table-wrap" {...props}>
-    <div ref={containerRef} onClickCapture={trackClick} onKeyDownCapture={tableKeyDown}>
+    <TableSelectionContext.Provider value={selectionContext}>
+    <div ref={containerRef} onClickCapture={trackClick} onKeyDownCapture={tableKeyDown}
+      onPasteCapture={tablePaste}>
     <div className="vop-plate-table-tools" contentEditable={false} role="toolbar" aria-label={uiT('admin.study_table.editing','Table editing')}>
       <span className="vop-plate-table-tools-label"><Rows3 size={13}/> {uiT('admin.study_table.layout','Table layout')}</span>
-      <button type="button" title={uiT('admin.study_table.row_above_title','Add row above selected cell')} onMouseDown={e=>e.preventDefault()} onClick={()=>execute('rowAbove')} disabled={rowCount>=MAX_ROWS}><Plus size={12}/> {uiT('admin.study_table.row_above','Row above')}</button>
-      <button type="button" title={uiT('admin.study_table.row_below_title','Add row below selected cell')} onMouseDown={e=>e.preventDefault()} onClick={()=>execute('rowBelow')} disabled={rowCount>=MAX_ROWS}><Plus size={12}/> {uiT('admin.study_table.row_below','Row below')}</button>
-      <button type="button" title={uiT('admin.study_table.remove_row_title','Remove selected row')} onMouseDown={e=>e.preventDefault()} onClick={()=>execute('removeRow')} disabled={rowCount<=1}><Minus size={12}/> {uiT('admin.study_table.row','Row')}</button>
+      <button type="button" title={uiT('admin.study_table.row_above_title','Add row above selected cell')} onMouseDown={e=>e.preventDefault()} onClick={()=>execute('rowAbove')} disabled={rowCount>=MAX_ROWS||merged}><Plus size={12}/> {uiT('admin.study_table.row_above','Row above')}</button>
+      <button type="button" title={uiT('admin.study_table.row_below_title','Add row below selected cell')} onMouseDown={e=>e.preventDefault()} onClick={()=>execute('rowBelow')} disabled={rowCount>=MAX_ROWS||merged}><Plus size={12}/> {uiT('admin.study_table.row_below','Row below')}</button>
+      <button type="button" title={uiT('admin.study_table.remove_row_title','Remove selected row')} onMouseDown={e=>e.preventDefault()} onClick={()=>execute('removeRow')} disabled={rowCount<=1||merged}><Minus size={12}/> {uiT('admin.study_table.row','Row')}</button>
       <span className="vop-table-tool-divider"/>
-      <button type="button" title={uiT('admin.study_table.column_before_title','Add column before selected cell')} onMouseDown={e=>e.preventDefault()} onClick={()=>execute('colBefore')} disabled={colCount>=MAX_COLS}><Columns3 size={12}/> {uiT('admin.study_table.before','Before')}</button>
-      <button type="button" title={uiT('admin.study_table.column_after_title','Add column after selected cell')} onMouseDown={e=>e.preventDefault()} onClick={()=>execute('colAfter')} disabled={colCount>=MAX_COLS}><Columns3 size={12}/> {uiT('admin.study_table.after','After')}</button>
-      <button type="button" title={uiT('admin.study_table.remove_column_title','Remove selected column')} onMouseDown={e=>e.preventDefault()} onClick={()=>execute('removeCol')} disabled={colCount<=1}><Minus size={12}/> {uiT('admin.study_table.column','Column')}</button>
+      <button type="button" title={uiT('admin.study_table.column_before_title','Add column before selected cell')} onMouseDown={e=>e.preventDefault()} onClick={()=>execute('colBefore')} disabled={colCount>=MAX_COLS||merged}><Columns3 size={12}/> {uiT('admin.study_table.before','Before')}</button>
+      <button type="button" title={uiT('admin.study_table.column_after_title','Add column after selected cell')} onMouseDown={e=>e.preventDefault()} onClick={()=>execute('colAfter')} disabled={colCount>=MAX_COLS||merged}><Columns3 size={12}/> {uiT('admin.study_table.after','After')}</button>
+      <button type="button" title={uiT('admin.study_table.remove_column_title','Remove selected column')} onMouseDown={e=>e.preventDefault()} onClick={()=>execute('removeCol')} disabled={colCount<=1||merged}><Minus size={12}/> {uiT('admin.study_table.column','Column')}</button>
       <span className="vop-table-tool-divider"/>
       <button type="button" title={uiT('admin.study_table.header_title','Toggle first row as table header')}
         onMouseDown={e=>e.preventDefault()} onClick={()=>tableLayout('header')}>
@@ -166,18 +254,85 @@ function StudyTableElement({element,children,...props}:PlateElementProps) {
       <button type="button" title={uiT('admin.study_table.fit_title','Fit columns to page width')}
         onMouseDown={e=>e.preventDefault()} onClick={()=>tableLayout('fit')}>
         <Maximize2 size={12}/> {uiT('admin.study_table.fit','Fit to page')}</button>
+      <span className="vop-table-tool-divider"/>
+      <span className="vop-study-cell-selection-status" aria-live="polite">
+        {isMulti
+          ?uiT('admin.study_table.selected_region','Selected')+' '+(selectionRect.bottom-selectionRect.top+1)+' × '+(selectionRect.right-selectionRect.left+1)
+          :uiT('admin.study_table.cell','Cell')+' '+(selection.row+1)+':'+(selection.col+1)}
+      </span>
+      <button type="button" title={uiT('admin.study_table.merge_help','Shift-click a second cell, then merge the selected rectangle')}
+        disabled={!isMulti} onMouseDown={e=>e.preventDefault()} onClick={mergeSelection}>
+        <Merge size={12}/> {uiT('admin.study_table.merge','Merge cells')}</button>
+      <button type="button" disabled={!merged} title={uiT('admin.study_table.split_help','Restore the individual cells within a merged area')}
+        onMouseDown={e=>e.preventDefault()} onClick={splitCell}>
+        <Split size={12}/> {uiT('admin.study_table.split','Split cells')}</button>
+      <button type="button" title={uiT('admin.study_table.copy_cells','Copy selected cells as a table')}
+        onMouseDown={e=>e.preventDefault()} onClick={()=>{void copyCells();}}>
+        <Copy size={12}/> {uiT('admin.study_table.copy','Copy cells')}</button>
+      <button type="button" title={uiT('admin.study_table.paste_cells','Paste tabular clipboard content into selected cells')}
+        onMouseDown={e=>e.preventDefault()} onClick={()=>{void pasteCells();}}>
+        <ClipboardPaste size={12}/> {uiT('admin.study_table.paste','Paste cells')}</button>
+      <span className="vop-table-tool-divider"/>
+      <label className="vop-plate-cell-format-control">
+        <PaintBucket size={12}/>
+        <select defaultValue="" aria-label={uiT('admin.study_table.cell_shading','Cell shading')}
+          onChange={event=>{if(event.target.value)applyCellFormat('backgroundColor',event.target.value);event.target.value='';}}>
+          <option value="">{uiT('admin.study_table.shading','Shading')}</option>
+          <option value="#ffffff">{uiT('admin.study_table.white','White')}</option>
+          <option value="#e7f0ff">{uiT('admin.study_table.pale_blue','Pale blue')}</option>
+          <option value="#dcfce7">{uiT('admin.study_table.pale_green','Pale green')}</option>
+          <option value="#fef3c7">{uiT('admin.study_table.pale_yellow','Pale yellow')}</option>
+          <option value="#fee2e2">{uiT('admin.study_table.pale_red','Pale red')}</option>
+        </select>
+      </label>
+      <label className="vop-plate-cell-format-control">
+        <select defaultValue="" aria-label={uiT('admin.study_table.border_color','Cell border color')}
+          onChange={event=>{if(event.target.value)applyCellFormat('borderColor',event.target.value);event.target.value='';}}>
+          <option value="">{uiT('admin.study_table.borders','Borders')}</option>
+          <option value="#cbd5e1">{uiT('admin.study_table.grey','Grey')}</option>
+          <option value="#1d4ed8">{uiT('admin.study_table.blue','Blue')}</option>
+          <option value="#15803d">{uiT('admin.study_table.green','Green')}</option>
+          <option value="#dc2626">{uiT('admin.study_table.red','Red')}</option>
+          <option value="#111827">{uiT('admin.study_table.black','Black')}</option>
+        </select>
+      </label>
+      <label className="vop-plate-cell-format-control">
+        <select defaultValue="" aria-label={uiT('admin.study_table.cell_alignment','Cell text alignment')}
+          onChange={event=>{if(event.target.value)applyCellFormat('align',event.target.value);event.target.value='';}}>
+          <option value="">{uiT('admin.study_table.align','Align')}</option>
+          <option value="left">{uiT('admin.study_table.left','Left')}</option>
+          <option value="center">{uiT('admin.study_table.center','Center')}</option>
+          <option value="right">{uiT('admin.study_table.right','Right')}</option>
+        </select>
+      </label>
+      <label className="vop-plate-cell-format-control">
+        <select aria-label={uiT('admin.study_table.table_style','Table appearance')}
+          value={node.tableStyle||'grid'}
+          onChange={event=>{
+            const path=locate();
+            if(path)editor.tf.setNodes({tableStyle:event.target.value} as never,{at:path});
+          }}>
+          <option value="grid">{uiT('admin.study_table.grid','Grid')}</option>
+          <option value="banded">{uiT('admin.study_table.banded','Banded rows')}</option>
+          <option value="minimal">{uiT('admin.study_table.minimal','Minimal')}</option>
+        </select>
+      </label>
+      <span className="vop-table-tool-divider"/>
       <button type="button" className="vop-plate-table-delete"
         title={uiT('admin.study_table.delete_title','Delete entire table')}
         onMouseDown={e=>e.preventDefault()} onClick={()=>tableLayout('delete')}>
         <Trash2 size={12}/> {uiT('admin.study_table.delete','Delete table')}</button>
     </div>
+    {status&&<div className="vop-study-table-feedback" role="status">{status}</div>}
     <div className="vop-plate-author-table-scroll">
-      <table className="vop-plate-author-table" style={{width:widths.reduce((sum,width)=>sum+width,0)}}>
+      <table className={'vop-plate-author-table vop-plate-table-'+(node.tableStyle||'grid')}
+        style={{width:widths.reduce((sum,width)=>sum+width,0)}}>
         <colgroup>{widths.map((width,index)=><col key={index} style={{width}}/>)}</colgroup>
         <tbody>{children}</tbody>
       </table>
     </div>
     </div>
+    </TableSelectionContext.Provider>
   </PlateElement>;
 }
 function StudyRowElement({element,children,...props}:PlateElementProps){
@@ -186,6 +341,9 @@ function StudyRowElement({element,children,...props}:PlateElementProps){
 }
 function StudyCellElement({element,children,...props}:PlateElementProps) {
   const editor=useEditorRef();
+  const tableSelection=useContext(TableSelectionContext);
+  const cell=element as {type:string;colSpan?:number;rowSpan?:number;covered?:boolean;
+    backgroundColor?:string;borderColor?:string;align?:'left'|'right'|'center'};
   const drag=(event:React.PointerEvent<HTMLSpanElement>,axis:'column'|'row')=>{
     if(event.button!==0)return;
     event.preventDefault();event.stopPropagation();
@@ -274,15 +432,34 @@ function StudyCellElement({element,children,...props}:PlateElementProps) {
   const rowIndex=path?.[1]??0;
   const rows=(editor.children as unknown as TableElement[])[path?.[0]??-1];
   const count=rows?.children[0]?.children.length||1;
-  return <PlateElement as={element.type==='th'?'th':'td'} element={element} {...props}>
-    {children}
-    {columnIndex<count&&
+  const selected=Boolean(tableSelection
+    &&rowIndex>=tableSelection.rect.top&&rowIndex<=tableSelection.rect.bottom
+    &&columnIndex>=tableSelection.rect.left&&columnIndex<=tableSelection.rect.right);
+  const pickThis=(extend:boolean)=>tableSelection?.pick({row:rowIndex,col:columnIndex},extend);
+  const cellStyle:React.CSSProperties={
+    ...(cell.covered?{display:'none'}:{}),
+    ...(cell.backgroundColor?{backgroundColor:cell.backgroundColor}:{}),
+    ...(cell.borderColor?{border:'1px solid '+cell.borderColor}:{}),
+    ...(cell.align?{textAlign:cell.align}:{}),
+  };
+  // Extra native table attributes are forwarded to the DOM by PlateElement.
+  const spanAttrs={colSpan:cell.colSpan||1,rowSpan:cell.rowSpan||1} as Record<string,number>;
+  return <PlateElement as={element.type==='th'?'th':'td'} element={element} {...props}
+    {...spanAttrs} style={cellStyle} className={selected?'vop-study-cell-selected':undefined}>
+    <div className="vop-study-cell-click-area"
+      onMouseDownCapture={event=>{
+        if(event.shiftKey){event.preventDefault();pickThis(true);}
+      }}
+      onClickCapture={event=>{if(!event.shiftKey)pickThis(false);}}>
+      {children}
+    </div>
+    {!cell.covered&&columnIndex<count&&
       <span contentEditable={false} tabIndex={0} className="vop-plate-col-resizer" role="separator"
         aria-label={'Resize column '+(columnIndex+1)}
         aria-orientation="vertical" aria-valuemin={MIN_COLUMN_WIDTH}
         aria-valuemax={MAX_COLUMN_WIDTH} aria-valuenow={rows?widthList(rows)[columnIndex]:145}
         onKeyDown={event=>keyboardResize(event,'column')} onPointerDown={e=>drag(e,'column')}/>}
-    {columnIndex===0&&<span contentEditable={false} tabIndex={0} className="vop-plate-row-resizer" role="separator"
+    {!cell.covered&&columnIndex===0&&<span contentEditable={false} tabIndex={0} className="vop-plate-row-resizer" role="separator"
       aria-label={'Resize row '+(rowIndex+1)} aria-orientation="horizontal"
       aria-valuemin={MIN_ROW_HEIGHT} aria-valuemax={MAX_ROW_HEIGHT}
       aria-valuenow={rows?.children[rowIndex]?.rowHeight||40}
