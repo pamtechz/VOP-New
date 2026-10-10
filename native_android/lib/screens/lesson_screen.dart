@@ -75,7 +75,7 @@ class _LessonScreenState extends State<LessonScreen> {
           :<Map<String,dynamic>>[];
         if(pages.isEmpty)return const Center(child:Text(
           'This lesson has no published reading pages.'));
-        final index=page.clamp(0,pages.length-1);
+        final index=page.clamp(0,pages.length-1).toInt();
         final last=index==pages.length-1;
         return Column(children:[
           LinearProgressIndicator(value:(index+1)/pages.length,minHeight:3),
