@@ -1385,15 +1385,15 @@ export function StudyPlatePageEditor({
                           <button type="button" onClick={() => insertTable(5, 4)}>5 × 4 Table</button>
                         </div>
                         <div className="vop-table-builder-custom">
-                          <strong>Custom table size</strong>
-                          <label>Rows <input type="number" min={1} max={20} step={1} value={tableRows}
+                          <strong>{uiT('admin.study_plate_editor.custom_table_size','Custom table size')}</strong>
+                          <label>{uiT('admin.study_plate_editor.rows','Rows')} <input type="number" min={1} max={20} step={1} value={tableRows}
                             onChange={event=>setTableRows(Number(event.target.value)||1)}/></label>
-                          <label>Columns <input type="number" min={1} max={12} step={1} value={tableColumns}
+                          <label>{uiT('admin.study_plate_editor.columns','Columns')} <input type="number" min={1} max={12} step={1} value={tableColumns}
                             onChange={event=>setTableColumns(Number(event.target.value)||1)}/></label>
                           <button type="button" onClick={()=>insertTable(tableRows,tableColumns)}>
                             <Table size={14}/> Insert {Math.min(20,Math.max(1,tableRows))} × {Math.min(12,Math.max(1,tableColumns))} table
                           </button>
-                          <small>After inserting, click a cell to add or remove rows and columns. Drag cell borders to resize.</small>
+                          <small>{uiT('admin.study_plate_editor.table_editing_help','After inserting, click a cell to add or remove rows and columns. Drag cell borders to resize.')}</small>
                         </div>
                       </div>
                     )}
