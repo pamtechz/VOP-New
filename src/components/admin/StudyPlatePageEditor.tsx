@@ -41,6 +41,7 @@ import { auth } from '../../lib/firebase';
 import { MediaPlayer } from '../media/MediaPlayer';
 import { ModalLayer } from '../layout/ModalLayer';
 import {StudyTablePlugin,StudyRowPlugin,StudyHeaderCellPlugin,StudyCellPlugin} from './StudyEditableTable';
+import {StudyTableInsertPicker} from './StudyTableInsertPicker';
 import './plate-authoring.css';
 import './plate-ribbon.css';
 
@@ -285,6 +286,22 @@ export function StudyPlatePageEditor({
     blockProps: Record<string, unknown>;
   } | null>(null);
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
+  useEffect(()=>{
+    if(!activeDropdown)return;
+    const onOutside=(event:PointerEvent)=>{
+      if(event.target instanceof Element&&!event.target.closest('.vop-ribbon-menu-wrapper'))
+        setActiveDropdown(null);
+    };
+    const onEscape=(event:KeyboardEvent)=>{
+      if(event.key==='Escape')setActiveDropdown(null);
+    };
+    window.document.addEventListener('pointerdown',onOutside);
+    window.document.addEventListener('keydown',onEscape);
+    return ()=>{
+      window.document.removeEventListener('pointerdown',onOutside);
+      window.document.removeEventListener('keydown',onEscape);
+    };
+  },[activeDropdown]);
   const [tableRows,setTableRows]=useState(3);
   const [tableColumns,setTableColumns]=useState(3);
   const [showPilcrow, setShowPilcrow] = useState(false);
@@ -699,9 +716,15 @@ export function StudyPlatePageEditor({
     const trigger=element.querySelector('button');
     if(!trigger)return;
     const rect=trigger.getBoundingClientRect();
-    element.style.setProperty('--vop-ribbon-menu-left',
-      Math.max(8,Math.min(rect.left,window.innerWidth-292))+'px');
-    element.style.setProperty('--vop-ribbon-menu-top',Math.min(rect.bottom+5,window.innerHeight-96)+'px');
+    const isTable=element.dataset.ribbonMenu==='table';
+    const width=Math.min(isTable?360:292,window.innerWidth-24);
+    const expectedHeight=isTable?Math.min(555,window.innerHeight*.72):Math.min(320,window.innerHeight*.52);
+    const left=Math.max(12,Math.min(rect.left,window.innerWidth-width-12));
+    let top=rect.bottom+5;
+    if(top+expectedHeight>window.innerHeight-10)
+      top=Math.max(12,rect.top-expectedHeight-5);
+    element.style.setProperty('--vop-ribbon-menu-left',left+'px');
+    element.style.setProperty('--vop-ribbon-menu-top',top+'px');
   };
 
   const handleSetFontFamily = (font: string) => {
@@ -1363,12 +1386,13 @@ export function StudyPlatePageEditor({
               <div className="vop-word-group" aria-label={uiT('admin.study_plate_editor.tables_and_callouts',"Tables & Callouts")}>
                 <div className="vop-word-group-content">
                   {/* Table Builder Dropdown */}
-                  <div className="vop-ribbon-menu-wrapper" onClickCapture={placeRibbonMenu}>
+                  <div className="vop-ribbon-menu-wrapper" data-ribbon-menu="table" onClickCapture={placeRibbonMenu}>
                     <button
                       type="button"
                       className="vop-plate-scripture-btn"
-                      title={uiT('admin.study_plate_editor.insert_html_table_into_lesson',"Insert HTML table into lesson")}
+                      title={uiT('admin.study_plate_editor.insert_table_into_lesson',"Insert an editable table into the lesson")}
                       onMouseDown={event => { event.preventDefault(); rememberSelection(); }}
+                      aria-expanded={activeDropdown==='table'}
                       onClick={() => setActiveDropdown(activeDropdown === 'table' ? null : 'table')}
                     >
                       <Table size={16} color="#2563eb" />
@@ -1376,25 +1400,17 @@ export function StudyPlatePageEditor({
                       <ChevronDown size={11} />
                     </button>
                     {activeDropdown === 'table' && (
-                      <div className="vop-ribbon-popover-light vop-table-builder-popover" onMouseDown={e => e.preventDefault()}>
-                        <div style={{ fontSize: '10px', color: '#475569', padding: '2px 6px', fontWeight: 700 }}>{uiT('admin.study_plate_editor.grid_selection',"GRID SELECTION")}</div>
-                        <div className="vop-table-grid-options">
-                          <button type="button" onClick={() => insertTable(2, 2)}>2 × 2 Table</button>
-                          <button type="button" onClick={() => insertTable(3, 3)}>3 × 3 Table</button>
-                          <button type="button" onClick={() => insertTable(4, 3)}>4 × 3 Table</button>
-                          <button type="button" onClick={() => insertTable(5, 4)}>5 × 4 Table</button>
-                        </div>
-                        <div className="vop-table-builder-custom">
-                          <strong>{uiT('admin.study_plate_editor.custom_table_size','Custom table size')}</strong>
-                          <label>{uiT('admin.study_plate_editor.rows','Rows')} <input type="number" min={1} max={20} step={1} value={tableRows}
-                            onChange={event=>setTableRows(Number(event.target.value)||1)}/></label>
-                          <label>{uiT('admin.study_plate_editor.columns','Columns')} <input type="number" min={1} max={12} step={1} value={tableColumns}
-                            onChange={event=>setTableColumns(Number(event.target.value)||1)}/></label>
-                          <button type="button" onClick={()=>insertTable(tableRows,tableColumns)}>
-                            <Table size={14}/> Insert {Math.min(20,Math.max(1,tableRows))} × {Math.min(12,Math.max(1,tableColumns))} table
-                          </button>
-                          <small>{uiT('admin.study_plate_editor.table_editing_help','After inserting, click a cell to add or remove rows and columns. Drag cell borders to resize.')}</small>
-                        </div>
+                      <div className="vop-ribbon-popover-light vop-table-builder-popover" onMouseDown={event => {
+                          // Preserve caret when choosing a grid cell, but allow
+                          // focus and text selection inside custom number inputs.
+                          if (!(event.target instanceof Element)
+                            || !event.target.closest('input')) event.preventDefault();
+                        }}>
+                        <StudyTableInsertPicker
+                          rows={tableRows} columns={tableColumns}
+                          onRowsChange={setTableRows} onColumnsChange={setTableColumns}
+                          onInsert={insertTable}
+                        />
                       </div>
                     )}
                   </div>

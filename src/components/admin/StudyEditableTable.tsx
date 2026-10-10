@@ -1,6 +1,6 @@
-import React, {useState} from 'react';
+import React, {useRef,useState} from 'react';
 import {PlateElement,createPlatePlugin,useEditorRef,type PlateElementProps} from 'platejs/react';
-import {Columns3,Rows3,Plus,Minus} from 'lucide-react';
+import {Columns3,Rows3,Plus,Minus,Trash2,AlignJustify,PanelTop,Maximize2} from 'lucide-react';
 import {getTranslation,getUiLocale} from '../../services/i18n';
 const uiT=(key:string,fallback:string)=>getTranslation(key,getUiLocale(),undefined,fallback,'StudyEditableTable');
 
@@ -13,6 +13,10 @@ const MIN_COLUMN_WIDTH=64;
 const MAX_COLUMN_WIDTH=640;
 const MIN_ROW_HEIGHT=32;
 const MAX_ROW_HEIGHT=480;
+const focusCell=(editor:ReturnType<typeof useEditorRef>,path:number[],row:number,col:number)=>{
+  editor.tf.select([...path,row,col,0,0]);
+  requestAnimationFrame(()=>editor.tf.focus());
+};
 const clamp=(n:number,min:number,max:number)=>Math.max(min,Math.min(max,n));
 const freshCell=()=>({type:'td',children:[{type:'p',children:[{text:''}]}]});
 const freshRow=(columns:number)=>({type:'tr',children:Array.from({length:columns},freshCell)});
@@ -25,6 +29,7 @@ const widthList=(table:TableElement,tableWidth?:number)=>{
 
 function StudyTableElement({element,children,...props}:PlateElementProps) {
   const editor=useEditorRef();
+  const containerRef=useRef<HTMLDivElement>(null);
   const node=element as unknown as TableElement;
   const rowCount=node.children.length;
   const colCount=node.children[0]?.children.length||1;
@@ -44,12 +49,14 @@ function StudyTableElement({element,children,...props}:PlateElementProps) {
       const nextIndex=row+(kind==='rowBelow'?1:0);
       editor.tf.insertNodes(freshRow(cols) as never,{at:[...path,nextIndex]});
       setActiveCell({row:nextIndex,col});
+      focusCell(editor,path,nextIndex,col);
       return;
     }
     if(kind==='removeRow'){
       if(rows<=1)return;
       editor.tf.removeNodes({at:[...path,row]});
       setActiveCell({row:Math.min(row,rows-2),col});
+      focusCell(editor,path,Math.min(row,rows-2),col);
       return;
     }
     if(kind==='colBefore'||kind==='colAfter'){
@@ -62,6 +69,7 @@ function StudyTableElement({element,children,...props}:PlateElementProps) {
       for(let r=0;r<rows;r++)editor.tf.insertNodes(freshCell() as never,{at:[...path,r,nextIndex]});
       editor.tf.setNodes({colWidths:nextWidths} as never,{at:path});
       setActiveCell({row,col:nextIndex});
+      focusCell(editor,path,row,nextIndex);
       return;
     }
     if(cols<=1)return;
@@ -70,6 +78,61 @@ function StudyTableElement({element,children,...props}:PlateElementProps) {
     for(let r=rows-1;r>=0;r--)editor.tf.removeNodes({at:[...path,r,col]});
     editor.tf.setNodes({colWidths:nextWidths} as never,{at:path});
     setActiveCell({row,col:Math.min(col,cols-2)});
+    focusCell(editor,path,row,Math.min(col,cols-2));
+  };
+  const tableLayout=(kind:'equal'|'fit'|'header'|'delete')=>{
+    const path=locate();
+    if(!path)return;
+    const current=(editor.children as unknown as TableElement[])[path[0]];
+    if(!current||current.type!=='table')return;
+    const cols=current.children[0]?.children.length||1;
+    if(kind==='delete'){
+      // Maintain at least one editable paragraph in the current study page.
+      editor.tf.removeNodes({at:path});
+      editor.tf.insertNodes({type:'p',id:'block-'+Math.random().toString(36).slice(2,12),
+        children:[{text:''}]} as never,{at:path});
+      editor.tf.select([...path,0]);
+      editor.tf.focus();
+      return;
+    }
+    if(kind==='header'){
+      const makeHeader=current.children[0].children.some(cell=>(cell as {type:string}).type!=='th');
+      for(let col=0;col<cols;col++)editor.tf.setNodes({type:makeHeader?'th':'td'} as never,{at:[...path,0,col]});
+      return;
+    }
+    const original=widthList(current);
+    const total=kind==='fit'
+      ?Math.max(cols*MIN_COLUMN_WIDTH,Math.round(
+        containerRef.current?.querySelector('.vop-plate-author-table-scroll')?.getBoundingClientRect().width
+        ||containerRef.current?.getBoundingClientRect().width
+        ||original.reduce((a,b)=>a+b,0)))
+      :original.reduce((a,b)=>a+b,0);
+    const even=clamp(Math.floor(total/cols),MIN_COLUMN_WIDTH,MAX_COLUMN_WIDTH);
+    editor.tf.setNodes({colWidths:Array.from({length:cols},()=>even)} as never,{at:path});
+  };
+  const tableKeyDown=(event:React.KeyboardEvent<HTMLDivElement>)=>{
+    if(event.key!=='Tab'||event.altKey||event.ctrlKey||event.metaKey)return;
+    if(!(event.target instanceof Element)||event.target.closest('[role="separator"]')||!event.target.closest('td,th'))return;
+    const path=locate(), anchor=editor.selection?.anchor.path;
+    if(!path||!anchor||anchor.length<path.length+3
+      ||path.some((segment,index)=>anchor[index]!==segment))return;
+    const table=(editor.children as unknown as TableElement[])[path[0]];
+    const row=anchor[path.length], col=anchor[path.length+1];
+    const rowCount=table.children.length,colCount=table.children[0]?.children.length||1;
+    if(row<0||row>=rowCount||col<0||col>=colCount)return;
+    const at=row*colCount+col+(event.shiftKey?-1:1);
+    if(at<0)return; // Shift+Tab on the first cell can leave the table.
+    event.preventDefault();
+    if(at>=rowCount*colCount){
+      if(rowCount>=MAX_ROWS)return;
+      editor.tf.insertNodes(freshRow(colCount) as never,{at:[...path,rowCount]});
+      setActiveCell({row:rowCount,col:0});
+      focusCell(editor,path,rowCount,0);
+      return;
+    }
+    const nextRow=Math.floor(at/colCount),nextCol=at%colCount;
+    setActiveCell({row:nextRow,col:nextCol});
+    focusCell(editor,path,nextRow,nextCol);
   };
   const trackClick=(event:React.MouseEvent<HTMLDivElement>)=>{
     const target=event.target;
@@ -83,7 +146,7 @@ function StudyTableElement({element,children,...props}:PlateElementProps) {
     if(rowIndex>=0&&colIndex>=0)setActiveCell({row:rowIndex,col:colIndex});
   };
   return <PlateElement as="div" element={element} className="vop-plate-author-table-wrap" {...props}>
-    <div onClickCapture={trackClick}>
+    <div ref={containerRef} onClickCapture={trackClick} onKeyDownCapture={tableKeyDown}>
     <div className="vop-plate-table-tools" contentEditable={false} role="toolbar" aria-label={uiT('admin.study_table.editing','Table editing')}>
       <span className="vop-plate-table-tools-label"><Rows3 size={13}/> {uiT('admin.study_table.layout','Table layout')}</span>
       <button type="button" title={uiT('admin.study_table.row_above_title','Add row above selected cell')} onMouseDown={e=>e.preventDefault()} onClick={()=>execute('rowAbove')} disabled={rowCount>=MAX_ROWS}><Plus size={12}/> {uiT('admin.study_table.row_above','Row above')}</button>
@@ -93,6 +156,20 @@ function StudyTableElement({element,children,...props}:PlateElementProps) {
       <button type="button" title={uiT('admin.study_table.column_before_title','Add column before selected cell')} onMouseDown={e=>e.preventDefault()} onClick={()=>execute('colBefore')} disabled={colCount>=MAX_COLS}><Columns3 size={12}/> {uiT('admin.study_table.before','Before')}</button>
       <button type="button" title={uiT('admin.study_table.column_after_title','Add column after selected cell')} onMouseDown={e=>e.preventDefault()} onClick={()=>execute('colAfter')} disabled={colCount>=MAX_COLS}><Columns3 size={12}/> {uiT('admin.study_table.after','After')}</button>
       <button type="button" title={uiT('admin.study_table.remove_column_title','Remove selected column')} onMouseDown={e=>e.preventDefault()} onClick={()=>execute('removeCol')} disabled={colCount<=1}><Minus size={12}/> {uiT('admin.study_table.column','Column')}</button>
+      <span className="vop-table-tool-divider"/>
+      <button type="button" title={uiT('admin.study_table.header_title','Toggle first row as table header')}
+        onMouseDown={e=>e.preventDefault()} onClick={()=>tableLayout('header')}>
+        <PanelTop size={12}/> {uiT('admin.study_table.header','Header row')}</button>
+      <button type="button" title={uiT('admin.study_table.equal_columns_title','Distribute columns evenly')}
+        onMouseDown={e=>e.preventDefault()} onClick={()=>tableLayout('equal')}>
+        <AlignJustify size={12}/> {uiT('admin.study_table.equal_columns','Equal columns')}</button>
+      <button type="button" title={uiT('admin.study_table.fit_title','Fit columns to page width')}
+        onMouseDown={e=>e.preventDefault()} onClick={()=>tableLayout('fit')}>
+        <Maximize2 size={12}/> {uiT('admin.study_table.fit','Fit to page')}</button>
+      <button type="button" className="vop-plate-table-delete"
+        title={uiT('admin.study_table.delete_title','Delete entire table')}
+        onMouseDown={e=>e.preventDefault()} onClick={()=>tableLayout('delete')}>
+        <Trash2 size={12}/> {uiT('admin.study_table.delete','Delete table')}</button>
     </div>
     <div className="vop-plate-author-table-scroll">
       <table className="vop-plate-author-table" style={{width:widths.reduce((sum,width)=>sum+width,0)}}>
@@ -123,17 +200,19 @@ function StudyCellElement({element,children,...props}:PlateElementProps) {
     const from=axis==='column'?event.clientX:event.clientY;
     const widths=widthList(tableNode,table.getBoundingClientRect().width);
     const originalWidth=widths[col];
-    const originalNext=widths[col+1];
+    const originalNext=widths[col+1]??0;
+    const atRightEdge=col===widths.length-1;
     const tr=table.rows[row];
     const originalHeight=tableNode.children[row]?.rowHeight||tr?.getBoundingClientRect().height||40;
     const cols=table.querySelectorAll('col');
     const move=(e:PointerEvent)=>{
       const delta=(axis==='column'?e.clientX:e.clientY)-from;
       if(axis==='column'){
-        if(col>=widths.length-1)return;
-        const bounded=Math.max(MIN_COLUMN_WIDTH-originalWidth,Math.min(delta,originalNext-MIN_COLUMN_WIDTH));
+        const bounded=atRightEdge
+          ?clamp(originalWidth+delta,MIN_COLUMN_WIDTH,MAX_COLUMN_WIDTH)-originalWidth
+          :Math.max(MIN_COLUMN_WIDTH-originalWidth,Math.min(delta,originalNext-MIN_COLUMN_WIDTH));
         (cols[col] as HTMLElement).style.width=(originalWidth+bounded)+'px';
-        (cols[col+1] as HTMLElement).style.width=(originalNext-bounded)+'px';
+        if(!atRightEdge)(cols[col+1] as HTMLElement).style.width=(originalNext-bounded)+'px';
       } else if(tr)tr.style.height=clamp(originalHeight+delta,MIN_ROW_HEIGHT,MAX_ROW_HEIGHT)+'px';
     };
     const release=(e:PointerEvent)=>{
@@ -141,10 +220,12 @@ function StudyCellElement({element,children,...props}:PlateElementProps) {
       window.removeEventListener('pointerup',release);
       window.removeEventListener('pointercancel',cancel);
       const delta=(axis==='column'?e.clientX:e.clientY)-from;
-      if(axis==='column'&&col<widths.length-1){
-        const bounded=Math.max(MIN_COLUMN_WIDTH-originalWidth,Math.min(delta,originalNext-MIN_COLUMN_WIDTH));
+      if(axis==='column'){
+        const bounded=atRightEdge
+          ?clamp(originalWidth+delta,MIN_COLUMN_WIDTH,MAX_COLUMN_WIDTH)-originalWidth
+          :Math.max(MIN_COLUMN_WIDTH-originalWidth,Math.min(delta,originalNext-MIN_COLUMN_WIDTH));
         widths[col]=originalWidth+bounded;
-        widths[col+1]=originalNext-bounded;
+        if(!atRightEdge)widths[col+1]=originalNext-bounded;
         editor.tf.setNodes({colWidths:widths} as never,{at:tablePath});
       } else if(axis==='row'){
         editor.tf.setNodes({rowHeight:clamp(originalHeight+delta,MIN_ROW_HEIGHT,MAX_ROW_HEIGHT)} as never,{at:rowPath});
@@ -156,7 +237,7 @@ function StudyCellElement({element,children,...props}:PlateElementProps) {
       window.removeEventListener('pointercancel',cancel);
       if(axis==='column'){
         (cols[col] as HTMLElement).style.width=originalWidth+'px';
-        if(cols[col+1])(cols[col+1] as HTMLElement).style.width=originalNext+'px';
+        if(!atRightEdge&&cols[col+1])(cols[col+1] as HTMLElement).style.width=originalNext+'px';
       }else if(tr)tr.style.height=originalHeight+'px';
     };
     window.addEventListener('pointermove',move);
@@ -164,18 +245,48 @@ function StudyCellElement({element,children,...props}:PlateElementProps) {
     window.addEventListener('pointercancel',cancel);
   };
   const path=editor.api.findPath(element);
+  const keyboardResize=(event:React.KeyboardEvent<HTMLSpanElement>,axis:'column'|'row')=>{
+    const relevant=axis==='column'?['ArrowLeft','ArrowRight']:['ArrowUp','ArrowDown'];
+    if(!relevant.includes(event.key))return;
+    event.preventDefault();event.stopPropagation();
+    const cellPath=editor.api.findPath(element);
+    if(!cellPath||cellPath.length<3)return;
+    const table=(editor.children as unknown as TableElement[])[cellPath[0]];
+    if(!table)return;
+    const row=cellPath[1],col=cellPath[2];
+    const delta=(event.key==='ArrowLeft'||event.key==='ArrowUp'?-1:1)*(event.shiftKey?2:12);
+    if(axis==='row'){
+      const rowHeight=table.children[row].rowHeight||40;
+      editor.tf.setNodes({rowHeight:clamp(rowHeight+delta,MIN_ROW_HEIGHT,MAX_ROW_HEIGHT)} as never,
+        {at:[cellPath[0],row]});
+    }else{
+      const widths=widthList(table);
+      const next=widths[col+1];
+      const amount=next===undefined
+        ?clamp(widths[col]+delta,MIN_COLUMN_WIDTH,MAX_COLUMN_WIDTH)-widths[col]
+        :Math.max(MIN_COLUMN_WIDTH-widths[col],Math.min(delta,next-MIN_COLUMN_WIDTH));
+      widths[col]+=amount;
+      if(next!==undefined)widths[col+1]-=amount;
+      editor.tf.setNodes({colWidths:widths} as never,{at:[cellPath[0]]});
+    }
+  };
   const columnIndex=path?.[2]??0;
   const rowIndex=path?.[1]??0;
   const rows=(editor.children as unknown as TableElement[])[path?.[0]??-1];
   const count=rows?.children[0]?.children.length||1;
   return <PlateElement as={element.type==='th'?'th':'td'} element={element} {...props}>
     {children}
-    {columnIndex<count-1&&
-      <span contentEditable={false} className="vop-plate-col-resizer" role="separator" aria-label={'Resize column '+(columnIndex+1)}
-        aria-orientation="vertical" onPointerDown={e=>drag(e,'column')}/>}
-    {columnIndex===0&&<span contentEditable={false} className="vop-plate-row-resizer" role="separator"
+    {columnIndex<count&&
+      <span contentEditable={false} tabIndex={0} className="vop-plate-col-resizer" role="separator"
+        aria-label={'Resize column '+(columnIndex+1)}
+        aria-orientation="vertical" aria-valuemin={MIN_COLUMN_WIDTH}
+        aria-valuemax={MAX_COLUMN_WIDTH} aria-valuenow={rows?widthList(rows)[columnIndex]:145}
+        onKeyDown={event=>keyboardResize(event,'column')} onPointerDown={e=>drag(e,'column')}/>}
+    {columnIndex===0&&<span contentEditable={false} tabIndex={0} className="vop-plate-row-resizer" role="separator"
       aria-label={'Resize row '+(rowIndex+1)} aria-orientation="horizontal"
-      onPointerDown={e=>drag(e,'row')}/>}
+      aria-valuemin={MIN_ROW_HEIGHT} aria-valuemax={MAX_ROW_HEIGHT}
+      aria-valuenow={rows?.children[rowIndex]?.rowHeight||40}
+      onKeyDown={event=>keyboardResize(event,'row')} onPointerDown={e=>drag(e,'row')}/>}
   </PlateElement>;
 }
 export const StudyTablePlugin=createPlatePlugin({key:'studyTable',node:{isElement:true,type:'table'}}).withComponent(StudyTableElement);
