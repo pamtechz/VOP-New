@@ -235,3 +235,58 @@
     position:sticky;bottom:0;z-index:20;
   }
 }
+
+
+/* Editable Word-like inserts use the same visual language as the learner reader. */
+.vop-plate-editable .vop-plate-author-table{
+  border-collapse:collapse;
+  table-layout:fixed;
+  width:100%;
+  margin:14px 0;
+  background:var(--bg-card,#fff);
+  border:1px solid #b9c9dd;
+  color:var(--text-primary,#1e293b);
+}
+.vop-plate-editable .vop-plate-author-table :is(td,th){
+  min-width:46px;
+  height:35px;
+  padding:8px;
+  border:1px solid #c7d2df;
+  vertical-align:top;
+  overflow-wrap:anywhere;
+}
+.vop-plate-editable .vop-plate-author-table th{
+  background:#eef4fc;
+  font-weight:750;
+}
+.vop-plate-editable .vop-plate-author-table p {margin:0}
+.vop-plate-editable .vop-plate-author-callout {
+  margin:12px 0;
+  padding:12px 14px;
+  border:1px solid #bfdbfe;
+  border-left:4px solid #2563eb;
+  border-radius:7px;
+  background:#eff6ff;
+  color:#1d3557;
+  line-height:1.65;
+}
+.vop-plate-editable .vop-plate-author-callout-tip{
+  background:#f0fdf4;border-color:#bbf7d0;border-left-color:#16a34a;
+}
+.vop-plate-editable .vop-plate-author-callout-warning{
+  background:#fff7ed;border-color:#fed7aa;border-left-color:#ea580c;
+}
+.vop-plate-editable .vop-plate-author-callout-reflection{
+  background:#faf5ff;border-color:#e9d5ff;border-left-color:#9333ea;
+}
+[data-theme="dark"] .vop-plate-editable .vop-plate-author-table{
+  background:#12243b;color:#e2e8f0;border-color:#4b6280;
+}
+[data-theme="dark"] .vop-plate-editable .vop-plate-author-table :is(td,th){border-color:#4b6280}
+[data-theme="dark"] .vop-plate-editable .vop-plate-author-table th{background:#1d3652}
+[data-theme="dark"] .vop-plate-editable .vop-plate-author-callout{
+  background:#1c3555;color:#eef6ff;
+}
+[data-theme="dark"] .vop-plate-editable .vop-plate-author-callout-tip{background:#133c32;color:#dcfce7}
+[data-theme="dark"] .vop-plate-editable .vop-plate-author-callout-warning{background:#4a2e17;color:#ffedd5}
+[data-theme="dark"] .vop-plate-editable .vop-plate-author-callout-reflection{background:#342148;color:#f3e8ff}
