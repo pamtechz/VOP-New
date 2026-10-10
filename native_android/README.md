@@ -48,8 +48,8 @@ subscription entitlements.
 From `native_android`:
 
 ```powershell
-Copy-Item Vop_Android_Config.example.env Vop_Android_Config.env
-# Fill in the public Firebase Android client configuration in the file.
+# Existing android/app/google-services.json is automatically reused.
+# Optional: copy the example env if using a different Firebase app/origin.
 flutter doctor
 flutter devices
 .\run_android.ps1
@@ -63,8 +63,12 @@ flutter devices
 flutter create --platforms=android --org com.sda --project-name vop .
 ```
 
-The script then runs `flutter pub get` and the native application with
-public values provided as `--dart-define`. Android's `INTERNET` permission,
+The script automatically reads the existing public Android Firebase client
+from `../android/app/google-services.json` when no local env file is supplied,
+then runs `flutter pub get` and the native app with `--dart-define`. This
+existing client is registered for `com.sda.vop`.
+To override the server origin or Firebase public client, create
+`Vop_Android_Config.env` from the example. Android's `INTERNET` permission,
 backup protections and cleartext-traffic restrictions are checked into
 `android/app/src/main/AndroidManifest.xml`.
 
@@ -75,19 +79,21 @@ After one-time Flutter scaffold generation, from `native_android`:
 ```powershell
 flutter analyze
 flutter test
-flutter build apk --debug --dart-define-from-file=android-config.json
+python tool/prepare_public_config.py
+flutter build apk --debug --dart-define-from-file=android-public-config.json
 ```
 
-The JSON file must contain the same public Dart defines from the example env
-file, with JSON key/value pairs and no private credentials. Never commit that
-file. A release build requires Android signing credentials and a configured
+The Python helper derives the JSON from the registered Firebase Android
+client. It contains public Firebase client identifiers only and is ignored by
+Git. Never commit the generated file or private credentials. A release build requires Android signing credentials and a configured
 Firebase Android OAuth registration; a CI-generated debug APK is for testing
 only and must not be confused with a Play Store release.
 
 CI workflow `VOP native Android` runs static analysis, widget tests and an
 Android debug APK compilation. It uploads `vop-native-debug-apk` as an
-Actions artifact. Its placeholder Firebase public values only test compilation;
-they cannot authenticate against production.
+Actions artifact. The CI-built debug APK uses VOP's existing public Firebase Android registration;
+Google OAuth still requires the Android debug signing fingerprints to be
+registered. A debug APK is not a signed production release.
 
 ## Mobile API contract (v1)
 
