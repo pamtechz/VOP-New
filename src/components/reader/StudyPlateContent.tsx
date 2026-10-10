@@ -73,12 +73,13 @@ function leafContent(leaf: StudyPlateLeaf, key: string, onScriptureClick?: (refe
   if (leaf.subscript) value = <sub>{value}</sub>;
   if (leaf.superscript) value = <sup>{value}</sup>;
 
-  if (leaf.color || leaf.backgroundColor || leaf.fontFamily || leaf.fontSize) {
+  if (leaf.color || leaf.backgroundColor || leaf.fontFamily || leaf.fontSize || leaf.textShadow) {
     const leafStyle: React.CSSProperties = {};
     if (leaf.color) leafStyle.color = leaf.color;
     if (leaf.backgroundColor) leafStyle.backgroundColor = leaf.backgroundColor;
     if (leaf.fontFamily) leafStyle.fontFamily = leaf.fontFamily;
     if (leaf.fontSize) leafStyle.fontSize = leaf.fontSize;
+    if (leaf.textShadow) leafStyle.textShadow = leaf.textShadow;
     value = <span style={leafStyle}>{value}</span>;
   }
 
