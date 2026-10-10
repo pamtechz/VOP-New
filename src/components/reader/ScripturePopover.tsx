@@ -146,8 +146,7 @@ export const ScripturePopover: React.FC<ScripturePopoverProps> = ({ reference, p
               <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>Loading scripture passage...</span>
             </div>
           ) : (
-            <>
-              data?.text?.trim() ? (
+            data?.text?.trim() ? (
                 <p className="vop-scripture-quote-text">“{data.text}”</p>
               ) : (
                 <div className="vop-scripture-unavailable" role="status">
@@ -158,7 +157,6 @@ export const ScripturePopover: React.FC<ScripturePopoverProps> = ({ reference, p
                   </button>
                 </div>
               )
-            </>
           )}
         </div>
 
