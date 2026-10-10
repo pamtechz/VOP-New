@@ -120,8 +120,11 @@ function renderNode(node: StudyPlateNode | StudyPlateLeaf, key: string, onScript
     case 'ol': return <ol key={key} style={hasStyle ? nodeStyle : undefined}>{children}</ol>;
     case 'li': return <li key={key} style={hasStyle ? nodeStyle : undefined}>{children}</li>;
     case 'lic': return <span key={key} style={hasStyle ? nodeStyle : undefined}>{children}</span>;
-    case 'table': return <div key={key} className="vop-study-table-wrapper"><table className="vop-study-table" style={hasStyle ? nodeStyle : undefined}><tbody>{children}</tbody></table></div>;
-    case 'tr': return <tr key={key}>{children}</tr>;
+    case 'table': return <div key={key} className="vop-study-table-wrapper"><table className="vop-study-table"
+      style={{...nodeStyle,...(node.colWidths?.length?{width:node.colWidths.reduce((sum,n)=>sum+n,0)}:{})}}>
+      {node.colWidths?.length&&<colgroup>{node.colWidths.map((width,index)=><col key={index} style={{width}}/>)}</colgroup>}
+      <tbody>{children}</tbody></table></div>;
+    case 'tr': return <tr key={key} style={node.rowHeight?{height:node.rowHeight}:undefined}>{children}</tr>;
     case 'th': return <th key={key} style={hasStyle ? nodeStyle : undefined}>{children}</th>;
     case 'td': return <td key={key} style={hasStyle ? nodeStyle : undefined}>{children}</td>;
     case 'callout': return <div key={key} className={`vop-study-callout vop-callout-${node.calloutType || 'info'}`} style={hasStyle ? nodeStyle : undefined}>{children}</div>;
