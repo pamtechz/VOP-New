@@ -615,8 +615,7 @@ test('Word-style merge and split preserve every nonempty cell text and stable ta
 });
 
 test('table span validation prevents orphan covered cells, overlapping anchors and lost formatting',async()=>{
-  const {formatStudyCells,mergeStudyCells}=await server.ssrLoadModule('/shared/studyTableOperations.ts')
-    as typeof import('../shared/studyTableOperations.ts');
+  const {formatStudyCells,mergeStudyCells}=(await server.ssrLoadModule('/shared/studyTableOperations.ts')) as typeof import('../shared/studyTableOperations.ts');
   const original=normalizeStudyPlateDocument([{
     id:'grid',type:'table',tableStyle:'banded',children:[
       {type:'tr',children:[
@@ -659,8 +658,7 @@ test('table span validation prevents orphan covered cells, overlapping anchors a
 });
 
 test('TSV copy/paste preserves rectangular bounds and blocks edits through merged regions',async()=>{
-  const {studyCellsToTsv,pasteStudyCellsTsv,mergeStudyCells}=await server.ssrLoadModule('/shared/studyTableOperations.ts')
-    as typeof import('../shared/studyTableOperations.ts');
+  const {studyCellsToTsv,pasteStudyCellsTsv,mergeStudyCells}=(await server.ssrLoadModule('/shared/studyTableOperations.ts')) as typeof import('../shared/studyTableOperations.ts');
   const original=normalizeStudyPlateDocument([{
     id:'grid-copy',type:'table',children:[
       {type:'tr',children:[
