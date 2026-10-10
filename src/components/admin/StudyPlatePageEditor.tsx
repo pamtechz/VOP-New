@@ -295,11 +295,11 @@ export function StudyPlatePageEditor({
     const onEscape=(event:KeyboardEvent)=>{
       if(event.key==='Escape')setActiveDropdown(null);
     };
-    document.addEventListener('pointerdown',onOutside);
-    document.addEventListener('keydown',onEscape);
+    window.document.addEventListener('pointerdown',onOutside);
+    window.document.addEventListener('keydown',onEscape);
     return ()=>{
-      document.removeEventListener('pointerdown',onOutside);
-      document.removeEventListener('keydown',onEscape);
+      window.document.removeEventListener('pointerdown',onOutside);
+      window.document.removeEventListener('keydown',onEscape);
     };
   },[activeDropdown]);
   const [tableRows,setTableRows]=useState(3);
