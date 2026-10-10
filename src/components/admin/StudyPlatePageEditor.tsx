@@ -161,6 +161,7 @@ function FormattedLeaf({ leaf, children, ...props }: any) {
   const style: React.CSSProperties = {};
   if (typedLeaf.color) style.color = typedLeaf.color;
   if (typedLeaf.backgroundColor) style.backgroundColor = typedLeaf.backgroundColor;
+  if (typedLeaf.textShadow) style.textShadow = typedLeaf.textShadow;
   if (typedLeaf.fontFamily) style.fontFamily = typedLeaf.fontFamily;
   if (typedLeaf.fontSize) style.fontSize = typedLeaf.fontSize;
 
@@ -198,6 +199,30 @@ function ParagraphElement({ element, children, ...props }: PlateElementProps) {
   );
 }
 
+/* Editable Plate elements keep persisted tables and callouts WYSIWYG. */
+function StudyTableElement({element,children,...props}:PlateElementProps){
+  return <PlateElement as="table" element={element} className="vop-plate-author-table" {...props}>
+    <tbody>{children}</tbody>
+  </PlateElement>;
+}
+function StudyRowElement({element,children,...props}:PlateElementProps){
+  return <PlateElement as="tr" element={element} {...props}>{children}</PlateElement>;
+}
+function StudyCellElement({element,children,...props}:PlateElementProps){
+  return <PlateElement as={element.type==='th'?'th':'td'} element={element} {...props}>{children}</PlateElement>;
+}
+function StudyCalloutElement({element,children,...props}:PlateElementProps){
+  const value=(element as {calloutType?:unknown}).calloutType;
+  const kind=['info','tip','warning','reflection'].includes(String(value))?String(value):'info';
+  return <PlateElement as="aside" element={element}
+    className={'vop-plate-author-callout vop-plate-author-callout-'+kind} {...props}>{children}</PlateElement>;
+}
+const StudyTablePlugin=createPlatePlugin({key:'studyTable',node:{isElement:true,type:'table'}}).withComponent(StudyTableElement);
+const StudyRowPlugin=createPlatePlugin({key:'studyRow',node:{isElement:true,type:'tr'}}).withComponent(StudyRowElement);
+const StudyHeaderCellPlugin=createPlatePlugin({key:'studyHeaderCell',node:{isElement:true,type:'th'}}).withComponent(StudyCellElement);
+const StudyCellPlugin=createPlatePlugin({key:'studyCell',node:{isElement:true,type:'td'}}).withComponent(StudyCellElement);
+const StudyCalloutPlugin=createPlatePlugin({key:'studyCallout',node:{isElement:true,type:'callout'}}).withComponent(StudyCalloutElement);
+
 const plugins=[
   BoldPlugin,ItalicPlugin,UnderlinePlugin,StrikethroughPlugin,CodePlugin,
   StudyFormatPlugin,
@@ -220,6 +245,7 @@ const plugins=[
     render:{as:'a'},
   }),
   SectionPagePlugin,StudyImagePlugin,StudyVideoPlugin,StudyAudioPlugin,
+  StudyTablePlugin,StudyRowPlugin,StudyHeaderCellPlugin,StudyCellPlugin,StudyCalloutPlugin,
 ];
 
 type QuizAnchor={type:'section'|'block';id:string};
@@ -685,7 +711,7 @@ export function StudyPlatePageEditor({
       const marksToRemove = [
         'bold', 'italic', 'underline', 'strikethrough', 'code',
         'subscript', 'superscript', 'color', 'backgroundColor',
-        'fontFamily', 'fontSize', 'scriptureRef', 'bibleVersion', 'isScriptureVerse',
+        'fontFamily', 'fontSize', 'textShadow', 'scriptureRef', 'bibleVersion', 'isScriptureVerse',
       ];
       marksToRemove.forEach(mark => editor.tf.removeMark(mark));
       const index = selectedIndex();
@@ -789,30 +815,24 @@ export function StudyPlatePageEditor({
   };
 
   const insertTable = (rows = 3, cols = 3) => {
+    let inserted=false;
     contentCommand(() => {
-      const headerRow = {
-        type: 'tr',
-        children: Array.from({ length: cols }, (_, c) => ({
-          type: 'th',
-          children: [{ text: `Header ${c + 1}` }],
+      const tableNode={
+        type:'table',
+        id:freshId('block'),
+        children:Array.from({length:rows},()=>({
+          type:'tr',
+          children:Array.from({length:cols},()=>({
+            type:'td',
+            children:[{type:'p',children:[{text:''}]}],
+          })),
         })),
-      };
-      const dataRows = Array.from({ length: Math.max(1, rows - 1) }, (_, r) => ({
-        type: 'tr',
-        children: Array.from({ length: cols }, (_, c) => ({
-          type: 'td',
-          children: [{ text: `Cell ${r + 1}-${c + 1}` }],
-        })),
-      }));
-      const tableNode = {
-        type: 'table',
-        id: freshId('block'),
-        children: [headerRow, ...dataRows],
       };
       editor.tf.insertNodes(tableNode as never);
+      inserted=true;
     });
     setActiveDropdown(null);
-    onNotify?.(`Inserted ${rows}×${cols} table into lesson.`);
+    if(inserted)onNotify?.('Inserted '+rows+'×'+cols+' editable table.');
   };
 
   const insertCallout = (kind: 'info' | 'warning' | 'tip' | 'reflection') => {
