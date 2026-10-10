@@ -892,3 +892,39 @@
 @media (prefers-reduced-motion: reduce) {
   .vop-plate-page-editor .vop-word-ribbon-tab { transition: none; }
 }
+
+
+/* The curriculum editor is frequently narrower than its browser viewport
+   because the chapter outline and admin navigation occupy columns.
+   Always provide horizontal access to groups, not just at a viewport breakpoint. */
+.vop-plate-page-editor .vop-ms-word-ribbon { backdrop-filter: none !important; }
+.vop-plate-page-editor .vop-word-ribbon-content {
+  overflow-x: auto;
+  overflow-y: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+}
+.vop-plate-page-editor .vop-word-ribbon-row {
+  width: max-content;
+  min-width: 100%;
+}
+/* Popovers are positioned using their trigger's viewport rectangle, so
+   scrolling the ribbon never clips the case/color/spacing menus. */
+.vop-plate-page-editor .vop-ribbon-menu-wrapper .vop-ribbon-popover-light {
+  position: fixed;
+  left: var(--vop-ribbon-menu-left, 12px);
+  top: var(--vop-ribbon-menu-top, 180px);
+  max-height: min(55vh, 420px);
+  overflow-y: auto;
+  z-index: 200;
+}
+.vop-plate-page-editor .vop-word-group-content button.format-painter-active {
+  background: #ffedd5 !important;
+  color: #9a3412 !important;
+  border: 1px solid #fb923c !important;
+  animation: none;
+}
+[data-theme="dark"] .vop-plate-page-editor .vop-word-group-content button.format-painter-active {
+  background: #55321d !important;
+  color: #fed7aa !important;
+}
