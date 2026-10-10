@@ -55,18 +55,20 @@ function StudyTableElement({element,children,...props}:PlateElementProps) {
     if(kind==='colBefore'||kind==='colAfter'){
       if(cols>=MAX_COLS)return;
       const nextIndex=col+(kind==='colAfter'?1:0);
+      // Snapshot widths BEFORE structural transforms: Slate may mutate the
+      // referenced table node in place during a multi-row column insertion.
+      const nextWidths=widthList(current);
+      nextWidths.splice(nextIndex,0,145);
       for(let r=0;r<rows;r++)editor.tf.insertNodes(freshCell() as never,{at:[...path,r,nextIndex]});
-      const currentWidths=widthList(current);
-      currentWidths.splice(nextIndex,0,145);
-      editor.tf.setNodes({colWidths:currentWidths} as never,{at:path});
+      editor.tf.setNodes({colWidths:nextWidths} as never,{at:path});
       setActiveCell({row,col:nextIndex});
       return;
     }
     if(cols<=1)return;
+    const nextWidths=widthList(current);
+    nextWidths.splice(col,1);
     for(let r=rows-1;r>=0;r--)editor.tf.removeNodes({at:[...path,r,col]});
-    const currentWidths=widthList(current);
-    currentWidths.splice(col,1);
-    editor.tf.setNodes({colWidths:currentWidths} as never,{at:path});
+    editor.tf.setNodes({colWidths:nextWidths} as never,{at:path});
     setActiveCell({row,col:Math.min(col,cols-2)});
   };
   const trackClick=(event:React.MouseEvent<HTMLDivElement>)=>{
