@@ -35,7 +35,7 @@ import {
 } from '../../../shared/studyPlateAuthoring';
 import { studyPlatePlainText, type StudyPlateDocument, type StudyPlateLeaf } from '../../../shared/studyPlateDocument';
 import { isSafeHttpsMediaUrl, resolveMediaSource } from '../../../shared/mediaSources';
-import { parseScriptureTokens } from '../../services/scriptureLookup';
+import { parseScriptureTokens,lookupScriptureVerse,normalizeScriptureReference } from '../../services/scriptureLookup';
 import { getTranslation, getUiLocale } from '../../services/i18n';
 import { auth } from '../../lib/firebase';
 import { MediaPlayer } from '../media/MediaPlayer';
@@ -293,6 +293,7 @@ export function StudyPlatePageEditor({
 
   // In-text Bible verse states
   const [bibleVerseOpen, setBibleVerseOpen] = useState(false);
+  const [verseResolving,setVerseResolving]=useState(false);
   const [verseText, setVerseText] = useState('');
   const [verseReference, setVerseReference] = useState('');
   const [verseVersion, setVerseVersion] = useState('NKJV');
@@ -948,43 +949,61 @@ export function StudyPlatePageEditor({
     setBibleVerseOpen(true);
   };
 
-  const applyBibleVerse = () => {
+  const applyBibleVerse = async () => {
     const ref = verseReference.trim();
-    const ver = (verseVersion === 'CUSTOM' ? customVersion.trim() : verseVersion).toUpperCase() || 'NKJV';
-    if (!ref && !verseText.trim()) {
-      onNotify?.('Please enter a scripture reference or verse text.');
-      return;
+    let verse=verseText.trim();
+    let version=(verseVersion==='CUSTOM'?customVersion.trim():verseVersion).toUpperCase()||'NKJV';
+    if(!ref&&!verse){onNotify?.('Please enter a Scripture reference or passage text.');return;}
+    if(!editor.selection)restoreSelection();
+    if(!contentSelection()){onNotify?.('Place the cursor in lesson text before inserting Scripture.');return;}
+    // When only a reference was selected/typed, resolve actual text before
+    // insertion. A bare citation must never be stored as a fabricated verse.
+    const citationOnly=Boolean(ref)&&normalizeScriptureReference(verse)
+      .toLowerCase()===normalizeScriptureReference(ref).toLowerCase();
+    if(!verse||citationOnly){
+      setVerseResolving(true);
+      try{
+        const found=await lookupScriptureVerse(ref);
+        if(!found.text.trim()){
+          onNotify?.('Scripture could not be fetched. Paste the passage text or retry with internet access.');
+          return;
+        }
+        verse=found.text.trim();
+        version=found.translation||version; // Never label KJV text as NKJV/Bemba.
+      }catch{
+        onNotify?.('Scripture lookup unavailable. Paste the complete verse text to continue.');
+        return;
+      }finally{setVerseResolving(false);}
     }
-
-    contentCommand(() => {
-      if (verseStyle === 'quote') {
-        const quoteText = `“${verseText.trim()}” — ${ref || 'Scripture'} (${ver})`;
+    restoreSelection();
+    contentCommand(()=>{
+      if(verseStyle==='quote'){
         editor.tf.insertNodes({
-          type: 'blockquote',
-          borderColor: '#f59e0b',
-          backgroundColor: '#fffbeb',
-          children: [{
-            text: quoteText,
-            scriptureRef: ref,
-            bibleVersion: ver,
-            isScriptureVerse: true,
+          type:'blockquote',
+          borderColor:'#f59e0b',backgroundColor:'#fffbeb',
+          children:[{
+            text:verse,scriptureRef:ref||undefined,
+            bibleVersion:version,isScriptureVerse:true,italic:true,
           }],
         });
-      } else {
-        const sel = activeSelection();
-        const currentStr = sel ? editor.api.string(sel) : '';
-        if (verseText.trim() && verseText.trim() !== currentStr) {
-          editor.tf.insertText(verseText.trim());
+      }else{
+        const selected=activeSelection();
+        const currentStr=selected?editor.api.string(selected):'';
+        if(verse!==currentStr){
+          editor.tf.insertNodes({
+            text:verse,scriptureRef:ref||undefined,
+            bibleVersion:version,isScriptureVerse:true,italic:true,
+          } as never);
+        }else{
+          editor.tf.addMark('scriptureRef',ref||currentStr);
+          editor.tf.addMark('bibleVersion',version);
+          editor.tf.addMark('isScriptureVerse',true);
+          editor.tf.addMark('italic',true);
         }
-        editor.tf.addMark('scriptureRef', ref || currentStr);
-        editor.tf.addMark('bibleVersion', ver);
-        editor.tf.addMark('isScriptureVerse', true);
-        editor.tf.addMark('italic', true);
       }
     });
-
     setBibleVerseOpen(false);
-    onNotify?.(`Marked as Bible verse ${ref ? ref + ' ' : ''}(${ver}).`);
+    onNotify?.('Scripture passage inserted: '+(ref||'Selected passage')+' ('+version+').');
   };
 
   const removeBibleVerseMark = () => {
@@ -1680,9 +1699,10 @@ export function StudyPlatePageEditor({
                 <button
                   type="button"
                   className="vop-primary"
-                  onClick={applyBibleVerse}
+                  disabled={verseResolving}
+                  onClick={()=>{void applyBibleVerse();}}
                 >
-                  Apply Verse & Version
+                  {verseResolving?'Fetching Scripture…':'Apply Verse & Version'}
                 </button>
               </div>
             </div>
