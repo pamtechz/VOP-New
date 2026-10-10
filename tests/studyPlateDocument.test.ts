@@ -429,3 +429,17 @@ test('editor tables, callouts and allowlisted text effects survive canonical val
   ]);
   assert.equal('textShadow' in invalid[0].children[0],false);
 });
+
+
+test('Format Painter applies existing text and viewport-anchored ribbon menus survive narrow workspaces',()=>{
+  const editor=read('src/components/admin/StudyPlatePageEditor.tsx');
+  const css=read('src/components/admin/plate-ribbon.css');
+  assert.match(editor,/if\(!expanded\)editor\.tf\.select\(\[index\]\)/);
+  assert.match(editor,/if\(!expanded\)editor\.tf\.select\(selection\)/);
+  assert.match(editor,/isStudyPlateSectionMarker\(node\)/);
+  assert.match(editor,/onClickCapture=\{placeRibbonMenu\}/);
+  assert.match(editor,/getBoundingClientRect\(\)/);
+  assert.match(css,/\.vop-word-ribbon-content\s*\{[\s\S]*?overflow-x:\s*auto/);
+  assert.match(css,/\.vop-ribbon-menu-wrapper \.vop-ribbon-popover-light\s*\{[\s\S]*?position:\s*fixed/);
+  assert.match(css,/backdrop-filter:\s*none\s*!important/);
+});
