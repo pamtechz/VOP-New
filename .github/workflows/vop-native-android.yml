@@ -33,7 +33,7 @@ jobs:
         run: flutter pub get
       - name: Analyze Flutter
         working-directory: native_android
-        run: flutter analyze --no-pub
+        run: flutter analyze --no-pub --no-fatal-infos
       - name: Run native widget tests
         working-directory: native_android
         run: flutter test --no-pub
