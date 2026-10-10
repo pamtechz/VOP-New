@@ -511,3 +511,59 @@ test('ribbon remains sticky and contextual table operations use bounded Plate tr
   assert.match(learner,/node\.colWidths\.reduce/);
   assert.match(learner,/node\.rowHeight/);
 });
+
+
+test('Word table picker is a real accessible grid, not broken 30px-wide preset text',()=>{
+  const picker=read('src/components/admin/StudyTableInsertPicker.tsx');
+  const editor=read('src/components/admin/StudyPlatePageEditor.tsx');
+  const css=read('src/components/admin/plate-ribbon.css');
+  assert.match(picker,/GRID_ROWS=8/);
+  assert.match(picker,/GRID_COLS=10/);
+  assert.match(picker,/aria-label=\{uiT\('admin.study_table.grid_size'/);
+  assert.match(picker,/onMouseEnter=\{\(\)=>setHover\(\{row,col\}\)\}/);
+  assert.match(picker,/onClick=\{\(\)=>insert\(row,col\)\}/);
+  assert.match(picker,/MAX_STUDY_TABLE_ROWS=20/);
+  assert.match(picker,/MAX_STUDY_TABLE_COLUMNS=12/);
+  assert.match(editor,/<StudyTableInsertPicker/);
+  assert.doesNotMatch(editor,/<div className="vop-table-grid-options">/);
+  assert.match(css,/\.vop-word-group-content \.vop-study-table-grid > \.vop-study-table-grid-cell\s*\{/);
+  assert.match(css,/width: 100% !important/);
+  assert.match(css,/\.vop-word-group-content \.vop-table-builder-popover/);
+  assert.match(editor,/closest\('input'\)/); // number fields remain focusable
+});
+
+test('Word table layout navigation, column distribution and sizing use genuine Plate transforms',()=>{
+  const file=read('src/components/admin/StudyEditableTable.tsx');
+  assert.match(file,/const tableKeyDown=/);
+  assert.match(file,/event\.key!=='Tab'/);
+  assert.match(file,/editor\.tf\.insertNodes\(freshRow\(colCount\)/);
+  assert.match(file,/focusCell\(editor,path,nextRow,nextCol\)/);
+  assert.match(file,/tableLayout\('header'\)/);
+  assert.match(file,/tableLayout\('equal'\)/);
+  assert.match(file,/tableLayout\('fit'\)/);
+  assert.match(file,/tableLayout\('delete'\)/);
+  assert.match(file,/role="separator"/);
+  assert.match(file,/tabIndex=\{0\}/);
+  assert.match(file,/keyboardResize\(event,'column'\)/);
+  assert.match(file,/keyboardResize\(event,'row'\)/);
+  assert.match(file,/atRightEdge/);
+});
+
+test('maximum custom table dimensions remain valid canonical learner content',()=>{
+  const table={
+    id:'maximum-valid-table',type:'table',
+    colWidths:Array.from({length:12},()=>100),
+    children:Array.from({length:20},(_,r)=>({
+      type:'tr',rowHeight:35,
+      children:Array.from({length:12},(_,c)=>({
+        type:'td',children:[{type:'p',children:[{text:(r+1)+'-'+(c+1)}]}],
+      })),
+    })),
+  };
+  const normalized=normalizeStudyPlateDocument([table]);
+  assert.equal(normalized[0].children.length,20);
+  assert.equal(normalized[0].children[19].children.length,12);
+  assert.equal(normalized[0].colWidths?.length,12);
+  assert.equal(normalized[0].children[0].rowHeight,35);
+  assert.match(studyPlatePlainText(normalized),/20-12/);
+});
