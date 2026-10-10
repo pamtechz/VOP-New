@@ -43,7 +43,7 @@ const BIBLE_BOOKS: BibleBookMeta[] = [
   { canonical: 'Nehemiah', aliases: ['neh', 'ne'] },
   { canonical: 'Esther', aliases: ['esth', 'est', 'es'] },
   { canonical: 'Job', aliases: ['jb'] },
-  { canonical: 'Psalms', aliases: ['psalm', 'psalms', 'ps', 'psa', 'pss'] },
+  { canonical: 'Psalms', aliases: ['psalm', 'psalms', 'ps', 'psa', 'pss', 'amalumbo', 'masalimo', 'salimo', 'zaburi'] },
   { canonical: 'Proverbs', aliases: ['prov', 'prv', 'pr', 'pro'] },
   { canonical: 'Ecclesiastes', aliases: ['eccles', 'eccl', 'ecc', 'ec'] },
   { canonical: 'Song of Solomon', aliases: ['song of songs', 'song', 'canticles', 'sos', 'ss'] },
@@ -375,8 +375,9 @@ export function resolveBibleBook(rawBook: string): string | null {
  * Normalizes a raw Bible reference into standard format, e.g. "Jn 3:16" -> "John 3:16"
  */
 export function normalizeScriptureReference(rawRef: string): string {
-  const match = rawRef.trim().match(/^((?:[123]\s*)?[A-Za-z]+(?:\.|\b))\s+(\d{1,3}):(\d{1,3})(?:-(\d{1,3}))?$/i);
-  if (!match) return rawRef.trim();
+  const cleanedRef=rawRef.trim().replace(/^[“"'‘]+|[.”"'’\s]+$/g,'');
+  const match = cleanedRef.match(/^((?:[123]\s*)?[A-Za-z]+(?:\.|\b))\s+(\d{1,3}):(\d{1,3})(?:-(\d{1,3}))?$/i);
+  if (!match) return cleanedRef;
   const [, rawBook, chapter, startVerse, endVerse] = match;
   const canonicalBook = resolveBibleBook(rawBook);
   if (!canonicalBook) return rawRef.trim();
@@ -535,11 +536,12 @@ export async function lookupScriptureVerse(rawReference: string): Promise<Script
     }
   }
 
-  // 4. Fallback for un-cached references when offline
+  // Never pass explanatory text off as scripture. The reader offers retry and
+  // the canonical reference instead of displaying a fabricated quotation.
   return {
     reference: normalized,
-    text: `"${normalized}" is cited in this study. Read this passage in your personal Bible or connect to the internet to view the full scripture text.`,
-    translation: 'Bible Citation',
+    text: '',
+    translation: '',
     source: 'fallback',
   };
 }
