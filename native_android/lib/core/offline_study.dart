@@ -55,6 +55,7 @@ class OfflineStudy {
     await _save(key,{
       'kind':'lesson','language':language,'guideId':guideId,'lessonId':lessonId,
       'savedAt':DateTime.now().toUtc().toIso8601String(),
+      'title':(lesson['title']??'Lesson').toString(),
       'lesson':lesson,'guide':payload['guide'],
     });
   }
@@ -71,7 +72,7 @@ class OfflineStudy {
   /// A downloaded quiz MUST be a real server-issued session. Only the fields
   /// needed to answer are persisted, never answer keys, scores or tokens.
   Future<void> saveQuiz(String guideId,String lessonId,
-      String language,Map<String,dynamic> issued)async{
+      String language,Map<String,dynamic> issued,{String title=''})async{
     final sessionId=(issued['sessionId']??'').toString();
     final expires=DateTime.tryParse((issued['expiresAt']??'').toString());
     if(sessionId.isEmpty||expires==null||!expires.isAfter(DateTime.now().toUtc()))
@@ -86,6 +87,7 @@ class OfflineStudy {
     await _save(_itemKey(uid,'quiz',language,guideId,lessonId),{
       'kind':'quiz','language':language,'guideId':guideId,'lessonId':lessonId,
       'sessionId':sessionId,'expiresAt':expires.toUtc().toIso8601String(),
+      'title':title,
       'questions':safe,'assessmentPolicy':issued['assessmentPolicy'],
     });
   }
@@ -96,6 +98,14 @@ class OfflineStudy {
     final expires=DateTime.tryParse((record['expiresAt']??'').toString());
     if(expires==null||!expires.isAfter(DateTime.now().toUtc()))return null;
     return {...record,'ok':true,'offline':true};
+  }
+  Future<List<Map<String,dynamic>>> downloaded()async{
+    final results=<Map<String,dynamic>>[];
+    for(final key in await _list(uid)){
+      final entry=await _get(key);
+      if(entry!=null)results.add(entry);
+    }
+    return results.reversed.toList();
   }
   Future<int> downloadedCount()async=> (await _list(uid)).length;
   Future<void> clearDownloads()async{
