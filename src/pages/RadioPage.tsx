@@ -113,7 +113,7 @@ type MediaSource =
   | { provider: 'embed'; url: string; embedUrl: string; label: string; live: false }
   | null;
 function detectMedia(item: RadioBroadcast): MediaSource {
-  const candidates = [item.videoUrl, item.audioUrl, item.streamUrl].map(v => v?.trim()).filter(Boolean) as string[];
+  const candidates = [item.mediaUrl,item.videoUrl, item.audioUrl, item.streamUrl].map(v => v?.trim()).filter(Boolean) as string[];
   for (const url of candidates) {
     const resolved = resolveMediaSource(url);
     if (!resolved || resolved.kind === 'external') continue;
@@ -125,7 +125,16 @@ function detectMedia(item: RadioBroadcast): MediaSource {
     if (resolved.kind === 'embed') return { provider:'embed', url, embedUrl:resolved.url, label:resolved.provider, live:false };
     return { provider:resolved.kind, url:resolved.url, live:false };
   }
-  // Direct browser-playable HTTPS radio streams can have an extensionless path.
+  // Extensionless CDN and live media are verified by the publishing server
+  // using their HTTP Content-Type before mediaType can be persisted.
+  const raw = item.mediaUrl || item.streamUrl || item.videoUrl || item.audioUrl || '';
+  if(raw && isSafeHttpsMediaUrl(raw)) {
+    if(item.mediaType==='video'||item.mediaType==='stream') {
+      return {provider:item.mediaType==='stream'&&item.mediaProvider==='Audio file'
+        ?'direct-audio':'direct-video',url:raw,live:item.mediaType==='stream'};
+    }
+    if(item.mediaType==='audio')return {provider:'direct-audio',url:raw,live:false};
+  }
   if (item.streamUrl && isSafeHttpsMediaUrl(item.streamUrl)) return {provider:'direct-audio',url:item.streamUrl,live:true};
   return null;
 }
