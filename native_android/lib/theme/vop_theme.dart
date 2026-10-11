@@ -37,20 +37,25 @@ abstract final class VopAppearance {
   }
 }
 abstract final class VopTheme {
-  static ThemeData build(Brightness brightness) {
+  static ThemeData build(Brightness brightness, {bool highContrast=false}) {
     final dark = brightness == Brightness.dark;
-    final surface = dark ? VopColors.darkSurface : VopColors.card;
+    final surface = highContrast
+      ? (dark ? const Color(0xFF050B15) : Colors.white)
+      : (dark ? VopColors.darkSurface : VopColors.card);
     final colors = ColorScheme.fromSeed(
       seedColor: VopColors.navy,
       brightness: brightness,
       primary: dark ? const Color(0xFF9BC4FF) : VopColors.navy,
       secondary: dark ? VopColors.goldLight : VopColors.gold,
       surface: surface,
+      onSurface: highContrast ? (dark ? Colors.white : Colors.black) : null,
     );
     final base = ThemeData(
       useMaterial3: true, colorScheme: colors,
       brightness: brightness,
-      scaffoldBackgroundColor: dark ? VopColors.darkCanvas : VopColors.canvas,
+      scaffoldBackgroundColor: highContrast
+        ? (dark ? Colors.black : Colors.white)
+        : (dark ? VopColors.darkCanvas : VopColors.canvas),
       splashFactory: InkRipple.splashFactory,
     );
     return base.copyWith(
@@ -77,7 +82,8 @@ abstract final class VopTheme {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(19),
           side: BorderSide(
-            color: dark ? VopColors.darkBorder : VopColors.border)),
+            color: highContrast ? (dark ? Colors.white70 : Colors.black54)
+              : (dark ? VopColors.darkBorder : VopColors.border))),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true, fillColor: surface,
@@ -108,7 +114,8 @@ abstract final class VopTheme {
           fontSize: 10,fontWeight: FontWeight.w700)),
       ),
       dividerTheme: DividerThemeData(
-        color: dark ? VopColors.darkBorder : VopColors.border),
+        color: highContrast ? (dark ? Colors.white70 : Colors.black54)
+          : (dark ? VopColors.darkBorder : VopColors.border)),
       chipTheme: base.chipTheme.copyWith(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
         side: BorderSide.none),
