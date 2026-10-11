@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 
 import 'config.dart';
+import 'offline_study.dart';
 
 class VopApiException implements Exception {
   const VopApiException(this.message, {this.status = 0, this.code = ''});
@@ -150,35 +151,104 @@ class VopApi {
       action('/api/prayer',{'action':'create',
         'requestText':requestText,'category':category,'isPrivate':isPrivate});
 
-  Future<Map<String, dynamic>> progress() => read('progress');
-  Future<Map<String, dynamic>> guide(String id) => read('guide', {'guideId': id});
-  Future<Map<String, dynamic>> lesson(String guideId, String lessonId) =>
-      read('lesson', {'guideId': guideId, 'lessonId': lessonId});
-  Future<Map<String, dynamic>> saveResume(
-          String guideId, String lessonId, String language, int pageIndex) =>
-      action('/api/study/progress', {
-        'action': 'saveLessonResume', 'guideId': guideId,
-        'lessonId': lessonId, 'language': language, 'pageIndex': pageIndex,
+  OfflineStudyStore get _offline {
+    final uid=_auth.currentUser?.uid;
+    if(uid==null || uid.isEmpty)throw const VopApiException('Sign in to view offline studies.');
+    return OfflineStudyStore(uid);
+  }
+  bool _connectionFailure(Object error)=>
+    error is VopApiException && error.status==0 &&
+      (error.message.contains('Network unavailable')||
+       error.message.contains('connection timed out'));
+
+  Future<Map<String,dynamic>> progress()=>read('progress');
+  Future<Map<String,dynamic>> guide(String id)=>read('guide',{'guideId':id});
+  Future<bool> isLessonDownloaded(String guideId,String lessonId,
+    String language)=>_offline.hasLesson(guideId,lessonId,language);
+  Future<void> downloadLesson(String guideId,String lessonId,String language)async{
+    final response=await read('lesson',{'guideId':guideId,'lessonId':lessonId});
+    await _offline.saveLesson(guideId,lessonId,language,response);
+  }
+  Future<Map<String,dynamic>> lesson(String guideId,String lessonId,
+      {String language='en'})async{
+    try{
+      return await read('lesson',{'guideId':guideId,'lessonId':lessonId});
+    }catch(error){
+      if(!_connectionFailure(error))rethrow;
+      final saved=await _offline.lesson(guideId,lessonId,language);
+      if(saved==null)rethrow;
+      return {...saved,'offline':true};
+    }
+  }
+  Future<Map<String,dynamic>> _pendingAction(
+      String actionName,Map<String,Object?> request)async{
+    try{
+      return await action('/api/study/progress',request);
+    }catch(error){
+      if(!_connectionFailure(error))rethrow;
+      await _offline.enqueue(actionName,Map<String,dynamic>.from(request));
+      return {'ok':true,'queued':true};
+    }
+  }
+  Future<Map<String,dynamic>> saveResume(
+    String guideId,String lessonId,String language,int pageIndex)=>
+      _pendingAction('saveLessonResume',{
+        'action':'saveLessonResume','guideId':guideId,
+        'lessonId':lessonId,'language':language,'pageIndex':pageIndex,
       });
-  Future<Map<String, dynamic>> completeLesson(
-          String guideId, String lessonId, String language) =>
-      action('/api/study/progress', {
-        'action': 'completeLesson', 'guideId': guideId,
-        'lessonId': lessonId, 'language': language,
+  Future<Map<String,dynamic>> completeLesson(
+    String guideId,String lessonId,String language)=>
+      _pendingAction('completeLesson',{
+        'action':'completeLesson','guideId':guideId,
+        'lessonId':lessonId,'language':language,
       });
-  Future<Map<String, dynamic>> startQuiz(
-          String guideId, String lessonId, String language,
-          {bool confirmRetake = false}) =>
-      action('/api/study/progress', {
-        'action': 'startQuiz', 'guideId': guideId,
-        'lessonId': lessonId, 'language': language, 'confirmRetake': confirmRetake,
+  Future<Map<String,dynamic>> startQuiz(
+      String guideId,String lessonId,String language,
+      {bool confirmRetake=false})async{
+    try{
+      final response=await action('/api/study/progress',{
+        'action':'startQuiz','guideId':guideId,'lessonId':lessonId,
+        'language':language,'confirmRetake':confirmRetake,
       });
-  Future<Map<String, dynamic>> submitQuiz(
-          String guideId, String lessonId, String language,
-          String sessionId, Map<String, Object?> answers) =>
-      action('/api/study/progress', {
-        'action': 'submitQuiz', 'guideId': guideId, 'lessonId': lessonId,
-        'language': language, 'sessionId': sessionId, 'answers': answers,
+      await _offline.saveQuiz(guideId,lessonId,language,response);
+      return response;
+    }catch(error){
+      if(!_connectionFailure(error)||confirmRetake)rethrow;
+      final cached=await _offline.quiz(guideId,lessonId,language);
+      if(cached==null)rethrow;
+      return {...cached,'offline':true};
+    }
+  }
+  Future<Map<String,dynamic>> submitQuiz(
+      String guideId,String lessonId,String language,
+      String sessionId,Map<String,Object?> answers)=>
+      _pendingAction('submitQuiz',{
+        'action':'submitQuiz','guideId':guideId,'lessonId':lessonId,
+        'language':language,'sessionId':sessionId,'answers':answers,
       });
+  Future<int> pendingStudyActions()async=>(await _offline.pending()).length;
+  /// Best-effort replay; the server may reject expired quizzes, conflicts or
+  /// now-locked curricula. Rejected requests remain pending for review.
+  Future<Map<String,int>> syncOfflineQueue()async{
+    final pending=await _offline.pending();
+    var synced=0,rejected=0;
+    for(final row in pending){
+      final actionName=(row['action']??'').toString();
+      final payload=row['payload'];
+      if(!{'completeLesson','saveLessonResume','submitQuiz'}.contains(actionName) ||
+          payload is! Map){rejected++;continue;}
+      try{
+        await action('/api/study/progress',
+          Map<String,Object?>.from(payload));
+        await _offline.remove((row['id']??'').toString());
+        synced++;
+      }catch(error){
+        if(_connectionFailure(error))break;
+        rejected++;
+      }
+    }
+    return {'synced':synced,'pending':(await _offline.pending()).length,
+      'rejected':rejected};
+  }
   void dispose() => _client.close();
 }
