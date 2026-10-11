@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import '../core/vop_api.dart';
 import '../core/offline_study.dart';
@@ -35,29 +37,48 @@ class HomeShell extends StatefulWidget {
   final VopApi api;
   @override State<HomeShell> createState()=>_HomeShellState();
 }
-class _HomeShellState extends State<HomeShell> {
+class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   int tab=0;
   String search='';
   String studyLanguage='';
   final offline=OfflineStudyStore();
+  StreamSubscription<List<ConnectivityResult>>? networkListener;
+  bool syncing=false;
   late Future<Map<String,dynamic>> profile,catalog,progress;
-  @override void initState(){super.initState();reload();
+  @override void initState(){super.initState();WidgetsBinding.instance.addObserver(this);reload();
     widget.api.personalSettings().then((result){
       final settings=asMap(result['settings']);
       VopAppearance.apply(settings);
       VopLocale.load(widget.api,(settings['uiLocale']??'en').toString());
       if(mounted)setState(()=>studyLanguage=(settings['studyLanguage']??'').toString());
     }).catchError((Object ignored){});
-    offline.sync(widget.api).then((count){
-      if(count>0&&mounted)setState(reload);
-    }).catchError((Object ignored){});
+    _syncOffline();
+    networkListener=Connectivity().onConnectivityChanged.listen((states){
+      if(states.any((state)=>state!=ConnectivityResult.none))_syncOffline();
+    });
   }
   void reload(){
     profile=widget.api.bootstrap();
     catalog=widget.api.catalogue();
     progress=widget.api.progress();
   }
-  @override void dispose(){widget.api.dispose();super.dispose();}
+  Future<void> _syncOffline()async{
+    if(syncing)return;
+    syncing=true;
+    try{
+      final count=await offline.sync(widget.api);
+      if(count>0&&mounted)setState(reload);
+    }catch(_){/* Keep failed operations queued for an authenticated retry. */}
+    finally{syncing=false;}
+  }
+  @override void didChangeAppLifecycleState(AppLifecycleState state){
+    if(state==AppLifecycleState.resumed)_syncOffline();
+  }
+  @override void dispose(){
+    networkListener?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    widget.api.dispose();super.dispose();
+  }
   void selectTab(int next)=>setState(()=>tab=next);
   void push(Widget page)=>Navigator.push(context,
     MaterialPageRoute<void>(builder:(_)=>page));
