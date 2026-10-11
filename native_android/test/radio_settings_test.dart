@@ -99,6 +99,22 @@ void main(){
     });
     expect(facebook.provider,'Facebook');
   });
+  test('licensed AudioVerse streams play natively only with rights confirmation',(){
+    final authorised=resolveRadioMedia({
+      'mediaUrl':'https://www.audioverse.org/en/media/12345',
+      'mediaProvider':'AudioVerse',
+      'licensedAudioUrl':'https://media.example.com/authorised.mp3',
+      'rightsConfirmed':true,
+    });
+    expect(authorised.kind,RadioMediaKind.audio);
+    final restricted=resolveRadioMedia({
+      'mediaUrl':'https://www.audioverse.org/en/media/12345',
+      'mediaProvider':'AudioVerse',
+      'licensedAudioUrl':'https://media.example.com/authorised.mp3',
+      'rightsConfirmed':false,
+    });
+    expect(restricted.kind,RadioMediaKind.external);
+  });
   test('web-backed appearance applies theme/accessibility on Android',(){
     VopAppearance.apply({'theme':'dark','accessibility':{
       'largeText':true,'reducedMotion':true,'highContrast':true,
