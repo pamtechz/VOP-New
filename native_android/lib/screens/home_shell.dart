@@ -310,9 +310,10 @@ class _HomeShellState extends State<HomeShell> {
   Widget study()=>asyncView(catalog,(data){
     final guides=asRows(data['guides']);
     final programs=asRows(data['programs']);
+    final availableCodes=guides.map((guide)=>(guide['language']??'').toString()).toSet();
+    final effectiveLanguage=availableCodes.contains(studyLanguage)?studyLanguage:'all';
     final visible=guides.where((guide){
-      if(studyLanguage.isNotEmpty && studyLanguage!='all'&&
-         guide['language']?.toString()!=studyLanguage)return false;
+      if(effectiveLanguage!='all'&&guide['language']?.toString()!=effectiveLanguage)return false;
       final text=(guide['title']??'').toString()+' '+
         (guide['description']??'').toString()+' '+
         (guide['language']??'').toString();
@@ -333,7 +334,7 @@ class _HomeShellState extends State<HomeShell> {
         const SizedBox(height:10),
         if(guides.isNotEmpty)Padding(padding:const EdgeInsets.only(bottom:10),
           child:DropdownButtonFormField<String>(
-            initialValue:studyLanguage.isEmpty?'all':studyLanguage,
+            initialValue:effectiveLanguage,
             decoration:const InputDecoration(labelText:'Study language',
               prefixIcon:Icon(Icons.translate)),
             items:[
