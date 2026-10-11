@@ -22,13 +22,22 @@ class _EngagementScreenState extends State<EngagementScreen> {
   @override Widget build(BuildContext context)=>Scaffold(
     appBar:AppBar(title:const Text('Scripture & Challenges')),
     body:Column(children:[
-      Padding(padding:const EdgeInsets.all(15),
-        child:SegmentedButton<int>(segments:const [
-          ButtonSegment(value:0,label:Text('Memory decks'),
-            icon:Icon(Icons.psychology_outlined)),
-          ButtonSegment(value:1,label:Text('Challenges'),
-            icon:Icon(Icons.sports_esports_outlined)),
-        ],selected:{tab},onSelectionChanged:(values)=>setState(()=>tab=values.first))),
+      Padding(padding:const EdgeInsets.fromLTRB(8,8,8,4),
+        child:LayoutBuilder(builder:(context,constraints)=>
+          SingleChildScrollView(scrollDirection:Axis.horizontal,
+            child:ConstrainedBox(
+              constraints:BoxConstraints(minWidth:constraints.maxWidth),
+              child:SegmentedButton<int>(
+                showSelectedIcon:false,
+                segments:const [
+                  ButtonSegment(value:0,label:Text('Memory decks'),
+                    icon:Icon(Icons.psychology_outlined)),
+                  ButtonSegment(value:1,label:Text('Challenges'),
+                    icon:Icon(Icons.sports_esports_outlined)),
+                ],
+                selected:{tab},
+                onSelectionChanged:(values)=>setState(()=>tab=values.first)),
+            )))),
       Expanded(child:tab==0?_decks():_challenges()),
     ]),
   );
@@ -105,11 +114,12 @@ class _EngagementScreenState extends State<EngagementScreen> {
         ]));
     });
   Widget _score(String label,String number,IconData icon)=>Card(
-    child:Padding(padding:const EdgeInsets.symmetric(horizontal:9,vertical:14),
+    child:Padding(padding:const EdgeInsets.symmetric(horizontal:5,vertical:10),
       child:Column(children:[
         Icon(icon,color:VopColors.gold,size:25),
         const SizedBox(height:7),
-        Text(number,style:Theme.of(context).textTheme.titleLarge),
+        FittedBox(fit:BoxFit.scaleDown,child:Text(number,
+          maxLines:1,style:Theme.of(context).textTheme.titleLarge)),
         Text(label,style:const TextStyle(fontSize:9,fontWeight:FontWeight.w800)),
       ])));
   Future<void> _startChallenge()async{
