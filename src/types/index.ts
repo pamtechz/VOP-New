@@ -515,6 +515,7 @@ export interface RadioBroadcast {
   videoUrl?: string;
   streamUrl?: string;
   mediaUrl?: string;
+  audioEmbedUrl?: string;
   mediaProvider?: string;
   mediaType?: 'audio' | 'video' | 'stream' | 'youtube' | 'audioverse' | 'embed';
   posterUrl?: string;
