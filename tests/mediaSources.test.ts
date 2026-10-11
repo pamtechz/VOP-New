@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { isSafeHttpsMediaUrl, resolveMediaSource, identifyRadioMedia, resolvedRadioRecord, parseAudioVerseEmbedCode } from '../shared/mediaSources.ts';
+import { isSafeHttpsMediaUrl, resolveMediaSource, identifyRadioMedia, resolvedRadioRecord, parseAudioVerseEmbedCode, extractPublishedMediaDetails } from '../shared/mediaSources.ts';
 
 test('rejects executable protocols, local network destinations and credentials', () => {
   for (const value of ['javascript:alert(1)','data:video/mp4;base64,AA==','http://www.youtube.com/watch?v=dQw4w9WgXcQ',
@@ -64,7 +64,9 @@ test('AudioVerse only embeds publisher-supplied vetted player URLs', () => {
   assert.match(radio,/selected\?\.audioEmbedUrl/);
   assert.match(radio,/iframe src=\{source\.embedUrl\}/);
   assert.match(radio,/Play AudioVerse/);
-  assert.match(admin,/audioEmbedCode/);
+  assert.doesNotMatch(admin,/audioEmbedCode/);
+  assert.match(admin,/audioEmbedUrl/);
+  assert.match(admin,/extract|embedUrl/i);
   assert.match(server,/parseAudioVerseEmbedCode/);
   assert.match(read('src/components/media/ProviderPlaybackNotice.tsx'),/isSafeHttpsMediaUrl/);
 });
@@ -78,4 +80,29 @@ test('AudioVerse audio embed code extracts only approved HTTPS player URLs', () 
   assert.throws(()=>parseAudioVerseEmbedCode('<script src="https://www.audioverse.org/en/embed/media/12345"></script>'));
   assert.throws(()=>parseAudioVerseEmbedCode('http://www.audioverse.org/en/embed/media/12345'));
   assert.throws(()=>parseAudioVerseEmbedCode('https://www.audioverse.org/en/media/12345'));
+});
+
+
+test('extracts publisher metadata and a vetted AudioVerse player from a single pasted link', () => {
+  const html = '<html><head>'
+    + '<meta property="og:title" content="Grace &amp; Hope">'
+    + '<meta name="author" content="Guest Speaker">'
+    + '<meta property="og:description" content="Bible teaching and encouragement">'
+    + '<meta property="og:image" content="https://cdn.audioverse.org/thumb.jpg">'
+    + '</head><body><iframe title="Audio player" src="https://www.audioverse.org/en/embed/media/12345"></iframe></body></html>';
+  assert.deepEqual(extractPublishedMediaDetails(html, 'https://www.audioverse.org/en/media/12345'), {
+    title: 'Grace & Hope', speaker: 'Guest Speaker',
+    description: 'Bible teaching and encouragement',
+    posterUrl: 'https://cdn.audioverse.org/thumb.jpg',
+    embedUrl: 'https://www.audioverse.org/en/embed/media/12345',
+  });
+});
+test('never imports cross-site or mismatched publisher iframes', () => {
+  const external = '<iframe src="https://evil.example/embed/media/12345"></iframe>';
+  assert.equal(extractPublishedMediaDetails(external,'https://www.audioverse.org/en/media/12345').embedUrl,undefined);
+  const wrong = '<iframe src="https://www.audioverse.org/en/embed/media/99999"></iframe>';
+  assert.equal(extractPublishedMediaDetails(wrong,'https://www.audioverse.org/en/media/12345').embedUrl,undefined);
+  const fakePage = '<iframe src="https://www.audioverse.org/en/embed/media/12345"></iframe>';
+  assert.equal(extractPublishedMediaDetails(fakePage,'https://evil.example/post').embedUrl,undefined);
+  assert.deepEqual(extractPublishedMediaDetails('<meta property="og:title" content="Hidden">','http://localhost/post'),{});
 });
