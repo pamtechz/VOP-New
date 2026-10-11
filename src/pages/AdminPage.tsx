@@ -717,7 +717,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
       // Core tenant workspaces must remain discoverable. A subscription may
       // restrict certification actions, but it must not silently remove the
       // organization approval/certificate workspace from navigation.
-      if(item.id!=='certification'&&organizationAdmin&&subscriptionFeature&&subscriptionFeatures
+      if(item.id!=='certification'&&item.id!=='radio'&&organizationAdmin&&subscriptionFeature&&subscriptionFeatures
         &&Object.hasOwn(subscriptionFeatures,subscriptionFeature)
         &&subscriptionFeatures[subscriptionFeature]!==true)return false;
       // Candidates, Curriculum Studio and Certification are core tenant
