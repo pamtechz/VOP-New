@@ -359,13 +359,34 @@ class _ProgrammeScreen extends StatelessWidget {
     body:ListView(padding:const EdgeInsets.all(17),children:[
       if(guides.isEmpty)const VopEmpty(icon:Icons.menu_book_outlined,
         message:'No published lessons in this programme yet.'),
-      ...guides.map((guide)=>VopCourseCard(
+      ...guides.map((guide)=>Column(children:[
+        VopCourseCard(
         title:(guide['title']??'').toString(),
         description:(guide['description']??'').toString(),
         language:(guide['language']??'').toString(),
         imageUrl:(guide['image']??'').toString(),
         onTap:()=>Navigator.push(context,MaterialPageRoute<void>(
-          builder:(_)=>GuideScreen(api:api,guideId:(guide['id']??'').toString()))))),
+          builder:(_)=>GuideScreen(api:api,guideId:(guide['id']??'').toString())))),
+        FutureBuilder<Map<String,dynamic>>(
+          future:api.guide((guide['id']??'').toString()),
+          builder:(context,snapshot){
+            if(!snapshot.hasData)return const SizedBox.shrink();
+            final lessons=asRows(snapshot.data?['lessons']);
+            return Column(children:lessons.map((lesson)=>ListTile(
+              dense:true,visualDensity:VisualDensity.compact,
+              contentPadding:const EdgeInsets.only(left:25,right:6),
+              leading:Icon(lesson['type']=='Test'
+                ?Icons.fact_check_outlined:Icons.article_outlined,size:18),
+              title:Text((lesson['title']??'Lesson').toString(),
+                maxLines:1,overflow:TextOverflow.ellipsis),
+              trailing:const Icon(Icons.chevron_right,size:18),
+              onTap:()=>Navigator.push(context,MaterialPageRoute<void>(
+                builder:(_)=>GuideScreen(api:api,
+                  guideId:(guide['id']??'').toString()))),
+            )).toList());
+          },
+        ),
+      ])),
     ]),
   );
 }
