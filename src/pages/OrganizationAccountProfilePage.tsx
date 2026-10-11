@@ -96,8 +96,8 @@ export default function OrganizationAccountProfilePage({
           <div className="vop-field"><label>WhatsApp number</label><div className="vop-org-account-input"><Phone size={15}/><input value={whatsapp} maxLength={40} onChange={event=>setWhatsapp(event.target.value)}/></div></div>
         </div>
         <div className="vop-field"><label>Address</label><div className="vop-org-account-input textarea"><MapPin size={15}/><textarea value={address} maxLength={500} rows={4} onChange={event=>setAddress(event.target.value)}/></div></div>
-        <div className="vop-field"><label>About me</label><textarea value={bio} maxLength={1000} rows={3} onChange={event=>setBio(event.target.value)}/></div>
-        <div className="vop-field"><label>Profile picture URL</label><input type="url" value={photoURL} maxLength={2048} placeholder="https://" onChange={event=>setPhotoURL(event.target.value)}/></div>
+        <div className="vop-field"><label>{roleLabel('About me')}</label><textarea value={bio} maxLength={1000} rows={3} onChange={event=>setBio(event.target.value)}/></div>
+        <div className="vop-field"><label>{roleLabel('Profile picture URL')}</label><input type="url" value={photoURL} maxLength={2048} placeholder={roleLabel('https://')} onChange={event=>setPhotoURL(event.target.value)}/></div>
         <div className="vop-org-account-security-note"><ShieldCheck size={17}/><span>Your organization, role and permissions cannot be self-edited here. They remain controlled by tenant authorization and active membership.</span></div>
         <div className="vop-org-account-actions"><button className="vop-primary" type="submit" disabled={saving}><Save size={16}/>{saving?'Saving…':'Save profile'}</button></div>
       </form>
