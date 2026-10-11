@@ -1,4 +1,3 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../core/vop_api.dart';
 import '../theme/vop_theme.dart';
@@ -397,47 +396,6 @@ class _ProgressScreen extends StatelessWidget{
             ]))),
           const SizedBox(height:12),
           const Text('Open a study guide to continue from your saved reading position.'),
-        ]);
-      }),
-  );
-}
-class _AccountScreen extends StatelessWidget {
-  const _AccountScreen({required this.api});
-  final VopApi api;
-  @override Widget build(BuildContext context)=>Scaffold(
-    appBar:AppBar(title:const Text('My Account')),
-    body:FutureBuilder<Map<String,dynamic>>(future:api.bootstrap(),
-      builder:(context,s){
-        if(s.connectionState!=ConnectionState.done)return const VopSkeleton();
-        if(s.hasError)return VopEmpty(icon:Icons.wifi_off,message:'${s.error}');
-        final user=asMap(s.data?['account']);
-        return ListView(padding:const EdgeInsets.all(19),children:[
-          const Center(child:CircleAvatar(radius:37,
-            child:Icon(Icons.person_outline,size:41))),
-          const SizedBox(height:11),
-          Center(child:Text((user['displayName']??'Learner').toString(),
-            style:Theme.of(context).textTheme.titleLarge)),
-          const SizedBox(height:4),
-          Center(child:Text((user['email']??'').toString())),
-          const SizedBox(height:24),
-          Card(child:Column(children:[
-            ListTile(leading:const Icon(Icons.shield_outlined),
-              title:const Text('Account role'),
-              subtitle:Text((user['role']??'').toString())),
-            const Divider(height:1),
-            ListTile(leading:const Icon(Icons.apartment_outlined),
-              title:const Text('Organisation'),
-              subtitle:Text((user['organizationName']??'').toString())),
-            const Divider(height:1),
-            ListTile(leading:const Icon(Icons.translate_outlined),
-              title:const Text('Study language'),
-              subtitle:Text((user['studyLanguage']??'en').toString())),
-          ])),
-          const SizedBox(height:20),
-          OutlinedButton.icon(
-            onPressed:()=>FirebaseAuth.instance.signOut(),
-            icon:const Icon(Icons.logout),
-            label:const Text('Sign out')),
         ]);
       }),
   );
