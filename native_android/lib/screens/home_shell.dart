@@ -17,6 +17,15 @@ List<Map<String,dynamic>> asRows(dynamic value)=>value is List
   ?value.whereType<Map>().map((e)=>Map<String,dynamic>.from(e)).toList()
   :<Map<String,dynamic>>[];
 
+/// Avoid a one-letter greeting if the account profile only contains an initial.
+/// The full name must come from the authenticated account, not a guessed name.
+String welcomeGreeting(dynamic displayName){
+  final words=(displayName??'').toString().trim()
+    .split(RegExp(r'\s+')).where((part)=>part.length>1).toList();
+  if(words.isEmpty)return 'Welcome back';
+  return 'Hello, ${words.first}';
+}
+
 /// Match the web's mobile bottom navigation, not a generic Flutter shell.
 /// Secondary destinations are accessible in an account/feature drawer.
 class HomeShell extends StatefulWidget {
@@ -27,13 +36,12 @@ class HomeShell extends StatefulWidget {
 class _HomeShellState extends State<HomeShell> {
   int tab=0;
   String search='';
-  late Future<Map<String,dynamic>> profile,catalog,progress,announcements;
+  late Future<Map<String,dynamic>> profile,catalog,progress;
   @override void initState(){super.initState();reload();}
   void reload(){
     profile=widget.api.bootstrap();
     catalog=widget.api.catalogue();
     progress=widget.api.progress();
-    announcements=widget.api.announcements();
   }
   @override void dispose(){widget.api.dispose();super.dispose();}
   void selectTab(int next)=>setState(()=>tab=next);
@@ -74,7 +82,7 @@ class _HomeShellState extends State<HomeShell> {
     ];
     return Scaffold(
       appBar:AppBar(
-        toolbarHeight:65,
+        toolbarHeight:58,
         title:tab==0?const VopBrand(compact:true)
           :Text(labels[tab],style:const TextStyle(fontWeight:FontWeight.w800)),
         actions:[
@@ -188,33 +196,33 @@ class _HomeShellState extends State<HomeShell> {
       final user=asMap(result[0]['account']);
       final guides=asRows(result[1]['guides']);
       final completed=(result[2]['completedLessons'] as List?)?.length??0;
-      final firstName=(user['displayName']??'Learner').toString().trim()
-        .split(' ').first;
+      final greeting=welcomeGreeting(user['displayName']);
       return RefreshIndicator(onRefresh:()async{
         setState(reload);await Future.wait([profile,catalog,progress]);},
-        child:ListView(padding:const EdgeInsets.all(17),children:[
+        child:ListView(key:const PageStorageKey<String>('vop-discover-scroll'),
+          padding:const EdgeInsets.all(15),children:[
           Row(children:[
             Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
               Text('WELCOME BACK',style:const TextStyle(
                 color:VopColors.gold,fontWeight:FontWeight.w800,
                 fontSize:10,letterSpacing:1.35)),
               const SizedBox(height:4),
-              Text('Hello, $firstName',
-                style:Theme.of(context).textTheme.headlineMedium),
+              Text(greeting,maxLines:1,overflow:TextOverflow.ellipsis,
+                style:Theme.of(context).textTheme.headlineMedium?.copyWith(fontSize:24)),
             ])),
-            Container(width:47,height:47,alignment:Alignment.center,
+            Container(width:38,height:38,alignment:Alignment.center,
               decoration:BoxDecoration(shape:BoxShape.circle,
                 color:Theme.of(context).colorScheme.primaryContainer),
-              child:const Icon(Icons.waving_hand_outlined,size:25)),
+              child:const Icon(Icons.waving_hand_outlined,size:21)),
           ]),
-          const SizedBox(height:16),
+          const SizedBox(height:12),
           VopHeroCard(
             title:'Discover truth.\nGrow in faith.',
             description:'Continue your Bible study journey and explore lessons prepared for you.',
             kicker:'YOUR FAITH. YOUR JOURNEY.',
             icon:Icons.menu_book_rounded,
             cta:'Explore Lessons',onTap:()=>selectTab(1)),
-          const SizedBox(height:22),
+          const SizedBox(height:13),
           Row(children:[
             Expanded(child:_metric(icon:Icons.menu_book_outlined,
               value:'${guides.length}',label:'Study guides')),
@@ -222,14 +230,14 @@ class _HomeShellState extends State<HomeShell> {
             Expanded(child:_metric(icon:Icons.task_alt,
               value:'$completed',label:'Lessons completed')),
           ]),
-          const SizedBox(height:20),
+          const SizedBox(height:14),
           VopSectionTitle('Explore VOP',
             subtitle:'Learning and encouragement at your fingertips'),
-          const SizedBox(height:8),
+          const SizedBox(height:4),
           GridView.count(
             crossAxisCount:2,shrinkWrap:true,
             physics:const NeverScrollableScrollPhysics(),
-            crossAxisSpacing:11,mainAxisSpacing:11,childAspectRatio:1.37,
+            crossAxisSpacing:10,mainAxisSpacing:10,childAspectRatio:1.53,
             children:[
               VopFeatureTile(title:'Bible Lessons',subtitle:'Grow through guided study',
                 icon:Icons.auto_stories_rounded,tint:VopColors.navyBright,
@@ -244,7 +252,7 @@ class _HomeShellState extends State<HomeShell> {
                 icon:Icons.radio_outlined,tint:const Color(0xFF8854D0),
                 onTap:()=>selectTab(4)),
             ]),
-          const SizedBox(height:24),
+          const SizedBox(height:17),
           VopSectionTitle('Featured study guides',
             subtitle:'Continue exploring the Word',
             action:'View all',onAction:()=>selectTab(1)),
@@ -258,14 +266,14 @@ class _HomeShellState extends State<HomeShell> {
       );
     });
   Widget _metric({required IconData icon,required String value,required String label})=>
-    Card(child:Padding(padding:const EdgeInsets.all(14),child:Row(children:[
-      Container(width:42,height:42,decoration:BoxDecoration(
+    Card(child:Padding(padding:const EdgeInsets.all(10),child:Row(children:[
+      Container(width:35,height:35,decoration:BoxDecoration(
         color:Theme.of(context).colorScheme.primaryContainer,
         borderRadius:BorderRadius.circular(12)),
-        child:Icon(icon,color:Theme.of(context).colorScheme.primary,size:22)),
-      const SizedBox(width:10),
+        child:Icon(icon,color:Theme.of(context).colorScheme.primary,size:19)),
+      const SizedBox(width:9),
       Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-        Text(value,style:Theme.of(context).textTheme.titleLarge),
+        Text(value,style:Theme.of(context).textTheme.titleMedium?.copyWith(fontSize:18)),
         Text(label,maxLines:2,style:TextStyle(fontSize:10.5,
           color:Theme.of(context).colorScheme.onSurfaceVariant)),
       ])),
@@ -281,17 +289,18 @@ class _HomeShellState extends State<HomeShell> {
       return text.toLowerCase().contains(search.toLowerCase());
     }).toList();
     return RefreshIndicator(onRefresh:()async{setState(reload);await catalog;},
-      child:ListView(padding:const EdgeInsets.all(17),children:[
+      child:ListView(key:const PageStorageKey<String>('vop-lessons-scroll'),
+        padding:const EdgeInsets.all(15),children:[
         const VopHeroCard(
           title:'Lessons for life.',
           description:'Explore the Bible at your own pace and continue your learning journey.',
           icon:Icons.auto_stories_rounded,kicker:'STUDY WITH PURPOSE'),
-        const SizedBox(height:19),
+        const SizedBox(height:12),
         TextField(onChanged:(value)=>setState(()=>search=value),
           decoration:const InputDecoration(
             hintText:'Find courses, topics and languages',
             prefixIcon:Icon(Icons.search_rounded))),
-        const SizedBox(height:15),
+        const SizedBox(height:10),
         if(programs.isNotEmpty)...[
           VopSectionTitle('Study programmes',
             subtitle:'Explore structured learning paths'),
@@ -299,6 +308,7 @@ class _HomeShellState extends State<HomeShell> {
             margin:const EdgeInsets.only(bottom:10),
             clipBehavior:Clip.antiAlias,
             child:ListTile(
+              dense:true,visualDensity:VisualDensity.compact,
               leading:const Icon(Icons.school_outlined),
               title:Text((p['title']??'').toString(),
                 style:const TextStyle(fontWeight:FontWeight.w800)),
@@ -312,7 +322,7 @@ class _HomeShellState extends State<HomeShell> {
                   guides:linked,api:widget.api));
               },
             ))),
-          const SizedBox(height:14),
+          const SizedBox(height:7),
         ],
         VopSectionTitle('Study guides',
           subtitle:'${visible.length} published'),
