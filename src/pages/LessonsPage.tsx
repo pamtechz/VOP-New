@@ -135,6 +135,7 @@ export const LessonsPage: React.FC<Props> = ({
             {programGuides.length?programGuides.map((guide,index)=>{
               const guideBm = getActiveGuideBookmark(guide, currentUser, settings.quizPassThreshold);
               const hasResume = Boolean(guideBm?.bookmark.hasBookmark && !guideBm.bookmark.isCompleted);
+              const ordered=orderedLessons(guide);
               return (
                 <div key={guide.id+':'+guide.language} className="vop-program-guide-item">
                   <button type="button"
@@ -148,8 +149,8 @@ export const LessonsPage: React.FC<Props> = ({
                   <details className="vop-program-guide-lessons">
                     <summary>{t('navigation.lessons','Lessons')} · {guide.lessons.length}</summary>
                     <div className="vop-program-guide-lesson-list">
-                      {orderedLessons(guide).map((lesson,lessonIndex)=>{
-                        const unlocked=isLessonUnlocked(guide,lessonIndex,currentUser,settings.quizPassThreshold);
+                      {ordered.map((lesson,lessonIndex)=>{
+                        const unlocked=isLessonUnlocked(guide,lessonIndex,currentUser,settings.quizPassThreshold,ordered);
                         const done=lessonIsComplete(guide,lesson,currentUser,settings.quizPassThreshold);
                         return <button key={lesson.id} type="button" disabled={!unlocked}
                           className={'vop-program-guide-lesson-row'+(done?' is-complete':'')+(!unlocked?' is-locked':'')}
