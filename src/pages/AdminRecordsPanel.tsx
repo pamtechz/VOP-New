@@ -727,14 +727,16 @@ function Fields({kind,form,setForm,records}:{kind:Exclude<ManagedAdminCollection
     case 'radio':
       return <div className="vop-form-grid" style={{gridTemplateColumns:'1fr'}}>
         {field('title','Title *')}{field('speaker','Speaker')}{field('series','Series')}
-        <div className="vop-radio-admin-note" role="status">
-          <strong>Automatic media detection:</strong>{' '}
-          {String(form.mediaProvider||'').trim()
-            ? String(form.mediaProvider)+' · '+String(form.mediaType||'').toUpperCase()
-            : 'Paste a public link above. VOP identifies the provider and file format automatically.'}
-          {String(form.mediaUrl||'')&&<div style={{overflowWrap:'anywhere'}}>{String(form.mediaUrl)}</div>}
-        </div>
+        {Boolean(form.mediaProvider)&&<div className="vop-radio-admin-note" role="status">
+          {String(form.mediaProvider)+' · '+String(form.mediaType||'').toUpperCase()}
+        </div>}
         {field('posterUrl','Poster image (optional)','url')}
+        {field('licensedAudioUrl','Licensed direct audio (optional)','url')}
+        {Boolean(form.licensedAudioUrl)&&<label className="vop-setting-row">
+          <input type="checkbox" checked={form.hasPlaybackRights===true}
+            onChange={event=>setForm(current=>({...current,hasPlaybackRights:event.target.checked}))}/>
+          <span>I have permission to stream this audio</span>
+        </label>}
         {select('sharingScope','Audience',[
           {value:'organization',label:'My organisation'},
           {value:'shared',label:'Shared with VOP'},
