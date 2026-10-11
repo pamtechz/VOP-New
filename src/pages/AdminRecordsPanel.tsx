@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { auth } from '../lib/firebase';
 import {
   AlertTriangle, Book, Check, ChevronDown, ChevronRight, Edit3, Globe, Layers, Megaphone,
@@ -924,6 +924,7 @@ function RadioAdminDashboard({
   const [importUrl, setImportUrl] = useState('');
   const [importBusy, setImportBusy] = useState(false);
   const detectSequence = useRef(0);
+  const [editorOpen, setEditorOpen] = useState(false);
   const importRadioSource = async (source = importUrl) => {
     if (!source.trim() || !isSafeHttpsMediaUrl(source.trim())) return;
     const requestId=++detectSequence.current;
@@ -973,7 +974,6 @@ function RadioAdminDashboard({
   const [playlistPublished, setPlaylistPublished] = useState(false);
   const [playlistItems, setPlaylistItems] = useState<string[]>([]);
   const [playlistSaving, setPlaylistSaving] = useState(false);
-  const [editorOpen, setEditorOpen] = useState(false);
   const startNewEditor = () => { if (!canCreate) { setError('You do not have permission to create radio content.'); return; } setMessage(''); setError(''); setImportUrl(''); setForm(previous=>({...previous,mediaUrl:'',mediaProvider:'',mediaType:''})); openNew(); setEditorOpen(true); };
   const startEditEditor = (item: AdminRecord) => { setMessage(''); setError(''); setImportUrl(String(item.mediaUrl||item.videoUrl||item.audioUrl||item.streamUrl||'')); edit(item); setEditorOpen(true); };
   useEffect(() => { if (editorOpen && message) setEditorOpen(false); }, [editorOpen, message]);
