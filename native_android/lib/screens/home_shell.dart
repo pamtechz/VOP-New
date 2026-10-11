@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import '../core/vop_api.dart';
+import '../core/vop_localizations.dart';
 import '../theme/vop_theme.dart';
 import '../widgets/vop_ui.dart';
 import 'certificates_screen.dart';
@@ -65,7 +66,11 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     });
     unawaited(_syncIfOnline());
     widget.api.personalSettings().then((result){
-      VopAppearance.apply(asMap(result['settings']));
+      final settings=asMap(result['settings']);
+      VopAppearance.apply(settings);
+      VopLocalizations.updateStudyLanguage((settings['studyLanguage']??'').toString());
+      unawaited(VopLocalizations.load(widget.api,
+        (settings['uiLocale']??'en').toString()));
     }).catchError((Object ignored){});
   }
   void reload(){
@@ -79,8 +84,18 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     widget.api.dispose();super.dispose();
   }
   void selectTab(int next)=>setState(()=>tab=next);
-  void push(Widget page)=>Navigator.push(context,
-    MaterialPageRoute<void>(builder:(_)=>page));
+  Future<void> push(Widget page)async{
+    await Navigator.push(context,MaterialPageRoute<void>(builder:(_)=>page));
+    if(!mounted)return;
+    widget.api.personalSettings().then((result){
+      final settings=asMap(result['settings']);
+      VopLocalizations.updateStudyLanguage(
+        (settings['studyLanguage']??'').toString());
+      unawaited(VopLocalizations.load(widget.api,
+        (settings['uiLocale']??'en').toString()));
+      if(mounted)setState(reload);
+    }).catchError((Object ignored){});
+  }
 
   Widget asyncView(Future<Map<String,dynamic>> future,
       Widget Function(Map<String,dynamic>) render)=>FutureBuilder<Map<String,dynamic>>(
@@ -103,7 +118,13 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
 
   @override Widget build(BuildContext context){
     final wide=MediaQuery.sizeOf(context).width>=880;
-    const labels=['Discover','Lessons','Library','Prayer','Radio'];
+    final labels=[
+      VopLocalizations.t('navigation.discover','Discover'),
+      VopLocalizations.t('navigation.lessons','Lessons'),
+      VopLocalizations.t('navigation.library','Library'),
+      VopLocalizations.t('navigation.prayer','Prayer'),
+      VopLocalizations.t('navigation.radio','Radio'),
+    ];
     final icons=[
       Icons.home_outlined,Icons.auto_stories_outlined,
       Icons.local_library_outlined,Icons.volunteer_activism_outlined,
@@ -318,7 +339,15 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   Widget study()=>asyncView(catalog,(data){
     final guides=asRows(data['guides']);
     final programs=asRows(data['programs']);
-    final visible=guides.where((guide){
+    final selectedLanguage=VopLocalizations.studyLanguage.value;
+    final ordered=[...guides]..sort((a,b){
+      final aCode=(a['language']??'').toString().toLowerCase();
+      final bCode=(b['language']??'').toString().toLowerCase();
+      final aMatch=aCode==selectedLanguage&&selectedLanguage.isNotEmpty;
+      final bMatch=bCode==selectedLanguage&&selectedLanguage.isNotEmpty;
+      return aMatch==bMatch?0:aMatch?-1:1;
+    });
+    final visible=ordered.where((guide){
       final text=(guide['title']??'').toString()+' '+
         (guide['description']??'').toString()+' '+
         (guide['language']??'').toString();
