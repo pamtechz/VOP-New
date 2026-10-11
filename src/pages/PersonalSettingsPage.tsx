@@ -46,6 +46,14 @@ function PasswordInput({label,placeholder,value,onChange,autoComplete,disabled}:
   </label>;
 }
 
+const defaultPersonalSettings:PersonalSettings={
+  theme:'light',language:'',
+  notifications:{enabled:true,email:true,announcements:true,certificates:true},
+  accessibility:{reducedMotion:false,largeText:false,highContrast:false},
+  privacy:{profileVisibility:'organization'},
+  studyPreferences:{reminders:true,preferredStudyTime:''},
+};
+
 interface Props { currentUser: User; onBack: () => void; onStudyLanguageChange: (language: string) => void; context?: 'learner'|'organization'; onNavigate?: (route: AppRoute) => void; }
 
 export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onStudyLanguageChange, context='learner', onNavigate }) => {
@@ -58,11 +66,9 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
     const hasPassword = user.providerData.some(p => p.providerId === 'password');
     return hasGoogle && !hasPassword;
   }, []);
-  const [settings, setSettings] = useState<PersonalSettings>({
-    theme: 'light', language: '', notifications: { enabled: true, email: true, announcements: true, certificates: true },
-    accessibility: { reducedMotion: false, largeText: false, highContrast: false },
-    privacy: { profileVisibility: 'organization' }, studyPreferences: { reminders: true, preferredStudyTime: '' },
-  });
+  const [settings,setSettings]=useState<PersonalSettings>(defaultPersonalSettings);
+  const [savedSettings,setSavedSettings]=useState<PersonalSettings|null>(null);
+  const [settingsLoadError,setSettingsLoadError]=useState('');
   const [busy, setBusy] = useState(true);
   const [profile, setProfile] = useState<OwnProfile>(currentUser);
   const [profileDraft, setProfileDraft] = useState<EditableOwnProfile>(()=>editableOwnProfile(currentUser));
@@ -163,14 +169,21 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
     const loadProfile=loadOwnProfile()
       .then(value=>{if(active){setProfile(value);setProfileDraft(editableOwnProfile(value));}})
       .catch(error=>{if(active)setProfileError(error instanceof Error?error.message:'Could not load your profile.');});
-    const loadSettings = loadPersonalSettings()
-      .then(value => {
-        if (active && value) {
-          setSettings(previous => ({ ...previous, ...value }));
-          applyAccessibilityPreferences(value.accessibility);
-        }
+    const loadSettings=loadPersonalSettings()
+      .then(value=>{
+        if(!active)return;
+        const hydrated={...defaultPersonalSettings,...value};
+        setSettings(hydrated);
+        setSavedSettings(hydrated);
+        setSettingsLoadError('');
+        applyAccessibilityPreferences(hydrated.accessibility);
       })
-      .catch(error => { if (active) setMessage(error instanceof Error ? error.message : 'Could not load your personal settings.'); });
+      .catch(error=>{
+        if(active){
+          setSavedSettings(null);
+          setSettingsLoadError(error instanceof Error?error.message:'Could not load your personal settings.');
+        }
+      });
     const loadLanguages=loadUiLocaleRegistry()
       .then(items=>{if(active){setUiLocales(items);setLanguages(items)}})
       .catch(error=>{if(active)setMessage(error instanceof Error?error.message:'Configured languages could not be loaded.');});
@@ -198,6 +211,36 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
     return () => { active = false; };
   }, []);
 
+  const pendingSettings:Array<[string,unknown]>=[];
+  if(savedSettings){
+    for(const key of Object.keys(settings) as Array<keyof PersonalSettings>){
+      const value=settings[key],previous=savedSettings[key];
+      if(JSON.stringify(value)===JSON.stringify(previous))continue;
+      if(value&&typeof value==='object'&&previous&&typeof previous==='object'){
+        const updated=Object.fromEntries(Object.keys(value)
+          .filter(child=>JSON.stringify((value as Record<string,unknown>)[child])
+            !==JSON.stringify((previous as Record<string,unknown>)[child]))
+          .map(child=>[child,(value as Record<string,unknown>)[child]]));
+        pendingSettings.push([key,updated]);
+      }else{
+        pendingSettings.push([key,value]);
+      }
+    }
+  }
+  const settingsChanges=Object.fromEntries(pendingSettings) as PersonalSettings;
+  const settingsDirty=Object.keys(settingsChanges).length>0;
+  const retrySettings=async()=>{
+    setSettingsLoadError('');
+    try{
+      const value=await loadPersonalSettings();
+      const hydrated={...defaultPersonalSettings,...value};
+      setSettings(hydrated);setSavedSettings(hydrated);
+      applyAccessibilityPreferences(hydrated.accessibility);
+    }catch(error){
+      setSavedSettings(null);
+      setSettingsLoadError(error instanceof Error?error.message:'Could not load your personal settings.');
+    }
+  };
   const patch = <K extends keyof PersonalSettings>(key: K, value: PersonalSettings[K]) =>
     setSettings(previous => ({ ...previous, [key]: value }));
   const patchProfile = (key:keyof EditableOwnProfile,value:string) =>
@@ -325,18 +368,23 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
   };
 
   const save = async () => {
-    setSaving(true); setMessage('');
-    try {
-      const persisted = await savePersonalSettings(settings);
-      setSettings(previous => ({ ...previous, ...persisted }));
-      applyAccessibilityPreferences(persisted.accessibility);
-      if (persisted.theme) persistThemePreference(persisted.theme==='system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light') : persisted.theme);
-      if (settings.uiLocale) setUiLocale(settings.uiLocale);
-      if (!organizationAccount && settings.studyLanguage !== undefined) onStudyLanguageChange(settings.studyLanguage || appSettings.defaultLanguage || '');
-      setMessage(t('settings.saved', 'Your personal settings have been saved.'));
-    }
-    catch (error) { setMessage(error instanceof Error ? error.message : 'Could not save settings.'); }
-    finally { setSaving(false); }
+    if(saving||!savedSettings||!settingsDirty)return;
+    const changed=settingsChanges;
+    setSaving(true);setMessage('');
+    try{
+      const persisted=await savePersonalSettings(changed);
+      const next={...settings,...persisted};
+      setSettings(next);
+      setSavedSettings(next);
+      applyAccessibilityPreferences(next.accessibility);
+      if(changed.theme&&next.theme)persistThemePreference(next.theme==='system'
+        ?(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):next.theme);
+      if(changed.uiLocale&&next.uiLocale)setUiLocale(next.uiLocale);
+      if(!organizationAccount&&changed.studyLanguage!==undefined)
+        onStudyLanguageChange(next.studyLanguage||appSettings.defaultLanguage||'');
+      setMessage(t('settings.saved','Your personal settings have been saved.'));
+    }catch(error){setMessage(error instanceof Error?error.message:'Could not save settings.');}
+    finally{setSaving(false);}
   };
 
   type PersonalTab = 'account' | 'interface' | 'notifications' | 'accessibility' | 'security' | 'privacy';
@@ -353,23 +401,12 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
 
   return <div className="vop-personal-settings vop-page-shell">
     <div className="vop-personal-header vop-page-head">
-      <div><p className="vop-kicker">{organizationAccount?'Organization Account':t('account.my_account','My Account')}</p><h1>{organizationAccount?'Personal Settings':t('settings.personal_title','Personal Settings')}</h1><p>{organizationAccount?'Preferences and sign-in security for this organization staff account. These settings are separate from organization-wide configuration.':t('settings.personal_description','These settings apply only to your VOP account.')}</p></div>
+      <div><p className="vop-kicker">{organizationAccount?'Organization Account':t('account.my_account','My Account')}</p><h1>{organizationAccount?'Personal Settings':t('settings.personal_title','Personal Settings')}</h1><p>t('settings.personal_description','These settings apply only to your VOP account.')</p></div>
       <div style={{display:'flex',gap:8,alignItems:'center'}}>
-        {isAdmin && (
-          <button
-            className="vop-primary"
-            type="button"
-            onClick={() => {
-              if (currentUser.uid) {
-                try { sessionStorage.setItem('vop-admin-tab-v1:' + currentUser.uid, 'dashboard'); } catch {}
-              }
-              onNavigate ? onNavigate('admin') : onBack();
-            }}
-            title={uiT('personal_settings.open_administration_workspace',"Open administration workspace")}
-          >
-            <ShieldCheck size={14}/> <span>{uiT('personal_settings.admin_operations',"Admin Operations")}</span>
-          </button>
-        )}
+        {isAdmin&&<button type="button" className="vop-secondary" onClick={()=>{
+          try{sessionStorage.setItem('vop-admin-tab-v1:'+currentUser.uid,'dashboard');}catch{}
+          if(onNavigate)onNavigate('admin');else onBack();
+        }}>{uiT('personal_settings.admin_operations','Admin Operations')}</button>}
         <button className="vop-secondary" type="button" onClick={onBack}>{t('common.back','Back')}</button>
       </div>
     </div>
@@ -429,12 +466,8 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
 
             <section className="vop-personal-card vop-card">
               <h2><KeyRound size={19}/> {isGoogleAccount ? 'Set Account Password' : 'Change Password'}</h2>
-              <p>{isGoogleAccount ? 'You signed up with Google. You can set a password to also sign in directly using your email address without requiring a current password.' : 'Update your sign-in password to keep your account protected.'}</p>
-              {isGoogleAccount && (
-                <div className="vop-personal-notice info" role="status">
-                  <span>{uiT('personal_settings.signed_in_via_google_no_current_password_is_required',"Signed in via Google. No current password is required.")}</span>
-                </div>
-              )}
+
+              {isGoogleAccount&&<small>{uiT('personal_settings.signed_in_via_google_no_current_password_is_required','Signed in via Google. No current password is required.')}</small>}
               {passwordMessage && (
                 <div className="vop-personal-notice success" role="status">
                   <CheckCircle size={16} /> <span>{passwordMessage}</span>
@@ -501,8 +534,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
             {!organizationAccount&&<section className="vop-personal-card vop-card">
               <h2><BookOpen size={19}/>{uiT('personal_settings.offline_study_on_this_device',"Offline study on this device")}</h2>
               <label className="vop-personal-toggle"><input type="checkbox" checked={trustedDevice} onChange={e => void changeTrustedDevice(e.target.checked)}/>{uiT('personal_settings.remember_previously_opened_study_materials_for_offline_reading',"Remember previously opened study materials for offline reading")}</label>
-              <small>{uiT('personal_settings.use_only_on_a_private_device_cached_course_material_can_remain_accessible_to_someone_using',"Use only on a private device. Cached course material can remain accessible to someone using the same browser after sign-out. Lesson completion while offline is saved as pending, not as an official result, until the server verifies it.")}</small>
-              <small>{uiT('personal_settings.reload_while_online_after_changing_this_option_for_complete_removal_of_previously_cached_c',"Reload while online after changing this option. For complete removal of previously cached content, clear the browser’s site data.")}</small>
+              <small>{uiT('personal_settings.offline_storage_privacy',"Private devices only. Cached lessons may remain after sign-out. Offline work syncs after server verification. Reload online after changes; clear browser site data to erase prior caches.")}</small>
             </section>}
             {!organizationAccount&&<LocalizationParticipation/>}
           </div>
@@ -514,7 +546,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
               <h2><Bell size={19}/>{uiT('personal_settings.notifications',"Notifications")}</h2>
               {(['enabled','email','announcements','certificates'] as const).map(key => <label key={key} className="vop-personal-toggle"><input type="checkbox" checked={settings.notifications?.[key] !== false} onChange={e => patch('notifications', { ...settings.notifications, [key]: e.target.checked })}/>{key === 'enabled' ? 'Enable notifications' : key.charAt(0).toUpperCase()+key.slice(1)+' notifications'}</label>)}
               {notificationCapabilities&&!notificationCapabilities.email.available&&<small role="status">
-                Email delivery is not currently available from this VOP deployment. Your preference is saved and will be enforced when the administrator enables and configures the mail provider.
+                Email is unavailable. Your preference will apply when the administrator configures delivery.
               </small>}
             </section>
           </div>
@@ -605,7 +637,14 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
           </div>
         )}
 
-        <button className="vop-personal-save vop-primary" type="button" disabled={saving} onClick={() => void save()}><Save size={18}/>{saving ? t('common.saving','Saving…') : t('settings.save','Save personal settings')}</button>
+        {settingsLoadError&&<div className="vop-personal-notice error" role="alert">
+          {settingsLoadError}
+          <button type="button" className="vop-secondary" onClick={()=>void retrySettings()}>{uiT('personal_settings.retry_loading','Retry loading settings')}</button>
+        </div>}
+        {!['account','security'].includes(activeTab)&&<button className="vop-personal-save vop-primary"
+          type="button" disabled={saving||!savedSettings||!settingsDirty} onClick={()=>void save()}>
+          <Save size={18}/>{saving?t('common.saving','Saving…'):t('settings.save','Save personal settings')}
+        </button>}
       </div>
     </>}
   </div>;

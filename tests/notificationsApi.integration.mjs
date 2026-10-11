@@ -365,6 +365,23 @@ test('personal settings API rejects malformed runtime preferences', async () => 
     assert.equal(valid.settings.studyPreferences.preferredStudyTime,'19:30');
     assert.equal(valid.settings.studyPreferences.timezone,'Africa/Lusaka');
     assert.equal(valid.settings.privacy.profileVisibility,'private');
+    const partial=await save({
+      notifications:{email:true},
+      accessibility:{largeText:false},
+      studyPreferences:{reminders:false},
+    });
+    assert.equal(partial.status,200,JSON.stringify(partial));
+    assert.equal(partial.settings.notifications.email,true);
+    assert.equal(partial.settings.notifications.announcements,true);
+    assert.equal(partial.settings.notifications.certificates,true);
+    assert.equal(partial.settings.accessibility.largeText,false);
+    assert.equal(partial.settings.accessibility.reducedMotion,true);
+    assert.equal(partial.settings.studyPreferences.reminders,false);
+    assert.equal(partial.settings.studyPreferences.preferredStudyTime,'19:30');
+    assert.equal(partial.settings.studyPreferences.timezone,'Africa/Lusaka');
+    assert.equal(partial.settings.privacy.profileVisibility,'private');
+    assert.equal((await save({studyPreferences:{preferredStudyTime:123}})).status,400);
+    assert.equal((await save({studyPreferences:{timezone:123}})).status,400);
   }finally{
     await vite.close();
     if(getApps().includes(app))await deleteApp(app);
