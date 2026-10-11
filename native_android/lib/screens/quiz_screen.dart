@@ -35,12 +35,20 @@ class _QuizScreenState extends State<QuizScreen> {
           code:(data['code']??'').toString());
       }
       await store.saveQuizSession(widget.guideId,widget.lessonId,widget.language,data);
+      final saved=await store.quizAnswers(widget.guideId,widget.lessonId,
+        widget.language,(data['sessionId']??'').toString());
+      if(mounted)setState(()=>answers=saved);
       offlineAttempt=false;
       return data;
     }catch(error){
       if(error is VopApiException && error.status==0){
         final cached=await store.quizSession(widget.guideId,widget.lessonId,widget.language);
-        if(cached!=null){offlineAttempt=true;return cached;}
+        if(cached!=null){
+          final saved=await store.quizAnswers(widget.guideId,widget.lessonId,
+            widget.language,(cached['sessionId']??'').toString());
+          if(mounted)setState(()=>answers=saved);
+          offlineAttempt=true;return cached;
+        }
       }
       rethrow;
     }
@@ -158,7 +166,11 @@ class _QuizScreenState extends State<QuizScreen> {
                   child:Card(
                     color:checked?Theme.of(context).colorScheme.primaryContainer:null,
                     child:InkWell(
-                      onTap:()=>setState(()=>answers['$index']=value),
+                      onTap:(){
+                        setState(()=>answers['$index']=value);
+                        store.saveQuizAnswers(widget.guideId,widget.lessonId,
+                          widget.language,(data['sessionId']??'').toString(),answers);
+                      },
                       borderRadius:BorderRadius.circular(12),
                       child:Padding(padding:const EdgeInsets.all(13),
                         child:Row(children:[
