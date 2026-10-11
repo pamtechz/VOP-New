@@ -228,6 +228,7 @@ export async function loadFirestoreGuides(_language?: LanguageCode, scopeUser?: 
       certificationRequirementIds: Array.isArray(data.certificationRequirementIds)
         ? data.certificationRequirementIds.map(value=>String(value)).filter(Boolean) : [],
       learnerEntryMode: data.learnerEntryMode === 'sections' ? 'sections':'lessons',
+      sequentialLearning: data.sequentialLearning===true||data.enforceSequentialProgress===true,
       requiresFinalExam: data.requiresFinalExam === true,
     };
     if (!guide.title) continue;
