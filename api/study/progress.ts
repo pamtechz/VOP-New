@@ -997,6 +997,17 @@ export default async function handler(
             ...existingScores,
             [scoreKey]: score,
           },
+          completedAssessments: passed
+            ? [...new Set([
+                ...(Array.isArray(progress.completedAssessments)
+                  ?progress.completedAssessments.filter((key):key is string=>typeof key==='string')
+                  :[]),
+                `${language}:${effectiveGuideId}:${lessonId}`,
+              ])]
+            : (Array.isArray(progress.completedAssessments)
+              ? progress.completedAssessments.filter((key:unknown)=>
+                  key!==`${language}:${effectiveGuideId}:${lessonId}`)
+              :[]),
           updatedAt: FieldValue.serverTimestamp(),
         },
         ...(!pointsLedger.exists&&assessmentPoints>0?{engagementPoints:FieldValue.increment(assessmentPoints)}:{}),
