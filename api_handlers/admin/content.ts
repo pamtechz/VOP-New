@@ -1,6 +1,7 @@
 import { isEnglishLocale } from '../../shared/locales.js';
 import { randomUUID } from 'node:crypto';
-import { isSafeHttpsMediaUrl, resolveMediaSource } from '../../shared/mediaSources.js';
+import { isSafeHttpsMediaUrl, resolveMediaSource, identifyRadioMedia } from '../../shared/mediaSources.js';
+import { identifyPublicMedia } from '../../api/media.js';
 import { FieldValue } from 'firebase-admin/firestore';
 import {
   authenticateTenant, billingTenantAudienceEnabled, billingTenantFromContext, canEditCanonicalContent, enforceBillingTenantQuota,
@@ -1332,26 +1333,42 @@ export default async function handler(req: Request, res: Response) {
         }
         if (existing.exists && !canEditCanonicalContent(ctx, existing.data())) throw new Error('Only the contributor who added this global content or VOP Super Admin can edit it.');
         if (existing.exists) assertMutableTenantResource(ctx.isSuperAdmin, existing.data(), 'edit');
-        if (collection === 'radioBroadcasts') {
-          const urls = ['videoUrl','audioUrl','streamUrl'].map(key => ({key,url:String(incoming[key] || '').trim()})).filter(item => item.url);
-          if (!urls.length) throw new Error('Add an approved radio audio, video or stream URL.');
-          for (const {key,url} of urls) {
-            const resolved = resolveMediaSource(url);
-            if (!resolved && !(key === 'streamUrl' && isSafeHttpsMediaUrl(url))) throw new Error('Radio media must use an approved public HTTPS provider or direct stream.');
-            if (resolved?.kind === 'external') throw new Error('A social-media page cannot play directly. Use the trusted media import tool first.');
-          }
+        let validatedRadio:Record<string,unknown>|null=null;
+        if(collection==='radioBroadcasts'){
+          const source=String(incoming.mediaUrl||incoming.videoUrl||incoming.audioUrl||incoming.streamUrl||'').trim();
+          if(!isSafeHttpsMediaUrl(source))throw new Error('Add one safe public HTTPS media URL.');
+          const media=identifyRadioMedia(await identifyPublicMedia(source));
+          const org=ctx.tenantType==='organization'?ctx.organizationId:'';
+          validatedRadio={
+            title:String(incoming.title||'').trim().slice(0,160),
+            speaker:String(incoming.speaker||'').trim().slice(0,120),
+            series:String(incoming.series||'').trim().slice(0,120),
+            description:String(incoming.description||'').trim().slice(0,3000),
+            mediaUrl:media.sourceUrl,mediaType:media.mediaType,mediaProvider:media.provider,
+            audioUrl:media.field==='audioUrl'?media.sourceUrl:'',
+            videoUrl:media.field==='videoUrl'?media.sourceUrl:'',
+            streamUrl:media.field==='streamUrl'?media.sourceUrl:'',
+            posterUrl:isSafeHttpsMediaUrl(incoming.posterUrl)?incoming.posterUrl:'',
+            broadcastTime:String(incoming.broadcastTime||'').trim().slice(0,50),
+            organizationId:existing.data()?.organizationId||org,
+            scope:existing.data()?.scope||(org?'organization':'platform'),
+            canonical:existing.exists?existing.data()?.canonical===true:!org,
+            sharingScope:org?(incoming.sharingScope==='shared'?'shared':'organization')
+              :existing.data()?.sharingScope||'shared',
+          };
         }
         await ref.set({
-          ...incoming,
+          ...(validatedRadio?{}:incoming),
+          ...(validatedRadio||{}),
           id,
           ...(Object.prototype.hasOwnProperty.call(incoming, 'published') ? { published: incoming.published === true } : {}),
-          organizationId: '',
+          organizationId: validatedRadio?.organizationId || '',
           ownerOrganizationId: existing.data()?.ownerOrganizationId || (ctx.tenantType === 'organization' ? ctx.organizationId : ''),
           ownerTenantId: existing.data()?.ownerTenantId || tenantOwnerKey(ctx),
           ownerUid: existing.data()?.ownerUid || ctx.auth.uid,
-          scope: 'platform',
-          canonical: true,
-          sharingScope: 'shared',
+          scope: validatedRadio?.scope || 'platform',
+          canonical: validatedRadio ? validatedRadio.canonical : true,
+          sharingScope: validatedRadio?.sharingScope || 'shared',
           createdAt: existing.data()?.createdAt || new Date().toISOString(),
           updatedAt: FieldValue.serverTimestamp(),
           updatedBy: ctx.auth.uid,
