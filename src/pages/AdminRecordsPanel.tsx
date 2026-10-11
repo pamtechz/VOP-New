@@ -734,6 +734,22 @@ function Fields({kind,form,setForm,records}:{kind:Exclude<ManagedAdminCollection
             : 'Paste a public link above. VOP identifies the provider and file format automatically.'}
           {String(form.mediaUrl||'')&&<div style={{overflowWrap:'anywhere'}}>{String(form.mediaUrl)}</div>}
         </div>
+        {String(form.mediaProvider||'')==='AudioVerse'&&<div className="vop-field">
+          <strong>Authorised native audio (optional)</strong>
+          <p>AudioVerse material may be played from a separately licensed direct file.
+            Do not extract or re-stream restricted player URLs. Check the recording's licence.</p>
+          {field('licensedAudioUrl','Authorised direct MP3 / audio HTTPS URL','url')}
+          {select('usageLicense','Rights basis',[
+            {value:'owned',label:'We own this recording'},
+            {value:'cc-by-nc-nd',label:'CC BY-NC-ND / non-commercial use'},
+            {value:'written-permission',label:'Written rights-holder permission'},
+          ])}
+          {field('attributionText','Attribution / AudioVerse credit')}
+          <label><input type="checkbox" checked={Boolean(form.rightsConfirmed)}
+            onChange={e=>setForm(current=>({...current,rightsConfirmed:e.target.checked}))}/>
+            I have verified our rights to host and play this unmodified recording in VOP.
+          </label>
+        </div>}
         {field('posterUrl','Poster image (optional)','url')}
         {select('sharingScope','Audience',[
           {value:'organization',label:'My organisation'},
