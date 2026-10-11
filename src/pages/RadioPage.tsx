@@ -114,6 +114,10 @@ type MediaSource =
   | { provider: 'embed'; url: string; embedUrl: string; label: string; live: false }
   | null;
 function detectMedia(item: RadioBroadcast): MediaSource {
+  if(item.hasPlaybackRights===true&&item.licensedAudioUrl&&
+    isSafeHttpsMediaUrl(item.licensedAudioUrl))return {
+      provider:'direct-audio',url:item.licensedAudioUrl,live:false
+    };
   const candidates = [item.mediaUrl,item.videoUrl, item.audioUrl, item.streamUrl].map(v => v?.trim()).filter(Boolean) as string[];
   for (const url of candidates) {
     const resolved = resolveMediaSource(url);
