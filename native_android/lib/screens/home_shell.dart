@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../core/vop_api.dart';
 import '../core/offline_study.dart';
+import '../core/vop_locale.dart';
 import '../theme/vop_theme.dart';
 import '../widgets/vop_ui.dart';
 import 'certificates_screen.dart';
@@ -44,6 +45,7 @@ class _HomeShellState extends State<HomeShell> {
     widget.api.personalSettings().then((result){
       final settings=asMap(result['settings']);
       VopAppearance.apply(settings);
+      VopLocale.load(widget.api,(settings['uiLocale']??'en').toString());
       if(mounted)setState(()=>studyLanguage=(settings['studyLanguage']??'').toString());
     }).catchError((Object ignored){});
     offline.sync(widget.api).then((count){
@@ -81,7 +83,13 @@ class _HomeShellState extends State<HomeShell> {
 
   @override Widget build(BuildContext context){
     final wide=MediaQuery.sizeOf(context).width>=880;
-    const labels=['Discover','Lessons','Library','Prayer','Radio'];
+    final labels=[
+      VopLocale.tr('navigation.discover','Discover'),
+      VopLocale.tr('navigation.lessons','Lessons'),
+      VopLocale.tr('navigation.library','Library'),
+      VopLocale.tr('navigation.prayer','Prayer'),
+      VopLocale.tr('navigation.radio','Radio'),
+    ];
     final icons=[
       Icons.home_outlined,Icons.auto_stories_outlined,
       Icons.local_library_outlined,Icons.volunteer_activism_outlined,
@@ -124,13 +132,19 @@ class _HomeShellState extends State<HomeShell> {
         const VerticalDivider(width:1),
         Expanded(child:body),
       ]):body,
-      bottomNavigationBar:wide?null:NavigationBar(
+      bottomNavigationBar:wide?null:ValueListenableBuilder<int>(
+        valueListenable:VopLocale.version,
+        builder:(context,version,_)=>NavigationBar(
         selectedIndex:tab,
         onDestinationSelected:selectTab,
         destinations:List.generate(labels.length,(index)=>NavigationDestination(
           icon:Icon(icons[index]),selectedIcon:Icon(activeIcons[index]),
-          label:labels[index])),
-      ),
+          label:[VopLocale.tr('navigation.discover','Discover'),
+            VopLocale.tr('navigation.lessons','Lessons'),
+            VopLocale.tr('navigation.library','Library'),
+            VopLocale.tr('navigation.prayer','Prayer'),
+            VopLocale.tr('navigation.radio','Radio')][index])),
+      )),
     );
   }
 
