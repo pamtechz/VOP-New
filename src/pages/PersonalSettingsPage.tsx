@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Save, UserRound, Bell, Globe2, Accessibility, ShieldCheck, BookOpen, Fingerprint, Trash2, Download, RotateCcw, CheckCircle, Eye, EyeOff, KeyRound, LoaderCircle } from 'lucide-react';
 import type { User, CustomLanguage, AppRoute } from '../types';
 import { auth } from '../lib/firebase';
-import { changeUserPassword, resetPassword } from '../services/firebaseAuth';
+import { changeUserPassword, resetPassword, firebaseSignOut } from '../services/firebaseAuth';
 import { getTranslation, getAvailableUiLocales, loadUiLocaleRegistry, setUiLocale, getUiLocale } from '../services/i18n';
 import { getActiveLanguage, getStoredSettings } from '../services/storage';
 import { hasTrustedOfflineDeviceConsent, setTrustedOfflineDeviceConsent } from '../services/offlineDeviceConsent';
@@ -23,7 +23,7 @@ import {
 } from '../services/personalSettings';
 import {
   cancelAccountDeletion, downloadAccountExport, exportAccountData, loadAccountLifecycleStatus, requestAccountDeletion,
-  type AccountLifecycleStatus,
+  loadAccountSecurityStatus, revokeAllSessions, type AccountSecurityStatus, type AccountLifecycleStatus,
 } from '../services/accountLifecycle';
 
 interface Props { currentUser: User; onBack: () => void; onStudyLanguageChange: (language: string) => void; context?: 'learner'|'organization'; onNavigate?: (route: AppRoute) => void; }
@@ -60,6 +60,9 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
   const [passkeyBusy,setPasskeyBusy]=useState(false);
   const [notificationCapabilities,setNotificationCapabilities]=useState<NotificationCapabilities|null>(null);
   const [accountLifecycle,setAccountLifecycle]=useState<AccountLifecycleStatus|null>(null);
+  const [securityOverview,setSecurityOverview]=useState<AccountSecurityStatus|null>(null);
+  const [securityBusy,setSecurityBusy]=useState(false);
+  const [securityError,setSecurityError]=useState('');
   const [privacyBusy,setPrivacyBusy]=useState(false);
   const [deletionConfirmation,setDeletionConfirmation]=useState('');
   const [deletionReason,setDeletionReason]=useState('');
@@ -155,6 +158,9 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
     const loadNotificationStatus=loadNotificationCapabilities()
       .then(value=>{if(active)setNotificationCapabilities(value)})
       .catch(()=>{if(active)setNotificationCapabilities(null)});
+    const loadSecurityOverview=loadAccountSecurityStatus()
+      .then(value=>{if(active)setSecurityOverview(value)})
+      .catch(error=>{if(active)setSecurityError(error instanceof Error?error.message:'Could not retrieve account security status.');});
     const loadLifecycle=loadAccountLifecycleStatus()
       .then(value=>{if(active)setAccountLifecycle(value)})
       .catch(error=>{if(active)setMessage(error instanceof Error?error.message:'Account privacy status could not be loaded.');});
@@ -169,7 +175,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
     void Promise.allSettled([loadProfile,loadSettings]).finally(() => {
       if (active) setBusy(false);
     });
-    void Promise.allSettled([loadLanguages,loadSecurity,loadNotificationStatus,loadLifecycle]);
+    void Promise.allSettled([loadLanguages,loadSecurity,loadNotificationStatus,loadLifecycle,loadSecurityOverview]);
     return () => { active = false; };
   }, []);
 
@@ -225,6 +231,20 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
     finally{setPasskeyBusy(false);}
   };
 
+  const signOutAllDevices=async()=>{
+    const confirmed=await appConfirm(
+      'End VOP sessions on this account, including this device? Sign in again afterwards. Existing access tokens on other devices can remain usable until expiry.',
+      {title:'Sign out all devices',confirmLabel:'Sign out all',tone:'danger'},
+    );
+    if(!confirmed)return;
+    setSecurityBusy(true);setSecurityError('');
+    try{
+      await revokeAllSessions();
+      await firebaseSignOut();
+    }catch(error){
+      setSecurityError(error instanceof Error?error.message:'Could not sign out all devices.');
+    }finally{setSecurityBusy(false);}
+  };
   const downloadMyData=async()=>{
     setPrivacyBusy(true);setMessage('');
     try{
@@ -537,6 +557,32 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
 
         {activeTab === 'security' && (
           <div className="vop-personal-tab-pane">
+            <section className="vop-personal-card vop-card">
+              <h2><ShieldCheck size={19}/>{uiT('personal_settings.security_overview','Account security')}</h2>
+              {securityError&&<div className="vop-personal-notice error" role="alert">{securityError}</div>}
+              {securityOverview?<>
+                <div className="vop-setting-row"><div>
+                  <strong>{uiT('personal_settings.email_verification','Email verification')}</strong>
+                  <div className="vop-setting-help">{securityOverview.emailVerified
+                    ?uiT('personal_settings.verified_email','Verified')
+                    :uiT('personal_settings.unverified_email','Not verified')}</div>
+                </div></div>
+                {securityOverview.lastSignInAt&&<div className="vop-setting-row"><div>
+                  <strong>{uiT('personal_settings.last_sign_in','Last sign-in')}</strong>
+                  <div className="vop-setting-help">{new Date(securityOverview.lastSignInAt).toLocaleString()}</div>
+                </div></div>}
+                <div className="vop-setting-row"><div>
+                  <strong>{uiT('personal_settings.linked_sign_in','Linked providers')}</strong>
+                  <div className="vop-setting-help">{securityOverview.signInProviders.join(', ') || uiT('personal_settings.email_or_custom_login','Email or supported sign-in')}</div>
+                </div></div>
+              </>:<p>{uiT('personal_settings.loading_account_security','Account security details are unavailable.')}</p>}
+              <p>{uiT('personal_settings.sessions_explanation',
+                'Firebase does not provide a device-session list here. You can revoke refresh tokens for all devices, then sign in again. Previously issued access tokens may remain usable until they expire.')}</p>
+              <button type="button" className="vop-secondary danger" disabled={securityBusy}
+                onClick={()=>void signOutAllDevices()}><ShieldCheck size={16}/>
+                {securityBusy?uiT('personal_settings.ending_sessions','Ending sessions…'):uiT('personal_settings.sign_out_all_devices','Sign out all devices')}
+              </button>
+            </section>
             <section className="vop-personal-card vop-card">
               <h2><Fingerprint size={19}/>{uiT('personal_settings.passkeys_and_device_verification',"Passkeys & device verification")}</h2>
               {!passkeyCapable?<p>{uiT('personal_settings.this_browser_or_connection_does_not_support_secure_passkey_sign_in',"This browser or connection does not support secure passkey sign-in.")}</p>:<>
