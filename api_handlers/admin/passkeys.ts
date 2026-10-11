@@ -76,12 +76,13 @@ async function authenticated(req:Request):Promise<DecodedIdToken>{
   getAdminDb();
   const authorization=header(req,'authorization');
   if(!authorization.startsWith('Bearer '))throw new Error('Sign in first.');
-  return getAuth().verifyIdToken(authorization.slice(7).trim());
+  return getAuth().verifyIdToken(authorization.slice(7).trim(),true);
 }
 function requireRecentAuthentication(actor:DecodedIdToken){
   const authTime=Number(actor.auth_time||0);
-  if(!authTime||Date.now()/1000-authTime>10*60){
-    throw new Error('For security, sign in again before enabling a new passkey.');
+  const now=Math.floor(Date.now()/1000);
+  if(!Number.isSafeInteger(authTime)||authTime<=0||now-authTime>300||authTime>now+60){
+    throw new Error('Recent sign-in required. Sign out and sign in again to manage passkeys.');
   }
 }
 function clean(value:unknown,max:number){return String(value||'').trim().slice(0,max);}
@@ -146,14 +147,24 @@ export default async function handler(req:Request,res:Response){
         authenticatorData,clientDataJSON,signature:b64(input.signature),
         publicKeyDer:b64(stored.publicKeyDer),algorithm:Number(stored.algorithm),
       });
-      const previousCount=Math.max(0,Number(stored.signCount||0));
-      if(previousCount>0&&authData.signCount>0&&authData.signCount<=previousCount)
-        throw new Error('Passkey counter validation failed. Remove and re-enroll this passkey.');
       await consumeChallenge(db,payload);
-      await credentialRef.set({
-        ...(authData.signCount>0&&authData.signCount!==previousCount?{signCount:authData.signCount}:{}),
-        lastUsedAt:FieldValue.serverTimestamp(),
-      },{merge:true});
+      await db.runTransaction(async transaction=>{
+        const current=await transaction.get(credentialRef);
+        const currentData=current.data()||{};
+        if(!current.exists||String(currentData.credentialId||'')!==id
+          ||currentData.uid!==stored.uid
+          ||currentData.publicKeyDer!==stored.publicKeyDer
+          ||currentData.algorithm!==stored.algorithm)
+          throw new Error('Passkey credential changed during verification. Start again.');
+        const previousCount=Math.max(0,Number(currentData.signCount||0));
+        if(previousCount>0&&authData.signCount>0&&authData.signCount<=previousCount)
+          throw new Error('Passkey counter validation failed. Remove and re-enroll this passkey.');
+        transaction.update(credentialRef,{
+          ...(authData.signCount>0&&authData.signCount!==previousCount
+            ?{signCount:authData.signCount}:{}),
+          lastUsedAt:FieldValue.serverTimestamp(),
+        });
+      });
       const uid=clean(stored.uid,180);
       if(!uid)throw new Error('Passkey account mapping is invalid.');
       const [authUser,profile]=await Promise.all([
@@ -234,6 +245,7 @@ export default async function handler(req:Request,res:Response){
     }
 
     if(action==='deleteCredential'){
+      requireRecentAuthentication(actor);
       const key=clean(input.credentialHash,180);
       if(!/^[A-Za-z0-9_-]{20,180}$/.test(key))throw new Error('Choose a valid passkey.');
       const ref=db.doc('passkeyCredentials/'+key);
@@ -248,6 +260,7 @@ export default async function handler(req:Request,res:Response){
   }catch(error){
     const message=error instanceof Error?error.message:'Passkey operation failed.';
     const status=/too many passkey attempts/i.test(message)?429
+      :/recent sign-in required/i.test(message)?403
       :/sign in|id token|auth\//i.test(message)?401
       :/another account|cannot remove/i.test(message)?403
       :400;
