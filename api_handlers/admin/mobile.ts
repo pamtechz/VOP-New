@@ -224,6 +224,22 @@ export default async function mobile(req:Request,res:Response){
     if(!guideSnap.exists||!hasAccess(guideSnap.data()||{},scope))
       return res.status(404).json({ok:false,code:'NOT_FOUND',error:'Published course not found or not available.'});
     const guide=guideSnap.data()||{};
+    const language=string(guide.language)||'en';
+    const profileProgress=ctx.profile.progress&&typeof ctx.profile.progress==='object'
+      ?ctx.profile.progress as Raw:{};
+    const completed=new Set<string>(Array.isArray(profileProgress.completedLessons)
+      ?profileProgress.completedLessons.filter((v:unknown):v is string=>typeof v==='string'):[]);
+    // Quiz completions are stored as verified assessment attempts, not as
+    // reading completions. Use active passed attempts, including revocations.
+    const attempts=await db.doc('users/'+uid).collection('assessmentAttempts')
+      .where('guideId','==',guideId).limit(500).get();
+    for(const doc of attempts.docs){
+      const attempt=doc.data();
+      if(attempt.passed===true&&attempt.creditStatus==='active'&&
+          attempt.language===language&&typeof attempt.lessonId==='string'){
+        completed.add(language+':'+guideId+':'+attempt.lessonId);
+      }
+    }
     if(resource==='guide'){
       const snap=await guideSnap.ref.collection('lessons').where('published','==',true).limit(120).get();
       const lessons=snap.docs.filter(doc=>{
@@ -231,10 +247,6 @@ export default async function mobile(req:Request,res:Response){
         return hasAccess(row,scope,string(guide.organizationId||guide.ownerOrganizationId));
       }).map(doc=>plainLesson(doc.id,doc.data()))
         .sort((a,b)=>a.lessonNumber.localeCompare(b.lessonNumber,undefined,{numeric:true}));
-      const progress=ctx.profile.progress&&typeof ctx.profile.progress==='object'
-        ?ctx.profile.progress as Raw:{};
-      const completed=new Set(Array.isArray(progress.completedLessons)
-        ?progress.completedLessons.filter(v=>typeof v==='string'):[]);
       // The first lesson is always accessible. Later lessons require confirmed
       // completion of the preceding lesson in this published guide.
       const lessonsWithAccess=lessons.map((item,index)=>({
@@ -257,10 +269,6 @@ export default async function mobile(req:Request,res:Response){
       .sort((a,b)=>a.lessonNumber.localeCompare(b.lessonNumber,undefined,{numeric:true}));
     const currentIndex=preceding.findIndex(item=>item.id===lessonId);
     if(currentIndex>0){
-      const progress=ctx.profile.progress&&typeof ctx.profile.progress==='object'
-        ?ctx.profile.progress as Raw:{};
-      const completed=new Set(Array.isArray(progress.completedLessons)
-        ?progress.completedLessons.filter(v=>typeof v==='string'):[]);
       const previousKey=`${string(guide.language)||'en'}:${guideId}:${preceding[currentIndex-1].id}`;
       if(!completed.has(previousKey))return res.status(403).json({
         ok:false,code:'LESSON_LOCKED',
