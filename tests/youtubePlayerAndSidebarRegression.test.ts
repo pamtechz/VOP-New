@@ -7,7 +7,7 @@ const read=(path:string)=>readFileSync(path,'utf8');
 test('learner sidebar assigns noncolliding keys and exposes one admin navigation group',()=>{
   const source=read('src/components/layout/LearnerSidebar.tsx');
   assert.match(source,/group\.items\.map\(\(item,itemIndex\)=>/);
-  assert.match(source,/key=\{\`\$\{group\.name\}:\$\{item\.route\}:\$\{item\.adminTab\|\|'base'\}:\$\{itemIndex\}\`\}/);
+  assert.ok(source.includes("key={`\${group.name}:\${item.route}:\${item.adminTab||'base'}:\${itemIndex}`}"));
   assert.doesNotMatch(source,/navigation\.admin','Admin panel'/);
   assert.match(source,/adminTab: 'dashboard'/);
   assert.match(source,/adminTab: 'curriculum'/);
