@@ -212,20 +212,23 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
     return () => { active = false; };
   }, []);
 
-  const settingsChanges=savedSettings?Object.fromEntries(
-    (Object.keys(settings) as Array<keyof PersonalSettings>).flatMap(key=>{
+  const pendingSettings:Array<[string,unknown]>=[];
+  if(savedSettings){
+    for(const key of Object.keys(settings) as Array<keyof PersonalSettings>){
       const value=settings[key],previous=savedSettings[key];
-      if(JSON.stringify(value)===JSON.stringify(previous))return [];
+      if(JSON.stringify(value)===JSON.stringify(previous))continue;
       if(value&&typeof value==='object'&&previous&&typeof previous==='object'){
         const updated=Object.fromEntries(Object.keys(value)
           .filter(child=>JSON.stringify((value as Record<string,unknown>)[child])
             !==JSON.stringify((previous as Record<string,unknown>)[child]))
           .map(child=>[child,(value as Record<string,unknown>)[child]]));
-        return [[key,updated]];
+        pendingSettings.push([key,updated]);
+      }else{
+        pendingSettings.push([key,value]);
       }
-      return [[key,value]];
-    }),
-  ) as PersonalSettings:{};
+    }
+  }
+  const settingsChanges=Object.fromEntries(pendingSettings) as PersonalSettings;
   const settingsDirty=Object.keys(settingsChanges).length>0;
   const retrySettings=async()=>{
     if(settingsReloading)return;
