@@ -17,13 +17,13 @@ test('learner sidebar assigns noncolliding keys and exposes one admin navigation
 
 test('native YouTube player supplies WebView client identity instead of bare embed navigation',()=>{
   const source=read('native_android/lib/screens/radio_player_screen.dart');
-  assert.match(source,/vopYoutubeClientOrigin='https:\/\/com\.sda\.vop'/);
+  assert.match(source,/Uri\.parse\(VopConfig\.apiUrl\)\.origin|configured\.origin/);
   assert.match(source,/loadHtmlString\(youtubeEmbedHtml\(source\.url!\)/);
   assert.match(source,/baseUrl:'\$vopYoutubeClientOrigin\/'/);
   assert.match(source,/referrerpolicy="strict-origin-when-cross-origin"/);
   assert.match(source,/origin':vopYoutubeClientOrigin/);
   assert.match(source,/request\.isMainFrame/);
-  assert.match(source,/YouTube fallback/);
+  assert.doesNotMatch(source,/YouTube fallback|Retry player|This player keeps videos inside VOP/);
 });
 
 test('website identifies YouTube embed errors and Android enables modern back navigation',()=>{
