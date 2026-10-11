@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import '../core/vop_api.dart';
 import '../theme/vop_theme.dart';
 import '../widgets/vop_ui.dart';
@@ -33,11 +35,35 @@ class HomeShell extends StatefulWidget {
   final VopApi api;
   @override State<HomeShell> createState()=>_HomeShellState();
 }
-class _HomeShellState extends State<HomeShell> {
+class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
+  StreamSubscription<List<ConnectivityResult>>? _connections;
+  bool _syncing=false;
+  Future<void> _syncIfOnline() async {
+    if(_syncing||!mounted)return;
+    _syncing=true;
+    try{
+      final result=await widget.api.syncOfflineQueue();
+      if(mounted&&result['synced']!=null&&result['synced']!>0){
+        setState(reload);
+      }
+    }catch(_){/* Keep the user's pending changes for the next retry. */}
+    finally{_syncing=false;}
+  }
+  @override void didChangeAppLifecycleState(AppLifecycleState state){
+    if(state==AppLifecycleState.resumed)unawaited(_syncIfOnline());
+  }
   int tab=0;
   String search='';
   late Future<Map<String,dynamic>> profile,catalog,progress;
-  @override void initState(){super.initState();reload();
+  @override void initState(){super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    reload();
+    _connections=Connectivity().onConnectivityChanged.listen((values){
+      if(values.any((item)=>item!=ConnectivityResult.none)){
+        unawaited(_syncIfOnline());
+      }
+    });
+    unawaited(_syncIfOnline());
     widget.api.personalSettings().then((result){
       VopAppearance.apply(asMap(result['settings']));
     }).catchError((Object ignored){});
@@ -47,7 +73,11 @@ class _HomeShellState extends State<HomeShell> {
     catalog=widget.api.catalogue();
     progress=widget.api.progress();
   }
-  @override void dispose(){widget.api.dispose();super.dispose();}
+  @override void dispose(){
+    WidgetsBinding.instance.removeObserver(this);
+    unawaited(_connections?.cancel());
+    widget.api.dispose();super.dispose();
+  }
   void selectTab(int next)=>setState(()=>tab=next);
   void push(Widget page)=>Navigator.push(context,
     MaterialPageRoute<void>(builder:(_)=>page));
