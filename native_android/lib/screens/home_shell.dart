@@ -6,6 +6,8 @@ import '../widgets/vop_ui.dart';
 import 'certificates_screen.dart';
 import 'content_screen.dart';
 import 'guide_screen.dart';
+import 'engagement_screen.dart';
+import 'notifications_screen.dart';
 import 'mentor_screen.dart';
 import 'prayer_screen.dart';
 
@@ -77,9 +79,8 @@ class _HomeShellState extends State<HomeShell> {
           :Text(labels[tab],style:const TextStyle(fontWeight:FontWeight.w800)),
         actions:[
           IconButton(
-            tooltip:'Announcements',
-            onPressed:()=>push(VopContentScreen(api:widget.api,
-              kind:VopContentKind.announcements)),
+            tooltip:'Notifications',
+            onPressed:()=>push(VopNotifications(api:widget.api)),
             icon:const Icon(Icons.notifications_none_rounded)),
           IconButton(
             tooltip:'My account',icon:CircleAvatar(radius:16,
@@ -137,6 +138,8 @@ class _HomeShellState extends State<HomeShell> {
       _destination('My Progress',Icons.insights_outlined,()=>push(_ProgressScreen(api:widget.api))),
       _destination('My Certificates',Icons.workspace_premium_outlined,
         ()=>push(CertificatesScreen(api:widget.api))),
+      _destination('Scripture Memory & Challenges',Icons.psychology_outlined,
+        ()=>push(EngagementScreen(api:widget.api))),
       const Divider(),
       _label('COMMUNITY'),
       _destination('Prayer Ministry',Icons.volunteer_activism_outlined,()=>selectTab(3)),
@@ -150,6 +153,8 @@ class _HomeShellState extends State<HomeShell> {
           body:MentorScreen(api:widget.api)))),
       const Divider(),
       _label('ACCOUNT'),
+      _destination('Notifications',Icons.notifications_outlined,
+        ()=>push(VopNotifications(api:widget.api))),
       _destination('My Profile',Icons.person_outline,
         ()=>push(_AccountScreen(api:widget.api))),
       _destination('About VOP',Icons.info_outline,
