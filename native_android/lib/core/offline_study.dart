@@ -171,7 +171,7 @@ class OfflineStudyStore {
       final data=jsonDecode(raw);
       if(data is! Map ||data['session'] is! Map)return null;
       final session=Map<String,dynamic>.from(data['session'] as Map);
-      final expiry=DateTime.tryParse((session['expiresAt']??'').toString());
+      final expiry=DateTime.tryParse((session['expiresAt']??session['resumeUntil']??'').toString());
       // A session without an explicit expiry must not be used offline.
       if(expiry==null||!expiry.isAfter(DateTime.now().toUtc()))return null;
       return session;
@@ -183,13 +183,13 @@ class OfflineStudyStore {
   }
   Future<void> queueQuiz(String guide,String lesson,String lang,
       Map<String,dynamic> session,Map<String,Object?> answers)async{
-    final expiry=DateTime.tryParse((session['expiresAt']??'').toString());
+    final expiry=DateTime.tryParse((session['expiresAt']??session['resumeUntil']??'').toString());
     if(expiry==null||!expiry.isAfter(DateTime.now().toUtc())){
       throw const VopApiException('The online assessment session expired. Reconnect to start a valid attempt.');
     }
     await _secret.write(key:_quizKey(guide,lesson,lang)+':pending',
       value:jsonEncode({'guideId':guide,'lessonId':lesson,'language':lang,
-        'sessionId':session['sessionId'],'expiresAt':session['expiresAt'],
+        'sessionId':session['sessionId'],'expiresAt':session['expiresAt']??session['resumeUntil'],
         'answers':answers}));
     final prefs=await SharedPreferences.getInstance();
     await prefs.setString(_key('pendingQuizIndex','current'),jsonEncode(
