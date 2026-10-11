@@ -12,15 +12,16 @@ void main(){
     expect(resolveRadioMedia({'streamUrl':'https://stream.example.com/live.m3u8'}).kind,
       RadioMediaKind.video);
   });
-  test('official YouTube and AudioVerse provider embeds are in app',(){
+  test('YouTube embeds in app and AudioVerse provides external CSP-safe playback',(){
     final youtube=resolveRadioMedia({
       'videoUrl':'https://www.youtube.com/watch?v=abcdefghijk'});
     expect(youtube.kind,RadioMediaKind.provider);
     expect(youtube.url!.host,'www.youtube-nocookie.com');
     final audioverse=resolveRadioMedia({
       'audioUrl':'https://www.audioverse.org/en/media/12345'});
-    expect(audioverse.kind,RadioMediaKind.provider);
+    expect(audioverse.kind,RadioMediaKind.external);
     expect(audioverse.url!.host,'www.audioverse.org');
+    expect(audioverse.url!.path,'/en/media/12345');
   });
   test('rejects HTTP, private networks, URLs with credentials and unrelated pages',(){
     for(final url in [

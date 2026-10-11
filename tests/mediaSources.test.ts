@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { isSafeHttpsMediaUrl, resolveMediaSource, identifyRadioMedia, resolvedRadioRecord } from '../shared/mediaSources.ts';
 
 test('rejects executable protocols, local network destinations and credentials', () => {
@@ -53,4 +54,20 @@ test('legacy records and server-confirmed extensionless sources remain playable'
   assert.equal(resolvedRadioRecord({mediaUrl:'https://cdn.example.com/watch?id=4',mediaType:'video'})?.field,'videoUrl');
   assert.equal(resolvedRadioRecord({mediaUrl:'https://cdn.example.com/live',mediaType:'stream'})?.field,'streamUrl');
   assert.equal(resolvedRadioRecord({mediaUrl:'https://example.com/article'})?.mediaType,undefined);
+});
+
+test('AudioVerse frame-ancestors restriction is respected in every web player', () => {
+  const read=(path:string)=>readFileSync(path,'utf8');
+  const player=read('src/components/media/MediaPlayer.tsx');
+  const radio=read('src/pages/RadioPage.tsx');
+  const admin=read('src/pages/AdminRecordsPanel.tsx');
+  const fallback=read('src/components/media/ProviderPlaybackNotice.tsx');
+  assert.match(player,/source\.provider === 'AudioVerse'/);
+  assert.match(player,/<ProviderPlaybackNotice/);
+  assert.match(radio,/source\?\.provider === 'audioverse' && <ProviderPlaybackNotice/);
+  assert.doesNotMatch(radio,/source\?\.provider === 'audioverse' && <iframe/);
+  assert.doesNotMatch(admin,/provider === 'AudioVerse'[\s\S]{0,280}<iframe/);
+  assert.match(admin,/provider === 'AudioVerse'[\s\S]{0,150}<MediaPlayer/);
+  assert.match(fallback,/rel="noopener noreferrer"/);
+  assert.match(fallback,/isSafeHttpsMediaUrl\(sourceUrl\)/);
 });

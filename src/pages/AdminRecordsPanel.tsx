@@ -866,21 +866,6 @@ function youtubeEmbedUrl(value: string) {
   }
 }
 
-function audioVerseEmbedUrl(value: string) {
-  try {
-    const url = new URL(value);
-    const host = url.hostname.toLowerCase();
-    if (host !== 'audioverse.org' && !host.endsWith('.audioverse.org')) return '';
-    if (/\/embed\/media\/\d+(?:\/|$)/i.test(url.pathname)) return url.toString();
-    const media = url.pathname.match(/\/media\/(\d+)(?:\/|$)/i);
-    if (media?.[1]) return 'https://www.audioverse.org/en/embed/media/' + media[1];
-    const teaching = url.pathname.match(/\/teachings\/(\d+)(?:\/|$)/i);
-    return teaching?.[1] ? 'https://www.audioverse.org/en/embed/media/' + teaching[1] : '';
-  } catch {
-    return '';
-  }
-}
-
 function RadioAdminMediaPreview({record}: {record: AdminRecord}) {
   const source = radioSourceUrl(record);
   const provider = radioProvider(record);
@@ -894,10 +879,7 @@ function RadioAdminMediaPreview({record}: {record: AdminRecord}) {
   }
 
   if (provider === 'AudioVerse') {
-    const embed = audioVerseEmbedUrl(source);
-    return embed
-      ? <iframe className="vop-radio-admin-preview-frame" src={embed} title={String(record.title || 'AudioVerse radio content')} allow="autoplay; encrypted-media; picture-in-picture" />
-      : <div className="vop-radio-admin-preview-empty"><Headphones size={28}/><span>Invalid AudioVerse source.</span></div>;
+    return <MediaPlayer src={source} title={String(record.title || 'AudioVerse radio content')} />;
   }
 
   if (provider === 'Video' || record.mediaType === 'video' || record.mediaType === 'stream') {
@@ -1124,7 +1106,7 @@ function RadioAdminDashboard({
       </section>}
 
       {tab==='settings'&&<section className="vop-studio-panel">
-        <div className="vop-studio-settings-card"><Settings size={30}/><div><strong>Provider-aware playback</strong><p>YouTube uses the YouTube IFrame player; AudioVerse uses its trusted embed; direct HTTPS audio/video uses the VOP player. Provider credentials and secrets remain server-side.</p></div></div>
+        <div className="vop-studio-settings-card"><Settings size={30}/><div><strong>Provider-aware playback</strong><p>YouTube uses the YouTube IFrame player; AudioVerse restricts third-party iframes, so content opens on its original site; direct HTTPS audio/video uses the VOP player. Provider credentials and secrets remain server-side.</p></div></div>
       </section>}
 
       {error&&<div className="vop-radio-admin-alert error">{error}<button type="button" onClick={()=>setError('')}>×</button></div>}
