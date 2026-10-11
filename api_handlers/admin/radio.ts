@@ -66,6 +66,25 @@ export default async function handler(req: Request, res: Response) {
       videoUrl:actualField === 'videoUrl' ? detected.sourceUrl : '',
       streamUrl:actualField === 'streamUrl' ? detected.sourceUrl : '',
     };
+    // Native playback is permitted only when the publisher has independently
+    // verified rights and supplied a public, playable, authorised direct copy.
+    // Never scrape or proxy AudioVerse's restricted third-party player.
+    const licensedRaw=String(incoming.licensedAudioUrl||'').trim();
+    let licensedAudioUrl='';
+    let usageLicense='';
+    let attributionText='';
+    if(licensedRaw){
+      if(detected.provider!=='AudioVerse')throw new Error('Use the licensed audio alternative only for an AudioVerse publication.');
+      if(incoming.rightsConfirmed!==true)throw new Error('Confirm you have redistribution and in-app playback rights.');
+      usageLicense=String(incoming.usageLicense||'').trim();
+      if(!['owned','cc-by-nc-nd','written-permission'].includes(usageLicense))throw new Error('Select the applicable licence or permission.');
+      attributionText=String(incoming.attributionText||'').trim().slice(0,500);
+      if(!attributionText)throw new Error('Provide recording attribution and AudioVerse credit.');
+      if(!isSafeHttpsMediaUrl(licensedRaw)||licensedRaw===mediaUrl)throw new Error('Provide a separate authorised HTTPS audio file.');
+      const authorised=await identifyPublicMedia(licensedRaw);
+      if(authorised.kind!=='direct-audio')throw new Error('The authorised alternative must be a directly playable audio file.');
+      licensedAudioUrl=authorised.originalUrl;
+    }
     if (!String(incoming.title || '').trim()) throw new Error('Radio title is required.');
 
     if (existing.exists) {
@@ -85,6 +104,7 @@ export default async function handler(req: Request, res: Response) {
       series: String(incoming.series||'').trim().slice(0,120),
       description: String(incoming.description||'').trim().slice(0,3000),
       ...normalizedMedia,
+      licensedAudioUrl, rightsConfirmed:Boolean(licensedAudioUrl),usageLicense,attributionText,
       posterUrl: validUrl(incoming.posterUrl) ? String(incoming.posterUrl).trim() : '',
       broadcastTime: String(incoming.broadcastTime||'').trim().slice(0,50),
       id: documentId,
