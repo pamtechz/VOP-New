@@ -346,7 +346,8 @@ export default async function handler(
       });
       return res.status(400).json({ error: 'The lesson does not belong to the selected guide.' });
     }
-    if(useTenantGuide && ['startQuiz','completeLesson','saveLessonResume'].includes(action)){
+    if(useTenantGuide && candidateGuideData.enforceSequentialStudy===true &&
+       ['startQuiz','completeLesson','saveLessonResume'].includes(action)){
       const courseLessons=await guideRef.collection('lessons')
         .where('published','==',true).limit(120).get();
       const ordered=courseLessons.docs.filter(doc=>doc.data().archived!==true)
