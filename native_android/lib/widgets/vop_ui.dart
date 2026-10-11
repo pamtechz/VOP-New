@@ -129,7 +129,7 @@ class VopFeatureTile extends StatelessWidget {
           child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
             Container(width:35,height:35,
               decoration:BoxDecoration(
-                color:effectiveTint.withValues(alpha:dark?.18:.10),
+                color:effectiveTint.withValues(alpha:dark ? .18 : .10),
                 borderRadius:BorderRadius.circular(10)),
               child:Icon(icon,color:effectiveTint,size:20)),
             const Spacer(),
