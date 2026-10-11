@@ -33,6 +33,9 @@ class VopApi {
       '/api/mentorship',
       '/api/engagement',
       '/api/share',
+      '/api/prayer',
+      '/api/certificates',
+      '/api/admin/notifications',
     }.contains(path)) {
       throw const VopApiException('Unsupported VOP API endpoint.');
     }
@@ -105,6 +108,30 @@ class VopApi {
 
   Future<Map<String, dynamic>> bootstrap() => read('bootstrap');
   Future<Map<String, dynamic>> catalogue() => read('catalog');
+  Future<Map<String, dynamic>> resources() => read('resources');
+  Future<Map<String, dynamic>> events() => read('events');
+  Future<Map<String, dynamic>> radio() => read('radio');
+  Future<Map<String, dynamic>> announcements() => read('announcements');
+  Future<Map<String,dynamic>> notifications()=>
+      _execute('/api/admin/notifications','GET',null,{'action':'list'});
+  Future<Map<String,dynamic>> markNotificationRead(String id)=>
+      action('/api/admin/notifications',
+        {'action':'markRead','notificationId':id});
+  Future<Map<String,dynamic>> markAllNotificationsRead()=>
+      action('/api/admin/notifications',{'action':'markAllRead'});
+  Future<Map<String,dynamic>> deleteNotification(String id)=>
+      action('/api/admin/notifications',
+        {'action':'delete','notificationId':id});
+  Future<Map<String, dynamic>> certificates() =>
+      _execute('/api/certificates', 'GET', null, {'action': 'mine'});
+  Future<Map<String, dynamic>> prayers({bool mine = true}) =>
+      _execute('/api/prayer','GET',null,{'mine': mine ? 'true' : 'false'});
+  Future<Map<String,dynamic>> submitPrayer({
+      required String requestText,required String category,
+      required bool isPrivate}) =>
+      action('/api/prayer',{'action':'create',
+        'requestText':requestText,'category':category,'isPrivate':isPrivate});
+
   Future<Map<String, dynamic>> progress() => read('progress');
   Future<Map<String, dynamic>> guide(String id) => read('guide', {'guideId': id});
   Future<Map<String, dynamic>> lesson(String guideId, String lessonId) =>

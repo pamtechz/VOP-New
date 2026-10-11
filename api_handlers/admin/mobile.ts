@@ -90,7 +90,7 @@ export default async function mobile(req:Request,res:Response){
   res.setHeader?.('X-Content-Type-Options','nosniff');
   if(req.method!=='GET')return res.status(405).json({ok:false,code:'METHOD_NOT_ALLOWED',error:'Use GET for read-only mobile endpoints.'});
   const resource=param(req,'resource');
-  if(!['bootstrap','catalog','guide','lesson','progress','announcements'].includes(resource))
+  if(!['bootstrap','catalog','guide','lesson','progress','announcements','resources','events','radio'].includes(resource))
     return res.status(404).json({ok:false,code:'NOT_FOUND',error:'Unknown mobile API resource.'});
   try{
     const ctx=await authenticateTenant(req,undefined,true);
@@ -160,6 +160,55 @@ export default async function mobile(req:Request,res:Response){
         .map(doc=>({id:doc.id,title:string(doc.data().title),body:string(doc.data().content||doc.data().description),
           imageUrl:publicImage(doc.data().imageUrl)})).slice(0,30);
       return res.status(200).json({ok:true,items:rows});
+    }
+    if(['resources','events','radio'].includes(resource)){
+      const collections=resource==='resources'
+        ?['books']:resource==='events'?['events']:['radioBroadcasts','playlists'];
+      const fetchScoped=async(collectionName:string)=>{
+        const ref=db.collection(collectionName);
+        const [shared,global,tenant]=await Promise.all([
+          ref.where('published','==',true).where('sharingScope','==','shared').limit(80).get(),
+          ref.where('published','==',true).where('organizationId','==','').limit(80).get(),
+          scope.organizationId?ref.where('organizationId','==',scope.organizationId).limit(80).get():Promise.resolve(null),
+        ]);
+        return unique([shared.docs,global.docs,tenant?.docs||[]])
+          .filter(doc=>hasAccess(doc.data(),scope));
+      };
+      const scoped=await Promise.all(collections.map(fetchScoped));
+      if(resource==='resources'){
+        const items=scoped[0].map(doc=>{
+          const data=doc.data();
+          return {id:doc.id,name:string(data.name),category:string(data.category),
+            author:string(data.author),description:string(data.description),
+            imageUrl:publicImage(data.imageUrl),url:publicImage(data.url||data.downloadUrl)};
+        }).filter(item=>item.name);
+        return res.status(200).json({ok:true,items});
+      }
+      if(resource==='events'){
+        const items=scoped[0].map(doc=>{
+          const data=doc.data();
+          return {id:doc.id,title:string(data.title),description:string(data.description),
+            startAt:string(data.startAt),endAt:string(data.endAt),
+            location:string(data.location),imageUrl:publicImage(data.imageUrl)};
+        }).filter(item=>item.title);
+        items.sort((a,b)=>a.startAt.localeCompare(b.startAt));
+        return res.status(200).json({ok:true,items});
+      }
+      const items=scoped[0].map(doc=>{
+        const data=doc.data();
+        return {id:doc.id,title:string(data.title),speaker:string(data.speaker),
+          series:string(data.series),description:string(data.description),
+          mediaType:string(data.mediaType),posterUrl:publicImage(data.posterUrl),
+          audioUrl:publicImage(data.audioUrl),videoUrl:publicImage(data.videoUrl),
+          streamUrl:publicImage(data.streamUrl)};
+      }).filter(item=>item.title);
+      const playlists=scoped[1].map(doc=>{
+        const data=doc.data();
+        return {id:doc.id,name:string(data.name),description:string(data.description),
+          itemIds:Array.isArray(data.itemIds)
+            ?data.itemIds.filter((id:unknown)=>typeof id==='string'&&idPattern.test(id)).slice(0,100):[]};
+      }).filter(item=>item.name);
+      return res.status(200).json({ok:true,items,playlists});
     }
     const guideId=cleanId(param(req,'guideId'));
     const guideSnap=await db.doc('guides/'+guideId).get();
