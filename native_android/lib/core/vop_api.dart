@@ -39,6 +39,7 @@ class VopApi {
       '/api/admin/notifications',
       '/api/admin/users',
       '/api/account',
+      '/api/localization',
     }.contains(path)) {
       throw const VopApiException('Unsupported VOP API endpoint.');
     }
@@ -125,6 +126,8 @@ class VopApi {
   Future<Map<String,dynamic>> cancelAccountDeletion() =>
       action('/api/account',{'action':'cancel-deletion'});
   Future<Map<String,dynamic>> supportedLanguages() => read('languages');
+  Future<Map<String,dynamic>> localizations(String locale) =>
+      _execute('/api/localization','GET',null,{'locale':locale});
 
   Future<Map<String, dynamic>> catalogue() => read('catalog');
   Future<Map<String, dynamic>> resources() => read('resources');
