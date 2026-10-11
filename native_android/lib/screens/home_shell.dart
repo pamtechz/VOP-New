@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../core/vop_api.dart';
+import '../core/offline_study.dart';
 import '../theme/vop_theme.dart';
 import '../widgets/vop_ui.dart';
 import 'certificates_screen.dart';
@@ -36,10 +37,17 @@ class HomeShell extends StatefulWidget {
 class _HomeShellState extends State<HomeShell> {
   int tab=0;
   String search='';
+  String studyLanguage='';
+  final offline=OfflineStudyStore();
   late Future<Map<String,dynamic>> profile,catalog,progress;
   @override void initState(){super.initState();reload();
     widget.api.personalSettings().then((result){
-      VopAppearance.apply(asMap(result['settings']));
+      final settings=asMap(result['settings']);
+      VopAppearance.apply(settings);
+      if(mounted)setState(()=>studyLanguage=(settings['studyLanguage']??'').toString());
+    }).catchError((Object ignored){});
+    offline.sync(widget.api).then((count){
+      if(count>0&&mounted)setState(reload);
     }).catchError((Object ignored){});
   }
   void reload(){
@@ -289,6 +297,8 @@ class _HomeShellState extends State<HomeShell> {
     final guides=asRows(data['guides']);
     final programs=asRows(data['programs']);
     final visible=guides.where((guide){
+      if(studyLanguage.isNotEmpty && studyLanguage!='all'&&
+         guide['language']?.toString()!=studyLanguage)return false;
       final text=(guide['title']??'').toString()+' '+
         (guide['description']??'').toString()+' '+
         (guide['language']??'').toString();
@@ -307,6 +317,19 @@ class _HomeShellState extends State<HomeShell> {
             hintText:'Find courses, topics and languages',
             prefixIcon:Icon(Icons.search_rounded))),
         const SizedBox(height:10),
+        if(guides.isNotEmpty)Padding(padding:const EdgeInsets.only(bottom:10),
+          child:DropdownButtonFormField<String>(
+            initialValue:studyLanguage.isEmpty?'all':studyLanguage,
+            decoration:const InputDecoration(labelText:'Study language',
+              prefixIcon:Icon(Icons.translate)),
+            items:[
+              const DropdownMenuItem(value:'all',child:Text('All available languages')),
+              ...{for(final g in guides)
+                if((g['language']??'').toString().isNotEmpty)
+                  (g['language']??'').toString()}.map((lang)=>
+                DropdownMenuItem(value:lang,child:Text(lang.toUpperCase()))),
+            ],
+            onChanged:(value)=>setState(()=>studyLanguage=value??'all'))),
         if(programs.isNotEmpty)...[
           VopSectionTitle('Study programmes',
             subtitle:'Explore structured learning paths'),
@@ -349,6 +372,8 @@ class _HomeShellState extends State<HomeShell> {
   );
 }
 
+/// The programmes are real Firestore relationships, not hardcoded navigation.
+/// Each course expands its actual published lessons, honoring unlock states.
 class _ProgrammeScreen extends StatelessWidget {
   const _ProgrammeScreen({required this.title,required this.guides,required this.api});
   final String title;
@@ -356,16 +381,61 @@ class _ProgrammeScreen extends StatelessWidget {
   final VopApi api;
   @override Widget build(BuildContext context)=>Scaffold(
     appBar:AppBar(title:Text(title)),
-    body:ListView(padding:const EdgeInsets.all(17),children:[
+    body:ListView(padding:const EdgeInsets.all(15),children:[
+      Text('Courses & lessons',style:Theme.of(context).textTheme.titleLarge),
+      const SizedBox(height:5),
+      Text('Choose a course to see the lessons and assessments inside it.',
+        style:Theme.of(context).textTheme.bodyMedium),
+      const SizedBox(height:13),
       if(guides.isEmpty)const VopEmpty(icon:Icons.menu_book_outlined,
-        message:'No published lessons in this programme yet.'),
-      ...guides.map((guide)=>VopCourseCard(
-        title:(guide['title']??'').toString(),
-        description:(guide['description']??'').toString(),
-        language:(guide['language']??'').toString(),
-        imageUrl:(guide['image']??'').toString(),
-        onTap:()=>Navigator.push(context,MaterialPageRoute<void>(
-          builder:(_)=>GuideScreen(api:api,guideId:(guide['id']??'').toString()))))),
+        message:'No published courses are assigned to this programme yet.'),
+      ...guides.map((guide)=>Card(margin:const EdgeInsets.only(bottom:10),
+        clipBehavior:Clip.antiAlias,
+        child:ExpansionTile(
+          leading:const Icon(Icons.school_outlined),
+          title:Text((guide['title']??'Course').toString(),
+            style:const TextStyle(fontWeight:FontWeight.w800)),
+          subtitle:Text((guide['language']??'').toString().toUpperCase()),
+          children:[
+            FutureBuilder<Map<String,dynamic>>(
+              future:OfflineStudyStore().loadGuide(api,(guide['id']??'').toString()),
+              builder:(context,snapshot){
+                if(snapshot.connectionState!=ConnectionState.done)
+                  return const Padding(padding:EdgeInsets.all(16),
+                    child:LinearProgressIndicator());
+                if(snapshot.hasError)return Padding(
+                  padding:const EdgeInsets.all(14),
+                  child:Text('Lessons could not be loaded: ${snapshot.error}'));
+                final lessons=(snapshot.data?['lessons'] as List? ?? [])
+                  .whereType<Map>().toList();
+                return Column(children:[
+                  ...lessons.asMap().entries.map((entry){
+                    final item=entry.value,locked=item['unlocked']==false;
+                    return ListTile(dense:true,
+                      leading:Icon(locked?Icons.lock_outline:
+                        item['completed']==true?Icons.check_circle_outline:
+                        item['type']=='Test'?Icons.fact_check_outlined:
+                        Icons.auto_stories_outlined,size:19),
+                      title:Text('${entry.key+1}. ${item['title']??'Lesson'}'),
+                      subtitle:Text(locked?'Complete previous learning first':
+                        item['type']=='Test'?'Assessment':'Reading lesson'),
+                      onTap:locked?null:()=>Navigator.push(context,
+                        MaterialPageRoute<void>(builder:(_)=>GuideScreen(
+                          api:api,guideId:(guide['id']??'').toString()))),
+                    );
+                  }),
+                  Padding(padding:const EdgeInsets.fromLTRB(12,4,12,12),
+                    child:FilledButton.icon(
+                      onPressed:()=>Navigator.push(context,
+                        MaterialPageRoute<void>(builder:(_)=>GuideScreen(
+                          api:api,guideId:(guide['id']??'').toString()))),
+                      icon:const Icon(Icons.menu_book_outlined),
+                      label:const Text('Open complete course')),
+                  ),
+                ]);
+              }),
+          ],
+        ))),
     ]),
   );
 }
