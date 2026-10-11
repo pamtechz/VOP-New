@@ -396,8 +396,29 @@ class _ProgrammeScreen extends StatefulWidget {
 }
 class _ProgrammeScreenState extends State<_ProgrammeScreen> {
   final Map<String,Future<Map<String,dynamic>>> loaded={};
+  final Map<int,Future<bool>> access={};
+  late Future<Map<String,dynamic>> progress=widget.api.progress();
   Future<Map<String,dynamic>> load(String id)=>loaded.putIfAbsent(
     id,()=>widget.api.guide(id));
+  Future<bool> canOpen(int index)=>access.putIfAbsent(index,()async{
+    if(index==0)return true;
+    final finished=(await progress)['completedLessons'] as List? ?? [];
+    final keys=finished.map((id)=>id.toString()).toSet();
+    for(var previous=0;previous<index;previous++){
+      final g=widget.guides[previous];
+      final guideId=(g['id']??'').toString();
+      final lang=(g['language']??'en').toString();
+      final content=await load(guideId);
+      final lessons=(content['lessons'] as List? ?? []).whereType<Map>();
+      if(lessons.isEmpty||lessons.any((lesson)=>
+        !keys.contains('$lang:$guideId:${lesson['id']}')))return false;
+    }
+    return true;
+  });
+  void refreshAccess(){setState((){
+    access.clear();
+    progress=widget.api.progress();
+  });}
   @override Widget build(BuildContext context)=>Scaffold(
     appBar:AppBar(title:Text(widget.title)),
     body:ListView(padding:const EdgeInsets.all(16),children:[
@@ -408,9 +429,13 @@ class _ProgrammeScreenState extends State<_ProgrammeScreen> {
       ...widget.guides.asMap().entries.map((entry){
         final guide=entry.value;
         final id=(guide['id']??'').toString();
-        return Card(margin:const EdgeInsets.only(bottom:11),
-          clipBehavior:Clip.antiAlias,
-          child:ExpansionTile(
+        return FutureBuilder<bool>(
+          future:canOpen(entry.key),
+          builder:(context,snapshot){
+            final unlocked=snapshot.data==true;
+            return Card(margin:const EdgeInsets.only(bottom:11),
+              clipBehavior:Clip.antiAlias,
+              child:unlocked?ExpansionTile(
             leading:CircleAvatar(child:Text('${entry.key+1}')),
             title:Text((guide['title']??'Study course').toString(),
               style:const TextStyle(fontWeight:FontWeight.w800)),
@@ -435,20 +460,29 @@ class _ProgrammeScreenState extends State<_ProgrammeScreen> {
                         ?Icons.fact_check_outlined:Icons.auto_stories_outlined,size:20),
                       title:Text((lesson['title']??'Lesson').toString(),
                         maxLines:2,overflow:TextOverflow.ellipsis),
-                      onTap:()=>Navigator.push(context,MaterialPageRoute<void>(
-                        builder:(_)=>GuideScreen(api:widget.api,guideId:id))),
+                      onTap:()async{await Navigator.push(context,MaterialPageRoute<void>(
+                        builder:(_)=>GuideScreen(api:widget.api,guideId:id))); if(mounted)refreshAccess(); },
                     )),
                     const SizedBox(height:8),
                     FilledButton.icon(
-                      onPressed:()=>Navigator.push(context,MaterialPageRoute<void>(
-                        builder:(_)=>GuideScreen(api:widget.api,guideId:id))),
+                      onPressed:()async{await Navigator.push(context,MaterialPageRoute<void>(
+                        builder:(_)=>GuideScreen(api:widget.api,guideId:id))); if(mounted)refreshAccess(); },
                       icon:const Icon(Icons.menu_book_outlined),
                       label:const Text('Open course')),
                   ]);
                 },
               ),
             ],
-          ));
+          ):ListTile(
+            leading:const Icon(Icons.lock_outline),
+            title:Text((guide['title']??'Study course').toString()),
+            subtitle:Text(snapshot.hasError?'Could not verify access':
+              snapshot.connectionState!=ConnectionState.done?'Checking access…':
+              'Complete the previous course first'),
+            enabled:false),
+          );
+          },
+        );
       }),
     ]),
   );
