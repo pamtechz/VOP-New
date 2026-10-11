@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../core/vop_api.dart';
+import '../core/offline_study.dart';
+import '../widgets/vop_ui.dart';
 
 class QuizScreen extends StatefulWidget {
   const QuizScreen({
@@ -12,16 +14,36 @@ class QuizScreen extends StatefulWidget {
   @override State<QuizScreen> createState()=>_QuizScreenState();
 }
 class _QuizScreenState extends State<QuizScreen> {
+  final store=OfflineStudyStore();
   late Future<Map<String,dynamic>> session;
+  int position=0;
+  bool offlineAttempt=false,pendingVerification=false;
   Map<String,Object?> answers={};
   Map<String,dynamic>? result;
   bool submitting=false;
   String? error;
   @override void initState(){super.initState();start();}
   void start({bool confirmRetake=false}){
-    session=widget.api.startQuiz(
-      widget.guideId,widget.lessonId,widget.language,
-      confirmRetake:confirmRetake);
+    session=_loadSession(confirmRetake:confirmRetake);
+  }
+  Future<Map<String,dynamic>> _loadSession({bool confirmRetake=false})async{
+    try{
+      final data=await widget.api.startQuiz(widget.guideId,widget.lessonId,
+        widget.language,confirmRetake:confirmRetake);
+      if(data['ok']==false||data['sessionId']==null){
+        throw VopApiException((data['error']??'Assessment unavailable').toString(),
+          code:(data['code']??'').toString());
+      }
+      await store.saveQuizSession(widget.guideId,widget.lessonId,widget.language,data);
+      offlineAttempt=false;
+      return data;
+    }catch(error){
+      if(error is VopApiException && error.status==0){
+        final cached=await store.quizSession(widget.guideId,widget.lessonId,widget.language);
+        if(cached!=null){offlineAttempt=true;return cached;}
+      }
+      rethrow;
+    }
   }
   Future<void> submit(Map<String,dynamic> data)async{
     if(submitting)return;
@@ -35,19 +57,41 @@ class _QuizScreenState extends State<QuizScreen> {
       final response=await widget.api.submitQuiz(
         widget.guideId,widget.lessonId,widget.language,
         '${data['sessionId']}',answers);
+      await store.clearQuiz(widget.guideId,widget.lessonId,widget.language);
       if(mounted)setState(()=>result=response);
     }catch(e){
-      if(mounted)setState(()=>error='$e');
+      if(e is VopApiException && e.status==0){
+        try{
+          await store.queueQuiz(widget.guideId,widget.lessonId,
+            widget.language,data,answers);
+          if(mounted)setState(()=>pendingVerification=true);
+        }catch(queueError){if(mounted)setState(()=>error='$queueError');}
+      }else if(mounted)setState(()=>error='$e');
     }finally{
       if(mounted)setState(()=>submitting=false);
     }
   }
   @override Widget build(BuildContext context)=>Scaffold(
     appBar:AppBar(title:Text(widget.title)),
-    body:result!=null?resultView():FutureBuilder<Map<String,dynamic>>(
+    body:pendingVerification
+      ?Center(child:Padding(padding:const EdgeInsets.all(24),
+        child:Column(mainAxisSize:MainAxisSize.min,children:[
+          const Icon(Icons.cloud_upload_outlined,size:58),
+          const SizedBox(height:15),
+          Text('Awaiting verification',style:Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height:10),
+          const Text('Your answers are encrypted on this device. VOP will submit '
+            'them to the server when you reconnect, provided the original '
+            'attempt has not expired. No score or points are awarded offline.',
+            textAlign:TextAlign.center),
+          const SizedBox(height:18),
+          FilledButton(onPressed:()=>Navigator.pop(context),
+            child:const Text('Return to guide')),
+        ])))
+      :result!=null?resultView():FutureBuilder<Map<String,dynamic>>(
       future:session,builder:(context,s){
         if(s.connectionState!=ConnectionState.done){
-          return const Center(child:CircularProgressIndicator());
+          return const VopSkeleton(rows:4);
         }
         if(s.hasError){
           final exception=s.error;
@@ -74,7 +118,21 @@ class _QuizScreenState extends State<QuizScreen> {
           child:Text('No published questions are available.'));
         final policy=data['assessmentPolicy'] is Map
           ?data['assessmentPolicy'] as Map:{};
-        return ListView(padding:const EdgeInsets.all(18),children:[
+        final index=position.clamp(0,questions.length-1).toInt();
+        final entry=questions[index];
+        final options=(entry['options'] is List)?entry['options'] as List:[true,false];
+        final selected=answers['$index'];
+        return ListView(padding:const EdgeInsets.all(16),children:[
+          if(offlineAttempt)const Card(child:ListTile(
+            leading:Icon(Icons.offline_bolt_outlined),
+            title:Text('Offline attempt'),
+            subtitle:Text('This server-started session expires at its original time. '
+              'Answers require online verification.'))),
+          LinearProgressIndicator(value:(index+1)/questions.length,minHeight:6),
+          const SizedBox(height:11),
+          Text('Question ${index+1} of ${questions.length}',
+            style:Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height:13),
           Card(child:Padding(padding:const EdgeInsets.all(18),
             child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
               Text('Assessment',style:Theme.of(context).textTheme.titleLarge),
@@ -86,39 +144,48 @@ class _QuizScreenState extends State<QuizScreen> {
                 Text('Session expires: ${data['expiresAt']}'),
             ]))),
           const SizedBox(height:14),
-          ...questions.asMap().entries.map((entry){
-            final index=entry.key;
-            final question=entry.value;
-            final options=(question['options'] is List)
-              ?question['options'] as List:[true,false];
-            final selected=answers['$index'];
-            return Card(margin:const EdgeInsets.only(bottom:12),
-              child:Padding(padding:const EdgeInsets.all(15),
-                child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-                  Text('${index+1}. ${question['prompt']??question['question']??''}',
-                    style:const TextStyle(fontWeight:FontWeight.w700)),
-                  const SizedBox(height:9),
-                  ...options.asMap().entries.map((opt){
-                    final value=question['options'] is List?opt.key:opt.key==0;
-                    final label=question['options'] is List
-                      ?'${opt.value}':opt.key==0?'True':'False';
-                    return RadioListTile<Object>(
-                      dense:true,contentPadding:EdgeInsets.zero,
-                      title:Text(label),value:value,
-                      groupValue:selected,
-                      onChanged:(answer)=>setState(()=>answers['$index']=answer),
-                    );
-                  }),
-                ]),
-              ),
-            );
-          }),
+          Card(child:Padding(padding:const EdgeInsets.all(17),child:
+            Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+              Text('${entry['prompt']??entry['question']??''}',
+                style:Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height:13),
+              ...options.asMap().entries.map((opt){
+                final value=entry['options'] is List?opt.key:opt.key==0;
+                final label=entry['options'] is List
+                  ?'${opt.value}':opt.key==0?'True':'False';
+                final checked=selected==value;
+                return Padding(padding:const EdgeInsets.only(bottom:8),
+                  child:Card(
+                    color:checked?Theme.of(context).colorScheme.primaryContainer:null,
+                    child:InkWell(
+                      onTap:()=>setState(()=>answers['$index']=value),
+                      borderRadius:BorderRadius.circular(12),
+                      child:Padding(padding:const EdgeInsets.all(13),
+                        child:Row(children:[
+                          Icon(checked?Icons.radio_button_checked:Icons.radio_button_unchecked,
+                            color:checked?Theme.of(context).colorScheme.primary:null),
+                          const SizedBox(width:11),
+                          Expanded(child:Text(label)),
+                        ])))));
+              }),
+            ]))),
+          const SizedBox(height:12),
+          Row(children:[
+            OutlinedButton.icon(onPressed:index==0?null:()=>setState(()=>position--),
+              icon:const Icon(Icons.chevron_left),label:const Text('Back')),
+            const Spacer(),
+            if(index<questions.length-1)
+              FilledButton.icon(onPressed:answers.containsKey('$index')
+                ?()=>setState(()=>position++):null,
+                icon:const Icon(Icons.chevron_right),label:const Text('Next')),
+          ]),
           if(error!=null)Padding(padding:const EdgeInsets.all(10),
             child:Text(error!,style:TextStyle(
               color:Theme.of(context).colorScheme.error))),
           const SizedBox(height:12),
-          FilledButton.icon(
-            onPressed:submitting?null:()=>submit(data),
+          if(position==questions.length-1)FilledButton.icon(
+            onPressed:submitting||answers.length!=questions.length
+              ?null:()=>submit(data),
             icon:submitting?const SizedBox(width:18,height:18,
               child:CircularProgressIndicator(strokeWidth:2))
               :const Icon(Icons.fact_check_rounded),
