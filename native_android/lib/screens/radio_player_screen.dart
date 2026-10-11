@@ -275,6 +275,14 @@ class _RadioPlayerScreenState extends State<RadioPlayerScreen>
         Text([widget.item['speaker'],widget.item['series'],source.provider]
           .where((e)=>e!=null&&e.toString().trim().isNotEmpty)
           .join(' · ')),
+        if(source.provider=='Authorised AudioVerse recording')...[
+          const SizedBox(height:9),
+          Text((widget.item['attributionText']??'AudioVerse / original rights holder').toString(),
+            style:const TextStyle(fontSize:12,fontWeight:FontWeight.w700)),
+          const SizedBox(height:5),
+          const Text('Playing an organisation-supplied recording with verified use rights.',
+            style:TextStyle(fontSize:11)),
+        ],
         if(source.provider=='YouTube')...[
           const SizedBox(height:12),
           Row(children:[
