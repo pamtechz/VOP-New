@@ -43,7 +43,7 @@ abstract final class VopTheme {
         titleLarge: base.textTheme.titleLarge?.copyWith(
           fontSize: 19, fontWeight: FontWeight.w800, letterSpacing: -0.35),
         titleMedium: base.textTheme.titleMedium?.copyWith(
-          fontSize: 15, fontWeight: FontWeight.w750),
+          fontSize: 15, fontWeight: FontWeight.w700),
         bodyMedium: base.textTheme.bodyMedium?.copyWith(height: 1.52),
       ),
       appBarTheme: AppBarTheme(
@@ -75,7 +75,7 @@ abstract final class VopTheme {
       filledButtonTheme: FilledButtonThemeData(style: FilledButton.styleFrom(
         minimumSize: const Size(0,46),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        textStyle: const TextStyle(fontWeight: FontWeight.w750),
+        textStyle: const TextStyle(fontWeight: FontWeight.w700),
       )),
       outlinedButtonTheme: OutlinedButtonThemeData(style: OutlinedButton.styleFrom(
         minimumSize: const Size(0,43),
