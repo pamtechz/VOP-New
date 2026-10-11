@@ -24,7 +24,7 @@ bool _host(String host,String domain)=>
     host==domain||host.endsWith('.'+domain);
 /// Only known providers or media file URLs, never unapproved private webpages.
 RadioMedia resolveRadioMedia(Map<String,dynamic> item) {
-  for(final name in ['streamUrl','videoUrl','audioUrl']){
+  for(final name in ['mediaUrl','streamUrl','videoUrl','audioUrl']){
     final raw=(item[name]??'').toString().trim();
     if(!safeRadioHttps(raw))continue;
     final uri=Uri.parse(raw), host=uri.host.toLowerCase(), path=uri.path.toLowerCase();
@@ -56,14 +56,57 @@ RadioMedia resolveRadioMedia(Map<String,dynamic> item) {
         Uri.parse('https://player.vimeo.com/video/'+id),provider:'Vimeo');
       continue;
     }
+    if(_host(host,'soundcloud.com')){
+      return RadioMedia(RadioMediaKind.provider,
+        Uri.parse('https://w.soundcloud.com/player/?url='+Uri.encodeComponent(raw)),
+        provider:'SoundCloud');
+    }
+    if(_host(host,'tiktok.com')){
+      final id=RegExp(r'/@[^/]+/video/(\d+)(?:/|$)').firstMatch(uri.path)?.group(1)
+        ??RegExp(r'/player/v1/(\d+)(?:/|$)').firstMatch(uri.path)?.group(1);
+      if(id!=null)return RadioMedia(RadioMediaKind.provider,
+        Uri.parse('https://www.tiktok.com/player/v1/'+id),provider:'TikTok');
+      continue;
+    }
+    if(_host(host,'instagram.com')){
+      final match=RegExp(r'^/(p|reel|tv)/([A-Za-z0-9_-]{5,30})(?:/|$)')
+        .firstMatch(uri.path);
+      if(match!=null){
+        return RadioMedia(RadioMediaKind.provider,
+          Uri.parse('https://www.instagram.com/'+match.group(1)!+'/'
+            +match.group(2)!+'/embed/'),provider:'Instagram');
+      }
+      continue;
+    }
+    if(_host(host,'facebook.com')||host=='fb.watch'){
+      final media=path.contains('/videos/')||path.contains('/reel/')
+        ||path=='/watch'||path=='/watch/';
+      final validWatch=!path.startsWith('/watch')||
+        RegExp(r'^\d+$').hasMatch(uri.queryParameters['v']??'');
+      if(media&&validWatch){
+        return RadioMedia(RadioMediaKind.provider,
+          Uri.parse('https://www.facebook.com/plugins/video.php?href='+
+            Uri.encodeComponent(raw)+'&show_text=0'),provider:'Facebook');
+      }
+      continue;
+    }
     if(RegExp(r'\.(mp4|m4v|webm|mov|ogv)$').hasMatch(path)){
       return RadioMedia(RadioMediaKind.video,uri);
     }
     if(RegExp(r'\.(mp3|m4a|aac|ogg|oga|wav|opus)$').hasMatch(path)){
       return RadioMedia(RadioMediaKind.audio,uri);
     }
-    if(name=='streamUrl'||path.endsWith('.m3u8')||path.endsWith('.mpd')){
+    if(name=='streamUrl'||path.endsWith('.m3u8')||path.endsWith('.mpd')||
+        item['mediaType']=='stream'){
       return RadioMedia(RadioMediaKind.video,uri,provider:'Live stream');
+    }
+    // Only the backend writes extensionless media types after inspecting public
+    // content-type metadata. This handles signed audio/video CDN URLs.
+    if(name=='mediaUrl'&&item['mediaType']=='audio'){
+      return RadioMedia(RadioMediaKind.audio,uri,provider:'Audio file');
+    }
+    if(name=='mediaUrl'&&item['mediaType']=='video'){
+      return RadioMedia(RadioMediaKind.video,uri,provider:'Video file');
     }
   }
   return const RadioMedia(RadioMediaKind.unsupported,null);

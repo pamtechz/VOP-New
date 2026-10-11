@@ -61,6 +61,11 @@ export function resolveMediaSource(value: unknown): ResolvedMedia | null {
   if (isHost(host, 'soundcloud.com')) {
     return embed('SoundCloud', 'https://w.soundcloud.com/player/?url=' + encodeURIComponent(originalUrl));
   }
+  // Streaming manifests are identified without requiring an admin to select
+  // a separate media type. Their audio/video tracks are handled by the player.
+  if (/\.(?:m3u8|mpd)$/i.test(path)) {
+    return { kind: 'direct-video', provider: 'Live stream', url: originalUrl, originalUrl };
+  }
   if (/\.(?:mp4|m4v|webm|ogv|mov)$/i.test(path)) {
     return { kind: 'direct-video', provider: 'Video file', url: originalUrl, originalUrl };
   }
@@ -71,6 +76,56 @@ export function resolveMediaSource(value: unknown): ResolvedMedia | null {
   // media URL. In particular, /app pages and private social posts are NOT files.
   if (isHost(host, 'umtu.me') || isHost(host, 'wordpress.com') || isHost(host, 'wordpress.tv')) {
     return { kind: 'external', provider: isHost(host, 'umtu.me') ? 'Umtu' : 'WordPress', url: originalUrl, originalUrl };
+  }
+  return null;
+}
+
+/** Deterministic classification shared by publishing UI and server.
+ * Client-provided `mediaType` is never the authority for provider identity.
+ */
+export type IdentifiedRadioMedia = {
+  mediaType: 'audio'|'video'|'stream'|'youtube'|'audioverse'|'embed';
+  field: 'audioUrl'|'videoUrl'|'streamUrl';
+  provider: string; sourceUrl: string; playbackUrl: string;
+};
+export function identifyRadioMedia(media: ResolvedMedia): IdentifiedRadioMedia {
+  const sourceUrl = media.originalUrl;
+  const stream = media.provider === 'Live stream' || /\.(?:m3u8|mpd)(?:[?#]|$)/i.test(sourceUrl);
+  const audioEmbed = ['AudioVerse','SoundCloud'].includes(media.provider);
+  const mediaType = stream ? 'stream' : media.provider === 'YouTube' ? 'youtube'
+    : media.provider === 'AudioVerse' ? 'audioverse'
+    : media.kind === 'embed' ? 'embed'
+    : media.kind === 'direct-audio' ? 'audio' : 'video';
+  const field = stream ? 'streamUrl' : media.kind === 'direct-audio' || audioEmbed ? 'audioUrl' : 'videoUrl';
+  return { mediaType, field, provider:media.provider, sourceUrl,
+    playbackUrl:media.url };
+}
+/** Compatible with legacy records containing separate URL fields. */
+export function resolvedRadioRecord(record: Record<string, unknown>): IdentifiedRadioMedia | null {
+  for (const field of ['streamUrl','videoUrl','audioUrl','mediaUrl'] as const) {
+    const url = String(record[field] || '').trim();
+    if (!url) continue;
+    const resolved = resolveMediaSource(url);
+    if (resolved && resolved.kind !== 'external') {
+      const classified = identifyRadioMedia(resolved);
+      return field === 'streamUrl' ? {...classified,mediaType:'stream',field:'streamUrl'} : classified;
+    }
+    // Some station/live URLs have no extension. They must be deliberately
+    // approved as streams by the server before saving; never iframe a webpage.
+    if (field === 'streamUrl' && isSafeHttpsMediaUrl(url)) {
+      return {mediaType:'stream',field:'streamUrl',provider:'Live stream',
+        sourceUrl:url,playbackUrl:url};
+    }
+    // Metadata-verified URLs may have an extensionless path; mediaType was
+    // written by the backend after inspecting the public Content-Type.
+    if (isSafeHttpsMediaUrl(url) &&
+        ['audio','video','stream'].includes(String(record.mediaType||''))) {
+      const kind = String(record.mediaType);
+      const typedField = kind==='audio'?'audioUrl':kind==='stream'?'streamUrl':'videoUrl';
+      return {mediaType:kind as 'audio'|'video'|'stream',field:typedField,
+        provider:kind==='stream'?'Live stream':kind==='audio'?'Audio file':'Video file',
+        sourceUrl:url,playbackUrl:url};
+    }
   }
   return null;
 }

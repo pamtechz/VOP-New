@@ -206,7 +206,8 @@ export default async function mobile(req:Request,res:Response){
         const data=doc.data();
         return {id:doc.id,title:string(data.title),speaker:string(data.speaker),
           series:string(data.series),description:string(data.description),
-          mediaType:string(data.mediaType),posterUrl:publicImage(data.posterUrl),
+          mediaType:string(data.mediaType),mediaProvider:string(data.mediaProvider),
+          mediaUrl:publicImage(data.mediaUrl),posterUrl:publicImage(data.posterUrl),
           audioUrl:publicImage(data.audioUrl),videoUrl:publicImage(data.videoUrl),
           streamUrl:publicImage(data.streamUrl)};
       }).filter(item=>item.title);
