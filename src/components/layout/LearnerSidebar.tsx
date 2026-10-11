@@ -96,7 +96,7 @@ export function LearnerSidebar({currentRoute,currentUser,settings,collapsed,onTo
         <span className="vop-learner-sidebar-label" aria-hidden="true">{collapsed?'•':group.name}</span>
         {group.items.map(item=>{
           const Icon=item.icon;
-          return <button type="button" key={item.route}
+          return <button type="button" key={item.adminTab ? `${item.route}:${item.adminTab}` : item.route}
             className={'vop-learner-sidebar-link'+(currentRoute===item.route?' active':'')}
             title={collapsed?item.label:undefined} aria-label={item.label}
             aria-current={currentRoute===item.route?'page':undefined}
