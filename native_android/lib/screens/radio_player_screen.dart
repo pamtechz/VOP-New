@@ -268,10 +268,13 @@ class _RadioPlayerScreenState extends State<RadioPlayerScreen>
         const SizedBox(height:16),
         Text((widget.item['title']??'VOP Programme').toString(),
           style:Theme.of(context).textTheme.headlineSmall),
-        const SizedBox(height:6),
-        Text([widget.item['speaker'],widget.item['series'],source.provider]
-          .where((e)=>e!=null&&e.toString().trim().isNotEmpty)
-          .join(' · ')),
+        if([widget.item['speaker'],widget.item['series']]
+            .any((entry)=>entry!=null&&entry.toString().trim().isNotEmpty))...[
+          const SizedBox(height:6),
+          Text([widget.item['speaker'],widget.item['series']]
+            .where((entry)=>entry!=null&&entry.toString().trim().isNotEmpty)
+            .join(' · ')),
+        ],
         if(ready)...[
           const SizedBox(height:14),
           if(duration>Duration.zero)Slider(
