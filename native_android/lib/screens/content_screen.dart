@@ -101,20 +101,20 @@ class _VopContentScreenState extends State<VopContentScreen> {
                         ?const VopEmpty(icon:Icons.queue_music,
                           message:'No published items in this playlist.')
                         :ListView(padding:const EdgeInsets.all(16),
-                          children:contents.map(_item).toList()),
+                          children:contents.map((item)=>_item(item,contents)).toList()),
                     )));
                   },
                 ))),
               VopSectionTitle('Programmes',subtitle:'Audio and video'),
             ],
-            ...filtered.map(_item),
+            ...filtered.map((item)=>_item(item,items)),
             const SizedBox(height:30),
           ]));
       });
     return widget.embedded?body:Scaffold(
       appBar:AppBar(title:Text(widget.kind.title)),body:body);
   }
-  Widget _item(Map<String,dynamic> row){
+  Widget _item(Map<String,dynamic> row,List<Map<String,dynamic>> related){
     final title=widget.kind==VopContentKind.resources?value(row,'name'):value(row,'title');
     final description=value(row,'description').isNotEmpty
       ?value(row,'description'):value(row,'body');
@@ -133,7 +133,7 @@ class _VopContentScreenState extends State<VopContentScreen> {
       clipBehavior:Clip.antiAlias,
       child:InkWell(onTap:()=>widget.kind==VopContentKind.radio
           ?Navigator.push(context,MaterialPageRoute<void>(
-            builder:(_)=>RadioPlayerScreen(item:row)))
+            builder:(_)=>RadioPlayerScreen(item:row,api:widget.api,related:related)))
           :_details(title,description,row,url),
         child:Padding(padding:const EdgeInsets.all(12),
           child:Row(crossAxisAlignment:CrossAxisAlignment.start,children:[
