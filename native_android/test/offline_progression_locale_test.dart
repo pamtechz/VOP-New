@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vop/core/vop_i18n.dart';
 import 'package:vop/theme/vop_theme.dart';
-import 'package:vop/screens/engagement_screen.dart';
 
 void main(){
   test('native UI uses published VOP translation values and safe fallback',(){
