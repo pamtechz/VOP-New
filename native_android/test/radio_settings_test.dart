@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:webview_flutter/webview_flutter.dart';
 import 'package:vop/screens/radio_player_screen.dart';
 import 'package:vop/theme/vop_theme.dart';
 
@@ -23,16 +24,34 @@ void main(){
     expect(audioverse.url!.host,'www.audioverse.org');
     expect(audioverse.url!.path,'/en/embed/media/12345');
   });
-  test('AudioVerse provider-supplied audio embed URL takes precedence',(){
-    final media=resolveRadioMedia({
+  test('AudioVerse only uses a publisher player for the selected recording',(){
+    final wrong=resolveRadioMedia({
       'mediaUrl':'https://www.audioverse.org/en/media/12345',
       'audioEmbedUrl':'https://www.audioverse.org/en/embed/media/98765',
     });
-    expect(media.kind,RadioMediaKind.provider);
-    expect(media.url!.path,'/en/embed/media/98765');
+    expect(wrong.kind,RadioMediaKind.provider);
+    expect(wrong.url!.path,'/en/embed/media/12345');
+    final correct=resolveRadioMedia({
+      'mediaUrl':'https://www.audioverse.org/en/media/12345',
+      'audioEmbedUrl':'https://www.audioverse.org/en/embed/media/12345',
+    });
+    expect(correct.url!.path,'/en/embed/media/12345');
+    expect(audioVerseMediaId(Uri.parse('https://www.audioverse.org/en/embed/media/12345')),'12345');
     expect(safeAudioVerseEmbedUrl(Uri.parse('https://evil.example/embed/media/5')),false);
     expect(safeAudioVerseEmbedUrl(Uri.parse('http://www.audioverse.org/en/embed/media/3')),false);
+    expect(safeAudioVerseEmbedUrl(Uri.parse('https://www.audioverse.org/en/embed/media/3/other')),false);
     expect(safeAudioVerseEmbedUrl(Uri.parse('https://www.audioverse.org/en/embed/media/3')),true);
+  });
+  testWidgets('radio screen defers provider WebView until the listener starts it',
+      (tester)async{
+    await tester.pumpWidget(const MaterialApp(home:RadioPlayerScreen(
+      item:{'title':'Radio teaching',
+        'mediaUrl':'https://www.audioverse.org/en/media/12345'},
+      api:null,
+    )));
+    expect(find.text('Radio teaching'),findsOneWidget);
+    expect(find.byType(WebViewWidget),findsNothing);
+    expect(find.text('Listen in app'),findsOneWidget);
   });
   test('YouTube iframe carries native identity and a valid referrer policy',(){
     const client='https://com.sda.vop';
