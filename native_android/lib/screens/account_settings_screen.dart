@@ -20,7 +20,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     bio=TextEditingController(),photoUrl=TextEditingController();
   bool loading=true,saving=false;
   String? error,message;
-  Map<String,dynamic> profile={},preferences={},deletion={};
+  Map<String,dynamic> profile={},preferences={},deletion={},security={};
   List<Map<String,dynamic>> languages=[];
   int page=0;
   @override void initState(){super.initState();_load();}
@@ -55,6 +55,9 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       widget.api.accountLifecycle().then((r){
         if(mounted)setState(()=>deletion=r);
       }).catchError((Object ignored){});
+      widget.api.accountSecurityStatus().then((r){
+        if(mounted)setState(()=>security=r);
+      }).catchError((Object ignored){if(mounted)setState(()=>security={'error':'Security details unavailable.'});});
     }catch(e){if(mounted)setState((){error='$e';loading=false;});}
   }
   Future<void> _saveProfile()async{
@@ -266,6 +269,56 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         label:Text(saving?'Saving…':'Save preferences')),
     ];
   }
+  Future<void> _revokeSessions()async{
+    final accepted=await showDialog<bool>(context:context,
+      builder:(ctx)=>AlertDialog(
+        title:const Text('Sign out all devices?'),
+        content:const Text('All refresh tokens will be revoked. Existing access tokens on other devices may remain usable until expiry. You will be signed out here too. For security, this action requires a recent sign-in.'),
+        actions:[
+          TextButton(onPressed:()=>Navigator.pop(ctx,false),
+            child:const Text('Cancel')),
+          FilledButton(onPressed:()=>Navigator.pop(ctx,true),
+            child:const Text('Sign out all')),
+        ]));
+    if(accepted!=true||!mounted)return;
+    await _perform(()async{
+      await widget.api.revokeAllSessions();
+      await FirebaseAuth.instance.signOut();
+    },'Sessions revoked. Sign in again.');
+  }
+  Future<void> _requestDeletion()async{
+    final confirmation=TextEditingController();
+    try{
+      final text=await showDialog<String>(context:context,
+        builder:(ctx)=>AlertDialog(
+          title:const Text('Request account deletion'),
+          content:Column(mainAxisSize:MainAxisSize.min,crossAxisAlignment:CrossAxisAlignment.start,
+            children:[
+              const Text('Your account enters a 30-day recovery period. Some financial, certificate and audit records follow the published retention policy.'),
+              const SizedBox(height:16),
+              const Text('Type DELETE MY ACCOUNT to confirm.'),
+              TextField(controller:confirmation,autocorrect:false,
+                enableSuggestions:false,
+                decoration:const InputDecoration(
+                  labelText:'Confirmation phrase',
+                  hintText:'DELETE MY ACCOUNT')),
+            ]),
+          actions:[
+            TextButton(onPressed:()=>Navigator.pop(ctx),
+              child:const Text('Keep account')),
+            FilledButton(onPressed:()=>Navigator.pop(ctx,confirmation.text),
+              child:const Text('Request deletion')),
+          ]));
+      if(text==null||!mounted)return;
+      if(text!='DELETE MY ACCOUNT'){
+        setState(()=>error='Type DELETE MY ACCOUNT exactly.');
+        return;
+      }
+      await _perform(()async{
+        deletion=await widget.api.requestAccountDeletion(text);
+      },'Account deletion requested. You can cancel before the scheduled date.');
+    }finally{confirmation.dispose();}
+  }
   List<Widget> _security()=>[
     _heading('Account protection','Manage sign-in and personal data.',
       Icons.security_outlined),
@@ -289,6 +342,32 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         subtitle:Text('Native passkey enrollment is not configured on this Android build. '
           'Your existing password or Google sign-in remains available.')),
       const Divider(),
+      if(security.isNotEmpty)...[
+        ListTile(contentPadding:EdgeInsets.zero,
+          leading:const Icon(Icons.verified_user_outlined),
+          title:const Text('Email verification'),
+          subtitle:Text(security['emailVerified']==true?'Verified':'Not verified')),
+        if((security['lastSignInAt']??'').toString().isNotEmpty)
+          ListTile(contentPadding:EdgeInsets.zero,
+            leading:const Icon(Icons.history),
+            title:const Text('Last sign-in'),
+            subtitle:Text((security['lastSignInAt']??'').toString())),
+        ListTile(contentPadding:EdgeInsets.zero,
+          leading:const Icon(Icons.link_outlined),
+          title:const Text('Linked sign-in providers'),
+          subtitle:Text((security['signInProviders'] is List &&
+                (security['signInProviders'] as List).isNotEmpty)
+            ?(security['signInProviders'] as List).join(', ')
+            :'Email or supported sign-in')),
+        const Divider(),
+      ],
+      ListTile(contentPadding:EdgeInsets.zero,
+        leading:const Icon(Icons.devices_other_outlined),
+        title:const Text('Sign out all devices'),
+        subtitle:const Text('Revoke refresh tokens across devices. Requires recent sign-in.'),
+        trailing:const Icon(Icons.chevron_right),
+        enabled:!saving,onTap:_revokeSessions),
+      const Divider(),
       _choose('Profile visibility','privacy','profileVisibility',[
         const DropdownMenuItem(value:'organization',child:Text('My organisation')),
         const DropdownMenuItem(value:'private',child:Text('Private')),
@@ -310,22 +389,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
           icon:const Icon(Icons.undo),label:const Text('Cancel deletion request'))
       else
         OutlinedButton.icon(
-          onPressed:saving?null:()async{
-            final accepted=await showDialog<bool>(context:context,
-              builder:(ctx)=>AlertDialog(
-                title:const Text('Request account deletion?'),
-                content:const Text('Your account will enter the VOP deletion workflow. '
-                  'You may lose access to your learning data.'),
-                actions:[
-                  TextButton(onPressed:()=>Navigator.pop(ctx,false),
-                    child:const Text('Keep account')),
-                  FilledButton(onPressed:()=>Navigator.pop(ctx,true),
-                    child:const Text('Request deletion')),
-                ]));
-            if(accepted==true)await _perform(()async{
-              deletion=await widget.api.requestAccountDeletion();
-            },'Account deletion request submitted.');
-          },
+          onPressed:saving?null:_requestDeletion,
           icon:const Icon(Icons.delete_outline),
           label:const Text('Request account deletion')),
     ]),
