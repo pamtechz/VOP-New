@@ -90,9 +90,9 @@ export default async function handler(req: Request, res: Response) {
       ownerUid: existing.data()?.ownerUid || ctx.auth.uid,
       scope: existing.data()?.scope || (organizationId?'organization':'platform'),
       canonical: existing.exists ? existing.data()?.canonical === true : !organizationId,
-      sharingScope: existing.exists
-        ? (existing.data()?.sharingScope || 'organization')
-        : organizationId ? (incoming.sharingScope === 'shared' ? 'shared' : 'organization') : 'shared',
+      sharingScope: organizationId
+        ? (incoming.sharingScope === 'shared' ? 'shared' : 'organization')
+        : existing.exists ? (existing.data()?.sharingScope || 'shared') : 'shared',
       createdAt: existing.data()?.createdAt || new Date().toISOString(),
       updatedAt: FieldValue.serverTimestamp(),
       updatedBy: ctx.auth.uid,
