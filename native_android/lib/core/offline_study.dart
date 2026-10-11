@@ -1,11 +1,13 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 /// Stores only authenticated user's published lesson pages and short-lived
 /// assessment drafts. No grading keys or privileged curriculum records.
 class OfflineStudyStore {
   OfflineStudyStore(this.uid);
   final String uid;
+  static const _secure=FlutterSecureStorage(aOptions:AndroidOptions(encryptedSharedPreferences:true));
   static const _schema=1;
   static const _maxLessonBytes=750000;
   static const _maxQuizBytes=170000;
@@ -44,12 +46,10 @@ class OfflineStudyStore {
     if(expiry==null || !expiry.isAfter(DateTime.now()))return;
     final data=jsonEncode(response);
     if(data.length>_maxQuizBytes)return;
-    final preferences=await SharedPreferences.getInstance();
-    await preferences.setString(_key('quiz',guide,lesson,language),data);
+    await _secure.write(key:_key('quiz',guide,lesson,language),value:data);
   }
   Future<Map<String,dynamic>?> quiz(String guide,String lesson,String language)async{
-    final preferences=await SharedPreferences.getInstance();
-    final raw=preferences.getString(_key('quiz',guide,lesson,language));
+    final raw=await _secure.read(key:_key('quiz',guide,lesson,language));
     if(raw==null)return null;
     try{
       final decoded=jsonDecode(raw);
@@ -57,7 +57,7 @@ class OfflineStudyStore {
       final data=Map<String,dynamic>.from(decoded);
       final expires=DateTime.tryParse((data['expiresAt']??'').toString());
       if(expires==null || !expires.isAfter(DateTime.now())){
-        await preferences.remove(_key('quiz',guide,lesson,language));
+        await _secure.delete(key:_key('quiz',guide,lesson,language));
         return null;
       }
       return data;
@@ -65,8 +65,7 @@ class OfflineStudyStore {
   }
   String get _queueKey=>'vop.offline.$_schema.$uid.pending';
   Future<List<Map<String,dynamic>>> pending()async{
-    final prefs=await SharedPreferences.getInstance();
-    final raw=prefs.getString(_queueKey);
+    final raw=await _secure.read(key:_queueKey);
     if(raw==null)return [];
     try{
       final data=jsonDecode(raw);
@@ -85,13 +84,11 @@ class OfflineStudyStore {
     current.removeWhere((row)=>row['id']==id);
     current.add({'id':id,'action':action,'payload':payload});
     if(current.length>60)current.removeRange(0,current.length-60);
-    final prefs=await SharedPreferences.getInstance();
-    await prefs.setString(_queueKey,jsonEncode(current));
+    await _secure.write(key:_queueKey,value:jsonEncode(current));
   }
   Future<void> remove(String id)async{
     final items=await pending();
     items.removeWhere((item)=>item['id']==id);
-    final prefs=await SharedPreferences.getInstance();
-    await prefs.setString(_queueKey,jsonEncode(items));
+    await _secure.write(key:_queueKey,value:jsonEncode(items));
   }
 }
