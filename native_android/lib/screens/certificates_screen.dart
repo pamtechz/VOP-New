@@ -77,7 +77,7 @@ class _CertificatesScreenState extends State<CertificatesScreen>{
                   'The complete designed certificate artwork is managed by the issuing organisation.',
                   style:TextStyle(fontSize:11.5,height:1.5,
                     color:Theme.of(context).colorScheme.onSurfaceVariant)),
-              ]))),
+              ])))),
         ]);
       }),
   );
