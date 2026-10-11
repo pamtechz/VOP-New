@@ -335,29 +335,6 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
         {activeTab === 'account' && (
           <div className="vop-personal-tab-pane">
             <section className="vop-personal-card vop-card">
-                <h2><ShieldCheck size={19}/>{uiT('personal_settings.admin_operations_and_tools',"Admin Operations & Tools")}</h2>
-                <p>{uiT('personal_settings.quickly_access_core_administrative_tools_and_workspaces',"Quickly access core administrative tools and workspaces:")}</p>
-                <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(170px, 1fr))',gap:8,marginTop:2}}>
-                  <button type="button" className="vop-secondary" style={{justifyContent:'flex-start'}} onClick={() => { if (currentUser.uid) { try { sessionStorage.setItem('vop-admin-tab-v1:' + currentUser.uid, 'dashboard'); } catch {} } onNavigate ? onNavigate('admin') : onBack(); }}>
-                    <LayoutDashboard size={14}/> Dashboard
-                  </button>
-                  <button type="button" className="vop-secondary" style={{justifyContent:'flex-start'}} onClick={() => { if (currentUser.uid) { try { sessionStorage.setItem('vop-admin-tab-v1:' + currentUser.uid, 'curriculum'); } catch {} } onNavigate ? onNavigate('admin') : onBack(); }}>
-                    <BookOpen size={14}/> Curriculum Studio
-                  </button>
-                  <button type="button" className="vop-secondary" style={{justifyContent:'flex-start'}} onClick={() => { if (currentUser.uid) { try { sessionStorage.setItem('vop-admin-tab-v1:' + currentUser.uid, 'userManagement'); } catch {} } onNavigate ? onNavigate('admin') : onBack(); }}>
-                    <Users size={14}/> User Management
-                  </button>
-                  <button type="button" className="vop-secondary" style={{justifyContent:'flex-start'}} onClick={() => { if (currentUser.uid) { try { sessionStorage.setItem('vop-admin-tab-v1:' + currentUser.uid, 'candidates'); } catch {} } onNavigate ? onNavigate('admin') : onBack(); }}>
-                    <UserCheck size={14}/> Candidates & Progress
-                  </button>
-                  <button type="button" className="vop-secondary" style={{justifyContent:'flex-start'}} onClick={() => { if (currentUser.uid) { try { sessionStorage.setItem('vop-admin-tab-v1:' + currentUser.uid, 'settings'); } catch {} } onNavigate ? onNavigate('admin') : onBack(); }}>
-                    <ShieldCheck size={14}/> System Settings
-                  </button>
-                </div>
-              </section>
-            )}
-
-            <section className="vop-personal-card vop-card">
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:8}}>
                 <h2><UserRound size={19}/>{uiT('personal_settings.account',"Account")}</h2>
                 <span className={'vop-chip ' + (currentUser.accountType === 'organization' || currentUser.organizationId ? 'vop-account-type-org' : 'vop-account-type-personal')} style={{fontSize:11.5,fontWeight:750,padding:'4px 10px',borderRadius:6}}>
