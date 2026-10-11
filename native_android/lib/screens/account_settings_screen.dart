@@ -91,7 +91,10 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
   }
   Widget _switch(String section,String key,String title,
       {bool enabled=true,String? help}) {
-    final value=_map(preferences[section])[key]==true;
+    final raw=_map(preferences[section])[key];
+    final defaultsOn=section=='notifications'||
+      (section=='studyPreferences'&&key=='reminders');
+    final value=defaultsOn ? raw!=false : raw==true;
     return SwitchListTile.adaptive(
       contentPadding:EdgeInsets.zero,
       title:Text(title,style:const TextStyle(fontSize:14,fontWeight:FontWeight.w600)),
