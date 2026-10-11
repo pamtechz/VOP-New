@@ -86,6 +86,25 @@ test('account privacy export and staged deletion are server authoritative',async
       assert.equal('publicKeyDer' in res.payload.export.data.passkeys[0],false);
     });
 
+    await t.test('security summary exposes limited identity metadata and revocation demands recent authentication',async()=>{
+      const securityUser=await emulatorSignUp('privacy-security@vop-test.invalid');
+      await db.doc('users/'+securityUser.uid).set({uid:securityUser.uid,email:securityUser.email,displayName:'Security Test',role:'student'});
+      const status=await call(securityUser,'GET','security-status');
+      assert.equal(status.code,200,JSON.stringify(status.payload));
+      assert.equal(typeof status.payload.emailVerified,'boolean');
+      assert.ok(Array.isArray(status.payload.signInProviders));
+      assert.equal('passwordHash' in status.payload,false);
+      assert.equal('refreshToken' in status.payload,false);
+      const rejected=await call(securityUser,'POST','revoke-sessions',{confirmation:'YES'});
+      assert.equal(rejected.code,400);
+      const revoked=await call(learner,'POST','revoke-sessions',{confirmation:'SIGN OUT ALL DEVICES'});
+      assert.equal(revoked.code,200,JSON.stringify(revoked.payload));
+      assert.equal(revoked.payload.revoked,true);
+      await assert.rejects(()=>auth.verifyIdToken(securityUser.token,true));
+      await db.doc('users/'+securityUser.uid).delete();
+      await auth.deleteUser(securityUser.uid);
+    });
+
     await t.test('confirmation phrase is mandatory and a valid request remains cancellable',async()=>{
       const rejected=await call(learner,'POST','request-deletion',{confirmation:'delete'});
       assert.equal(rejected.code,400);
