@@ -1,6 +1,6 @@
 import { isEnglishLocale } from '../../shared/locales.js';
 import { randomUUID } from 'node:crypto';
-import { isSafeHttpsMediaUrl, resolveMediaSource, identifyRadioMedia } from '../../shared/mediaSources.js';
+import { isSafeHttpsMediaUrl, resolveMediaSource, identifyRadioMedia, parseAudioVerseEmbedCode } from '../../shared/mediaSources.js';
 import { identifyPublicMedia } from '../../api/media.js';
 import { FieldValue } from 'firebase-admin/firestore';
 import {
@@ -1345,6 +1345,9 @@ export default async function handler(req: Request, res: Response) {
             series:String(incoming.series||'').trim().slice(0,120),
             description:String(incoming.description||'').trim().slice(0,3000),
             mediaUrl:media.sourceUrl,mediaType:media.mediaType,mediaProvider:media.provider,
+            audioEmbedUrl:media.provider==='AudioVerse'
+              ?parseAudioVerseEmbedCode(incoming.audioEmbedCode||incoming.audioEmbedUrl||
+                existing.data()?.audioEmbedUrl||''):'',
             audioUrl:media.field==='audioUrl'?media.sourceUrl:'',
             videoUrl:media.field==='videoUrl'?media.sourceUrl:'',
             streamUrl:media.field==='streamUrl'?media.sourceUrl:'',
