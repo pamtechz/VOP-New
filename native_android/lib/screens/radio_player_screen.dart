@@ -25,6 +25,15 @@ bool _host(String host,String domain)=>
     host==domain||host.endsWith('.'+domain);
 /// Only known providers or media file URLs, never unapproved private webpages.
 RadioMedia resolveRadioMedia(Map<String,dynamic> item) {
+  // The publishing server verifies the alternative file and rights attestation.
+  // Never scrape an AudioVerse player or its internal requests.
+  final licensed=(item['licensedAudioUrl']??'').toString().trim();
+  final provider=(item['mediaProvider']??'').toString();
+  if(item['rightsConfirmed']==true&&provider=='AudioVerse'&&
+      safeRadioHttps(licensed)){
+    return RadioMedia(RadioMediaKind.audio,Uri.parse(licensed),
+      provider:'Authorised AudioVerse recording');
+  }
   for(final name in ['mediaUrl','streamUrl','videoUrl','audioUrl']){
     final raw=(item[name]??'').toString().trim();
     if(!safeRadioHttps(raw))continue;
