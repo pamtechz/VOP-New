@@ -15,6 +15,7 @@ class _QuizScreenState extends State<QuizScreen> {
   late Future<Map<String,dynamic>> session;
   Map<String,Object?> answers={};
   Map<String,dynamic>? result;
+  bool pendingSync=false;
   bool submitting=false;
   String? error;
   @override void initState(){super.initState();start();}
@@ -35,7 +36,10 @@ class _QuizScreenState extends State<QuizScreen> {
       final response=await widget.api.submitQuiz(
         widget.guideId,widget.lessonId,widget.language,
         '${data['sessionId']}',answers);
-      if(mounted)setState(()=>result=response);
+      if(mounted)setState((){
+        pendingSync=response['queued']==true;
+        result=pendingSync?null:response;
+      });
     }catch(e){
       if(mounted)setState(()=>error='$e');
     }finally{
@@ -44,7 +48,7 @@ class _QuizScreenState extends State<QuizScreen> {
   }
   @override Widget build(BuildContext context)=>Scaffold(
     appBar:AppBar(title:Text(widget.title)),
-    body:result!=null?resultView():FutureBuilder<Map<String,dynamic>>(
+    body:pendingSync?pendingView():result!=null?resultView():FutureBuilder<Map<String,dynamic>>(
       future:session,builder:(context,s){
         if(s.connectionState!=ConnectionState.done){
           return const Center(child:CircularProgressIndicator());
@@ -74,7 +78,13 @@ class _QuizScreenState extends State<QuizScreen> {
           child:Text('No published questions are available.'));
         final policy=data['assessmentPolicy'] is Map
           ?data['assessmentPolicy'] as Map:{};
+        final offline=data['offline']==true;
         return ListView(padding:const EdgeInsets.all(18),children:[
+          if(offline)const Card(child:ListTile(
+            leading:Icon(Icons.offline_bolt_outlined),
+            title:Text('Offline attempt'),
+            subtitle:Text('The server will verify your answers when online.'),
+          )),
           Card(child:Padding(padding:const EdgeInsets.all(18),
             child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
               Text('Assessment',style:Theme.of(context).textTheme.titleLarge),
@@ -127,6 +137,42 @@ class _QuizScreenState extends State<QuizScreen> {
         ]);
       }),
   );
+  Widget pendingView()=>Center(child:Padding(
+    padding:const EdgeInsets.all(25),
+    child:Column(mainAxisSize:MainAxisSize.min,children:[
+      const Icon(Icons.cloud_upload_outlined,size:58),
+      const SizedBox(height:17),
+      Text('Awaiting verification',
+        style:Theme.of(context).textTheme.headlineSmall),
+      const SizedBox(height:12),
+      const Text('Your answers are saved on this device and will sync when connected. No score or certificate has been issued.',
+        textAlign:TextAlign.center),
+      const SizedBox(height:19),
+      FilledButton.icon(
+        onPressed:()async{
+          try{
+            final response=await widget.api.syncOfflineQueue();
+            if(!mounted)return;
+            final remaining=response['pending']??0;
+            if(remaining==0){
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content:Text('Submission synchronized. Open your results on VOP.')));
+              Navigator.pop(context,true);
+            }else{
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content:Text('Verification is still pending.')));
+            }
+          }catch(error){
+            if(mounted)ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content:Text('$error')));
+          }
+        },
+        icon:const Icon(Icons.sync),label:const Text('Sync now')),
+      const SizedBox(height:9),
+      TextButton(onPressed:()=>Navigator.pop(context),
+        child:const Text('Return to guide')),
+    ]),
+  ));
   Widget resultView(){
     final data=result!;
     final passed=data['passed']==true;
