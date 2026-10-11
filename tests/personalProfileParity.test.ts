@@ -38,7 +38,7 @@ test('server whitelists editable fields and protects profile authorization',()=>
 test('native account permits same personal fields with responsive controls',()=>{
   const native=read('native_android/lib/screens/account_settings_screen.dart');
   assert.match(native,/widget.api.saveProfile/);
-  assert.match(native,/widget.api.savePersonalSettings\(preferences\)/);
+  assert.match(native,/widget.api.savePersonalSettings\(changes\)/);
   assert.match(native,/bio.text.trim\(\)/);
   assert.match(native,/photoUrl.text.trim\(\)/);
   assert.match(native,/constraints.maxWidth<410/);
