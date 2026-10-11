@@ -208,27 +208,51 @@ class OfflineStudyStore {
         'sessionId':session['sessionId'],'expiresAt':session['expiresAt']??session['resumeUntil'],
         'answers':answers}));
     final prefs=await SharedPreferences.getInstance();
-    await prefs.setString(_key('pendingQuizIndex','current'),jsonEncode(
-      {'guideId':guide,'lessonId':lesson,'language':lang}));
+    final key=_key('pendingQuizIndex','all');
+    final saved=prefs.getString(key);
+    List<Map<String,dynamic>> all=[];
+    try{
+      final data=saved==null?null:jsonDecode(saved);
+      if(data is List)all=data.whereType<Map>().map((v)=>Map<String,dynamic>.from(v)).toList();
+    }catch(_){}
+    all.removeWhere((item)=>item['guideId']==guide && item['lessonId']==lesson
+      && item['language']==lang);
+    all.add({'guideId':guide,'lessonId':lesson,'language':lang});
+    await prefs.setString(key,jsonEncode(all.take(30).toList()));
   }
   Future<int> syncPendingQuiz(VopApi api)async{
     final prefs=await SharedPreferences.getInstance();
-    final index=prefs.getString(_key('pendingQuizIndex','current'));
-    if(index==null)return 0;
+    final key=_key('pendingQuizIndex','all');
+    final raw=prefs.getString(key);
+    if(raw==null)return 0;
+    List<Map<String,dynamic>> keys=[];
     try{
-      final keys=Map<String,dynamic>.from(jsonDecode(index) as Map);
-      final guide=keys['guideId'].toString(),lesson=keys['lessonId'].toString(),
-        lang=keys['language'].toString();
-      final pending=await _secret.read(key:_quizKey(guide,lesson,lang)+':pending');
-      if(pending==null){await prefs.remove(_key('pendingQuizIndex','current'));return 0;}
-      final data=Map<String,dynamic>.from(jsonDecode(pending) as Map);
-      final expiry=DateTime.tryParse((data['expiresAt']??'').toString());
-      if(expiry==null||!expiry.isAfter(DateTime.now().toUtc()))return 0;
-      await api.submitQuiz(guide,lesson,lang,data['sessionId'].toString(),
-        Map<String,Object?>.from(data['answers'] as Map));
-      await clearQuiz(guide,lesson,lang);
-      await prefs.remove(_key('pendingQuizIndex','current'));
-      return 1;
+      final value=jsonDecode(raw);
+      if(value is List)keys=value.whereType<Map>()
+        .map((e)=>Map<String,dynamic>.from(e)).toList();
     }catch(_){return 0;}
+    final pending=<Map<String,dynamic>>[];
+    var uploaded=0;
+    for(final entry in keys){
+      final guide=entry['guideId'].toString(),
+        lesson=entry['lessonId'].toString(),
+        lang=entry['language'].toString();
+      final encrypted=await _secret.read(key:_quizKey(guide,lesson,lang)+':pending');
+      if(encrypted==null)continue;
+      try{
+        final data=Map<String,dynamic>.from(jsonDecode(encrypted) as Map);
+        final expiry=DateTime.tryParse((data['expiresAt']??'').toString());
+        if(expiry==null||!expiry.isAfter(DateTime.now().toUtc())){
+          pending.add(entry);
+          continue;
+        }
+        await api.submitQuiz(guide,lesson,lang,data['sessionId'].toString(),
+          Map<String,Object?>.from(data['answers'] as Map));
+        await clearQuiz(guide,lesson,lang);
+        uploaded++;
+      }catch(_){pending.add(entry);}
+    }
+    await prefs.setString(key,jsonEncode(pending));
+    return uploaded;
   }
 }
