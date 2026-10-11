@@ -103,6 +103,26 @@ test('passkey authentication is one-time, server-verified and replay resistant',
       assert.equal(challenges.size,0,'consumed challenges must be deleted');
     });
 
+    await t.test('two different challenges with the same stale authenticator counter cannot both sign in',async()=>{
+      await credentialRef.set({signCount:7},{merge:true});
+      const first=await call({action:'beginAuthentication'});
+      const second=await call({action:'beginAuthentication'});
+      assert.equal(first.code,200);
+      assert.equal(second.code,200);
+      const firstFinish=await call({
+        action:'finishAuthentication',challengeToken:first.payload.challengeToken,
+        ...assertionFor(first.payload.challenge,credentialId,privateKey,8),
+      });
+      assert.equal(firstFinish.code,200,JSON.stringify(firstFinish.payload));
+      const secondFinish=await call({
+        action:'finishAuthentication',challengeToken:second.payload.challengeToken,
+        ...assertionFor(second.payload.challenge,credentialId,privateKey,8),
+      });
+      assert.equal(secondFinish.code,400,JSON.stringify(secondFinish.payload));
+      assert.match(String(secondFinish.payload.error||''),/counter validation failed/i);
+      assert.equal((await credentialRef.get()).data().signCount,8);
+    });
+
     await t.test('origin mismatch is rejected before a ceremony can be issued',async()=>{
       const res=await call(
         {action:'beginAuthentication'},
