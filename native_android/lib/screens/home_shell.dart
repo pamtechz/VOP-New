@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../core/vop_api.dart';
+import '../core/vop_i18n.dart';
 import '../theme/vop_theme.dart';
 import '../widgets/vop_ui.dart';
 import 'certificates_screen.dart';
@@ -39,8 +40,16 @@ class _HomeShellState extends State<HomeShell> {
   String search='';
   late Future<Map<String,dynamic>> profile,catalog,progress;
   @override void initState(){super.initState();reload();
-    widget.api.personalSettings().then((result){
-      VopAppearance.apply(asMap(result['settings']));
+    widget.api.personalSettings().then((result)async{
+      final settings=asMap(result['settings']);
+      VopAppearance.apply(settings);
+      final locale=(settings['uiLocale']??'en').toString().trim().toLowerCase();
+      if(locale.isNotEmpty){
+        try{
+          final response=await widget.api.languagePack(locale);
+          if(mounted)VopI18n.apply(locale,response);
+        }catch(_){}
+      }
     }).catchError((Object ignored){});
   }
   void reload(){
@@ -74,7 +83,13 @@ class _HomeShellState extends State<HomeShell> {
 
   @override Widget build(BuildContext context){
     final wide=MediaQuery.sizeOf(context).width>=880;
-    const labels=['Discover','Lessons','Library','Prayer','Radio'];
+    final labels=[
+      VopI18n.text('navigation.discover','Discover'),
+      VopI18n.text('navigation.lessons','Lessons'),
+      VopI18n.text('navigation.library','Library'),
+      VopI18n.text('navigation.prayer','Prayer'),
+      VopI18n.text('navigation.radio','Radio'),
+    ];
     final icons=[
       Icons.home_outlined,Icons.auto_stories_outlined,
       Icons.local_library_outlined,Icons.volunteer_activism_outlined,
@@ -145,9 +160,9 @@ class _HomeShellState extends State<HomeShell> {
         ]),
       ),
       _label('LEARNING'),
-      _destination('Discover',Icons.home_outlined,()=>selectTab(0)),
-      _destination('Lessons & Assessments',Icons.book_outlined,()=>selectTab(1)),
-      _destination('Library',Icons.local_library_outlined,()=>selectTab(2)),
+      _destination(VopI18n.text('navigation.discover','Discover'),Icons.home_outlined,()=>selectTab(0)),
+      _destination(VopI18n.text('navigation.lessons','Lessons & Assessments'),Icons.book_outlined,()=>selectTab(1)),
+      _destination(VopI18n.text('navigation.library','Library'),Icons.local_library_outlined,()=>selectTab(2)),
       _destination('My Progress',Icons.insights_outlined,()=>push(_ProgressScreen(api:widget.api))),
       _destination('Offline downloads',Icons.download_for_offline_outlined,
         ()=>push(OfflineStudiesScreen(api:widget.api))),
@@ -157,24 +172,24 @@ class _HomeShellState extends State<HomeShell> {
         ()=>push(EngagementScreen(api:widget.api))),
       const Divider(),
       _label('COMMUNITY'),
-      _destination('Prayer Ministry',Icons.volunteer_activism_outlined,()=>selectTab(3)),
-      _destination('Radio & Broadcasts',Icons.radio_outlined,()=>selectTab(4)),
-      _destination('Announcements',Icons.campaign_outlined,
+      _destination(VopI18n.text('navigation.prayer','Prayer Ministry'),Icons.volunteer_activism_outlined,()=>selectTab(3)),
+      _destination(VopI18n.text('navigation.radio','Radio & Broadcasts'),Icons.radio_outlined,()=>selectTab(4)),
+      _destination(VopI18n.text('navigation.announcements','Announcements'),Icons.campaign_outlined,
         ()=>push(VopContentScreen(api:widget.api,kind:VopContentKind.announcements))),
-      _destination('Events',Icons.event_outlined,
+      _destination(VopI18n.text('navigation.events','Events'),Icons.event_outlined,
         ()=>push(VopContentScreen(api:widget.api,kind:VopContentKind.events))),
       _destination('Mentor & Conversations',Icons.forum_outlined,
         ()=>push(Scaffold(appBar:AppBar(title:const Text('Mentoring')),
           body:MentorScreen(api:widget.api)))),
       const Divider(),
       _label('ACCOUNT'),
-      _destination('Notifications',Icons.notifications_outlined,
+      _destination(VopI18n.text('navigation.notifications','Notifications'),Icons.notifications_outlined,
         ()=>push(VopNotifications(api:widget.api))),
-      _destination('My Profile',Icons.person_outline,
+      _destination(VopI18n.text('navigation.profile','My Profile'),Icons.person_outline,
         ()=>push(AccountSettingsScreen(api:widget.api))),
-      _destination('Personal Settings',Icons.tune_outlined,
+      _destination(VopI18n.text('navigation.personal_settings','Personal Settings'),Icons.tune_outlined,
         ()=>push(AccountSettingsScreen(api:widget.api))),
-      _destination('About VOP',Icons.info_outline,
+      _destination(VopI18n.text('navigation.about','About VOP'),Icons.info_outline,
         ()=>push(const _AboutScreen())),
       const SizedBox(height:25),
     ]));
