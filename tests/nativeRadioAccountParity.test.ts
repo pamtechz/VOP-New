@@ -35,6 +35,16 @@ test('native personal settings use authoritative web profile/settings actions',(
   const profile=read('native_android/lib/screens/account_settings_screen.dart');
   assert.match(api,/action':'updateOwnProfile/);
   assert.match(api,/action':'personalSettings/);
+  assert.match(api,/notificationCapabilities\(\)/);
+  assert.match(api,/action':'capabilities/);
+  assert.match(profile,/notificationStatusLoaded/);
+  assert.match(profile,/Email delivery is currently unavailable/);
+  assert.match(api,/exportOwnAccount\(\)/);
+  assert.match(api,/'action':'export'/);
+  assert.match(profile,/widget\.api\.exportOwnAccount\(\)/);
+  assert.match(profile,/Share\.shareXFiles/);
+  assert.match(profile,/Export your VOP account data/);
+  assert.match(read('native_android/pubspec.yaml'),/share_plus: \^10\.1\.4/);
   assert.match(profile,/widget\.api\.savePersonalSettings\(preferences\)/);
   assert.match(profile,/widget\.api\.saveProfile/);
   assert.match(profile,/sendPasswordResetEmail/);

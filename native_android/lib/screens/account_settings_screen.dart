@@ -1,4 +1,7 @@
+import 'dart:convert';
+import 'dart:typed_data';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:flutter/material.dart';
 import '../core/vop_api.dart';
 import '../theme/vop_theme.dart';
@@ -20,7 +23,8 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     bio=TextEditingController(),photoUrl=TextEditingController();
   bool loading=true,saving=false;
   String? error,message;
-  Map<String,dynamic> profile={},preferences={},deletion={},security={};
+  Map<String,dynamic> profile={},preferences={},deletion={},security={},notificationCapabilities={};
+  bool notificationStatusLoaded=false;
   List<Map<String,dynamic>> languages=[];
   int page=0;
   @override void initState(){super.initState();_load();}
@@ -58,6 +62,11 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       widget.api.accountSecurityStatus().then((r){
         if(mounted)setState(()=>security=r);
       }).catchError((Object ignored){if(mounted)setState(()=>security={'error':'Security details unavailable.'});});
+      widget.api.notificationCapabilities().then((r){
+        if(mounted)setState((){notificationCapabilities=r;notificationStatusLoaded=true;});
+      }).catchError((Object ignored){
+        if(mounted)setState(()=>notificationStatusLoaded=true);
+      });
     }catch(e){if(mounted)setState((){error='$e';loading=false;});}
   }
   Future<void> _saveProfile()async{
@@ -262,6 +271,17 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         _switch('notifications','email','Email updates'),
         _switch('notifications','announcements','Announcements'),
         _switch('notifications','certificates','Certificate updates'),
+        if(notificationStatusLoaded)...[
+          const SizedBox(height:8),
+          Text(
+            notificationCapabilities.isEmpty
+              ?'Email delivery status could not be checked. Preferences can still be saved.'
+              :_map(notificationCapabilities['email'])['available']==true
+                ?'Email delivery is configured for this platform.'
+                :'Email delivery is currently unavailable. Your preference will take effect when the administrator configures email.',
+            style:TextStyle(fontSize:12,
+              color:Theme.of(context).colorScheme.onSurfaceVariant)),
+        ],
       ]),
       const SizedBox(height:19),
       FilledButton.icon(onPressed:saving?null:_saveSettings,
@@ -269,6 +289,34 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         label:Text(saving?'Saving…':'Save preferences')),
     ];
   }
+  Future<void> _exportData()async{
+    final accepted=await showDialog<bool>(context:context,
+      builder:(ctx)=>AlertDialog(
+        title:const Text('Export your VOP account data?'),
+        content:const Text('Your export may contain private study and account records. Share only with a trusted destination. The system share sheet can leave a temporary file in the app cache.'),
+        actions:[
+          TextButton(onPressed:()=>Navigator.pop(ctx,false),
+            child:const Text('Cancel')),
+          FilledButton(onPressed:()=>Navigator.pop(ctx,true),
+            child:const Text('Prepare export')),
+        ]));
+    if(accepted!=true||!mounted)return;
+    await _perform(()async{
+      final result=await widget.api.exportOwnAccount();
+      final export=result['export'];
+      if(export is! Map)throw StateError('The server did not return a valid account export.');
+      final bytes=Uint8List.fromList(utf8.encode(const JsonEncoder.withIndent('  ').convert(export)));
+      if(bytes.length>12*1024*1024){
+        throw StateError('This export is too large to share from the device.');
+      }
+      final date=DateTime.now().toIso8601String().substring(0,10);
+      await Share.shareXFiles([
+        XFile.fromData(bytes,mimeType:'application/json'),
+      ],fileNameOverrides:['vop-account-export-$date.json'],
+        subject:'VOP account data export');
+    },'Your export was prepared. Keep any saved copy secure.');
+  }
+
   Future<void> _revokeSessions()async{
     final accepted=await showDialog<bool>(context:context,
       builder:(ctx)=>AlertDialog(
@@ -394,6 +442,13 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       ],(_map(preferences['privacy'])['profileVisibility']??'organization').toString()),
       FilledButton.icon(onPressed:saving?null:_saveSettings,
         icon:const Icon(Icons.save_outlined),label:const Text('Save privacy')),
+      const Divider(),
+      ListTile(contentPadding:EdgeInsets.zero,
+        leading:const Icon(Icons.download_outlined),
+        title:const Text('Export my data'),
+        subtitle:const Text('Create a JSON account export and choose where to save it.'),
+        trailing:const Icon(Icons.chevron_right),
+        enabled:!saving,onTap:_exportData),
     ]),
     _heading('Account lifecycle','A deletion request follows the VOP retention process.',
       Icons.manage_accounts_outlined),
