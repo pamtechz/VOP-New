@@ -129,3 +129,21 @@ export function resolvedRadioRecord(record: Record<string, unknown>): Identified
   }
   return null;
 }
+
+/** Accept AudioVerse's published iframe Audio Embed Code without persisting or
+ * executing arbitrary HTML. Only a vetted HTTPS player URL is stored. */
+export function parseAudioVerseEmbedCode(value: unknown): string {
+  if(value==null || value==='')return '';
+  if(typeof value!=='string' || value.length>8192)throw new Error('Invalid AudioVerse embed code.');
+  const trimmed=value.trim();
+  const match=trimmed.match(/<(?:iframe|audio)\b[^>]*?\bsrc\s*=\s*(["'])(https:\/\/[^"']+)\1/i);
+  const source=match?.[2] || (/^https:\/\//i.test(trimmed) ? trimmed : '');
+  if(!isSafeHttpsMediaUrl(source))throw new Error('AudioVerse embed requires a public HTTPS player URL.');
+  const url=new URL(source);
+  const host=url.hostname.toLowerCase();
+  if(!isHost(host,'audioverse.org') ||
+    !/(?:^|\/)(?:embed|player)(?:\/|$)/i.test(url.pathname)) {
+    throw new Error('Use the Audio Embed Code supplied by AudioVerse.');
+  }
+  return url.toString();
+}
