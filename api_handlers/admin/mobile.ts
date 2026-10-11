@@ -226,14 +226,61 @@ export default async function mobile(req:Request,res:Response){
     const guide=guideSnap.data()||{};
     if(resource==='guide'){
       const snap=await guideSnap.ref.collection('lessons').where('published','==',true).limit(120).get();
-      const lessons=snap.docs.filter(doc=>{
-        const row=doc.data();
-        return hasAccess(row,scope,string(guide.organizationId||guide.ownerOrganizationId));
-      }).map(doc=>plainLesson(doc.id,doc.data()))
+      const userProgress=ctx.profile.progress&&typeof ctx.profile.progress==='object'
+        ?ctx.profile.progress as Raw:{};
+      const completed=new Set(Array.isArray(userProgress.completedLessons)
+        ?userProgress.completedLessons.filter((v):v is string=>typeof v==='string'):[]);
+      const attempts=await db.collection('users').doc(uid).collection('assessmentAttempts')
+        .where('guideId','==',guideId).limit(300).get();
+      const passed=new Set(attempts.docs.filter(doc=>doc.data().passed===true
+        &&doc.data().creditStatus!=='revoked').map(doc=>
+        string(doc.data().language)+':'+guideId+':'+string(doc.data().lessonId)));
+      const all=snap.docs.filter(doc=>hasAccess(doc.data(),scope,
+        string(guide.organizationId||guide.ownerOrganizationId)))
+        .map(doc=>plainLesson(doc.id,doc.data()))
         .sort((a,b)=>a.lessonNumber.localeCompare(b.lessonNumber,undefined,{numeric:true}));
+      let prerequisitesMet=true;
+      const staged=all.map(lesson=>{
+        const key=string(guide.language||'en')+':'+guideId+':'+lesson.id;
+        const done=lesson.type==='Test'?passed.has(key):completed.has(key);
+        const state={...lesson,unlocked:prerequisitesMet,completed:done};
+        // A learner who already completed a lesson may always revisit it.
+        // New lessons and exams remain locked until prior items are complete.
+        prerequisitesMet=prerequisitesMet&&done;
+        return {...state,unlocked:state.unlocked||done};
+      });
+      const lessons=staged;
       return res.status(200).json({ok:true,guide:plainGuide(guideId,guide),lessons});
     }
     const lessonId=cleanId(param(req,'lessonId'));
+    // Protect the deep link too: a forged native route must not bypass
+    // progression checks by skipping the guide overview.
+    const guideLessons=await guideSnap.ref.collection('lessons')
+      .where('published','==',true).limit(120).get();
+    const ordered=guideLessons.docs.filter(doc=>hasAccess(doc.data(),scope,
+      string(guide.organizationId||guide.ownerOrganizationId)))
+      .map(doc=>({id:doc.id,...plainLesson(doc.id,doc.data())}))
+      .sort((a,b)=>a.lessonNumber.localeCompare(b.lessonNumber,undefined,{numeric:true}));
+    const target=ordered.findIndex(row=>row.id===lessonId);
+    if(target<0)return res.status(404).json({ok:false,code:'NOT_FOUND',error:'Published lesson is unavailable.'});
+    const prog=ctx.profile.progress&&typeof ctx.profile.progress==='object'
+      ?ctx.profile.progress as Raw:{};
+    const completedSet=new Set(Array.isArray(prog.completedLessons)?prog.completedLessons.map(String):[]);
+    const passDocs=await db.collection('users').doc(uid).collection('assessmentAttempts')
+      .where('guideId','==',guideId).limit(300).get();
+    const passedSet=new Set(passDocs.docs.filter(doc=>doc.data().passed===true
+      &&doc.data().creditStatus!=='revoked')
+      .map(doc=>string(doc.data().language)+':'+guideId+':'+string(doc.data().lessonId)));
+    const lang=string(guide.language||'en');
+    const done=(row:typeof ordered[number])=>{
+      const key=lang+':'+guideId+':'+row.id;
+      return row.type==='Test'?passedSet.has(key):completedSet.has(key);
+    };
+    if(!done(ordered[target])&&!ordered.slice(0,target).every(done)){
+      return res.status(423).json({ok:false,code:'LESSON_LOCKED',
+        error:'Complete the preceding lessons and assessments before opening this one.'});
+    }
+
     const snap=await guideSnap.ref.collection('lessons').doc(lessonId).get();
     if(!snap.exists||!hasAccess(snap.data()||{},scope,string(guide.organizationId||guide.ownerOrganizationId)))
       return res.status(404).json({ok:false,code:'NOT_FOUND',error:'Published lesson not found or not available.'});
