@@ -136,6 +136,8 @@ class VopApi {
   Future<Map<String, dynamic>> events() => read('events');
   Future<Map<String, dynamic>> radio() => read('radio');
   Future<Map<String, dynamic>> announcements() => read('announcements');
+  Future<Map<String,dynamic>> notificationCapabilities() =>
+      _execute('/api/admin/notifications','GET',null,{'action':'capabilities'});
   Future<Map<String,dynamic>> notifications()=>
       _execute('/api/admin/notifications','GET',null,{'action':'list'});
   Future<Map<String,dynamic>> markNotificationRead(String id)=>
