@@ -127,8 +127,12 @@ class VopApi {
   Future<Map<String, dynamic>> action(String path, Map<String, Object?> body) =>
       _execute(path, 'POST', body, null);
 
-  Future<Map<String,dynamic>> bootstrap()=>_cachedRead('bootstrap','bootstrap',
-    ()=>read('bootstrap'));
+  Future<Map<String,dynamic>> bootstrap()async{
+    final response=await _cachedRead('bootstrap','bootstrap',
+      ()=>read('bootstrap'));
+    if(response['offline']!=true)unawaited(syncPending());
+    return response;
+  }
   Future<Map<String,dynamic>> accountProfile() =>
       action('/api/admin/users',{'action':'profile'});
   Future<Map<String,dynamic>> saveProfile(Map<String,dynamic> profile) =>
@@ -284,7 +288,9 @@ class VopApi {
         'language':language,'confirmRetake':confirmRetake,
       });
       if(_uid.isNotEmpty&&result['sessionId'] is String){
-        final deadline=DateTime.tryParse((result['expiresAt']??'').toString());
+        final started=DateTime.tryParse((result['startedAt']??'').toString());
+        final deadline=DateTime.tryParse((result['expiresAt']??'').toString())
+          ??started?.add(const Duration(hours:24));
         if(deadline!=null&&DateTime.now().toUtc().isBefore(deadline)){
           await _offline.save(_uid,'quiz',key,result,
             title:'Assessment',expiresAt:deadline);
@@ -303,7 +309,9 @@ class VopApi {
       String sessionId,Map<String,Object?> answers)async{
     final cache=await _offline.read(_uid,'quiz',
       language+'_'+guideId+'_'+lessonId);
-    final deadline=DateTime.tryParse((cache?['expiresAt']??'').toString());
+    final started=DateTime.tryParse((cache?['startedAt']??'').toString());
+    final deadline=DateTime.tryParse((cache?['expiresAt']??'').toString())
+      ??started?.add(const Duration(hours:24));
     final body=<String,dynamic>{
       'action':'submitQuiz','guideId':guideId,'lessonId':lessonId,
       'language':language,'sessionId':sessionId,'answers':answers,
