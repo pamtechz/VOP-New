@@ -91,6 +91,7 @@ export function validateClientData(
   if(String(client.type||'')!==expectedType)throw new Error('Passkey ceremony type is invalid.');
   if(String(client.challenge||'')!==payload.challenge)throw new Error('Passkey challenge does not match.');
   if(String(client.origin||'')!==payload.origin)throw new Error('Passkey origin does not match this VOP site.');
+  if(client.crossOrigin===true)throw new Error('Passkey use from a cross-origin frame is not allowed.');
 }
 
 function readCborLength(data:Buffer,offset:number,additional:number){
