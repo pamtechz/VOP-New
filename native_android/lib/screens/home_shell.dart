@@ -21,7 +21,7 @@ List<Map<String,dynamic>> asRows(dynamic value)=>value is List
 /// The full name must come from the authenticated account, not a guessed name.
 String welcomeGreeting(dynamic displayName){
   final words=(displayName??'').toString().trim()
-    .split(RegExp(r'\s+')).where((part)=>part.length>1).toList();
+    .split(RegExp(r'\s+')).map((part)=>part.replaceAll(RegExp(r'[.,;:!?]'),'')).where((part)=>part.length>1).toList();
   if(words.isEmpty)return 'Welcome back';
   return 'Hello, ${words.first}';
 }
