@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, BookOpen, Bookmark, CheckCircle2, ChevronRight, CircleHelp, Clock3, Play, Search, Sparkles, RefreshCw } from 'lucide-react';
+import { ArrowLeft, BookOpen, Bookmark, CheckCircle2, ChevronRight, CircleHelp, Clock3, Play, Search, Sparkles, RefreshCw, LockKeyhole, FileText } from 'lucide-react';
 import type { CurriculumProgram, DiscoverGuide, Lesson, User } from '../types';
 import { getStoredSettings } from '../services/storage';
 import { loadFirestorePrograms } from '../services/firestoreData';
@@ -145,6 +145,26 @@ export const LessonsPage: React.FC<Props> = ({
                       <small>{guide.lessons.filter(lesson=>lesson.type==='Lesson').length} lessons ·
                         {guide.language.toUpperCase()}</small></span><ChevronRight size={17}/>
                   </button>
+                  <ol className="vop-program-guide-lessons">
+                    {orderedLessons(guide).map((lesson,lessonIndex,ordered)=>{
+                      const locked=lessonIndex>0&&!lessonIsComplete(
+                        guide,ordered[lessonIndex-1],currentUser,settings.quizPassThreshold);
+                      const complete=lessonIsComplete(
+                        guide,lesson,currentUser,settings.quizPassThreshold);
+                      return <li key={lesson.id}>
+                        <button type="button" disabled={locked}
+                          className={'vop-program-lesson-button'+(locked?' is-locked':'')}
+                          aria-label={locked?'Locked: '+lesson.title:lesson.title}
+                          onClick={()=>onOpenLesson(guide,lesson)}>
+                          {locked?<LockKeyhole size={15}/>:
+                            complete?<CheckCircle2 size={15}/>:
+                            <FileText size={15}/>}
+                          <span>{lesson.title}</span>
+                          <small>{lesson.type==='Test'?'Assessment':'Lesson '+lesson.lessonNumber}</small>
+                        </button>
+                      </li>;
+                    })}
+                  </ol>
                   {hasResume && guideBm && (
                     <button
                       type="button"
