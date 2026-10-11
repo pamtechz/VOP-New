@@ -546,7 +546,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
               <h2><Bell size={19}/>{uiT('personal_settings.notifications',"Notifications")}</h2>
               {(['enabled','email','announcements','certificates'] as const).map(key => <label key={key} className="vop-personal-toggle"><input type="checkbox" checked={settings.notifications?.[key] !== false} onChange={e => patch('notifications', { ...settings.notifications, [key]: e.target.checked })}/>{key === 'enabled' ? 'Enable notifications' : key.charAt(0).toUpperCase()+key.slice(1)+' notifications'}</label>)}
               {notificationCapabilities&&!notificationCapabilities.email.available&&<small role="status">
-                Email delivery is not currently available from this VOP deployment. Your preference is saved and will be enforced when the administrator enables and configures the mail provider.
+                Email is unavailable. Your preference will apply when the administrator configures delivery.
               </small>}
             </section>
           </div>
