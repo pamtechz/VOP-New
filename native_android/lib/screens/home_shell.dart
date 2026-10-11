@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import '../core/vop_api.dart';
 import '../core/offline_study.dart';
 import '../core/vop_i18n.dart';
@@ -40,9 +42,17 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   int tab=0;
   String search='';
   String preferredStudyLanguage='';
+  StreamSubscription<List<ConnectivityResult>>? connection;
   late Future<Map<String,dynamic>> profile,catalog,progress;
   @override void initState(){super.initState();reload();
     WidgetsBinding.instance.addObserver(this);
+    connection=Connectivity().onConnectivityChanged.listen((states){
+      if(states.any((state)=>state!=ConnectivityResult.none)){
+        OfflineStudy.instance.pendingCount().then((count){
+          if(count>0)OfflineStudy.instance.sync(widget.api).catchError((Object ignored){});
+        }).catchError((Object ignored){});
+      }
+    });
     VopI18n.restoreLastKnown();
     OfflineStudy.instance.sync(widget.api).catchError((Object ignored){});
     widget.api.personalSettings().then((result){
@@ -65,6 +75,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   }
   @override void dispose(){
     WidgetsBinding.instance.removeObserver(this);
+    connection?.cancel();
     widget.api.dispose();
     super.dispose();
   }
