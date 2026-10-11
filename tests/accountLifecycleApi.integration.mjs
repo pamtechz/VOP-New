@@ -97,6 +97,7 @@ test('account privacy export and staged deletion are server authoritative',async
       assert.equal('refreshToken' in status.payload,false);
       const rejected=await call(securityUser,'POST','revoke-sessions',{confirmation:'YES'});
       assert.equal(rejected.code,400);
+      await new Promise(resolve=>setTimeout(resolve,1100));
       const revoked=await call(securityUser,'POST','revoke-sessions',{confirmation:'SIGN OUT ALL DEVICES'});
       assert.equal(revoked.code,200,JSON.stringify(revoked.payload));
       assert.equal(revoked.payload.revoked,true);
