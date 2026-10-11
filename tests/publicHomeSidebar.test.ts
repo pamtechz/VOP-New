@@ -31,10 +31,12 @@ test('desktop has permanent collapsible learner sidebar without duplicate accoun
   assert.match(app,/readSidebarCollapsed/);
   assert.match(app,/persistSidebarCollapsed/);
   assert.match(sidebar,/onClick=\{onToggle\}/);
-  assert.match(sidebar,/isAdmin\?\[\{route:'admin'/);
-  // Admin dashboard, curriculum, users, candidates and settings have the
-  // same route but distinct tab identities and React keys.
-  assert.ok(sidebar.includes('key={item.adminTab ? `${item.route}:${item.adminTab}` : item.route}'));
+  assert.match(sidebar,/navigation.admin_operations/);
+  // The Admin panel appears once (under Admin Operations). Admin tabs
+  // use group, route, tab, and position to prevent all key collisions.
+  assert.doesNotMatch(sidebar,/navigation\.admin','Admin panel'/);
+  assert.ok(sidebar.includes('item.adminTab||\'base\'')); 
+  assert.ok(sidebar.includes('itemIndex'));
   assert.doesNotMatch(sidebar,/key=\{item\.route\}/);
   for(const tab of ['dashboard','curriculum','userManagement','candidates','settings']) {
     assert.ok(sidebar.includes(`adminTab: '${tab}'`));
