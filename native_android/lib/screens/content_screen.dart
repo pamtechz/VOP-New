@@ -3,6 +3,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../core/vop_api.dart';
 import '../theme/vop_theme.dart';
 import '../widgets/vop_ui.dart';
+import 'radio_player_screen.dart';
 
 enum VopContentKind {resources,events,radio,announcements}
 extension VopContentLabel on VopContentKind {
@@ -78,6 +79,34 @@ class _VopContentScreenState extends State<VopContentScreen> {
               icon:widget.kind.icon,
               message:filter.isNotEmpty?'No matching results.':
                 'Nothing has been published here yet.')),
+            if(widget.kind==VopContentKind.radio)...[
+              VopSectionTitle('Playlists',subtitle:'Curated broadcasts'),
+              ...rows(s.data?['playlists']).map((playlist)=>Card(
+                margin:const EdgeInsets.only(bottom:10),
+                child:ListTile(
+                  leading:const Icon(Icons.queue_music_rounded),
+                  title:Text(value(playlist,'name')),
+                  subtitle:Text(value(playlist,'description'),maxLines:2,
+                    overflow:TextOverflow.ellipsis),
+                  trailing:const Icon(Icons.chevron_right),
+                  onTap:(){
+                    final ids=(playlist['itemIds'] as List? ?? [])
+                      .map((item)=>item.toString()).toList();
+                    final contents=items.where((item)=>ids.contains(item['id'])).toList()
+                      ..sort((a,b)=>ids.indexOf(a['id'].toString())
+                        .compareTo(ids.indexOf(b['id'].toString())));
+                    Navigator.push(context,MaterialPageRoute<void>(builder:(_)=>Scaffold(
+                      appBar:AppBar(title:Text(value(playlist,'name'))),
+                      body:contents.isEmpty
+                        ?const VopEmpty(icon:Icons.queue_music,
+                          message:'No published items in this playlist.')
+                        :ListView(padding:const EdgeInsets.all(16),
+                          children:contents.map(_item).toList()),
+                    )));
+                  },
+                ))),
+              VopSectionTitle('Programmes',subtitle:'Audio and video'),
+            ],
             ...filtered.map(_item),
             const SizedBox(height:30),
           ]));
@@ -102,7 +131,10 @@ class _VopContentScreenState extends State<VopContentScreen> {
         :'';
     return Card(margin:const EdgeInsets.only(bottom:12),
       clipBehavior:Clip.antiAlias,
-      child:InkWell(onTap:()=>_details(title,description,row,url),
+      child:InkWell(onTap:()=>widget.kind==VopContentKind.radio
+          ?Navigator.push(context,MaterialPageRoute<void>(
+            builder:(_)=>RadioPlayerScreen(item:row)))
+          :_details(title,description,row,url),
         child:Padding(padding:const EdgeInsets.all(12),
           child:Row(crossAxisAlignment:CrossAxisAlignment.start,children:[
             ClipRRect(borderRadius:BorderRadius.circular(12),
