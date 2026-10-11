@@ -52,7 +52,7 @@ class _GuideScreenState extends State<GuideScreen> {
   Future<void> openLesson(Map<String,dynamic> lesson,String language,bool isQuiz)async{
     final id=(lesson['id']??'').toString();
     final title=(lesson['title']??'Lesson').toString();
-    final result=await Navigator.push<bool>(context,MaterialPageRoute<bool>(
+    await Navigator.push<bool>(context,MaterialPageRoute<bool>(
       builder:(_)=>isQuiz
         ?QuizScreen(api:widget.api,guideId:widget.guideId,
           lessonId:id,language:language,title:title)
