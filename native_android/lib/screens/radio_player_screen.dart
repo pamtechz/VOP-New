@@ -187,7 +187,7 @@ class _RadioPlayerScreenState extends State<RadioPlayerScreen>
             IconButton(tooltip:'Back ten seconds',onPressed:()=>_skip(-10),
               icon:const Icon(Icons.replay_10)),
             FilledButton.tonalIcon(
-              onPressed:()=>v!.isPlaying?c!.pause():c!.play(),
+              onPressed:()=>v.isPlaying?c!.pause():c!.play(),
               icon:Icon(v!.isPlaying?Icons.pause:Icons.play_arrow),
               label:Text(v.isPlaying?'Pause':'Play')),
             IconButton(tooltip:'Forward ten seconds',onPressed:()=>_skip(10),
