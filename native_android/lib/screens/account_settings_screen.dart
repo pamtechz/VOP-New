@@ -1,6 +1,8 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../core/vop_api.dart';
+import '../core/vop_i18n.dart';
+import 'offline_studies_screen.dart';
 import '../theme/vop_theme.dart';
 import '../widgets/vop_ui.dart';
 
@@ -71,6 +73,13 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       final result=await widget.api.savePersonalSettings(preferences);
       preferences=_map(result['settings']);
       VopAppearance.apply(preferences);
+      final locale=(preferences['uiLocale']??'en').toString().trim();
+      if(locale.isNotEmpty){
+        try{
+          final pack=await widget.api.languagePack(locale);
+          VopI18n.apply(locale,pack);
+        }catch(_){}
+      }
     },'Personal settings saved for web and Android.');
   }
   Future<void> _perform(Future<void> Function() action,String success)async{
@@ -146,12 +155,27 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       error!=null&&profile.isEmpty
         ?VopEmpty(icon:Icons.wifi_off,message:error!,onRetry:_load)
         :Column(children:[
-          Padding(padding:const EdgeInsets.fromLTRB(14,12,14,3),
-            child:SegmentedButton<int>(segments:const [
-              ButtonSegment(value:0,label:Text('Profile'),icon:Icon(Icons.person_outline)),
-              ButtonSegment(value:1,label:Text('Settings'),icon:Icon(Icons.tune)),
-              ButtonSegment(value:2,label:Text('Security'),icon:Icon(Icons.shield_outlined)),
-            ],selected:{page},onSelectionChanged:(v)=>setState(()=>page=v.first))),
+          Padding(padding:const EdgeInsets.fromLTRB(12,10,12,3),
+            child:LayoutBuilder(builder:(context,constraints){
+              final compact=constraints.maxWidth<390;
+              return SegmentedButton<int>(
+                showSelectedIcon:!compact,
+                style:ButtonStyle(
+                  visualDensity:VisualDensity.compact,
+                  padding:WidgetStateProperty.all(const EdgeInsets.symmetric(
+                    horizontal:5,vertical:7)),
+                  textStyle:WidgetStateProperty.all(const TextStyle(fontSize:12))),
+                segments:[
+                  ButtonSegment(value:0,
+                    label:Text(VopI18n.text('navigation.profile','Profile')),
+                    icon:const Icon(Icons.person_outline,size:17)),
+                  ButtonSegment(value:1,
+                    label:Text(VopI18n.text('navigation.personal_settings','Settings')),
+                    icon:const Icon(Icons.tune,size:17)),
+                  const ButtonSegment(value:2,
+                    label:Text('Security'),icon:Icon(Icons.shield_outlined,size:17)),
+                ],selected:{page},onSelectionChanged:(v)=>setState(()=>page=v.first));
+            })),
           if(error!=null)Padding(padding:const EdgeInsets.symmetric(horizontal:18,vertical:5),
             child:Text(error!,style:TextStyle(color:Theme.of(context).colorScheme.error))),
           if(message!=null)Padding(padding:const EdgeInsets.symmetric(horizontal:18,vertical:5),
@@ -274,18 +298,44 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
           },'Password reset email requested. Check your inbox.');
         }),
       const Divider(),
-      const ListTile(contentPadding:EdgeInsets.zero,
-        leading:Icon(Icons.fingerprint),
-        title:Text('Passkeys & biometrics'),
-        subtitle:Text('Native passkey enrollment is not configured on this Android build. '
-          'Your existing password or Google sign-in remains available.')),
-      const Divider(),
       _choose('Profile visibility','privacy','profileVisibility',[
         const DropdownMenuItem(value:'organization',child:Text('My organisation')),
         const DropdownMenuItem(value:'private',child:Text('Private')),
       ],(_map(preferences['privacy'])['profileVisibility']??'organization').toString()),
       FilledButton.icon(onPressed:saving?null:_saveSettings,
         icon:const Icon(Icons.save_outlined),label:const Text('Save privacy')),
+    ]),
+    _heading('Offline downloads','Manage this device’s study files.',Icons.download_outlined),
+    _group([
+      ListTile(
+        contentPadding:EdgeInsets.zero,
+        leading:const Icon(Icons.folder_outlined),
+        title:const Text('Saved lessons and sync'),
+        trailing:const Icon(Icons.chevron_right),
+        onTap:()=>Navigator.push(context,MaterialPageRoute<void>(
+          builder:(_)=>OfflineStudiesScreen(api:widget.api))),
+      ),
+      OutlinedButton.icon(
+        onPressed:()async{
+          final confirm=await showDialog<bool>(context:context,
+            builder:(ctx)=>AlertDialog(
+              title:const Text('Clear offline files?'),
+              content:const Text('Downloaded studies, assessment drafts and pending changes on this device will be deleted.'),
+              actions:[
+                TextButton(onPressed:()=>Navigator.pop(ctx,false),
+                  child:const Text('Cancel')),
+                FilledButton(onPressed:()=>Navigator.pop(ctx,true),
+                  child:const Text('Clear')),
+              ],
+            ));
+          if(confirm==true){
+            await widget.api.clearOfflineStudies();
+            if(mounted)ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content:Text('Offline files cleared.')));
+          }
+        },
+        icon:const Icon(Icons.delete_outline),
+        label:const Text('Clear offline files')),
     ]),
     _heading('Account lifecycle','A deletion request follows the VOP retention process.',
       Icons.manage_accounts_outlined),
