@@ -156,10 +156,10 @@ export const ReferenceProfilePage: React.FC<ProfileProps> = ({
             <p className="vop-reference-muted">
               {t('identity_admin_note', 'You can edit personal information. Your email, organisation and permissions are managed separately.')}
             </p>
-            <label className="vop-reference-field">Display name
+            <label className="vop-reference-field">{t('profile_name','Display name')}
               <input required maxLength={120} value={name} onChange={event=>setName(event.target.value)} autoComplete="name" />
             </label>
-            <label className="vop-reference-field">Email
+            <label className="vop-reference-field">{t('profile_email','Email')}
               <input type="email" readOnly value={currentUser.email} />
             </label>
             <label className="vop-reference-field">
@@ -175,11 +175,11 @@ export const ReferenceProfilePage: React.FC<ProfileProps> = ({
               {t('address', 'Address')}
               <input maxLength={500} value={address} onChange={event => setAddress(event.target.value)} />
             </label>
-            <label className="vop-reference-field">About me
+            <label className="vop-reference-field">{t('profile_bio','About me')}
               <textarea rows={3} maxLength={1000} value={bio} onChange={event=>setBio(event.target.value)}/>
             </label>
-            <label className="vop-reference-field">Profile picture URL
-              <input type="url" maxLength={2048} value={photoURL} placeholder="https://" onChange={event=>setPhotoURL(event.target.value)}/>
+            <label className="vop-reference-field">{t('profile_picture_url','Profile picture URL')}
+              <input type="url" maxLength={2048} value={photoURL} placeholder={t('profile_url_placeholder','https://')} onChange={event=>setPhotoURL(event.target.value)}/>
             </label>
             <button type="submit" className="vop-cert-action-btn" disabled={savingProfile} style={{ minHeight: '2.85rem' }}>{savingProfile ? t('saving', 'Saving…') : t('save', 'Save')}</button>
           </form>
