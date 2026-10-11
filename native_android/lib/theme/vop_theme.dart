@@ -13,8 +13,8 @@ abstract final class VopColors {
   static const card = Colors.white;
   static const border = Color(0xFFE2E8F0);
   static const success = Color(0xFF10B981);
-  static const darkCanvas = Color(0xFF091525);
-  static const darkSurface = Color(0xFF10233D);
+  static const darkCanvas = Color(0xFF0B192D);
+  static const darkSurface = Color(0xFF142A46);
   static const darkBorder = Color(0xFF294263);
 }
 abstract final class VopTheme {
@@ -82,10 +82,11 @@ abstract final class VopTheme {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       )),
       navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: surface, elevation: 0, height: 70,
+        backgroundColor: surface, elevation: 0, height: 62,
+        iconTheme: WidgetStateProperty.all(const IconThemeData(size:21)),
         indicatorColor: dark ? const Color(0xFF1C406B) : const Color(0xFFE8F0FB),
         labelTextStyle: WidgetStateProperty.all(const TextStyle(
-          fontSize: 10.5,fontWeight: FontWeight.w700)),
+          fontSize: 10,fontWeight: FontWeight.w700)),
       ),
       dividerTheme: DividerThemeData(
         color: dark ? VopColors.darkBorder : VopColors.border),
