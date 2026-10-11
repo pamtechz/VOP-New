@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Save, UserRound, Bell, Globe2, Accessibility, ShieldCheck, BookOpen, Fingerprint, Trash2, Download, RotateCcw, CheckCircle, Eye, EyeOff, KeyRound, LoaderCircle } from 'lucide-react';
 import type { User, CustomLanguage, AppRoute } from '../types';
 import { auth } from '../lib/firebase';
+import { reload, sendEmailVerification } from 'firebase/auth';
 import { changeUserPassword, resetPassword, firebaseSignOut } from '../services/firebaseAuth';
 import { getTranslation, getAvailableUiLocales, loadUiLocaleRegistry, setUiLocale, getUiLocale } from '../services/i18n';
 import { getActiveLanguage, getStoredSettings } from '../services/storage';
@@ -62,6 +63,8 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
   const [accountLifecycle,setAccountLifecycle]=useState<AccountLifecycleStatus|null>(null);
   const [securityOverview,setSecurityOverview]=useState<AccountSecurityStatus|null>(null);
   const [securityBusy,setSecurityBusy]=useState(false);
+  const [verificationBusy,setVerificationBusy]=useState(false);
+  const [verificationMessage,setVerificationMessage]=useState('');
   const [securityError,setSecurityError]=useState('');
   const [privacyBusy,setPrivacyBusy]=useState(false);
   const [deletionConfirmation,setDeletionConfirmation]=useState('');
@@ -231,6 +234,27 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
     finally{setPasskeyBusy(false);}
   };
 
+  const requestEmailVerification=async()=>{
+    const user=auth?.currentUser;
+    if(!user||user.emailVerified)return;
+    setVerificationBusy(true);setSecurityError('');setVerificationMessage('');
+    try{
+      await sendEmailVerification(user);
+      setVerificationMessage(uiT('personal_settings.verification_email_sent','Verification email sent. Check your inbox.'));
+    }catch(error){setSecurityError(error instanceof Error?error.message:'Could not send verification email.');}
+    finally{setVerificationBusy(false);}
+  };
+  const refreshEmailVerification=async()=>{
+    const user=auth?.currentUser;
+    if(!user)return;
+    setVerificationBusy(true);setSecurityError('');
+    try{
+      await reload(user);
+      const fresh=await loadAccountSecurityStatus();
+      setSecurityOverview(fresh);
+    }catch(error){setSecurityError(error instanceof Error?error.message:'Could not refresh email verification status.');}
+    finally{setVerificationBusy(false);}
+  };
   const signOutAllDevices=async()=>{
     const confirmed=await appConfirm(
       'End VOP sessions on this account, including this device? Sign in again afterwards. Existing access tokens on other devices can remain usable until expiry.',
@@ -566,7 +590,19 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
                   <div className="vop-setting-help">{securityOverview.emailVerified
                     ?uiT('personal_settings.verified_email','Verified')
                     :uiT('personal_settings.unverified_email','Not verified')}</div>
-                </div></div>
+                </div>
+                  <div className="vop-personal-profile-actions">
+                    {!securityOverview.emailVerified&&<button type="button" className="vop-secondary"
+                      disabled={verificationBusy} onClick={()=>void requestEmailVerification()}>
+                      {uiT('personal_settings.send_verification_email','Send verification email')}
+                    </button>}
+                    <button type="button" className="vop-secondary" disabled={verificationBusy}
+                      onClick={()=>void refreshEmailVerification()}>
+                      {uiT('personal_settings.refresh_verification','Refresh status')}
+                    </button>
+                  </div>
+                </div>
+                {verificationMessage&&<small role="status">{verificationMessage}</small>}
                 {securityOverview.lastSignInAt&&<div className="vop-setting-row"><div>
                   <strong>{uiT('personal_settings.last_sign_in','Last sign-in')}</strong>
                   <div className="vop-setting-help">{new Date(securityOverview.lastSignInAt).toLocaleString()}</div>
