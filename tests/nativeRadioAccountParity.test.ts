@@ -37,4 +37,5 @@ test('native personal settings use authoritative web profile/settings actions',(
   assert.match(profile,/sendPasswordResetEmail/);
   assert.match(profile,/VopAppearance\.apply/);
   assert.match(read('api_handlers/admin/mobile.ts'),/resource==='languages'/);
+  assert.match(read('api_handlers/admin/users.ts'),/displayName: String\(existing\.displayName\|\|''\)\.trim\(\) \|\| decoded\.name/);
 });
