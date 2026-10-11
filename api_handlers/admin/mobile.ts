@@ -249,6 +249,24 @@ export default async function mobile(req:Request,res:Response){
     if(!snap.exists||!hasAccess(snap.data()||{},scope,string(guide.organizationId||guide.ownerOrganizationId)))
       return res.status(404).json({ok:false,code:'NOT_FOUND',error:'Published lesson not found or not available.'});
     const lesson=snap.data()||{};
+    const ordered=await guideSnap.ref.collection('lessons').where('published','==',true)
+      .limit(120).get();
+    const preceding=ordered.docs.filter(doc=>hasAccess(doc.data(),scope,
+      string(guide.organizationId||guide.ownerOrganizationId)))
+      .map(doc=>plainLesson(doc.id,doc.data()))
+      .sort((a,b)=>a.lessonNumber.localeCompare(b.lessonNumber,undefined,{numeric:true}));
+    const currentIndex=preceding.findIndex(item=>item.id===lessonId);
+    if(currentIndex>0){
+      const progress=ctx.profile.progress&&typeof ctx.profile.progress==='object'
+        ?ctx.profile.progress as Raw:{};
+      const completed=new Set(Array.isArray(progress.completedLessons)
+        ?progress.completedLessons.filter(v=>typeof v==='string'):[]);
+      const previousKey=`${string(guide.language)||'en'}:${guideId}:${preceding[currentIndex-1].id}`;
+      if(!completed.has(previousKey))return res.status(403).json({
+        ok:false,code:'LESSON_LOCKED',
+        error:'Complete the preceding lesson before opening this one.',
+      });
+    }
     return res.status(200).json({ok:true,guide:plainGuide(guideId,guide),
       lesson:{...plainLesson(lessonId,lesson),pages:lessonPages(lesson)}});
   }catch(error){
