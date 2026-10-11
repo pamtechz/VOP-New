@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../core/vop_api.dart';
+import '../core/vop_localizations.dart';
 import '../theme/vop_theme.dart';
 import '../widgets/vop_ui.dart';
 
@@ -47,6 +48,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         loading=false;
       });
       VopAppearance.apply(settings);
+      VopLocalizations.updateStudyLanguage((settings['studyLanguage']??'').toString());
       widget.api.accountLifecycle().then((r){
         if(mounted)setState(()=>deletion=r);
       }).catchError((Object ignored){});
@@ -71,6 +73,10 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       final result=await widget.api.savePersonalSettings(preferences);
       preferences=_map(result['settings']);
       VopAppearance.apply(preferences);
+      VopLocalizations.updateStudyLanguage(
+        (preferences['studyLanguage']??'').toString());
+      await VopLocalizations.load(widget.api,
+        (preferences['uiLocale']??'en').toString());
     },'Personal settings saved for web and Android.');
   }
   Future<void> _perform(Future<void> Function() action,String success)async{
@@ -139,7 +145,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         }));
   }
   @override Widget build(BuildContext context)=>Scaffold(
-    appBar:AppBar(title:const Text('My Account & Settings'),
+    appBar:AppBar(title:Text(VopLocalizations.t('account.my_account','My Account')),
       actions:[IconButton(tooltip:'Reload account',onPressed:_load,
         icon:const Icon(Icons.refresh_rounded))]),
     body:loading?const VopSkeleton(rows:4):
@@ -208,7 +214,8 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
           (lang['nativeName']??lang['code']).toString()))),
     ];
     return [
-      _heading('Appearance','Choose how VOP looks on your phone.',Icons.palette_outlined),
+      _heading(VopLocalizations.t('settings.tab_interface','Appearance'),
+        'Choose how VOP looks on your phone.',Icons.palette_outlined),
       _group([
         _choose('Theme','', 'theme',colors,
           (preferences['theme']??'system').toString()),
@@ -216,7 +223,8 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         _switch('accessibility','highContrast','High contrast'),
         _switch('accessibility','reducedMotion','Reduce motion'),
       ]),
-      _heading('Language','Set the interface and the language of your Bible studies.',
+      _heading(VopLocalizations.t('settings.ui_language','Language'),
+        'Set the interface and the language of your Bible studies.',
         Icons.translate_outlined),
       _group([
         _choose('Interface language','','uiLocale',opts,
@@ -224,7 +232,8 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         _choose('Study language','','studyLanguage',opts,
           codes.contains(studyCode)?studyCode:''),
       ]),
-      _heading('Notifications','Control the messages you receive.',Icons.notifications_outlined),
+      _heading(VopLocalizations.t('settings.tab_notifications','Notifications'),
+        'Control the messages you receive.',Icons.notifications_outlined),
       _group([
         _switch('notifications','enabled','Enable notifications'),
         _switch('notifications','email','Email updates'),
@@ -251,6 +260,32 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
           onChanged:(text)=>_nested('studyPreferences','timezone',text),
         ),
       ]),
+      _heading('Offline studies','Save lessons and synchronize pending work.',
+        Icons.download_for_offline_outlined),
+      _group([
+        FutureBuilder<int>(
+          future:widget.api.pendingStudyActions(),
+          builder:(context,snapshot)=>ListTile(
+            contentPadding:EdgeInsets.zero,
+            leading:const Icon(Icons.cloud_sync_outlined),
+            title:const Text('Pending synchronizations'),
+            subtitle:Text(snapshot.hasData
+              ?snapshot.data.toString()+' waiting':'Checking device storage…'),
+          ),
+        ),
+        FilledButton.icon(
+          onPressed:saving?null:()async{
+            await _perform(()async{
+              final result=await widget.api.syncOfflineQueue();
+              if(!mounted)return;
+              final count=(result['pending']??0).toString();
+              message=count=='0'?'All pending work synchronized.':
+                count+' items still awaiting server verification.';
+            },'Offline synchronization finished.');
+            if(mounted)setState((){});
+          },
+          icon:const Icon(Icons.sync),label:const Text('Sync offline work')),
+      ]),
       const SizedBox(height:19),
       FilledButton.icon(onPressed:saving?null:_saveSettings,
         icon:const Icon(Icons.save_outlined),
@@ -274,12 +309,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
           },'Password reset email requested. Check your inbox.');
         }),
       const Divider(),
-      const ListTile(contentPadding:EdgeInsets.zero,
-        leading:Icon(Icons.fingerprint),
-        title:Text('Passkeys & biometrics'),
-        subtitle:Text('Native passkey enrollment is not configured on this Android build. '
-          'Your existing password or Google sign-in remains available.')),
-      const Divider(),
+
       _choose('Profile visibility','privacy','profileVisibility',[
         const DropdownMenuItem(value:'organization',child:Text('My organisation')),
         const DropdownMenuItem(value:'private',child:Text('Private')),
