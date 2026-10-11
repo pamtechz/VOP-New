@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import '../core/vop_api.dart';
+import '../core/offline_study.dart';
 import '../theme/vop_theme.dart';
 import '../widgets/vop_ui.dart';
 import 'certificates_screen.dart';
 import 'account_settings_screen.dart';
+import 'offline_downloads_screen.dart';
 import 'content_screen.dart';
 import 'guide_screen.dart';
 import 'engagement_screen.dart';
@@ -33,11 +35,13 @@ class HomeShell extends StatefulWidget {
   final VopApi api;
   @override State<HomeShell> createState()=>_HomeShellState();
 }
-class _HomeShellState extends State<HomeShell> {
+class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   int tab=0;
   String search='';
   late Future<Map<String,dynamic>> profile,catalog,progress;
   @override void initState(){super.initState();reload();
+    WidgetsBinding.instance.addObserver(this);
+    OfflineStudy.instance.sync(widget.api).catchError((Object ignored){});
     widget.api.personalSettings().then((result){
       VopAppearance.apply(asMap(result['settings']));
     }).catchError((Object ignored){});
@@ -47,7 +51,16 @@ class _HomeShellState extends State<HomeShell> {
     catalog=widget.api.catalogue();
     progress=widget.api.progress();
   }
-  @override void dispose(){widget.api.dispose();super.dispose();}
+  @override void didChangeAppLifecycleState(AppLifecycleState state){
+    if(state==AppLifecycleState.resumed){
+      OfflineStudy.instance.sync(widget.api).catchError((Object ignored){});
+    }
+  }
+  @override void dispose(){
+    WidgetsBinding.instance.removeObserver(this);
+    widget.api.dispose();
+    super.dispose();
+  }
   void selectTab(int next)=>setState(()=>tab=next);
   void push(Widget page)=>Navigator.push(context,
     MaterialPageRoute<void>(builder:(_)=>page));
@@ -148,6 +161,8 @@ class _HomeShellState extends State<HomeShell> {
       _destination('Lessons & Assessments',Icons.book_outlined,()=>selectTab(1)),
       _destination('Library',Icons.local_library_outlined,()=>selectTab(2)),
       _destination('My Progress',Icons.insights_outlined,()=>push(_ProgressScreen(api:widget.api))),
+      _destination('Offline Downloads',Icons.download_for_offline_outlined,
+        ()=>push(OfflineDownloadsScreen(api:widget.api))),
       _destination('My Certificates',Icons.workspace_premium_outlined,
         ()=>push(CertificatesScreen(api:widget.api))),
       _destination('Scripture Memory & Challenges',Icons.psychology_outlined,
