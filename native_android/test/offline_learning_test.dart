@@ -26,7 +26,7 @@ void main(){
     );
     expect(
       () => learner.saveLesson('guide','lesson','en',{
-        'lesson':{'pages':[{'content':'a'*800000}]},
+        'lesson':{'pages':[{'content':'a'.padRight(800000,'a')}]},
       }),
       throwsStateError,
     );
