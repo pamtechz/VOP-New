@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../core/vop_api.dart';
 import '../core/offline_study.dart';
+import '../core/vop_i18n.dart';
 import '../theme/vop_theme.dart';
 import '../widgets/vop_ui.dart';
 import 'certificates_screen.dart';
@@ -38,12 +39,17 @@ class HomeShell extends StatefulWidget {
 class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   int tab=0;
   String search='';
+  String preferredStudyLanguage='';
   late Future<Map<String,dynamic>> profile,catalog,progress;
   @override void initState(){super.initState();reload();
     WidgetsBinding.instance.addObserver(this);
     OfflineStudy.instance.sync(widget.api).catchError((Object ignored){});
     widget.api.personalSettings().then((result){
-      VopAppearance.apply(asMap(result['settings']));
+      final settings=asMap(result['settings']);
+      VopAppearance.apply(settings);
+      VopI18n.load(widget.api,(settings['uiLocale']??'en').toString());
+      if(mounted)setState(()=>preferredStudyLanguage=
+        (settings['studyLanguage']??'').toString());
     }).catchError((Object ignored){});
   }
   void reload(){
@@ -86,7 +92,13 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
 
   @override Widget build(BuildContext context){
     final wide=MediaQuery.sizeOf(context).width>=880;
-    const labels=['Discover','Lessons','Library','Prayer','Radio'];
+    final labels=[
+      VopI18n.t('navigation.discover','Discover'),
+      VopI18n.t('navigation.lessons','Lessons'),
+      VopI18n.t('navigation.library','Library'),
+      VopI18n.t('navigation.prayer','Prayer'),
+      VopI18n.t('navigation.radio','Radio'),
+    ];
     final icons=[
       Icons.home_outlined,Icons.auto_stories_outlined,
       Icons.local_library_outlined,Icons.volunteer_activism_outlined,
@@ -97,7 +109,9 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
       Icons.local_library_rounded,Icons.volunteer_activism_rounded,
       Icons.radio_rounded,
     ];
-    return Scaffold(
+    return ValueListenableBuilder<VopLocaleBundle>(
+      valueListenable:VopI18n.bundle,
+      builder:(context,locale,_)=>Scaffold(
       appBar:AppBar(
         toolbarHeight:58,
         title:tab==0?const VopBrand(compact:true)
@@ -136,7 +150,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
           icon:Icon(icons[index]),selectedIcon:Icon(activeIcons[index]),
           label:labels[index])),
       ),
-    );
+    ));
   }
 
   Widget _drawer(){
@@ -309,6 +323,13 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
         (guide['language']??'').toString();
       return text.toLowerCase().contains(search.toLowerCase());
     }).toList();
+    if(preferredStudyLanguage.isNotEmpty){
+      visible.sort((a,b){
+        final p=a['language']==preferredStudyLanguage?0:1;
+        final q=b['language']==preferredStudyLanguage?0:1;
+        return p.compareTo(q);
+      });
+    }
     return RefreshIndicator(onRefresh:()async{setState(reload);await catalog;},
       child:ListView(key:const PageStorageKey<String>('vop-lessons-scroll'),
         padding:const EdgeInsets.all(15),children:[
