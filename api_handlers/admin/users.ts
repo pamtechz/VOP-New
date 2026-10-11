@@ -491,15 +491,21 @@ export default async function handler(request: Request, response: Response) {
         if(Object.keys(study).some(key=>!studyKeys.includes(key)))return response.status(400).json({error:'Unsupported study preference.'});
         const reminders=study.reminders===undefined?undefined:study.reminders===true;
         if(study.reminders!==undefined&&typeof study.reminders!=='boolean')return response.status(400).json({error:'Study reminders must use a true or false value.'});
-        const preferredStudyTime=String(study.preferredStudyTime||'').trim();
-        if(preferredStudyTime&&!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(preferredStudyTime))return response.status(400).json({error:'Select a valid preferred study time.'});
-        const timezone=String(study.timezone||'').trim();
-        if(timezone.length>80||timezone&&(timezone!=='UTC'&&!/^[A-Za-z_]+(?:\/[A-Za-z0-9_+.-]+)+$/.test(timezone)))return response.status(400).json({error:'Select a valid timezone.'});
-        normalized.studyPreferences={
-          ...(reminders!==undefined?{reminders}:{}),
-          preferredStudyTime,
-          timezone,
-        };
+        const changes:Record<string,unknown>={};
+        if(reminders!==undefined)changes.reminders=reminders;
+        if(study.preferredStudyTime!==undefined){
+          if(typeof study.preferredStudyTime!=='string')return response.status(400).json({error:'Select a valid preferred study time.'});
+          const preferredStudyTime=study.preferredStudyTime.trim();
+          if(preferredStudyTime&&!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(preferredStudyTime))return response.status(400).json({error:'Select a valid preferred study time.'});
+          changes.preferredStudyTime=preferredStudyTime;
+        }
+        if(study.timezone!==undefined){
+          if(typeof study.timezone!=='string')return response.status(400).json({error:'Select a valid timezone.'});
+          const timezone=study.timezone.trim();
+          if(timezone.length>80||timezone&&(timezone!=='UTC'&&!/^[A-Za-z_]+(?:\/[A-Za-z0-9_+.-]+)+$/.test(timezone)))return response.status(400).json({error:'Select a valid timezone.'});
+          changes.timezone=timezone;
+        }
+        normalized.studyPreferences=changes;
       }
 
       const preferences: Record<string, string> = {};
