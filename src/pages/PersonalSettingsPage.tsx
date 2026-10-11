@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Save, UserRound, Bell, Globe2, Accessibility, ShieldCheck, BookOpen, Fingerprint, Trash2, Download, RotateCcw, CheckCircle, Eye, EyeOff, KeyRound, LoaderCircle, LayoutDashboard, Users, UserCheck } from 'lucide-react';
+import { Save, UserRound, Bell, Globe2, Accessibility, ShieldCheck, BookOpen, Fingerprint, Trash2, Download, RotateCcw, CheckCircle, Eye, EyeOff, KeyRound, LoaderCircle } from 'lucide-react';
 import type { User, CustomLanguage, AppRoute } from '../types';
 import { auth } from '../lib/firebase';
 import { changeUserPassword, resetPassword } from '../services/firebaseAuth';
@@ -334,8 +334,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
       <div className="vop-personal-tab-content">
         {activeTab === 'account' && (
           <div className="vop-personal-tab-pane">
-            {isAdmin && (
-              <section className="vop-personal-card vop-card">
+            <section className="vop-personal-card vop-card">
                 <h2><ShieldCheck size={19}/>{uiT('personal_settings.admin_operations_and_tools',"Admin Operations & Tools")}</h2>
                 <p>{uiT('personal_settings.quickly_access_core_administrative_tools_and_workspaces',"Quickly access core administrative tools and workspaces:")}</p>
                 <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(170px, 1fr))',gap:8,marginTop:2}}>
