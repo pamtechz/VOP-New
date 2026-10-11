@@ -12,12 +12,32 @@ class GuideScreen extends StatefulWidget {
 }
 class _GuideScreenState extends State<GuideScreen> {
   late Future<Map<String,dynamic>> guide;
+  bool downloading=false;
+  Future<void> download()async{
+    if(downloading)return;
+    setState(()=>downloading=true);
+    try{
+      final count=await widget.api.downloadGuide(widget.guideId);
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content:Text(count.toString()+' lessons saved for offline study.')));
+    }catch(error){
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content:Text('Download failed: '+error.toString())));
+    }finally{if(mounted)setState(()=>downloading=false);}
+  }
   @override void initState(){super.initState();reload();}
   void reload(){guide=widget.api.guide(widget.guideId);}
   @override Widget build(BuildContext context)=>Scaffold(
     appBar:AppBar(title:const Text('Study guide'),
-      actions:[IconButton(onPressed:()=>setState(reload),
-        icon:const Icon(Icons.refresh),tooltip:'Reload guide')]),
+      actions:[
+        IconButton(onPressed:downloading?null:download,
+          tooltip:'Download lessons',
+          icon:downloading?const SizedBox(width:18,height:18,
+            child:CircularProgressIndicator(strokeWidth:2)):
+            const Icon(Icons.download_for_offline_outlined)),
+        IconButton(onPressed:()=>setState(reload),
+          icon:const Icon(Icons.refresh),tooltip:'Reload guide'),
+      ]),
     body:FutureBuilder<Map<String,dynamic>>(
       future:guide,
       builder:(context,s){
@@ -40,7 +60,14 @@ class _GuideScreenState extends State<GuideScreen> {
             const SizedBox(height:9),
             Text('${details['description']??''}'),
             const SizedBox(height:17),
-            Chip(label:Text(language.toUpperCase())),
+            Row(children:[
+              Chip(label:Text(language.toUpperCase())),
+              if(data['offline']==true)...[
+                const SizedBox(width:9),
+                const Chip(avatar:Icon(Icons.offline_bolt_outlined,size:16),
+                  label:Text('Offline')),
+              ],
+            ]),
             const SizedBox(height:16),
             Text('Lessons and assessments',
               style:Theme.of(context).textTheme.titleLarge),
