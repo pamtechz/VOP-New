@@ -8,6 +8,7 @@ import 'content_screen.dart';
 import 'guide_screen.dart';
 import 'engagement_screen.dart';
 import 'notifications_screen.dart';
+import 'offline_studies_screen.dart';
 import 'mentor_screen.dart';
 import 'prayer_screen.dart';
 
@@ -148,6 +149,8 @@ class _HomeShellState extends State<HomeShell> {
       _destination('Lessons & Assessments',Icons.book_outlined,()=>selectTab(1)),
       _destination('Library',Icons.local_library_outlined,()=>selectTab(2)),
       _destination('My Progress',Icons.insights_outlined,()=>push(_ProgressScreen(api:widget.api))),
+      _destination('Offline downloads',Icons.download_for_offline_outlined,
+        ()=>push(OfflineStudiesScreen(api:widget.api))),
       _destination('My Certificates',Icons.workspace_premium_outlined,
         ()=>push(CertificatesScreen(api:widget.api))),
       _destination('Scripture Memory & Challenges',Icons.psychology_outlined,
