@@ -43,6 +43,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   late Future<Map<String,dynamic>> profile,catalog,progress;
   @override void initState(){super.initState();reload();
     WidgetsBinding.instance.addObserver(this);
+    VopI18n.restoreLastKnown();
     OfflineStudy.instance.sync(widget.api).catchError((Object ignored){});
     widget.api.personalSettings().then((result){
       final settings=asMap(result['settings']);
