@@ -20,7 +20,8 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     bio=TextEditingController(),photoUrl=TextEditingController();
   bool loading=true,saving=false;
   String? error,message;
-  Map<String,dynamic> profile={},preferences={},deletion={},security={};
+  Map<String,dynamic> profile={},preferences={},deletion={},security={},notificationCapabilities={};
+  bool notificationStatusLoaded=false;
   List<Map<String,dynamic>> languages=[];
   int page=0;
   @override void initState(){super.initState();_load();}
@@ -58,6 +59,11 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       widget.api.accountSecurityStatus().then((r){
         if(mounted)setState(()=>security=r);
       }).catchError((Object ignored){if(mounted)setState(()=>security={'error':'Security details unavailable.'});});
+      widget.api.notificationCapabilities().then((r){
+        if(mounted)setState((){notificationCapabilities=r;notificationStatusLoaded=true;});
+      }).catchError((Object ignored){
+        if(mounted)setState(()=>notificationStatusLoaded=true);
+      });
     }catch(e){if(mounted)setState((){error='$e';loading=false;});}
   }
   Future<void> _saveProfile()async{
@@ -262,6 +268,17 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         _switch('notifications','email','Email updates'),
         _switch('notifications','announcements','Announcements'),
         _switch('notifications','certificates','Certificate updates'),
+        if(notificationStatusLoaded)...[
+          const SizedBox(height:8),
+          Text(
+            notificationCapabilities.isEmpty
+              ?'Email delivery status could not be checked. Preferences can still be saved.'
+              :_map(notificationCapabilities['email'])['available']==true
+                ?'Email delivery is configured for this platform.'
+                :'Email delivery is currently unavailable. Your preference will take effect when the administrator configures email.',
+            style:TextStyle(fontSize:12,
+              color:Theme.of(context).colorScheme.onSurfaceVariant)),
+        ],
       ]),
       const SizedBox(height:19),
       FilledButton.icon(onPressed:saving?null:_saveSettings,
