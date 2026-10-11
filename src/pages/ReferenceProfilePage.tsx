@@ -6,7 +6,7 @@ import type {
 import { ArrowLeft, Pencil, X, Check } from 'lucide-react';
 import { calculateCurriculumProgress } from '../services/progress';
 import { getTranslation, getUiLocale } from '../services/i18n';
-import { auth } from '../lib/firebase';
+import { saveOwnProfile } from '../services/accountProfile';
 
 interface ProfileProps {
   currentUser: User;
@@ -28,15 +28,21 @@ export const ReferenceProfilePage: React.FC<ProfileProps> = ({
 }) => {
   const [editing, setEditing] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [name, setName] = useState(currentUser.displayName ?? '');
+  const [bio, setBio] = useState(currentUser.bio ?? '');
+  const [photoURL, setPhotoURL] = useState(currentUser.photoURL ?? '');
   const [phone, setPhone] = useState(currentUser.phoneNumber ?? '');
   const [whatsapp, setWhatsapp] = useState(currentUser.whatsappNumber ?? '');
   const [address, setAddress] = useState(currentUser.address ?? '');
 
   useEffect(() => {
+    setName(currentUser.displayName ?? '');
+    setBio(currentUser.bio ?? '');
+    setPhotoURL(currentUser.photoURL ?? '');
     setPhone(currentUser.phoneNumber ?? '');
     setWhatsapp(currentUser.whatsappNumber ?? '');
     setAddress(currentUser.address ?? '');
-  }, [currentUser.uid, currentUser.phoneNumber, currentUser.whatsappNumber, currentUser.address]);
+  }, [currentUser.uid, currentUser.displayName, currentUser.bio, currentUser.photoURL, currentUser.phoneNumber, currentUser.whatsappNumber, currentUser.address]);
 
   const course = useMemo(() => calculateCurriculumProgress(
     guides, currentUser, settings.quizPassThreshold, activeLanguage,
@@ -73,25 +79,17 @@ export const ReferenceProfilePage: React.FC<ProfileProps> = ({
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!auth?.currentUser) return;
+    if(!name.trim()){setProfileError('Enter a display name.');return;}
     setSavingProfile(true);
     setSaved(false);
     setProfileError('');
     try {
-      const token = await auth.currentUser.getIdToken();
-      const response = await fetch('/api/admin/users', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-        body: JSON.stringify({
-          action: 'updateOwnProfile',
-          profile: { phoneNumber: phone.trim(), whatsappNumber: whatsapp.trim(), address: address.trim() },
-        }),
+      await saveOwnProfile({
+        displayName:name.trim(),phoneNumber:phone.trim(),whatsappNumber:whatsapp.trim(),
+        address:address.trim(),bio:bio.trim(),photoURL:photoURL.trim(),
       });
-      const body = await response.json().catch(() => ({})) as { error?: string };
-      if (!response.ok) throw new Error(body.error || 'Could not save your contact details.');
       setEditing(false);
       setSaved(true);
-      window.dispatchEvent(new Event('vop_profile_updated'));
     } catch (error) {
       setSaved(false);
       setProfileError(error instanceof Error ? error.message : 'Could not save your contact details.');
@@ -148,28 +146,40 @@ export const ReferenceProfilePage: React.FC<ProfileProps> = ({
         {profileError && <p role="alert" className="vop-reference-error">{profileError}</p>}
         {saved && (
           <p role="status" className="vop-reference-success">
-            <Check size={16} /> {t('contact_saved_local', 'Contact details saved to your VOP account.')}
+            <Check size={16} /> {t('contact_saved_local', 'Profile saved to your VOP account.')}
           </p>
         )}
 
         {editing ? (
           <form onSubmit={submit} className="vop-reference-form">
-            <h2>{t('contact_details', 'Contact details')}</h2>
+            <h2>{t('contact_details', 'My profile')}</h2>
             <p className="vop-reference-muted">
-              {t('identity_admin_note', 'Identity and organisation assignments are managed by authorised administration.')}
+              {t('identity_admin_note', 'You can edit personal information. Your email, organisation and permissions are managed separately.')}
             </p>
+            <label className="vop-reference-field">Display name
+              <input required maxLength={120} value={name} onChange={event=>setName(event.target.value)} autoComplete="name" />
+            </label>
+            <label className="vop-reference-field">Email
+              <input type="email" readOnly value={currentUser.email} />
+            </label>
             <label className="vop-reference-field">
               {t('phone', 'Phone')}
-              <input type="tel" value={phone} onChange={event => setPhone(event.target.value)} />
+              <input type="tel" maxLength={40} value={phone} onChange={event => setPhone(event.target.value)} />
             </label>
             <label className="vop-reference-field">
               WhatsApp number
-              <input type="tel" value={whatsapp} onChange={event => setWhatsapp(event.target.value)} placeholder="+260…" />
+              <input type="tel" maxLength={40} value={whatsapp} onChange={event => setWhatsapp(event.target.value)} placeholder="+260…" />
               <small>Mentors can use this number for candidate support WhatsApp handoff.</small>
             </label>
             <label className="vop-reference-field">
               {t('address', 'Address')}
-              <input value={address} onChange={event => setAddress(event.target.value)} />
+              <input maxLength={500} value={address} onChange={event => setAddress(event.target.value)} />
+            </label>
+            <label className="vop-reference-field">About me
+              <textarea rows={3} maxLength={1000} value={bio} onChange={event=>setBio(event.target.value)}/>
+            </label>
+            <label className="vop-reference-field">Profile picture URL
+              <input type="url" maxLength={2048} value={photoURL} placeholder="https://" onChange={event=>setPhotoURL(event.target.value)}/>
             </label>
             <button type="submit" className="vop-cert-action-btn" disabled={savingProfile} style={{ minHeight: '2.85rem' }}>{savingProfile ? t('saving', 'Saving…') : t('save', 'Save')}</button>
           </form>
