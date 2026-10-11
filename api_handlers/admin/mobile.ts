@@ -208,6 +208,9 @@ export default async function mobile(req:Request,res:Response){
           series:string(data.series),description:string(data.description),
           mediaType:string(data.mediaType),mediaProvider:string(data.mediaProvider),
           mediaUrl:publicImage(data.mediaUrl),posterUrl:publicImage(data.posterUrl),
+          licensedAudioUrl:data.hasPlaybackRights===true
+            ?publicImage(data.licensedAudioUrl):'',
+          hasPlaybackRights:data.hasPlaybackRights===true,
           audioUrl:publicImage(data.audioUrl),videoUrl:publicImage(data.videoUrl),
           streamUrl:publicImage(data.streamUrl)};
       }).filter(item=>item.title);
