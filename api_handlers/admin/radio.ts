@@ -1,7 +1,8 @@
 import { FieldValue } from 'firebase-admin/firestore';
 import { authenticateTenant, canEditCanonicalContent, enforceQuota, requireOrgRole, tenantOwnerKey, writeTenantAudit } from '../../server/tenant.js';
 import { requirePermission } from '../../server/permissions.js';
-import { isSafeHttpsMediaUrl, resolveMediaSource } from '../../shared/mediaSources.js';
+import { isSafeHttpsMediaUrl, identifyRadioMedia } from '../../shared/mediaSources.js';
+import { identifyPublicMedia } from '../../api/media.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -46,12 +47,25 @@ export default async function handler(req: Request, res: Response) {
     }
 
     const incoming = body.data && typeof body.data === 'object' ? body.data as Record<string, unknown> : {};
-    const urls = ['audioUrl', 'videoUrl', 'streamUrl'].map(key => String(incoming[key] || '').trim()).filter(Boolean);
-    if (!urls.length || urls.some(url => !validUrl(url))) throw new Error('Add at least one safe HTTPS Radio media URL.');
-    for(const key of ['audioUrl','videoUrl']){
-      const link=String(incoming[key]||'').trim();
-      if(link && !resolveMediaSource(link)) throw new Error('Radio media must be a supported playable file or trusted embed source.');
-    }
+    const mediaUrl = String(incoming.mediaUrl || incoming.videoUrl ||
+      incoming.audioUrl || incoming.streamUrl || '').trim();
+    if(!isSafeHttpsMediaUrl(mediaUrl)) throw new Error('Add one safe public HTTPS audio, video, live stream or approved provider URL.');
+    // Re-resolve on the trusted server: never accept a manually selected mediaType
+    // or client supplied media URL classification as authority.
+    const inspected = await identifyPublicMedia(mediaUrl);
+    const detected = identifyRadioMedia(inspected);
+    const isOriginalStream = !incoming.mediaUrl && !incoming.videoUrl &&
+      !incoming.audioUrl && Boolean(incoming.streamUrl);
+    const actualField = isOriginalStream && detected.mediaType === 'audio'
+      ? 'streamUrl' : detected.field;
+    const actualType = actualField === 'streamUrl' ? 'stream' : detected.mediaType;
+    const normalizedMedia = {
+      mediaType:actualType, mediaProvider:detected.provider,
+      mediaUrl:detected.sourceUrl,
+      audioUrl:actualField === 'audioUrl' ? detected.sourceUrl : '',
+      videoUrl:actualField === 'videoUrl' ? detected.sourceUrl : '',
+      streamUrl:actualField === 'streamUrl' ? detected.sourceUrl : '',
+    };
     if (!String(incoming.title || '').trim()) throw new Error('Radio title is required.');
 
     if (existing.exists) {
@@ -70,10 +84,7 @@ export default async function handler(req: Request, res: Response) {
       speaker: String(incoming.speaker||'').trim().slice(0,120),
       series: String(incoming.series||'').trim().slice(0,120),
       description: String(incoming.description||'').trim().slice(0,3000),
-      mediaType: String(incoming.mediaType||'audio').trim().slice(0,40),
-      audioUrl: String(incoming.audioUrl||'').trim(),
-      videoUrl: String(incoming.videoUrl||'').trim(),
-      streamUrl: String(incoming.streamUrl||'').trim(),
+      ...normalizedMedia,
       posterUrl: validUrl(incoming.posterUrl) ? String(incoming.posterUrl).trim() : '',
       broadcastTime: String(incoming.broadcastTime||'').trim().slice(0,50),
       id: documentId,
@@ -97,7 +108,8 @@ export default async function handler(req: Request, res: Response) {
     if (!saved.exists) throw new Error('Radio content was not written to Firestore.');
     const savedPublished = saved.data()?.published === true;
     const savedTitle = String(saved.data()?.title || '');
-    if (savedTitle !== String(savedData.title) || savedPublished !== (incoming.published === true)) {
+    const savedMediaUrl=String(saved.data()?.mediaUrl||'');
+    if (savedTitle !== String(savedData.title) || savedPublished !== (incoming.published === true) || savedMediaUrl !== detected.sourceUrl) {
       throw new Error('Radio content was written but could not be verified in Firestore.');
     }
 
