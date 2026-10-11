@@ -147,3 +147,76 @@ export function parseAudioVerseEmbedCode(value: unknown): string {
   }
   return url.toString();
 }
+
+
+/** Parse public publisher metadata and provider-approved player URLs only.
+ * Never persist provider HTML, scripts, or arbitrary iframe attributes.
+ */
+export type PublishedMediaDetails = {
+  title?: string;
+  speaker?: string;
+  description?: string;
+  posterUrl?: string;
+  embedUrl?: string;
+};
+export function extractPublishedMediaDetails(html: string, originalUrl: string): PublishedMediaDetails {
+  if (!isSafeHttpsMediaUrl(originalUrl) || typeof html !== 'string') return {};
+  const source = new URL(originalUrl);
+  const attribute = (tag: string, name: string) =>
+    tag.match(new RegExp('\\b' + name + '\\s*=\\s*(?:"([^"]*)"|\\x27([^\\x27]*)\\x27)', 'i'))
+      ?.slice(1).find(Boolean) || '';
+  const decode = (value: string) => value
+    .replace(/&#(x[0-9a-f]+|\d+);/gi, (match, number: string) => {
+      const value = number[0].toLowerCase() === 'x'
+        ? Number.parseInt(number.slice(1), 16) : Number(number);
+      return value > 0 && value <= 0x10ffff && !(value >= 0xd800 && value <= 0xdfff)
+        ? String.fromCodePoint(value) : match;
+    })
+    .replace(/&(?:amp|quot|apos|lt|gt|nbsp);/gi, entity =>
+      ({'&amp;':'&','&quot;':'"','&apos;':"'",'&lt;':'<','&gt;':'>','&nbsp;':' '})
+        [entity.toLowerCase() as '&amp;'|'&quot;'|'&apos;'|'&lt;'|'&gt;'|'&nbsp;'] || entity);
+  const clean = (value: string, limit: number) =>
+    decode(value).replace(/<[^>]*>/g,'').replace(/\s+/g,' ').trim().slice(0,limit);
+  const metadata = new Map<string,string>();
+  for (const tag of html.match(/<meta\b[^>]{0,1800}>/gi) || []) {
+    const key = attribute(tag,'property') || attribute(tag,'name');
+    const content = attribute(tag,'content');
+    if (key && content && !metadata.has(key.toLowerCase())) metadata.set(key.toLowerCase(), content);
+  }
+  const first = (...keys: string[]) => keys.map(key=>metadata.get(key)).find(Boolean) || '';
+  const titleTag = html.match(/<title\b[^>]*>([\s\S]{0,500}?)<\/title>/i)?.[1] || '';
+  const title = clean(first('og:title','twitter:title') || titleTag,160);
+  const speaker = clean(first('article:author','author','music:musician','dc.creator'),120);
+  const description = clean(first('og:description','description','twitter:description'),3000);
+  const rawPoster = decode(first('og:image:secure_url','og:image','twitter:image'));
+  let posterUrl = '';
+  if (rawPoster) {
+    try {
+      const candidate = new URL(rawPoster, source).toString();
+      if (isSafeHttpsMediaUrl(candidate)) posterUrl = candidate;
+    } catch { /* ignore invalid publisher image */ }
+  }
+  let embedUrl = '';
+  if (isHost(source.hostname.toLowerCase(), 'audioverse.org')) {
+    const mediaId = source.pathname.match(/\/(?:media|teachings)\/(\d+)(?:\/|$)/i)?.[1];
+    for (const tag of html.match(/<iframe\b[^>]{0,2500}>/gi) || []) {
+      const src = decode(attribute(tag,'src'));
+      if (!src) continue;
+      try {
+        const candidate = new URL(src, source).toString();
+        const approved = parseAudioVerseEmbedCode(candidate);
+        const embeddedId = new URL(approved).pathname.match(/\/embed\/media\/(\d+)(?:\/|$)/i)?.[1];
+        if (mediaId && embeddedId && mediaId !== embeddedId) continue;
+        embedUrl = approved;
+        break;
+      } catch { /* never accept an unrelated iframe */ }
+    }
+  }
+  return {
+    ...(title ? {title}:{}),
+    ...(speaker ? {speaker}:{}),
+    ...(description ? {description}:{}),
+    ...(posterUrl ? {posterUrl}:{}),
+    ...(embedUrl ? {embedUrl}:{}),
+  };
+}
