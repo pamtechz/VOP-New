@@ -119,6 +119,8 @@ class VopApi {
       action('/api/admin/users',{'action':'personalSettings','settings':settings});
   Future<Map<String,dynamic>> accountLifecycle() =>
       _execute('/api/account','GET',null,{'action':'status'});
+  Future<Map<String,dynamic>> exportOwnAccount() =>
+      _execute('/api/account','GET',null,{'action':'export'});
   Future<Map<String,dynamic>> requestAccountDeletion(String confirmation,{String reason=''}) =>
       action('/api/account',{'action':'request-deletion',
         'confirmation':confirmation,'reason':reason});
