@@ -561,9 +561,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
             <section className="vop-personal-card vop-card">
               <h2><Fingerprint size={19}/>{uiT('personal_settings.passkeys_and_device_verification',"Passkeys & device verification")}</h2>
               {!passkeyCapable?<p>{uiT('personal_settings.this_browser_or_connection_does_not_support_secure_passkey_sign_in',"This browser or connection does not support secure passkey sign-in.")}</p>:<>
-                <p>{platformBiometric
-                  ?'Enable a passkey after signing in once. Your device can then verify you using fingerprint, face recognition, PIN or screen lock.'
-                  :'Enable a passkey after signing in once. The available verification method is controlled by your device or passkey provider.'}</p>
+                <p>{platformBiometric?'Use fingerprint, face, PIN or device lock.':'Use a supported passkey provider.'}</p>
                 <small>{uiT('personal_settings.vop_stores_a_public_key_credential_only_biometric_data_remains_on_your_device_and_is_not_u',"VOP stores a public-key credential only. Biometric data remains on your device and is not uploaded to VOP or Firebase.")}</small>
                 <button type="button" className="vop-primary" disabled={passkeyBusy} onClick={()=>void enablePasskey()}>
                   <Fingerprint size={17}/>{passkeyBusy?'Please wait…':'Enable passkey on this device'}
@@ -574,16 +572,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
                     <button type="button" className="vop-secondary danger" disabled={passkeyBusy} onClick={()=>void removePasskey(item)}><Trash2 size={15}/>{uiT('personal_settings.remove',"Remove")}</button>
                   </div>)}
                 </div>}
-                <p style={{marginTop:16,fontSize:13,color:'var(--text-muted,#64748b)'}}>
-                  Looking to update your sign-in password? You can change it anytime in the{' '}
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('account')}
-                    style={{background:'none',border:'none',color:'var(--primary,#1e40af)',textDecoration:'underline',cursor:'pointer',font:'inherit',fontWeight:600,padding:0}}
-                  >
-                    Account tab
-                  </button>.
-                </p>
+                <button type="button" className="vop-secondary" onClick={()=>setActiveTab('account')}>Manage password</button>
               </>}
             </section>
           </div>
