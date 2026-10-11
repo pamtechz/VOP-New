@@ -126,7 +126,8 @@ class VopApi {
   Future<Map<String, dynamic>> action(String path, Map<String, Object?> body) =>
       _execute(path, 'POST', body, null);
 
-  Future<Map<String, dynamic>> bootstrap() => read('bootstrap');
+  Future<Map<String,dynamic>> bootstrap()=>_cachedRead('bootstrap','bootstrap',
+    ()=>read('bootstrap'));
   Future<Map<String,dynamic>> accountProfile() =>
       action('/api/admin/users',{'action':'profile'});
   Future<Map<String,dynamic>> saveProfile(Map<String,dynamic> profile) =>
@@ -218,6 +219,24 @@ class VopApi {
   Future<void> removeOfflineStudy(String kind,String id)=>
     _offline.delete(_uid,kind,id);
   Future<void> clearOfflineStudies()=>_offline.clear(_uid);
+  Future<void> saveQuizDraft(String language,String guideId,String lessonId,
+      String sessionId,Map<String,Object?> answers,
+      {DateTime? expiresAt})async{
+    if(_uid.isEmpty)return;
+    await _offline.save(_uid,'draft',
+      language+'_'+guideId+'_'+lessonId,{
+        'sessionId':sessionId,'answers':answers,
+      },expiresAt:expiresAt,title:'Assessment answers');
+  }
+  Future<Map<String,Object?>> quizDraft(String language,String guideId,
+      String lessonId,String sessionId)async{
+    if(_uid.isEmpty)return {};
+    final payload=await _offline.read(_uid,'draft',
+      language+'_'+guideId+'_'+lessonId);
+    if(payload?['sessionId']!=sessionId)return {};
+    return payload?['answers'] is Map
+      ?Map<String,Object?>.from(payload!['answers'] as Map):{};
+  }
   Future<Map<String,dynamic>> _offlineMutation(String action,
       Map<String,dynamic> body,{DateTime? expiresAt})async{
     try{
@@ -226,6 +245,10 @@ class VopApi {
       return result;
     }catch(error){
       if(!_networkFailure(error)||_uid.isEmpty)rethrow;
+      if(action=='submitQuiz'&&expiresAt==null){
+        throw const VopApiException(
+          'This attempt cannot be saved offline without a verified expiry. Reconnect and retry.');
+      }
       if(expiresAt!=null&&!DateTime.now().toUtc().isBefore(expiresAt)){
         throw const VopApiException(
           'The assessment session has expired. Reconnect to request a new attempt.',
@@ -284,6 +307,7 @@ class VopApi {
     final result=await _offlineMutation('submitQuiz',body,expiresAt:deadline);
     if(result['queued']!=true&&_uid.isNotEmpty){
       await _offline.delete(_uid,'quiz',language+'_'+guideId+'_'+lessonId);
+      await _offline.delete(_uid,'draft',language+'_'+guideId+'_'+lessonId);
     }
     return result;
   }
