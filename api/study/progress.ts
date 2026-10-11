@@ -353,6 +353,42 @@ export default async function handler(
       return res.status(403).json({ error: 'This lesson is not shared with your organization.' });
     }
 
+    // Preserve the guide's prescribed order in the authoritative mutation
+    // endpoints. The Android/web lock icon is UX, not an access-control check.
+    if(action==='startQuiz'||action==='completeLesson'){
+      const published=await guideRef.collection('lessons')
+        .where('published','==',true).limit(120).get();
+      const sequenced=published.docs.filter(doc=>doc.data().archived!==true)
+        .sort((a,b)=>String(a.data().lessonNumber||a.id).localeCompare(
+          String(b.data().lessonNumber||b.id),undefined,{numeric:true}));
+      const currentIndex=sequenced.findIndex(doc=>doc.id===lessonId);
+      if(currentIndex>0){
+        const completedSet=new Set(Array.isArray(userData.progress?.completedLessons)
+          ?userData.progress.completedLessons.map(String):[]);
+        const prior=sequenced.slice(0,currentIndex);
+        const hasTests=prior.some(doc=>doc.data().type==='Test');
+        const attempts=hasTests?await userRef.collection('assessmentAttempts')
+          .where('guideId','==',guideId).limit(300).get():null;
+        const passed=new Set(attempts?.docs.filter(doc=>doc.data().passed===true
+          &&doc.data().creditStatus!=='revoked')
+          .map(doc=>String(doc.data().language||'')+':'+guideId+':'+String(doc.data().lessonId||''))||[]);
+        const ready=prior.every(doc=>{
+          const key=language+':'+guideId+':'+doc.id;
+          return doc.data().type==='Test'?passed.has(key):completedSet.has(key);
+        });
+        if(!ready){
+          if(action==='startQuiz')return res.status(200).json({
+            ok:false,available:false,code:'ASSESSMENT_PREREQUISITE',
+            error:'Complete the preceding lessons and assessments before starting this quiz.',
+          });
+          return res.status(423).json({
+            error:'Complete the preceding lessons and assessments before completing this lesson.',
+            code:'LESSON_LOCKED',
+          });
+        }
+      }
+    }
+
     if (action === 'startQuiz') {
       if (String(lessonData.type ?? '') !== 'Test') {
         return res.status(200).json({
