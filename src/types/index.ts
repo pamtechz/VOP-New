@@ -381,6 +381,7 @@ export interface CurriculumProgram {
 }
 
 export interface DiscoverGuide {
+  sequentialLearning?: boolean;
   learnerEntryMode?: 'lessons'|'sections';
   requiresFinalExam?: boolean;
   ownerOrganizationId?: string;
