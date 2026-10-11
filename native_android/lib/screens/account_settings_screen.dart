@@ -1,6 +1,8 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../core/vop_api.dart';
+import '../core/offline_study.dart';
+import '../core/vop_locale.dart';
 import '../theme/vop_theme.dart';
 import '../widgets/vop_ui.dart';
 
@@ -15,6 +17,8 @@ class AccountSettingsScreen extends StatefulWidget {
   @override State<AccountSettingsScreen> createState()=>_AccountSettingsScreenState();
 }
 class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
+  final offline=OfflineStudyStore();
+  int pendingWrites=0;
   final name=TextEditingController(),phone=TextEditingController(),
     whatsapp=TextEditingController(),address=TextEditingController();
   bool loading=true,saving=false;
@@ -22,7 +26,11 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
   Map<String,dynamic> profile={},preferences={},deletion={};
   List<Map<String,dynamic>> languages=[];
   int page=0;
-  @override void initState(){super.initState();_load();}
+  @override void initState(){super.initState();_load();_refreshPending();}
+  Future<void> _refreshPending()async{
+    final count=await offline.pendingCount();
+    if(mounted)setState(()=>pendingWrites=count);
+  }
   @override void dispose(){
     name.dispose();phone.dispose();whatsapp.dispose();address.dispose();super.dispose();
   }
@@ -71,6 +79,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       final result=await widget.api.savePersonalSettings(preferences);
       preferences=_map(result['settings']);
       VopAppearance.apply(preferences);
+      await VopLocale.load(widget.api,(preferences['uiLocale']??'en').toString());
     },'Personal settings saved for web and Android.');
   }
   Future<void> _perform(Future<void> Function() action,String success)async{
@@ -146,12 +155,15 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       error!=null&&profile.isEmpty
         ?VopEmpty(icon:Icons.wifi_off,message:error!,onRetry:_load)
         :Column(children:[
-          Padding(padding:const EdgeInsets.fromLTRB(14,12,14,3),
-            child:SegmentedButton<int>(segments:const [
-              ButtonSegment(value:0,label:Text('Profile'),icon:Icon(Icons.person_outline)),
-              ButtonSegment(value:1,label:Text('Settings'),icon:Icon(Icons.tune)),
-              ButtonSegment(value:2,label:Text('Security'),icon:Icon(Icons.shield_outlined)),
-            ],selected:{page},onSelectionChanged:(v)=>setState(()=>page=v.first))),
+          Padding(padding:const EdgeInsets.fromLTRB(10,10,10,4),
+            child:LayoutBuilder(builder:(context,constraints)=>
+              SingleChildScrollView(scrollDirection:Axis.horizontal,
+                child:SegmentedButton<int>(showSelectedIcon:false,segments:const [
+                  ButtonSegment(value:0,label:Text('Profile'),icon:Icon(Icons.person_outline)),
+                  ButtonSegment(value:1,label:Text('Settings'),icon:Icon(Icons.tune)),
+                  ButtonSegment(value:2,label:Text('Security'),icon:Icon(Icons.shield_outlined)),
+                ],selected:{page},
+                  onSelectionChanged:(v)=>setState(()=>page=v.first))))),
           if(error!=null)Padding(padding:const EdgeInsets.symmetric(horizontal:18,vertical:5),
             child:Text(error!,style:TextStyle(color:Theme.of(context).colorScheme.error))),
           if(message!=null)Padding(padding:const EdgeInsets.symmetric(horizontal:18,vertical:5),
@@ -230,6 +242,36 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         _switch('notifications','email','Email updates'),
         _switch('notifications','announcements','Announcements'),
         _switch('notifications','certificates','Certificate updates'),
+      ]),
+      _heading('Offline studies','Download lessons before travel, then sync when connected.',
+        Icons.offline_pin_outlined),
+      _group([
+        Text('$pendingWrites pending reading updates on this device.'),
+        const SizedBox(height:9),
+        OutlinedButton.icon(onPressed:saving?null:()async{
+          await _perform(()async{
+            await offline.sync(widget.api);
+            await _refreshPending();
+          },'Online progress sync attempted. Pending writes remain if the network is unavailable.');
+        },icon:const Icon(Icons.sync),label:const Text('Sync offline progress')),
+        const SizedBox(height:7),
+        TextButton.icon(onPressed:saving?null:()async{
+          final agreed=await showDialog<bool>(context:context,
+            builder:(ctx)=>AlertDialog(
+              title:const Text('Delete offline reading copies?'),
+              content:const Text('Saved offline lesson pages will be removed from this device. '
+                'Pending sync operations will remain untouched.'),
+              actions:[
+                TextButton(onPressed:()=>Navigator.pop(ctx,false),
+                  child:const Text('Keep downloads')),
+                FilledButton(onPressed:()=>Navigator.pop(ctx,true),
+                  child:const Text('Delete downloads')),
+              ]));
+          if(agreed==true)await _perform(()async{
+            await offline.clearDownloadedLessons();
+          },'Downloaded lesson pages removed from this device.');
+        },icon:const Icon(Icons.delete_outline),
+          label:const Text('Clear downloaded lesson pages')),
       ]),
       _heading('Study routine','Make learning fit your schedule.',
         Icons.schedule_outlined),
