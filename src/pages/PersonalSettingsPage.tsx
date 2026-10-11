@@ -403,23 +403,12 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
 
   return <div className="vop-personal-settings vop-page-shell">
     <div className="vop-personal-header vop-page-head">
-      <div><p className="vop-kicker">{organizationAccount?'Organization Account':t('account.my_account','My Account')}</p><h1>{organizationAccount?'Personal Settings':t('settings.personal_title','Personal Settings')}</h1><p>{organizationAccount?'Preferences and sign-in security for this organization staff account. These settings are separate from organization-wide configuration.':t('settings.personal_description','These settings apply only to your VOP account.')}</p></div>
+      <div><p className="vop-kicker">{organizationAccount?'Organization Account':t('account.my_account','My Account')}</p><h1>{organizationAccount?'Personal Settings':t('settings.personal_title','Personal Settings')}</h1><p>{organizationAccount?'Personal preferences and sign-in security for this staff account.':t('settings.personal_description','These settings apply only to your VOP account.')}</p></div>
       <div style={{display:'flex',gap:8,alignItems:'center'}}>
-        {isAdmin && (
-          <button
-            className="vop-primary"
-            type="button"
-            onClick={() => {
-              if (currentUser.uid) {
-                try { sessionStorage.setItem('vop-admin-tab-v1:' + currentUser.uid, 'dashboard'); } catch {}
-              }
-              onNavigate ? onNavigate('admin') : onBack();
-            }}
-            title={uiT('personal_settings.open_administration_workspace',"Open administration workspace")}
-          >
-            <ShieldCheck size={14}/> <span>{uiT('personal_settings.admin_operations',"Admin Operations")}</span>
-          </button>
-        )}
+        {isAdmin&&<button type="button" className="vop-secondary" onClick={()=>{
+          try{sessionStorage.setItem('vop-admin-tab-v1:'+currentUser.uid,'dashboard');}catch{}
+          if(onNavigate)onNavigate('admin');else onBack();
+        }}>{uiT('personal_settings.admin_operations','Admin Operations')}</button>}
         <button className="vop-secondary" type="button" onClick={onBack}>{t('common.back','Back')}</button>
       </div>
     </div>
@@ -479,12 +468,8 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
 
             <section className="vop-personal-card vop-card">
               <h2><KeyRound size={19}/> {isGoogleAccount ? 'Set Account Password' : 'Change Password'}</h2>
-              <p>{isGoogleAccount ? 'You signed up with Google. You can set a password to also sign in directly using your email address without requiring a current password.' : 'Update your sign-in password to keep your account protected.'}</p>
-              {isGoogleAccount && (
-                <div className="vop-personal-notice info" role="status">
-                  <span>{uiT('personal_settings.signed_in_via_google_no_current_password_is_required',"Signed in via Google. No current password is required.")}</span>
-                </div>
-              )}
+
+              {isGoogleAccount&&<small>{uiT('personal_settings.signed_in_via_google_no_current_password_is_required','Signed in via Google. No current password is required.')}</small>}
               {passwordMessage && (
                 <div className="vop-personal-notice success" role="status">
                   <CheckCircle size={16} /> <span>{passwordMessage}</span>
