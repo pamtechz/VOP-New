@@ -213,9 +213,18 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
   }, []);
 
   const settingsChanges=savedSettings?Object.fromEntries(
-    (Object.keys(settings) as Array<keyof PersonalSettings>)
-      .filter(key=>JSON.stringify(settings[key])!==JSON.stringify(savedSettings[key]))
-      .map(key=>[key,settings[key]]),
+    (Object.keys(settings) as Array<keyof PersonalSettings>).flatMap(key=>{
+      const value=settings[key],previous=savedSettings[key];
+      if(JSON.stringify(value)===JSON.stringify(previous))return [];
+      if(value&&typeof value==='object'&&previous&&typeof previous==='object'){
+        const updated=Object.fromEntries(Object.keys(value)
+          .filter(child=>JSON.stringify((value as Record<string,unknown>)[child])
+            !==JSON.stringify((previous as Record<string,unknown>)[child]))
+          .map(child=>[child,(value as Record<string,unknown>)[child]]));
+        return [[key,updated]];
+      }
+      return [[key,value]];
+    }),
   ) as PersonalSettings:{};
   const settingsDirty=Object.keys(settingsChanges).length>0;
   const retrySettings=async()=>{
