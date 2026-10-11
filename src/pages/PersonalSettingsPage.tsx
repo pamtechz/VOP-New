@@ -335,26 +335,6 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
         {activeTab === 'account' && (
           <div className="vop-personal-tab-pane">
             <section className="vop-personal-card vop-card">
-              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:8}}>
-                <h2><UserRound size={19}/>{uiT('personal_settings.account',"Account")}</h2>
-                <span className={'vop-chip ' + (currentUser.accountType === 'organization' || currentUser.organizationId ? 'vop-account-type-org' : 'vop-account-type-personal')} style={{fontSize:11.5,fontWeight:750,padding:'4px 10px',borderRadius:6}}>
-                  {currentUser.accountType === 'organization' || currentUser.organizationId ? 'Organisation Account' : 'Personal Account'}
-                </span>
-              </div>
-              <p>{profile.displayName || currentUser.displayName} · {profile.email || currentUser.email}</p>
-              {currentUser.accountType === 'organization' || currentUser.organizationId ? (
-                <div style={{margin:'8px 0',padding:'10px 12px',borderRadius:8,background:'var(--theme-surface-soft,#f0f5ff)',border:'1px solid #c7d9fc',fontSize:12,color:'#1e3a8a'}}>
-                  <strong>{uiT('personal_settings.organisation_account_status',"Organisation Account Status:")}</strong> A personal account can manage an organisation account. Immediately an account has been assigned to an organisation, it assumes the organisation account type while retaining your personal identity and credentials.
-                </div>
-              ) : (
-                <div style={{margin:'8px 0',padding:'10px 12px',borderRadius:8,background:'var(--theme-surface-soft,#f8fafc)',border:'1px solid #e2e8f0',fontSize:12,color:'#475569'}}>
-                  <strong>{uiT('personal_settings.personal_account_status',"Personal Account Status:")}</strong> Personal accounts are separate from organisation accounts. If your account is assigned to an organisation, it will immediately assume the Organisation Account type.
-                </div>
-              )}
-              <small>{organizationAccount?'Your organization assignment and permissions are managed separately and cannot be changed here.':'Your role, organization, permissions and learning records are managed separately and cannot be changed here.'}</small>
-            </section>
-
-            <section className="vop-personal-card vop-card">
               <h2><UserRound size={19}/>{t('account.profile','My profile')}</h2>
               <div className="vop-personal-profile-summary">
                 {profileDraft.photoURL && /^https:\/\//i.test(profileDraft.photoURL)
