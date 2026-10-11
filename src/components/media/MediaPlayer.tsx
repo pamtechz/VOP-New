@@ -1,11 +1,14 @@
 import React from 'react';
 import { resolveMediaSource } from '../../../shared/mediaSources';
+import { ProviderPlaybackNotice } from './ProviderPlaybackNotice';
 
 interface Props { src?: string; title?: string; kind?: 'audio' | 'video' | 'any' }
 export function MediaPlayer({ src, title = 'Media', kind = 'any' }: Props) {
   const source = resolveMediaSource(src);
   if (!src) return null;
   if (!source) return <p role="alert">This source is not an approved playable media URL. Ask the publisher for an official HTTPS embed or direct media file.</p>;
+  if (source.provider === 'AudioVerse') return <ProviderPlaybackNotice
+    provider="AudioVerse" title={title} sourceUrl={source.originalUrl} />;
   if (source.kind === 'external') return <p><a href={source.url} target="_blank" rel="noopener noreferrer">Open {source.provider} content on its original site</a> (no public embedded media is available).</p>;
   if (kind === 'audio' && source.kind === 'direct-video') return <p>Choose an audio source for this field.</p>;
   if (kind === 'video' && source.kind === 'direct-audio') return <p>Choose a video source for this field.</p>;
