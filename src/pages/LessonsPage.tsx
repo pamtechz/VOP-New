@@ -89,6 +89,12 @@ export const LessonsPage: React.FC<Props> = ({
   const programGuides=activeProgram
     ?(availableProgramGuideIds.get(activeProgram.id)||[]).flatMap(id=>guides.filter(guide=>guide.id===id))
     :[];
+  const canOpen=(guide:DiscoverGuide,lesson:Lesson)=>{
+    const ordered=orderedLessons(guide);
+    const pos=ordered.findIndex(item=>item.id===lesson.id);
+    return pos<=0||ordered.slice(0,pos).every(previous=>
+      lessonIsComplete(guide,previous,currentUser,settings.quizPassThreshold));
+  };
   const status=(guide:DiscoverGuide,lesson:Lesson)=>{
     const done=lessonIsComplete(guide,lesson,currentUser,settings.quizPassThreshold);
     if(lesson.type==='Lesson') return {label:done?'Completed':'Not started',done};
@@ -225,6 +231,7 @@ export const LessonsPage: React.FC<Props> = ({
       {refreshError&&<div className="vop-lessons-refresh-error" role="alert">{refreshError}</div>}
       {standaloneEntries.length ? <div className={'vop-lessons-grid'+(refreshing?' vop-refreshing vop-shimmer-overlay':'')}>{standaloneEntries.map(({guide,lesson})=>{
         const state=status(guide,lesson);
+        const locked=!canOpen(guide,lesson)&&!state.done;
         const attempted=lesson.type==='Test'&&lessonScoreForDisplay(guide,lesson,currentUser)!==undefined;
         const isOrgLesson=Boolean(currentUser.organizationId && (
           lesson.ownerOrganizationId===currentUser.organizationId ||
@@ -235,7 +242,7 @@ export const LessonsPage: React.FC<Props> = ({
         const hasBookmark = Boolean(lesson.type === 'Lesson' && bookmark?.hasBookmark && !bookmark.isCompleted);
         return <article className="vop-material-card vop-lesson-card" key={guide.id+':'+guide.language+':'+lesson.id}>
           <div className="vop-lesson-card-meta"><span>{guide.language.toUpperCase()} · {lesson.type==='Test'?'Assessment':'Lesson'} {lesson.lessonNumber}{scopeTag ? ` · ${scopeTag}` : ''}</span>
-            <span className={state.done?'vop-lesson-status completed':'vop-lesson-status'}>{state.done&&<CheckCircle2 size={13}/>} {state.label}</span>
+            <span className={state.done?'vop-lesson-status completed':'vop-lesson-status'}>{state.done&&<CheckCircle2 size={13}/>} {locked?t('lessons.locked','Locked · complete previous learning'):state.label}</span>
           </div>
           <div className="vop-lesson-card-body">
             <h2>{lesson.title}</h2>
@@ -265,7 +272,7 @@ export const LessonsPage: React.FC<Props> = ({
                 <button
                   type="button"
                   className="vop-lesson-open vop-lesson-resume-btn"
-                  onClick={()=>onOpenLesson(guide, lesson, bookmark.pageIndex)}
+                  onClick={()=>onOpenLesson(guide, lesson, bookmark.pageIndex)} disabled={locked}
                   title={`Resume reading at Page ${bookmark.pageNumber}`}
                 >
                   <Bookmark size={13} fill="currentColor"/>
@@ -275,14 +282,14 @@ export const LessonsPage: React.FC<Props> = ({
                 <button
                   type="button"
                   className="vop-lesson-restart-btn"
-                  onClick={()=>onOpenLesson(guide, lesson, 0)}
+                  onClick={()=>onOpenLesson(guide, lesson, 0)} disabled={locked}
                   title="Start from beginning (Page 1)"
                 >
                   Page 1
                 </button>
               </div>
             ) : (
-              <button type="button" className="vop-lesson-open" onClick={()=>onOpenLesson(guide,lesson)}>
+              <button type="button" className="vop-lesson-open" disabled={locked} aria-disabled={locked} onClick={()=>onOpenLesson(guide,lesson)}>
                 {lesson.type==='Test'
                   ?attempted?t('guide.retake_quiz','Retake quiz'):t('lessons.take_assessment','Take assessment')
                   :t('lessons.open_lesson','Open lesson')} <ChevronRight size={16}/>
