@@ -66,7 +66,14 @@ export default async function handler(req: Request, res: Response) {
       videoUrl:actualField === 'videoUrl' ? detected.sourceUrl : '',
       streamUrl:actualField === 'streamUrl' ? detected.sourceUrl : '',
     };
-    if (!String(incoming.title || '').trim()) throw new Error('Radio title is required.');
+    const title=String(incoming.title || inspected.title || '').trim();
+    if (!title) throw new Error('Add a title. This publisher did not expose one automatically.');
+    const previous=existing.data();
+    const sameSource=String(previous?.mediaUrl || '').trim() === detected.sourceUrl;
+    const approvedEmbed=detected.provider==='AudioVerse'
+      ? parseAudioVerseEmbedCode(inspected.embedUrl ||
+          (sameSource ? previous?.audioEmbedUrl : '') || detected.playbackUrl)
+      : '';
 
     if (existing.exists) {
       await requirePermission(ctx, 'radio', 'update');
@@ -80,16 +87,14 @@ export default async function handler(req: Request, res: Response) {
     // An organisation controls its own channel; public sharing is opt-in.
     // Preserve existing ownership/scope when editing older canonical broadcasts.
     const savedData = {
-      title: String(incoming.title||'').trim().slice(0,160),
-      speaker: String(incoming.speaker||'').trim().slice(0,120),
-      series: String(incoming.series||'').trim().slice(0,120),
-      description: String(incoming.description||'').trim().slice(0,3000),
+      title: title.slice(0,160),
+      speaker: String(incoming.speaker || inspected.speaker || '').trim().slice(0,120),
+      series: String(incoming.series || '').trim().slice(0,120),
+      description: String(incoming.description || inspected.description || '').trim().slice(0,3000),
       ...normalizedMedia,
-      audioEmbedUrl: detected.provider==='AudioVerse'
-        ?parseAudioVerseEmbedCode(incoming.audioEmbedCode || incoming.audioEmbedUrl ||
-          existing.data()?.audioEmbedUrl || '')
-        :'',
-      posterUrl: validUrl(incoming.posterUrl) ? String(incoming.posterUrl).trim() : '',
+      audioEmbedUrl: approvedEmbed,
+      posterUrl: validUrl(incoming.posterUrl) ? String(incoming.posterUrl).trim()
+        : validUrl(inspected.posterUrl) ? inspected.posterUrl : '',
       broadcastTime: String(incoming.broadcastTime||'').trim().slice(0,50),
       id: documentId,
       published,

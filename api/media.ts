@@ -2,7 +2,10 @@ import { lookup } from 'node:dns/promises';
 import { request as httpsRequest } from 'node:https';
 import { authenticateTenant } from '../server/tenant.js';
 import { requirePermission } from '../server/permissions.js';
-import { isSafeHttpsMediaUrl, resolveMediaSource } from '../shared/mediaSources.js';
+import { isSafeHttpsMediaUrl, resolveMediaSource, extractPublishedMediaDetails } from '../shared/mediaSources.js';
+import type { ResolvedMedia, PublishedMediaDetails } from '../shared/mediaSources.js';
+
+type InspectedMedia = ResolvedMedia & PublishedMediaDetails;
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -37,7 +40,7 @@ function publicAddress(ip: string): boolean {
     && !lower.startsWith('2001:0:') && !lower.startsWith('2002:')
     && !lower.includes('::ffff:');
 }
-async function readHeadPage(page: URL) {
+async function readHeadPage(page: URL, timeoutMs = 5000) {
   const addresses = await lookup(page.hostname, { all:true });
   // Only public addresses are eligible. The request is pinned to the checked
   // address, avoiding a DNS-rebinding window between validation and connect.
@@ -54,7 +57,7 @@ async function readHeadPage(page: URL) {
       else resolve(html || '');
     };
     const req = httpsRequest(page, {
-      method:'GET', timeout:5000, headers:{Accept:'text/html'},
+      method:'GET', timeout:timeoutMs, headers:{Accept:'text/html'},
       lookup: (_host, _options, callback) => callback(null, pinned.address, pinned.family),
     }, response => {
       const status = response.statusCode || 0;
@@ -87,7 +90,8 @@ async function readHeadPage(page: URL) {
     req.end();
   });
 }
-function extractPublicMedia(html: string, source: URL) {
+function extractPublicMedia(html: string, source: URL): InspectedMedia {
+  const details = extractPublishedMediaDetails(html, source.toString());
   const metas = html.match(/<meta\b[^>]{0,1800}>/gi) || [];
   const urls: string[] = [];
   const keys = new Set(['og:video:secure_url','og:video:url','og:video','og:audio:secure_url','og:audio:url','og:audio','twitter:player:stream']);
@@ -106,12 +110,20 @@ function extractPublicMedia(html: string, source: URL) {
     const src = attr(tag, 'src').replace(/&amp;/g, '&').replace(/&#38;/g, '&');
     if (src) urls.push(src);
   }
+  for (const tag of html.match(/<iframe\b[^>]{0,1800}>/gi) || []) {
+    const src = attr(tag, 'src').replace(/&amp;/g, '&').replace(/&#38;/g, '&');
+    if (!src) continue;
+    try {
+      const candidate = new URL(src, source).toString();
+      if (resolveMediaSource(candidate)?.kind === 'embed') urls.push(candidate);
+    } catch { /* ignore invalid publisher iframe */ }
+  }
   for (const candidate of urls) {
     try {
       const url = new URL(candidate, source);
       if (!isSafeHttpsMediaUrl(url.toString())) continue;
       const media = resolveMediaSource(url.toString());
-      if (media && media.kind !== 'external') return media;
+      if (media && media.kind !== 'external') return {...media, ...details};
     } catch { /* ignore malformed metadata */ }
   }
   throw new Error('No publicly playable media was exposed by this page. Use an official embed or direct media link; private content cannot be extracted.');
@@ -143,11 +155,23 @@ async function probeMediaContentType(source: URL): Promise<string> {
     req.end();
   });
 }
-export async function identifyPublicMedia(source: string) {
+export async function identifyPublicMedia(source: string): Promise<InspectedMedia> {
   if(!isSafeHttpsMediaUrl(source))throw new Error('Use a safe public HTTPS media link.');
   const known=resolveMediaSource(source);
-  if(known&&known.kind!=='external')return known;
   const parsed=new URL(source);
+  if(known&&known.kind!=='external'){
+    if(!['AudioVerse','YouTube','Vimeo','SoundCloud'].includes(known.provider))return known;
+    let details:PublishedMediaDetails={};
+    const host=parsed.hostname.toLowerCase();
+    const metadataHost=['audioverse.org','youtube.com','youtu.be','vimeo.com','soundcloud.com']
+      .some(domain=>host===domain||host.endsWith('.'+domain));
+    if(metadataHost && !/\/(?:embed|player)\//i.test(parsed.pathname)){
+      try { details=extractPublishedMediaDetails(await readHeadPage(parsed,3200),source); }
+      catch { /* official player URL is still usable without optional metadata */ }
+    }
+    return {...known,...details,...(known.provider==='AudioVerse'
+      ? {embedUrl:details.embedUrl||known.url}: {})};
+  }
   // Try the original URL's Content-Type before HTML page parsing. Only HEAD
   // requests are permitted to arbitrary public hosts.
   let headError:Error|null=null;

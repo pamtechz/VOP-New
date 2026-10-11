@@ -1450,3 +1450,13 @@ html[data-vop-reduced-motion="true"] *::after {
   scroll-behavior: auto !important;
   transition-duration: .01ms !important;
 }
+
+
+.vop-radio-advanced-options{border:1px solid var(--border-color,#dce5ef);border-radius:12px;padding:0 13px;background:var(--bg-elevated,#f8fafc);margin:8px 0 12px}
+.vop-radio-advanced-options summary{cursor:pointer;list-style-position:inside;padding:12px 0;color:var(--text-primary,#173a64);font-weight:700;font-size:12px}
+.vop-radio-advanced-options[open]{padding-bottom:12px}
+.vop-radio-advanced-options summary:focus-visible{outline:2px solid var(--primary,#1967d2);outline-offset:3px}
+.vop-radio-editor-body .vop-radio-admin-preview-frame{height:220px}
+.vop-radio-editor-body .vop-radio-admin-preview-media{max-height:220px}
+.vop-radio-editor-body .vop-radio-admin-preview-audio{margin:10px 0}
+@media(max-width:520px){.vop-radio-editor-body .vop-radio-admin-preview-frame{height:190px}}

@@ -16,7 +16,7 @@ import { getStoredAutoLocalization, saveAutoLocalization } from '../services/sto
 import { saveRadioAdminRecord, deleteRadioAdminRecord } from '../services/radioAdmin';
 import { isEnglishLocale } from '../../shared/locales';
 import { getUiLocale, translationSourceLabel, getTranslation } from '../services/i18n';
-import { isSafeHttpsMediaUrl, identifyRadioMedia, resolveMediaSource } from '../../shared/mediaSources';
+import { isSafeHttpsMediaUrl, identifyRadioMedia, resolveMediaSource, parseAudioVerseEmbedCode } from '../../shared/mediaSources';
 import { MediaPlayer } from '../components/media/MediaPlayer';
 import { ModalLayer } from '../components/layout/ModalLayer';
 import { appConfirm } from '../components/layout/AppDialog';
@@ -129,7 +129,7 @@ function blankForm(kind: ManagedAdminCollection): FormState {
       return { name: '', category: '', author: '', description: '', imageUrl: '', downloadUrl: '', published: false };
     case 'radio':
       return { title:'', speaker:'', series:'', mediaUrl:'', mediaType:'',
-        mediaProvider:'', audioEmbedCode:'', audioUrl:'',videoUrl:'',streamUrl:'',posterUrl:'',
+        mediaProvider:'', audioEmbedUrl:'', audioUrl:'',videoUrl:'',streamUrl:'',posterUrl:'',
         sharingScope:'organization',description:'',published:false };
     case 'unions':
       return { name: '', code: '', divisionName: '', directorName: '', contactEmail: '', contactPhone: '', headquarters: '' };
@@ -726,21 +726,20 @@ function Fields({kind,form,setForm,records}:{kind:Exclude<ManagedAdminCollection
       return <div className="vop-form-grid" style={{gridTemplateColumns:'1fr'}}>{field('name','Name *')}{field('category','Category')}{field('author','Author')}{area('description','Description *')}{field('imageUrl','Image URL')}{field('downloadUrl','Download URL','url')}{published}</div>;
     case 'radio':
       return <div className="vop-form-grid" style={{gridTemplateColumns:'1fr'}}>
-        {field('title','Title *')}{field('speaker','Speaker')}{field('series','Series')}
-        <div className="vop-radio-admin-note" role="status">
-          <strong>Automatic media detection:</strong>{' '}
-          {String(form.mediaProvider||'').trim()
-            ? String(form.mediaProvider)+' · '+String(form.mediaType||'').toUpperCase()
-            : 'Paste a public link above. VOP identifies the provider and file format automatically.'}
-          {String(form.mediaUrl||'')&&<div style={{overflowWrap:'anywhere'}}>{String(form.mediaUrl)}</div>}
-        </div>
-        {area('audioEmbedCode','AudioVerse Audio Embed Code (optional)')}
-        {field('posterUrl','Poster image (optional)','url')}
-        {select('sharingScope','Audience',[
-          {value:'organization',label:'My organisation'},
-          {value:'shared',label:'Shared with VOP'},
-        ])}
-        {area('description','Description')}{published}
+        {field('title','Title *')}
+        {String(form.mediaUrl||'') && <RadioAdminMediaPreview record={{...form,id:''}}/>}
+        <details className="vop-radio-advanced-options">
+          <summary>Programme details and visibility</summary>
+          {field('speaker','Speaker')}
+          {field('series','Series')}
+          {field('posterUrl','Cover image URL','url')}
+          {select('sharingScope','Audience',[
+            {value:'organization',label:'My organisation'},
+            {value:'shared',label:'Shared with VOP'},
+          ])}
+          {area('description','Description')}
+        </details>
+        {published}
       </div>;
     case 'unions':
       return <div className="vop-form-grid" style={{gridTemplateColumns:'1fr'}}>{field('name','Name *')}{field('code','Code *')}{field('divisionName','Division')}{field('directorName','Director')}{field('contactEmail','Email','email')}{field('contactPhone','Phone')}{field('headquarters','Headquarters')}</div>;
@@ -880,7 +879,16 @@ function RadioAdminMediaPreview({record}: {record: AdminRecord}) {
   }
 
   if (provider === 'AudioVerse') {
-    return <MediaPlayer src={source} title={String(record.title || 'AudioVerse radio content')} />;
+    let approved = '';
+    try { approved = parseAudioVerseEmbedCode(record.audioEmbedUrl); }
+    catch { /* ignore an invalid legacy embed */ }
+    return approved
+      ? <iframe className="vop-radio-admin-preview-frame" src={approved}
+          title={String(record.title || 'AudioVerse content')}
+          sandbox="allow-scripts allow-same-origin allow-presentation allow-popups"
+          allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen
+          referrerPolicy="strict-origin-when-cross-origin" />
+      : <MediaPlayer src={source} title={String(record.title || 'AudioVerse content')} />;
   }
 
   if (provider === 'Video' || record.mediaType === 'video' || record.mediaType === 'stream') {
@@ -903,7 +911,6 @@ function RadioAdminDashboard({
 }) {
   const [tab, setTab] = useState<'content'|'live'|'audio'|'video'|'playlists'|'schedule'|'analytics'|'settings'>('content');
   const [search, setSearch] = useState('');
-  const [sourceMode, setSourceMode] = useState<'stream'|'youtube'|'audioverse'>('stream');
   const [importUrl, setImportUrl] = useState('');
   const [importBusy, setImportBusy] = useState(false);
   const detectSequence = useRef(0);
@@ -922,21 +929,28 @@ function RadioAdminDashboard({
       });
       const data=await response.json().catch(()=>({})) as {
         error?:string;media?:{kind:'direct-audio'|'direct-video'|'embed'|'external';
-          provider:string;url:string;originalUrl:string};
+          provider:string;url:string;originalUrl:string;title?:string;speaker?:string;
+          description?:string;posterUrl?:string;embedUrl?:string};
       };
       if(requestId!==detectSequence.current)return;
       if(!response.ok||!data.media)throw new Error(data.error||'This link does not expose playable public media.');
-      const detection=identifyRadioMedia(data.media);
+      const media=data.media;
+      const detection=identifyRadioMedia(media);
       setForm(previous=>({
         ...previous,mediaUrl:detection.sourceUrl,mediaType:detection.mediaType,
         mediaProvider:detection.provider,
+        audioEmbedUrl:detection.provider==='AudioVerse'?String(media.embedUrl||detection.playbackUrl):'',
+        title:String(previous.title||media.title||''),
+        speaker:String(previous.speaker||media.speaker||''),
+        description:String(previous.description||media.description||''),
+        posterUrl:String(previous.posterUrl||media.posterUrl||''),
         audioUrl:detection.field==='audioUrl'?detection.sourceUrl:'',
         videoUrl:detection.field==='videoUrl'?detection.sourceUrl:'',
         streamUrl:detection.field==='streamUrl'?detection.sourceUrl:'',
       }));
     }catch(reason){
       if(requestId===detectSequence.current){
-        setForm(previous=>({...previous,mediaUrl:'',mediaType:'',mediaProvider:''}));
+        setForm(previous=>({...previous,mediaUrl:'',mediaType:'',mediaProvider:'',audioEmbedUrl:''}));
         setError(reason instanceof Error?reason.message:'Could not identify this media URL.');
       }
     }finally{if(requestId===detectSequence.current)setImportBusy(false);}
@@ -957,8 +971,8 @@ function RadioAdminDashboard({
   const [playlistPublished, setPlaylistPublished] = useState(false);
   const [playlistItems, setPlaylistItems] = useState<string[]>([]);
   const [playlistSaving, setPlaylistSaving] = useState(false);
-  const startNewEditor = () => { if (!canCreate) { setError('You do not have permission to create radio content.'); return; } detectSequence.current++; setMessage(''); setError(''); setImportUrl(''); setForm(previous=>({...previous,mediaUrl:'',mediaProvider:'',mediaType:''})); openNew(); setEditorOpen(true); };
-  const startEditEditor = (item: AdminRecord) => { detectSequence.current++; setMessage(''); setError(''); setImportUrl(String(item.mediaUrl||item.videoUrl||item.audioUrl||item.streamUrl||'')); edit(item); setForm(previous=>({...previous,audioEmbedCode:String(item.audioEmbedUrl||'')})); setEditorOpen(true); };
+  const startNewEditor = () => { if (!canCreate) { setError('You do not have permission to create radio content.'); return; } detectSequence.current++; setMessage(''); setError(''); setImportUrl(''); openNew(); setForm(blankForm('radio')); setEditorOpen(true); };
+  const startEditEditor = (item: AdminRecord) => { detectSequence.current++; setMessage(''); setError(''); setImportUrl(String(item.mediaUrl||item.videoUrl||item.audioUrl||item.streamUrl||'')); edit(item); setForm(previous=>({...previous,audioEmbedUrl:String(item.audioEmbedUrl||'')})); setEditorOpen(true); };
   useEffect(() => { if (editorOpen && message) setEditorOpen(false); }, [editorOpen, message]);
 
   const live = records.filter(item => Boolean(item.streamUrl) || item.mediaType === 'stream' || radioProvider(item) === 'Stream');
@@ -1107,7 +1121,7 @@ function RadioAdminDashboard({
       </section>}
 
       {tab==='settings'&&<section className="vop-studio-panel">
-        <div className="vop-studio-settings-card"><Settings size={30}/><div><strong>Provider-aware playback</strong><p>YouTube uses the YouTube IFrame player; AudioVerse restricts third-party iframes, so content opens on its original site; direct HTTPS audio/video uses the VOP player. Provider credentials and secrets remain server-side.</p></div></div>
+        <div className="vop-studio-settings-card"><Settings size={30}/><div><strong>Provider-aware playback</strong><p>YouTube uses the YouTube IFrame player; official provider embeds are used when permitted; direct HTTPS audio/video uses the VOP player. Provider credentials and secrets remain server-side.</p></div></div>
       </section>}
 
       {error&&<div className="vop-radio-admin-alert error">{error}<button type="button" onClick={()=>setError('')}>×</button></div>}
@@ -1116,7 +1130,7 @@ function RadioAdminDashboard({
         <form className="vop-radio-editor-modal" onSubmit={submit}>
           <div className="vop-radio-editor-head"><div><span>VOP Media Studio</span><h2>{editingId?'Edit content':'Create content'}</h2><p>Add a live stream, video, audio programme or trusted public media source.</p></div><button type="button" onClick={()=>setEditorOpen(false)}>×</button></div>
           <div className="vop-radio-editor-body">
-            <div className="vop-field"><label htmlFor="vop-radio-source-url">Audio / video / live stream URL *</label><input id="vop-radio-source-url" type="url" value={importUrl} onChange={e=>{detectSequence.current++;setImportBusy(false);setImportUrl(e.target.value);setForm(previous=>({...previous,mediaUrl:'',mediaType:'',mediaProvider:''}));}} placeholder="Paste any public playable HTTPS media link" autoComplete="url"/><small role="status">{importBusy?'Identifying provider and media type…':String(form.mediaProvider||'')?'Detected '+String(form.mediaProvider)+' · '+String(form.mediaType||''): 'Detection starts automatically after pasting a link.'}</small><button className="vop-secondary" type="button" disabled={importBusy||!isSafeHttpsMediaUrl(importUrl)} onClick={()=>void importRadioSource()}>{importBusy?'Checking…':'Recheck link'}</button></div>
+            <div className="vop-field"><label htmlFor="vop-radio-source-url">Audio / video / live stream URL *</label><input id="vop-radio-source-url" type="url" value={importUrl} onChange={e=>{detectSequence.current++;setImportBusy(false);setImportUrl(e.target.value);setForm(previous=>({...previous,mediaUrl:'',mediaType:'',mediaProvider:'',audioEmbedUrl:''}));}} placeholder="Paste any public playable HTTPS media link" autoComplete="url"/><small role="status">{importBusy?'Identifying provider and media type…':String(form.mediaProvider||'')?'Detected '+String(form.mediaProvider)+' · '+String(form.mediaType||''): 'Detection starts automatically after pasting a link.'}</small><button className="vop-secondary" type="button" disabled={importBusy||!isSafeHttpsMediaUrl(importUrl)} onClick={()=>void importRadioSource()}>{importBusy?'Checking…':'Recheck link'}</button></div>
             <Fields kind="radio" form={form} setForm={setForm} records={records}/>
           </div>
           <footer><button type="button" className="vop-secondary" onClick={()=>setEditorOpen(false)}>Cancel</button><button type="submit" className="vop-primary" disabled={saving||importBusy||!String(form.mediaUrl||'').trim()}><Save size={16}/>{saving?'Saving…':editingId?'Save changes':'Save content'}</button></footer>
