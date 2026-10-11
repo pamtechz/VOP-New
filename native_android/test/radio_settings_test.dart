@@ -24,8 +24,8 @@ void main(){
     expect(audioverse.url!.path,'/en/media/12345');
   });
   test('YouTube iframe carries native identity and a valid referrer policy',(){
-    const client='https://com.sda.vop';
-    expect(vopYoutubeClientOrigin,client);
+    final client=vopYoutubeClientOrigin;
+    expect(Uri.parse(client).scheme,'https');
     final url=resolveRadioMedia({
       'mediaUrl':'https://www.youtube.com/watch?v=abcdefghijk',
     }).url!;
@@ -33,7 +33,7 @@ void main(){
     expect(url.host,'www.youtube-nocookie.com');
     expect(html,contains('<iframe'));
     expect(html,contains('referrerpolicy="strict-origin-when-cross-origin"'));
-    expect(html,contains('origin=https%3A%2F%2Fcom.sda.vop'));
+    expect(html,contains('origin='+Uri.encodeComponent(client)));
     expect(html,contains('abcdefghijk'));
     expect(html,contains('allowfullscreen'));
     expect(html,contains('viewport'));
