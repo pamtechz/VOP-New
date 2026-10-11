@@ -82,7 +82,6 @@ export default async function handler(req: Request, res: Response) {
       posterUrl: validUrl(incoming.posterUrl) ? String(incoming.posterUrl).trim() : '',
       broadcastTime: String(incoming.broadcastTime||'').trim().slice(0,50),
       id: documentId,
-      title: String(incoming.title).trim(),
       published,
       organizationId: String(existing.data()?.organizationId||organizationId),
       ownerOrganizationId: existing.data()?.ownerOrganizationId || (ctx.tenantType === 'organization' ? ctx.organizationId : ''),
