@@ -44,6 +44,20 @@ class _OfflineDownloadsScreenState extends State<OfflineDownloadsScreen> {
     await OfflineStudy.instance.clearDownloads();
     if(mounted)setState(refresh);
   }
+  Future<void> _clearPending()async{
+    final accepted=await showDialog<bool>(context:context,
+      builder:(ctx)=>AlertDialog(title:const Text('Discard unsent changes?'),
+        content:const Text('Unsent reading progress and assessment answers will be lost.'),
+        actions:[
+          TextButton(onPressed:()=>Navigator.pop(ctx,false),
+            child:const Text('Keep changes')),
+          FilledButton(onPressed:()=>Navigator.pop(ctx,true),
+            child:const Text('Discard')),
+        ]));
+    if(accepted!=true)return;
+    await OfflineStudy.instance.clearPending();
+    if(mounted)setState(refresh);
+  }
   void _open(Map<String,dynamic> entry){
     final id=(entry['lessonId']??'').toString(),
       guideId=(entry['guideId']??'').toString(),
@@ -78,6 +92,11 @@ class _OfflineDownloadsScreenState extends State<OfflineDownloadsScreen> {
                   onPressed:syncing?null:_sync,
                   child:Text(syncing?'Syncing…':'Sync')),
               ]))),
+            if(pending>0)Align(alignment:Alignment.centerRight,
+              child:TextButton.icon(
+                onPressed:_clearPending,
+                icon:const Icon(Icons.delete_sweep_outlined,size:18),
+                label:const Text('Discard unsent changes'))),
             const SizedBox(height:17),
             VopSectionTitle('Downloaded lessons and quizzes',
               subtitle:'${items.length} available on this device'),
