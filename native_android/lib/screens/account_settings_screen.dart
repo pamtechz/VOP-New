@@ -23,7 +23,9 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     bio=TextEditingController(),photoUrl=TextEditingController();
   bool loading=true,saving=false;
   String? error,message;
-  Map<String,dynamic> profile={},preferences={},deletion={},security={},notificationCapabilities={};
+  Map<String,dynamic> profile={},preferences={},savedPreferences={},deletion={},security={},notificationCapabilities={};
+  bool preferencesReady=false;
+  String? settingsLoadError;
   bool notificationStatusLoaded=false;
   List<Map<String,dynamic>> languages=[];
   int page=0;
@@ -37,16 +39,23 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     try{
       final results=await Future.wait([
         widget.api.accountProfile(),
-        widget.api.personalSettings(),
+        widget.api.personalSettings().catchError((Object problem)=>
+          <String,dynamic>{'settings':<String,dynamic>{},'settingsUnavailable':true,
+            'message':'$problem'}),
         widget.api.supportedLanguages().catchError(
           (Object _) => <String,dynamic>{'items':<dynamic>[]}),
       ]);
       final p=_map(results[0]['profile']);
       final settings=_map(results[1]['settings']);
+      final settingsAvailable=results[1]['settingsUnavailable']!=true;
       final supported=_rows(results[2]['items']);
       if(!mounted)return;
       setState((){
-        profile=p;preferences=settings;languages=supported;
+        profile=p;preferences=settings;savedPreferences=Map<String,dynamic>.from(settings);
+        preferencesReady=settingsAvailable;
+        settingsLoadError=settingsAvailable?null:
+          'Personal preferences could not be loaded. Reload before making changes.';
+        languages=supported;
         name.text=(p['displayName']??'').toString();
         phone.text=(p['phoneNumber']??'').toString();
         whatsapp.text=(p['whatsappNumber']??'').toString();
@@ -55,7 +64,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         photoUrl.text=(p['photoURL']??'').toString();
         loading=false;
       });
-      VopAppearance.apply(settings);
+      if(settingsAvailable)VopAppearance.apply(settings);
       widget.api.accountLifecycle().then((r){
         if(mounted)setState(()=>deletion=r);
       }).catchError((Object ignored){});
@@ -95,10 +104,23 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       profile=_map(result['profile']);
     },'Profile updated for web and Android.');
   }
+  Map<String,dynamic> _settingsDelta(){
+    final changes=<String,dynamic>{};
+    for(final key in preferences.keys){
+      if(jsonEncode(preferences[key])!=jsonEncode(savedPreferences[key])){
+        changes[key]=preferences[key];
+      }
+    }
+    return changes;
+  }
   Future<void> _saveSettings()async{
+    if(!preferencesReady)return;
+    final changes=_settingsDelta();
+    if(changes.isEmpty)return;
     await _perform(()async{
-      final result=await widget.api.savePersonalSettings(preferences);
+      final result=await widget.api.savePersonalSettings(changes);
       preferences=_map(result['settings']);
+      savedPreferences=Map<String,dynamic>.from(preferences);
       VopAppearance.apply(preferences);
     },'Personal settings saved for web and Android.');
   }
@@ -249,6 +271,14 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
           (lang['nativeName']??lang['code']).toString()))),
     ];
     return [
+      if(settingsLoadError!=null)...[
+        Text(settingsLoadError!,style:TextStyle(
+          color:Theme.of(context).colorScheme.error)),
+        const SizedBox(height:8),
+        OutlinedButton.icon(onPressed:loading?null:_load,
+          icon:const Icon(Icons.refresh_rounded),
+          label:const Text('Retry loading settings')),
+      ],
       _heading('Appearance','Choose how VOP looks on your phone.',Icons.palette_outlined),
       _group([
         _choose('Theme','', 'theme',colors,
@@ -284,7 +314,8 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         ],
       ]),
       const SizedBox(height:19),
-      FilledButton.icon(onPressed:saving?null:_saveSettings,
+      FilledButton.icon(onPressed:saving||!preferencesReady||_settingsDelta().isEmpty
+        ?null:_saveSettings,
         icon:const Icon(Icons.save_outlined),
         label:Text(saving?'Saving…':'Save preferences')),
     ];
@@ -440,7 +471,8 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         const DropdownMenuItem(value:'organization',child:Text('My organisation')),
         const DropdownMenuItem(value:'private',child:Text('Private')),
       ],(_map(preferences['privacy'])['profileVisibility']??'organization').toString()),
-      FilledButton.icon(onPressed:saving?null:_saveSettings,
+      FilledButton.icon(onPressed:saving||!preferencesReady||_settingsDelta().isEmpty
+          ?null:_saveSettings,
         icon:const Icon(Icons.save_outlined),label:const Text('Save privacy')),
       const Divider(),
       ListTile(contentPadding:EdgeInsets.zero,
