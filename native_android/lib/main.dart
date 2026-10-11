@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import 'core/config.dart';
 import 'core/vop_api.dart';
+import 'core/vop_i18n.dart';
 import 'theme/vop_theme.dart';
 import 'screens/auth_screen.dart';
 import 'screens/home_shell.dart';
@@ -25,7 +26,9 @@ class VopAndroidApp extends StatelessWidget {
       valueListenable:VopAppearance.mode,
       builder:(context,mode,child)=>ValueListenableBuilder<bool>(
         valueListenable:VopAppearance.highContrast,
-        builder:(context,contrast,_)=>MaterialApp(
+        builder:(context,contrast,_)=>ValueListenableBuilder<int>(
+          valueListenable:VopI18n.revision,
+          builder:(context,revision,_)=>MaterialApp(
       title: 'Voice of Prophecy',
       debugShowCheckedModeBanner: false,
       themeMode: mode,
@@ -37,7 +40,10 @@ class VopAndroidApp extends StatelessWidget {
             data:MediaQuery.of(context).copyWith(
               textScaler:TextScaler.linear(large?1.16:1.0),
               disableAnimations:reduce),
-            child:child??const SizedBox.shrink(),
+            child:Directionality(
+              textDirection:VopI18n.direction=='rtl'
+                ?TextDirection.rtl:TextDirection.ltr,
+              child:child??const SizedBox.shrink()),
           ),
         ),
       ),
@@ -65,6 +71,6 @@ class VopAndroidApp extends StatelessWidget {
                 return HomeShell(key: ValueKey(snapshot.data!.uid), api: VopApi());
               },
             ),
-    )));
+    ))));
   }
 }
