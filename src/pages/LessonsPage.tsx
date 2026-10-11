@@ -90,6 +90,7 @@ export const LessonsPage: React.FC<Props> = ({
     ?(availableProgramGuideIds.get(activeProgram.id)||[]).flatMap(id=>guides.filter(guide=>guide.id===id))
     :[];
   const canOpen=(guide:DiscoverGuide,lesson:Lesson)=>{
+    if(guide.sequentialLearning!==true)return true;
     const ordered=orderedLessons(guide);
     const pos=ordered.findIndex(item=>item.id===lesson.id);
     return pos<=0||ordered.slice(0,pos).every(previous=>
