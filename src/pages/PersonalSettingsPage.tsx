@@ -46,6 +46,14 @@ function PasswordInput({label,placeholder,value,onChange,autoComplete,disabled}:
   </label>;
 }
 
+const defaultPersonalSettings:PersonalSettings={
+  theme:'light',language:'',
+  notifications:{enabled:true,email:true,announcements:true,certificates:true},
+  accessibility:{reducedMotion:false,largeText:false,highContrast:false},
+  privacy:{profileVisibility:'organization'},
+  studyPreferences:{reminders:true,preferredStudyTime:''},
+};
+
 interface Props { currentUser: User; onBack: () => void; onStudyLanguageChange: (language: string) => void; context?: 'learner'|'organization'; onNavigate?: (route: AppRoute) => void; }
 
 export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onStudyLanguageChange, context='learner', onNavigate }) => {
@@ -58,11 +66,10 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
     const hasPassword = user.providerData.some(p => p.providerId === 'password');
     return hasGoogle && !hasPassword;
   }, []);
-  const [settings, setSettings] = useState<PersonalSettings>({
-    theme: 'light', language: '', notifications: { enabled: true, email: true, announcements: true, certificates: true },
-    accessibility: { reducedMotion: false, largeText: false, highContrast: false },
-    privacy: { profileVisibility: 'organization' }, studyPreferences: { reminders: true, preferredStudyTime: '' },
-  });
+  const [settings,setSettings]=useState<PersonalSettings>(defaultPersonalSettings);
+  const [savedSettings,setSavedSettings]=useState<PersonalSettings|null>(null);
+  const [settingsLoadError,setSettingsLoadError]=useState('');
+  const [settingsReloading,setSettingsReloading]=useState(false);
   const [busy, setBusy] = useState(true);
   const [profile, setProfile] = useState<OwnProfile>(currentUser);
   const [profileDraft, setProfileDraft] = useState<EditableOwnProfile>(()=>editableOwnProfile(currentUser));
@@ -163,14 +170,21 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
     const loadProfile=loadOwnProfile()
       .then(value=>{if(active){setProfile(value);setProfileDraft(editableOwnProfile(value));}})
       .catch(error=>{if(active)setProfileError(error instanceof Error?error.message:'Could not load your profile.');});
-    const loadSettings = loadPersonalSettings()
-      .then(value => {
-        if (active && value) {
-          setSettings(previous => ({ ...previous, ...value }));
-          applyAccessibilityPreferences(value.accessibility);
-        }
+    const loadSettings=loadPersonalSettings()
+      .then(value=>{
+        if(!active)return;
+        const hydrated={...defaultPersonalSettings,...value};
+        setSettings(hydrated);
+        setSavedSettings(hydrated);
+        setSettingsLoadError('');
+        applyAccessibilityPreferences(hydrated.accessibility);
       })
-      .catch(error => { if (active) setMessage(error instanceof Error ? error.message : 'Could not load your personal settings.'); });
+      .catch(error=>{
+        if(active){
+          setSavedSettings(null);
+          setSettingsLoadError(error instanceof Error?error.message:'Could not load your personal settings.');
+        }
+      });
     const loadLanguages=loadUiLocaleRegistry()
       .then(items=>{if(active){setUiLocales(items);setLanguages(items)}})
       .catch(error=>{if(active)setMessage(error instanceof Error?error.message:'Configured languages could not be loaded.');});
@@ -198,6 +212,25 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
     return () => { active = false; };
   }, []);
 
+  const settingsChanges=savedSettings?Object.fromEntries(
+    (Object.keys(settings) as Array<keyof PersonalSettings>)
+      .filter(key=>JSON.stringify(settings[key])!==JSON.stringify(savedSettings[key]))
+      .map(key=>[key,settings[key]]),
+  ) as PersonalSettings:{};
+  const settingsDirty=Object.keys(settingsChanges).length>0;
+  const retrySettings=async()=>{
+    if(settingsReloading)return;
+    setSettingsReloading(true);setSettingsLoadError('');
+    try{
+      const value=await loadPersonalSettings();
+      const hydrated={...defaultPersonalSettings,...value};
+      setSettings(hydrated);setSavedSettings(hydrated);
+      applyAccessibilityPreferences(hydrated.accessibility);
+    }catch(error){
+      setSavedSettings(null);
+      setSettingsLoadError(error instanceof Error?error.message:'Could not load your personal settings.');
+    }finally{setSettingsReloading(false);}
+  };
   const patch = <K extends keyof PersonalSettings>(key: K, value: PersonalSettings[K]) =>
     setSettings(previous => ({ ...previous, [key]: value }));
   const patchProfile = (key:keyof EditableOwnProfile,value:string) =>
@@ -325,18 +358,23 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
   };
 
   const save = async () => {
-    setSaving(true); setMessage('');
-    try {
-      const persisted = await savePersonalSettings(settings);
-      setSettings(previous => ({ ...previous, ...persisted }));
-      applyAccessibilityPreferences(persisted.accessibility);
-      if (persisted.theme) persistThemePreference(persisted.theme==='system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light') : persisted.theme);
-      if (settings.uiLocale) setUiLocale(settings.uiLocale);
-      if (!organizationAccount && settings.studyLanguage !== undefined) onStudyLanguageChange(settings.studyLanguage || appSettings.defaultLanguage || '');
-      setMessage(t('settings.saved', 'Your personal settings have been saved.'));
-    }
-    catch (error) { setMessage(error instanceof Error ? error.message : 'Could not save settings.'); }
-    finally { setSaving(false); }
+    if(saving||!savedSettings||!settingsDirty)return;
+    const changed=settingsChanges;
+    setSaving(true);setMessage('');
+    try{
+      const persisted=await savePersonalSettings(changed);
+      const next={...settings,...persisted};
+      setSettings(next);
+      setSavedSettings(next);
+      applyAccessibilityPreferences(next.accessibility);
+      if(changed.theme&&next.theme)persistThemePreference(next.theme==='system'
+        ?(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):next.theme);
+      if(changed.uiLocale&&next.uiLocale)setUiLocale(next.uiLocale);
+      if(!organizationAccount&&changed.studyLanguage!==undefined)
+        onStudyLanguageChange(next.studyLanguage||appSettings.defaultLanguage||'');
+      setMessage(t('settings.saved','Your personal settings have been saved.'));
+    }catch(error){setMessage(error instanceof Error?error.message:'Could not save settings.');}
+    finally{setSaving(false);}
   };
 
   type PersonalTab = 'account' | 'interface' | 'notifications' | 'accessibility' | 'security' | 'privacy';
@@ -605,7 +643,15 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
           </div>
         )}
 
-        <button className="vop-personal-save vop-primary" type="button" disabled={saving} onClick={() => void save()}><Save size={18}/>{saving ? t('common.saving','Saving…') : t('settings.save','Save personal settings')}</button>
+        {settingsLoadError&&<div className="vop-personal-notice error" role="alert">
+          {settingsLoadError}
+          <button type="button" className="vop-secondary" disabled={settingsReloading}
+            onClick={()=>void retrySettings()}>{uiT('personal_settings.retry_loading','Retry loading settings')}</button>
+        </div>}
+        {!['account','security'].includes(activeTab)&&<button className="vop-personal-save vop-primary"
+          type="button" disabled={saving||!savedSettings||!settingsDirty} onClick={()=>void save()}>
+          <Save size={18}/>{saving?t('common.saving','Saving…'):t('settings.save','Save personal settings')}
+        </button>}
       </div>
     </>}
   </div>;
