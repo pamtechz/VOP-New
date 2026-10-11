@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../theme/vop_theme.dart';
 
-enum RadioMediaKind { audio, video, provider, unsupported }
+enum RadioMediaKind { audio, video, provider, external, unsupported }
 class RadioMedia {
   const RadioMedia(this.kind, this.url, {this.provider = ''});
   final RadioMediaKind kind;
@@ -45,9 +46,8 @@ RadioMedia resolveRadioMedia(Map<String,dynamic> item) {
       final match=RegExp(r'/(?:media|teachings)/(\d+)(?:/|$)').firstMatch(uri.path);
       final embed=RegExp(r'/embed/media/(\d+)(?:/|$)').firstMatch(uri.path);
       final id=match?.group(1)??embed?.group(1);
-      if(id!=null)return RadioMedia(RadioMediaKind.provider,
-        Uri.parse('https://www.audioverse.org/en/embed/media/'+id),
-        provider:'AudioVerse');
+      if(id!=null)return RadioMedia(RadioMediaKind.external,
+        uri,provider:'AudioVerse');
       continue;
     }
     if(_host(host,'vimeo.com')){
@@ -128,6 +128,10 @@ class _RadioPlayerScreenState extends State<RadioPlayerScreen>
     if(source.url==null){if(mounted)setState((){
       loading=false;error='This programme has no supported playable media URL.';
     });return;}
+    if(source.kind==RadioMediaKind.external){
+      if(mounted)setState(()=>loading=false);
+      return;
+    }
     if(source.kind==RadioMediaKind.provider){
       final allowed=source.url!.host;
       embed=WebViewController()
@@ -143,8 +147,7 @@ class _RadioPlayerScreenState extends State<RadioPlayerScreen>
             if(uri==null||uri.scheme!='https')return NavigationDecision.prevent;
             final host=uri.host.toLowerCase();
             return host==allowed||
-                (source.provider=='YouTube'&&_host(host,'youtube.com'))||
-                (source.provider=='AudioVerse'&&_host(host,'audioverse.org'))
+                (source.provider=='YouTube'&&_host(host,'youtube.com'))
               ?NavigationDecision.navigate:NavigationDecision.prevent;
           },
         ));
@@ -203,6 +206,8 @@ class _RadioPlayerScreenState extends State<RadioPlayerScreen>
               WebViewWidget(controller:embed!),
             if(source.kind==RadioMediaKind.audio)
               const Icon(Icons.graphic_eq,size:74,color:VopColors.goldLight),
+            if(source.kind==RadioMediaKind.external)
+              const Icon(Icons.open_in_new,size:65,color:VopColors.goldLight),
             if(loading)const CircularProgressIndicator(color:VopColors.goldLight),
             if(error!=null)Padding(padding:const EdgeInsets.all(18),
               child:Text(error!,textAlign:TextAlign.center,
@@ -216,6 +221,17 @@ class _RadioPlayerScreenState extends State<RadioPlayerScreen>
         Text([widget.item['speaker'],widget.item['series'],source.provider]
           .where((e)=>e!=null&&e.toString().trim().isNotEmpty)
           .join(' · ')),
+        if(source.kind==RadioMediaKind.external)...[
+          const SizedBox(height:18),
+          Text('AudioVerse prevents third-party apps from embedding its player. '
+            'You can open this programme on AudioVerse, or your organisation '
+            'can publish an authorised direct audio link for playback in VOP.',
+            style:const TextStyle(height:1.55)),
+          const SizedBox(height:12),
+          FilledButton.icon(
+            onPressed:source.url==null?null:()=>launchUrl(source.url!,mode:LaunchMode.externalApplication),
+            icon:const Icon(Icons.open_in_new),label:const Text('Open on AudioVerse')),
+        ],
         if(ready)...[
           const SizedBox(height:14),
           if(duration>Duration.zero)Slider(
@@ -250,8 +266,8 @@ class _RadioPlayerScreenState extends State<RadioPlayerScreen>
             style:const TextStyle(height:1.55)),
         const SizedBox(height:23),
         Text('Approved direct streams use the native player. YouTube, Vimeo and '
-          'AudioVerse use their official embedded player inside VOP. '
-          'Private or restricted sources cannot be bypassed.',
+          'other embeddable providers play within VOP. AudioVerse restricts '
+          'third-party embedding. Private content cannot be bypassed.',
           style:TextStyle(fontSize:11,height:1.5,
             color:Theme.of(context).colorScheme.onSurfaceVariant)),
       ]),
