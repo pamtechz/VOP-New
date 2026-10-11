@@ -56,20 +56,17 @@ test('legacy records and server-confirmed extensionless sources remain playable'
   assert.equal(resolvedRadioRecord({mediaUrl:'https://example.com/article'})?.mediaType,undefined);
 });
 
-test('AudioVerse frame-ancestors restriction is respected in every web player', () => {
+test('AudioVerse only embeds publisher-supplied vetted player URLs', () => {
   const read=(path:string)=>readFileSync(path,'utf8');
-  const player=read('src/components/media/MediaPlayer.tsx');
   const radio=read('src/pages/RadioPage.tsx');
   const admin=read('src/pages/AdminRecordsPanel.tsx');
-  const fallback=read('src/components/media/ProviderPlaybackNotice.tsx');
-  assert.match(player,/source\.provider === 'AudioVerse'/);
-  assert.match(player,/<ProviderPlaybackNotice/);
-  assert.match(radio,/source\?\.provider === 'audioverse' && <ProviderPlaybackNotice/);
-  assert.doesNotMatch(radio,/source\?\.provider === 'audioverse' && <iframe/);
-  assert.doesNotMatch(admin,/provider === 'AudioVerse'[\s\S]{0,280}<iframe/);
-  assert.match(admin,/provider === 'AudioVerse'[\s\S]{0,150}<MediaPlayer/);
-  assert.match(fallback,/rel="noopener noreferrer"/);
-  assert.match(fallback,/isSafeHttpsMediaUrl\(sourceUrl\)/);
+  const server=read('api_handlers/admin/radio.ts');
+  assert.match(radio,/selected\?\.audioEmbedUrl/);
+  assert.match(radio,/iframe src=\{source\.embedUrl\}/);
+  assert.match(radio,/Play AudioVerse/);
+  assert.match(admin,/audioEmbedCode/);
+  assert.match(server,/parseAudioVerseEmbedCode/);
+  assert.match(read('src/components/media/ProviderPlaybackNotice.tsx'),/isSafeHttpsMediaUrl/);
 });
 
 test('AudioVerse audio embed code extracts only approved HTTPS player URLs', () => {
