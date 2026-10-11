@@ -352,6 +352,8 @@ export default async function handler(req: Request, res: Response) {
         learnerEntryMode: data.learnerEntryMode === 'sections' ? 'sections'
           : data.learnerEntryMode === 'lessons' ? 'lessons'
           : current.learnerEntryMode === 'sections' ? 'sections':'lessons',
+        sequentialLearning: data.sequentialLearning===true ||
+          (data.sequentialLearning===undefined && current.sequentialLearning===true),
         // Structured guides always require a final exam; existing legacy guides
         // can opt in, but their configured requirement cannot be disabled.
         requiresFinalExam: !existing.exists || current.requiresFinalExam === true || data.requiresFinalExam === true,
