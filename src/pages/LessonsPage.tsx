@@ -4,7 +4,7 @@ import type { CurriculumProgram, DiscoverGuide, Lesson, User } from '../types';
 import { getStoredSettings } from '../services/storage';
 import { loadFirestorePrograms } from '../services/firestoreData';
 import './program-catalog.css';
-import { lessonIsComplete, lessonScoreForDisplay } from '../services/lessonProgress';
+import { isLessonUnlocked, lessonIsComplete, lessonScoreForDisplay } from '../services/lessonProgress';
 import { getTranslation, getUiLocale } from '../services/i18n';
 import { resolveLessonResumeBookmark, getActiveGuideBookmark, getActiveProgramBookmark } from '../services/lessonBookmark';
 import { ShimmerCards } from '../components/layout/Shimmer';
@@ -145,6 +145,23 @@ export const LessonsPage: React.FC<Props> = ({
                       <small>{guide.lessons.filter(lesson=>lesson.type==='Lesson').length} lessons ·
                         {guide.language.toUpperCase()}</small></span><ChevronRight size={17}/>
                   </button>
+                  <details className="vop-program-guide-lessons">
+                    <summary>{t('navigation.lessons','Lessons')} · {guide.lessons.length}</summary>
+                    <div className="vop-program-guide-lesson-list">
+                      {orderedLessons(guide).map((lesson,lessonIndex)=>{
+                        const unlocked=isLessonUnlocked(guide,lessonIndex,currentUser,settings.quizPassThreshold);
+                        const done=lessonIsComplete(guide,lesson,currentUser,settings.quizPassThreshold);
+                        return <button key={lesson.id} type="button" disabled={!unlocked}
+                          className={'vop-program-guide-lesson-row'+(done?' is-complete':'')+(!unlocked?' is-locked':'')}
+                          onClick={()=>onOpenLesson(guide,lesson)}>
+                          {done?<CheckCircle2 size={16}/>:unlocked?<BookOpen size={16}/>:<CircleHelp size={16}/>}
+                          <span><strong>{lesson.title}</strong>
+                            <small>{lesson.type==='Test'?t('lessons.assessment','Assessment'):t('navigation.lessons','Lesson')} · {lesson.lessonNumber}</small></span>
+                          {unlocked?<ChevronRight size={15}/>:<span aria-label="Locked">🔒</span>}
+                        </button>;
+                      })}
+                    </div>
+                  </details>
                   {hasResume && guideBm && (
                     <button
                       type="button"
