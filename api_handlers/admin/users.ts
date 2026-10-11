@@ -3,6 +3,7 @@ import { getAuth, type UserRecord } from 'firebase-admin/auth';
 import { FieldValue, getFirestore, type Firestore, type DocumentSnapshot } from 'firebase-admin/firestore';
 import { authenticateTenant, enforceOrganizationMembershipQuotas } from '../../server/tenant.js';
 import { requirePermission } from '../../server/permissions.js';
+import { isSafeHttpsMediaUrl } from '../../shared/mediaSources.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -425,19 +426,9 @@ export default async function handler(request: Request, response: Response) {
       if('displayName' in updates && !updates.displayName){
         return response.status(400).json({ error:'Your display name cannot be empty.' });
       }
-      if('photoURL' in updates && updates.photoURL){
-        const value=String(updates.photoURL);
-        let safe=false;
-        try {
-          const parsed=new URL(value);
-          const host=parsed.hostname.toLowerCase();
-          safe=parsed.protocol==='https:' && !parsed.username && !parsed.password &&
-            (!parsed.port||parsed.port==='443') && !parsed.hash && host!=='localhost' &&
-            !host.endsWith('.local') && !host.endsWith('.internal') &&
-            !host.endsWith('.localhost') && !/^(?:\\d{1,3}\\.){3}\\d{1,3}$/.test(host) &&
-            !host.includes(':');
-        }catch { /* rejected below */ }
-        if(!safe)return response.status(400).json({ error:'Use a public HTTPS profile image URL or leave it empty.' });
+      if('photoURL' in updates && updates.photoURL &&
+          !isSafeHttpsMediaUrl(String(updates.photoURL))){
+        return response.status(400).json({ error:'Use a public HTTPS profile image URL or leave it empty.' });
       }
       const ref=db.doc('users/'+decoded.uid);
       const existing=await ref.get();
