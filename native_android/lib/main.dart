@@ -21,10 +21,20 @@ class VopAndroidApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable:VopAppearance.mode,
+      builder:(context,mode,child)=>MaterialApp(
       title: 'Voice of Prophecy',
       debugShowCheckedModeBanner: false,
-      themeMode: ThemeMode.system,
+      themeMode: mode,
+      builder:(context,child)=>ValueListenableBuilder<bool>(
+        valueListenable:VopAppearance.largerText,
+        builder:(context,large,_)=>MediaQuery(
+          data:MediaQuery.of(context).copyWith(
+            textScaler:TextScaler.linear(large?1.16:1.0)),
+          child:child??const SizedBox.shrink(),
+        ),
+      ),
       theme: VopTheme.build(Brightness.light),
       darkTheme: VopTheme.build(Brightness.dark),
       home: VopConfig.error != null
@@ -49,6 +59,6 @@ class VopAndroidApp extends StatelessWidget {
                 return HomeShell(key: ValueKey(snapshot.data!.uid), api: VopApi());
               },
             ),
-    );
+    ));
   }
 }
