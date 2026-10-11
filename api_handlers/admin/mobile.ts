@@ -32,6 +32,7 @@ const plainGuide=(id:string,row:Raw)=>({
   organizationId:string(row.organizationId||row.ownerOrganizationId),
   sharingScope:string(row.sharingScope),learnerEntryMode:row.learnerEntryMode==='sections'?'sections':'lessons',
   certificateEligible:row.certificateEligible===true,requiresFinalExam:row.requiresFinalExam===true,
+  sequentialLearning:row.sequentialLearning===true||row.enforceSequentialProgress===true,
 });
 const plainProgram=(id:string,row:Raw)=>({
   id,title:string(row.title),description:string(row.description),
@@ -250,7 +251,7 @@ export default async function mobile(req:Request,res:Response){
         // A learner who already completed a lesson may always revisit it.
         // New lessons and exams remain locked until prior items are complete.
         prerequisitesMet=prerequisitesMet&&done;
-        return {...state,unlocked:state.unlocked||done};
+        return {...state,unlocked:guide.sequentialLearning!==true && guide.enforceSequentialProgress!==true || state.unlocked||done};
       });
       const lessons=staged;
       return res.status(200).json({ok:true,guide:plainGuide(guideId,guide),lessons});
@@ -279,7 +280,8 @@ export default async function mobile(req:Request,res:Response){
       const key=lang+':'+guideId+':'+row.id;
       return row.type==='Test'?passedSet.has(key):completedSet.has(key);
     };
-    if(!done(ordered[target])&&!ordered.slice(0,target).every(done)){
+    if((guide.sequentialLearning===true||guide.enforceSequentialProgress===true)
+      &&!done(ordered[target])&&!ordered.slice(0,target).every(done)){
       return res.status(423).json({ok:false,code:'LESSON_LOCKED',
         error:'Complete the preceding lessons and assessments before opening this one.'});
     }
