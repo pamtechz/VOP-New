@@ -1,7 +1,7 @@
 import { FieldValue } from 'firebase-admin/firestore';
 import { authenticateTenant, canEditCanonicalContent, enforceQuota, requireOrgRole, tenantOwnerKey, writeTenantAudit } from '../../server/tenant.js';
 import { requirePermission } from '../../server/permissions.js';
-import { isSafeHttpsMediaUrl, identifyRadioMedia } from '../../shared/mediaSources.js';
+import { isSafeHttpsMediaUrl, identifyRadioMedia, parseAudioVerseEmbedCode } from '../../shared/mediaSources.js';
 import { identifyPublicMedia } from '../../api/media.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
@@ -85,6 +85,10 @@ export default async function handler(req: Request, res: Response) {
       series: String(incoming.series||'').trim().slice(0,120),
       description: String(incoming.description||'').trim().slice(0,3000),
       ...normalizedMedia,
+      audioEmbedUrl: detected.provider==='AudioVerse'
+        ?parseAudioVerseEmbedCode(incoming.audioEmbedCode || incoming.audioEmbedUrl ||
+          existing.data()?.audioEmbedUrl || '')
+        :'',
       posterUrl: validUrl(incoming.posterUrl) ? String(incoming.posterUrl).trim() : '',
       broadcastTime: String(incoming.broadcastTime||'').trim().slice(0,50),
       id: documentId,

@@ -24,7 +24,10 @@ test('native radio never launches a media URL outside the app',()=>{
   assert.match(source,/WebViewWidget/);
   assert.match(source,/safeRadioHttps/);
   assert.match(source,/onNavigationRequest/);
-  assert.match(catalog,/RadioPlayerScreen\(item:row\)/);
+  assert.match(source,/LaunchMode\.inAppBrowserView/);
+  assert.match(source,/RefreshIndicator/);
+  assert.match(source,/More from VOP/);
+  assert.match(catalog,/RadioPlayerScreen\(item:row,api:widget\.api,related:related\)/);
 });
 
 test('native personal settings use authoritative web profile/settings actions',()=>{

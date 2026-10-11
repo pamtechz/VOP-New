@@ -129,7 +129,7 @@ function blankForm(kind: ManagedAdminCollection): FormState {
       return { name: '', category: '', author: '', description: '', imageUrl: '', downloadUrl: '', published: false };
     case 'radio':
       return { title:'', speaker:'', series:'', mediaUrl:'', mediaType:'',
-        mediaProvider:'', audioUrl:'',videoUrl:'',streamUrl:'',posterUrl:'',
+        mediaProvider:'', audioEmbedCode:'', audioUrl:'',videoUrl:'',streamUrl:'',posterUrl:'',
         sharingScope:'organization',description:'',published:false };
     case 'unions':
       return { name: '', code: '', divisionName: '', directorName: '', contactEmail: '', contactPhone: '', headquarters: '' };
@@ -734,6 +734,7 @@ function Fields({kind,form,setForm,records}:{kind:Exclude<ManagedAdminCollection
             : 'Paste a public link above. VOP identifies the provider and file format automatically.'}
           {String(form.mediaUrl||'')&&<div style={{overflowWrap:'anywhere'}}>{String(form.mediaUrl)}</div>}
         </div>
+        {area('audioEmbedCode','AudioVerse Audio Embed Code (optional)')}
         {field('posterUrl','Poster image (optional)','url')}
         {select('sharingScope','Audience',[
           {value:'organization',label:'My organisation'},
@@ -957,7 +958,7 @@ function RadioAdminDashboard({
   const [playlistItems, setPlaylistItems] = useState<string[]>([]);
   const [playlistSaving, setPlaylistSaving] = useState(false);
   const startNewEditor = () => { if (!canCreate) { setError('You do not have permission to create radio content.'); return; } detectSequence.current++; setMessage(''); setError(''); setImportUrl(''); setForm(previous=>({...previous,mediaUrl:'',mediaProvider:'',mediaType:''})); openNew(); setEditorOpen(true); };
-  const startEditEditor = (item: AdminRecord) => { detectSequence.current++; setMessage(''); setError(''); setImportUrl(String(item.mediaUrl||item.videoUrl||item.audioUrl||item.streamUrl||'')); edit(item); setEditorOpen(true); };
+  const startEditEditor = (item: AdminRecord) => { detectSequence.current++; setMessage(''); setError(''); setImportUrl(String(item.mediaUrl||item.videoUrl||item.audioUrl||item.streamUrl||'')); edit(item); setForm(previous=>({...previous,audioEmbedCode:String(item.audioEmbedUrl||'')})); setEditorOpen(true); };
   useEffect(() => { if (editorOpen && message) setEditorOpen(false); }, [editorOpen, message]);
 
   const live = records.filter(item => Boolean(item.streamUrl) || item.mediaType === 'stream' || radioProvider(item) === 'Stream');

@@ -209,7 +209,8 @@ export default async function mobile(req:Request,res:Response){
         return {id:doc.id,title:string(data.title),speaker:string(data.speaker),
           series:string(data.series),description:string(data.description),
           mediaType:string(data.mediaType),mediaProvider:string(data.mediaProvider),
-          mediaUrl:publicImage(data.mediaUrl),posterUrl:publicImage(data.posterUrl),
+          mediaUrl:publicImage(data.mediaUrl),
+          audioEmbedUrl:publicImage(data.audioEmbedUrl),posterUrl:publicImage(data.posterUrl),
           audioUrl:publicImage(data.audioUrl),videoUrl:publicImage(data.videoUrl),
           streamUrl:publicImage(data.streamUrl)};
       }).filter(item=>item.title);

@@ -4,7 +4,6 @@ import type { RadioBroadcast, RadioPlaylist } from '../types';
 import { getTranslation, getUiLocale } from '../services/i18n';
 import { getActiveLanguage, getStoredSettings } from '../services/storage';
 import { isSafeHttpsMediaUrl, resolveMediaSource } from '../../shared/mediaSources';
-import { ProviderPlaybackNotice } from '../components/media/ProviderPlaybackNotice';
 import {
   ArrowLeft, Radio, Play, Pause, Volume2, Maximize2, ExternalLink,
   SkipBack, SkipForward, Gauge, BookOpen, Globe2, CalendarDays,
@@ -122,7 +121,7 @@ function detectMedia(item: RadioBroadcast): MediaSource {
       const id = resolved.url.split('/embed/')[1]?.split('?')[0] || '';
       if (id) return { provider:'youtube', url, videoId:id, live:url.includes('/live/') };
     }
-    if (resolved.provider === 'AudioVerse') return { provider:'audioverse', url, embedUrl:resolved.url, live:false };
+    if (resolved.provider === 'AudioVerse') return { provider:'audioverse', url, embedUrl:item.audioEmbedUrl||resolved.url, live:false };
     if (resolved.kind === 'embed') return { provider:'embed', url, embedUrl:resolved.url, label:resolved.provider, live:false };
     return { provider:resolved.kind, url:resolved.url, live:false };
   }
@@ -450,7 +449,12 @@ export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, playlists = []
         <section className="vop-yt-watch-main">
           <div className="vop-yt-player">
             {source?.provider === 'youtube' && <div ref={ytMountRef} className="vop-yt-youtube-stage"/>}
-            {source?.provider === 'audioverse' && <ProviderPlaybackNotice sourceUrl={source.url} provider="AudioVerse" title={selected?.title||'AudioVerse programme'} />}
+            {source?.provider === 'audioverse' && (selected?.audioEmbedUrl
+               ? <iframe src={source.embedUrl} title={selected?.title||'AudioVerse audio'}
+                   sandbox="allow-scripts allow-same-origin allow-presentation allow-popups"
+                   allow="autoplay; encrypted-media; picture-in-picture"
+                   referrerPolicy="strict-origin-when-cross-origin" loading="lazy" />
+               : <div className="vop-yt-player-empty"><a href={source.url} target="_blank" rel="noopener noreferrer"><Play size={18}/> Play AudioVerse</a></div>)}
             {source?.provider === 'embed' && <iframe src={source.embedUrl} title={selected?.title||source.label} sandbox="allow-scripts allow-same-origin allow-presentation allow-popups" referrerPolicy="strict-origin-when-cross-origin" allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowFullScreen />}
             {source?.provider === 'direct-video' && <video ref={videoRef} src={source.url} poster={selectedPoster||undefined} playsInline preload="metadata" controls {...mediaEvents}/>}
             {source?.provider === 'direct-audio' && <div className="vop-yt-audio-stage" style={selectedPoster?{backgroundImage:'linear-gradient(rgba(0,0,0,.28),rgba(0,0,0,.58)),url("' + selectedPoster + '")'}:undefined}><audio ref={audioRef} src={source.url} preload="metadata" {...mediaEvents}/><button type="button" onClick={()=>void togglePlay()}>{playing?<Pause size={36}/>:<Play size={36} fill="currentColor"/>}</button><span>{source.live?'LIVE RADIO':'AUDIO PROGRAMME'}</span></div>}
