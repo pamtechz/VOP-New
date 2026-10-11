@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../core/vop_api.dart';
 import '../theme/vop_theme.dart';
 
 enum RadioMediaKind { audio, video, provider, external, unsupported }
@@ -23,6 +24,11 @@ bool safeRadioHttps(String value) {
 }
 bool _host(String host,String domain)=>
     host==domain||host.endsWith('.'+domain);
+bool safeAudioVerseEmbedUrl(Uri uri) =>
+    safeRadioHttps(uri.toString()) &&
+    _host(uri.host.toLowerCase(),'audioverse.org') &&
+    (uri.path.contains('/embed/')||uri.path.contains('/player/'));
+
 /// Only known providers or media file URLs, never unapproved private webpages.
 RadioMedia resolveRadioMedia(Map<String,dynamic> item) {
   for(final name in ['mediaUrl','streamUrl','videoUrl','audioUrl']){
@@ -46,9 +52,15 @@ RadioMedia resolveRadioMedia(Map<String,dynamic> item) {
       final match=RegExp(r'/(?:media|teachings)/(\d+)(?:/|$)').firstMatch(uri.path);
       final embed=RegExp(r'/embed/media/(\d+)(?:/|$)').firstMatch(uri.path);
       final id=match?.group(1)??embed?.group(1);
-      if(id!=null)return RadioMedia(RadioMediaKind.external,
-        uri,provider:'AudioVerse');
-      continue;
+      final approved=(item['audioEmbedUrl']??'').toString().trim();
+      final parsed=Uri.tryParse(approved);
+      if(parsed!=null&&safeAudioVerseEmbedUrl(parsed)){
+        return RadioMedia(RadioMediaKind.provider,parsed,provider:'AudioVerse');
+      }
+      if(id!=null)return RadioMedia(RadioMediaKind.provider,
+        Uri.parse('https://www.audioverse.org/en/embed/media/'+id),
+        provider:'AudioVerse');
+      return RadioMedia(RadioMediaKind.external,uri,provider:'AudioVerse');
     }
     if(_host(host,'vimeo.com')){
       final id=RegExp(r'^/(?:video/)?(\d+)(?:/|$)').firstMatch(uri.path)?.group(1);
@@ -136,8 +148,11 @@ allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture; 
 allowfullscreen></iframe></body></html>''';
 }
 class RadioPlayerScreen extends StatefulWidget {
-  const RadioPlayerScreen({required this.item,super.key});
+  const RadioPlayerScreen({required this.item,this.api,
+    this.related=const [],super.key});
   final Map<String,dynamic> item;
+  final VopApi? api;
+  final List<Map<String,dynamic>> related;
   @override State<RadioPlayerScreen> createState()=>_RadioPlayerScreenState();
 }
 class _RadioPlayerScreenState extends State<RadioPlayerScreen>
@@ -147,7 +162,9 @@ class _RadioPlayerScreenState extends State<RadioPlayerScreen>
   WebViewController? embed;
   bool loading=true;
   String? error;
-  @override void initState(){super.initState();WidgetsBinding.instance.addObserver(this);_prepare();}
+  late List<Map<String,dynamic>> recommendations;
+  String category='All';
+  @override void initState(){super.initState();recommendations=List<Map<String,dynamic>>.from(widget.related);WidgetsBinding.instance.addObserver(this);_prepare();}
   Future<void> _prepare()async{
     if(source.url==null){if(mounted)setState((){
       loading=false;error='This programme has no supported playable media URL.';
