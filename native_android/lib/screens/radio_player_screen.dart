@@ -24,7 +24,7 @@ bool _host(String host,String domain)=>
     host==domain||host.endsWith('.'+domain);
 /// Only known providers or media file URLs, never unapproved private webpages.
 RadioMedia resolveRadioMedia(Map<String,dynamic> item) {
-  for(final name in ['streamUrl','videoUrl','audioUrl']){
+  for(final name in ['mediaUrl','streamUrl','videoUrl','audioUrl']){
     final raw=(item[name]??'').toString().trim();
     if(!safeRadioHttps(raw))continue;
     final uri=Uri.parse(raw), host=uri.host.toLowerCase(), path=uri.path.toLowerCase();
@@ -56,7 +56,371 @@ RadioMedia resolveRadioMedia(Map<String,dynamic> item) {
         Uri.parse('https://player.vimeo.com/video/'+id),provider:'Vimeo');
       continue;
     }
-    if(RegExp(r'\.(mp4|m4v|webm|mov|ogv)$').hasMatch(path)){
+
+    if(_host(host,'soundcloud.com')){
+      return RadioMedia(RadioMediaKind.provider,
+        Uri.parse('https://w.soundcloud.com/player/?url='+Uri.encodeComponent(raw)),
+        provider:'SoundCloud');
+    }
+    if(_host(host,'tiktok.com')){
+      final id=RegExp(r'/@[^/]+/video/(\d+)(?:/|$)').firstMatch(uri.path)?.group(1)
+        ??RegExp(r'/player/v1/(\d+)(?:/|$)').firstMatch(uri.path)?.group(1);
+      if(id!=null)return RadioMedia(RadioMediaKind.provider,
+        Uri.parse('https://www.tiktok.com/player/v1/'+id),provider:'TikTok');
+      continue;
+    }
+    if(_host(host,'instagram.com')){
+      final match=RegExp(r'^/(p|reel|tv)/([A-Za-z0-9_-]{5,30})(?:/|$)')
+        .firstMatch(uri.path);
+      if(match!=null){
+        return RadioMedia(RadioMediaKind.provider,
+          Uri.parse('https://www.instagram.com/'+match.group(1)!+'/'
+            +match.group(2)!+'/embed/'),provider:'Instagram');
+      }
+      continue;
+    }
+    if(_host(host,'facebook.com')||host=='fb.watch'){
+      final media=path.contains('/videos/')||path.contains('/reel/')
+        ||path=='/watch'||path=='/watch/';
+      final validWatch=!path.startsWith('/watch')||
+        RegExp(r'^\d+
+      return RadioMedia(RadioMediaKind.video,uri);
+    }
+    if(RegExp(r'\.(mp3|m4a|aac|ogg|oga|wav|opus)$').hasMatch(path)){
+      return RadioMedia(RadioMediaKind.audio,uri);
+    }
+    if(name=='streamUrl'||path.endsWith('.m3u8')||path.endsWith('.mpd')||
+        item['mediaType']=='stream'){
+      return RadioMedia(RadioMediaKind.video,uri,provider:'Live stream');
+    }
+    // The VOP API only emits these classifications after a server-side
+    // content-type inspection. Handles signed and extensionless CDN URLs.
+    if(name=='mediaUrl'&&item['mediaType']=='audio'){
+      return RadioMedia(RadioMediaKind.audio,uri,provider:'Audio file');
+    }
+    if(name=='mediaUrl'&&item['mediaType']=='video'){
+      return RadioMedia(RadioMediaKind.video,uri,provider:'Video file');
+    }
+  }
+  return const RadioMedia(RadioMediaKind.unsupported,null);
+}
+class RadioPlayerScreen extends StatefulWidget {
+  const RadioPlayerScreen({required this.item,super.key});
+  final Map<String,dynamic> item;
+  @override State<RadioPlayerScreen> createState()=>_RadioPlayerScreenState();
+}
+class _RadioPlayerScreenState extends State<RadioPlayerScreen>
+    with WidgetsBindingObserver {
+  late final RadioMedia source=resolveRadioMedia(widget.item);
+  VideoPlayerController? player;
+  WebViewController? embed;
+  bool loading=true;
+  String? error;
+  @override void initState(){super.initState();WidgetsBinding.instance.addObserver(this);_prepare();}
+  Future<void> _prepare()async{
+    if(source.url==null){if(mounted)setState((){
+      loading=false;error='This programme has no supported playable media URL.';
+    });return;}
+    if(source.kind==RadioMediaKind.provider){
+      final allowed=source.url!.host;
+      embed=WebViewController()
+        ..setJavaScriptMode(JavaScriptMode.unrestricted)
+        ..setBackgroundColor(const Color(0xFF071A33))
+        ..setNavigationDelegate(NavigationDelegate(
+          onPageFinished:(_){if(mounted)setState(()=>loading=false);},
+          onWebResourceError:(e){if(e.isForMainFrame==true&&mounted)setState((){
+            loading=false;error='The media provider could not load.';
+          });},
+          onNavigationRequest:(request){
+            final uri=Uri.tryParse(request.url);
+            if(uri==null||uri.scheme!='https')return NavigationDecision.prevent;
+            final host=uri.host.toLowerCase();
+            // Provider embeds may navigate only to the approved original
+            // embed host, not to arbitrary links inside the provider's page.
+            return host==allowed ||
+                (source.provider=='YouTube'&&_host(host,'youtube.com')) ||
+                (source.provider=='AudioVerse'&&_host(host,'audioverse.org'))
+              ?NavigationDecision.navigate:NavigationDecision.prevent;
+          },
+        ));
+      await embed!.loadRequest(source.url!);
+      return;
+    }
+    try{
+      final controller=VideoPlayerController.networkUrl(source.url!,
+        videoPlayerOptions:VideoPlayerOptions(mixWithOthers:false));
+      player=controller;
+      await controller.initialize();
+      controller.addListener(_refresh);
+      if(mounted){setState(()=>loading=false);await controller.play();}
+    }catch(_){if(mounted)setState((){
+      loading=false;error='Unable to play this media. Verify the URL and connection.';
+    });}
+  }
+  void _refresh(){if(mounted)setState((){});}
+  @override void didChangeAppLifecycleState(AppLifecycleState state){
+    if(state==AppLifecycleState.paused||state==AppLifecycleState.inactive)player?.pause();
+  }
+  @override void dispose(){
+    WidgetsBinding.instance.removeObserver(this);
+    player?.removeListener(_refresh);player?.dispose();embed=null;super.dispose();
+  }
+  String _clock(Duration value){
+    final minutes=value.inMinutes,seconds=value.inSeconds.remainder(60);
+    return minutes.toString()+':'+seconds.toString().padLeft(2,'0');
+  }
+  Future<void> _skip(int offset)async{
+    final c=player;
+    if(c==null||!c.value.isInitialized)return;
+    final target=c.value.position+Duration(seconds:offset);
+    await c.seekTo(target<Duration.zero?Duration.zero:
+      target>c.value.duration?c.value.duration:target);
+  }
+  @override Widget build(BuildContext context){
+    final c=player,v=c?.value;
+    final ready=v?.isInitialized==true;
+    final duration=v?.duration??Duration.zero;
+    final position=v?.position??Duration.zero;
+    final elapsed=position.inMilliseconds.clamp(0,
+      duration.inMilliseconds>0?duration.inMilliseconds:0);
+    return Scaffold(
+      appBar:AppBar(title:const Text('VOP Radio & Media')),
+      body:ListView(padding:const EdgeInsets.all(16),children:[
+        AspectRatio(aspectRatio:16/9,child:Container(
+          clipBehavior:Clip.antiAlias,
+          decoration:BoxDecoration(color:const Color(0xFF071A33),
+            borderRadius:BorderRadius.circular(16)),
+          child:Stack(alignment:Alignment.center,children:[
+            if(ready&&source.kind==RadioMediaKind.video)
+              AspectRatio(aspectRatio:v!.aspectRatio>0?v.aspectRatio:16/9,
+                child:VideoPlayer(c!)),
+            if(source.kind==RadioMediaKind.provider&&embed!=null)
+              WebViewWidget(controller:embed!),
+            if(source.kind==RadioMediaKind.audio)
+              const Icon(Icons.graphic_eq,size:74,color:VopColors.goldLight),
+            if(loading)const CircularProgressIndicator(color:VopColors.goldLight),
+            if(error!=null)Padding(padding:const EdgeInsets.all(18),
+              child:Text(error!,textAlign:TextAlign.center,
+                style:const TextStyle(color:Colors.white))),
+          ]),
+        )),
+        const SizedBox(height:16),
+        Text((widget.item['title']??'VOP Programme').toString(),
+          style:Theme.of(context).textTheme.headlineSmall),
+        const SizedBox(height:6),
+        Text([widget.item['speaker'],widget.item['series'],source.provider]
+          .where((e)=>e!=null&&e.toString().trim().isNotEmpty)
+          .join(' · ')),
+        if(ready)...[
+          const SizedBox(height:14),
+          if(duration>Duration.zero)Slider(
+            min:0,max:duration.inMilliseconds.toDouble(),
+            value:elapsed.toDouble(),
+            onChanged:(value)=>c!.seekTo(Duration(milliseconds:value.round()))),
+          Row(mainAxisAlignment:MainAxisAlignment.spaceBetween,children:[
+            Text(_clock(position)),
+            Text(duration>Duration.zero?_clock(duration):'LIVE'),
+          ]),
+          Row(mainAxisAlignment:MainAxisAlignment.center,children:[
+            IconButton(tooltip:'Back ten seconds',onPressed:()=>_skip(-10),
+              icon:const Icon(Icons.replay_10)),
+            FilledButton.tonalIcon(
+              onPressed:()=>v.isPlaying?c!.pause():c!.play(),
+              icon:Icon(v!.isPlaying?Icons.pause:Icons.play_arrow),
+              label:Text(v.isPlaying?'Pause':'Play')),
+            IconButton(tooltip:'Forward ten seconds',onPressed:()=>_skip(10),
+              icon:const Icon(Icons.forward_10)),
+            PopupMenuButton<double>(
+              tooltip:'Playback speed',icon:const Icon(Icons.speed),
+              onSelected:(speed)=>c!.setPlaybackSpeed(speed),
+              itemBuilder:(_)=>[
+                for(final speed in [0.75,1.0,1.25,1.5,2.0])
+                  PopupMenuItem(value:speed,child:Text(speed.toString()+'x')),
+              ]),
+          ]),
+        ],
+        const SizedBox(height:17),
+        if((widget.item['description']??'').toString().isNotEmpty)
+          Text((widget.item['description']??'').toString(),
+            style:const TextStyle(height:1.55)),
+        const SizedBox(height:23),
+        Text('Approved direct streams use the native player. YouTube, Vimeo and '
+          'AudioVerse use their official embedded player inside VOP. '
+          'Private or restricted sources cannot be bypassed.',
+          style:TextStyle(fontSize:11,height:1.5,
+            color:Theme.of(context).colorScheme.onSurfaceVariant)),
+      ]),
+    );
+  }
+}
+).hasMatch(uri.queryParameters['v']??'');
+      if(media&&validWatch){
+        return RadioMedia(RadioMediaKind.provider,
+          Uri.parse('https://www.facebook.com/plugins/video.php?href='+
+            Uri.encodeComponent(raw)+'&show_text=0'),provider:'Facebook');
+      }
+      continue;
+    }
+    if(RegExp(r'\.(mp4|m4v|webm|mov|ogv)
+      return RadioMedia(RadioMediaKind.video,uri);
+    }
+    if(RegExp(r'\.(mp3|m4a|aac|ogg|oga|wav|opus)$').hasMatch(path)){
+      return RadioMedia(RadioMediaKind.audio,uri);
+    }
+    if(name=='streamUrl'||path.endsWith('.m3u8')||path.endsWith('.mpd')){
+      return RadioMedia(RadioMediaKind.video,uri,provider:'Live stream');
+    }
+  }
+  return const RadioMedia(RadioMediaKind.unsupported,null);
+}
+class RadioPlayerScreen extends StatefulWidget {
+  const RadioPlayerScreen({required this.item,super.key});
+  final Map<String,dynamic> item;
+  @override State<RadioPlayerScreen> createState()=>_RadioPlayerScreenState();
+}
+class _RadioPlayerScreenState extends State<RadioPlayerScreen>
+    with WidgetsBindingObserver {
+  late final RadioMedia source=resolveRadioMedia(widget.item);
+  VideoPlayerController? player;
+  WebViewController? embed;
+  bool loading=true;
+  String? error;
+  @override void initState(){super.initState();WidgetsBinding.instance.addObserver(this);_prepare();}
+  Future<void> _prepare()async{
+    if(source.url==null){if(mounted)setState((){
+      loading=false;error='This programme has no supported playable media URL.';
+    });return;}
+    if(source.kind==RadioMediaKind.provider){
+      final allowed=source.url!.host;
+      embed=WebViewController()
+        ..setJavaScriptMode(JavaScriptMode.unrestricted)
+        ..setBackgroundColor(const Color(0xFF071A33))
+        ..setNavigationDelegate(NavigationDelegate(
+          onPageFinished:(_){if(mounted)setState(()=>loading=false);},
+          onWebResourceError:(e){if(e.isForMainFrame==true&&mounted)setState((){
+            loading=false;error='The media provider could not load.';
+          });},
+          onNavigationRequest:(request){
+            final uri=Uri.tryParse(request.url);
+            if(uri==null||uri.scheme!='https')return NavigationDecision.prevent;
+            final host=uri.host.toLowerCase();
+            return host==allowed||
+                (source.provider=='YouTube'&&_host(host,'youtube.com'))||
+                (source.provider=='AudioVerse'&&_host(host,'audioverse.org'))
+              ?NavigationDecision.navigate:NavigationDecision.prevent;
+          },
+        ));
+      await embed!.loadRequest(source.url!);
+      return;
+    }
+    try{
+      final controller=VideoPlayerController.networkUrl(source.url!,
+        videoPlayerOptions:VideoPlayerOptions(mixWithOthers:false));
+      player=controller;
+      await controller.initialize();
+      controller.addListener(_refresh);
+      if(mounted){setState(()=>loading=false);await controller.play();}
+    }catch(_){if(mounted)setState((){
+      loading=false;error='Unable to play this media. Verify the URL and connection.';
+    });}
+  }
+  void _refresh(){if(mounted)setState((){});}
+  @override void didChangeAppLifecycleState(AppLifecycleState state){
+    if(state==AppLifecycleState.paused||state==AppLifecycleState.inactive)player?.pause();
+  }
+  @override void dispose(){
+    WidgetsBinding.instance.removeObserver(this);
+    player?.removeListener(_refresh);player?.dispose();embed=null;super.dispose();
+  }
+  String _clock(Duration value){
+    final minutes=value.inMinutes,seconds=value.inSeconds.remainder(60);
+    return minutes.toString()+':'+seconds.toString().padLeft(2,'0');
+  }
+  Future<void> _skip(int offset)async{
+    final c=player;
+    if(c==null||!c.value.isInitialized)return;
+    final target=c.value.position+Duration(seconds:offset);
+    await c.seekTo(target<Duration.zero?Duration.zero:
+      target>c.value.duration?c.value.duration:target);
+  }
+  @override Widget build(BuildContext context){
+    final c=player,v=c?.value;
+    final ready=v?.isInitialized==true;
+    final duration=v?.duration??Duration.zero;
+    final position=v?.position??Duration.zero;
+    final elapsed=position.inMilliseconds.clamp(0,
+      duration.inMilliseconds>0?duration.inMilliseconds:0);
+    return Scaffold(
+      appBar:AppBar(title:const Text('VOP Radio & Media')),
+      body:ListView(padding:const EdgeInsets.all(16),children:[
+        AspectRatio(aspectRatio:16/9,child:Container(
+          clipBehavior:Clip.antiAlias,
+          decoration:BoxDecoration(color:const Color(0xFF071A33),
+            borderRadius:BorderRadius.circular(16)),
+          child:Stack(alignment:Alignment.center,children:[
+            if(ready&&source.kind==RadioMediaKind.video)
+              AspectRatio(aspectRatio:v!.aspectRatio>0?v.aspectRatio:16/9,
+                child:VideoPlayer(c!)),
+            if(source.kind==RadioMediaKind.provider&&embed!=null)
+              WebViewWidget(controller:embed!),
+            if(source.kind==RadioMediaKind.audio)
+              const Icon(Icons.graphic_eq,size:74,color:VopColors.goldLight),
+            if(loading)const CircularProgressIndicator(color:VopColors.goldLight),
+            if(error!=null)Padding(padding:const EdgeInsets.all(18),
+              child:Text(error!,textAlign:TextAlign.center,
+                style:const TextStyle(color:Colors.white))),
+          ]),
+        )),
+        const SizedBox(height:16),
+        Text((widget.item['title']??'VOP Programme').toString(),
+          style:Theme.of(context).textTheme.headlineSmall),
+        const SizedBox(height:6),
+        Text([widget.item['speaker'],widget.item['series'],source.provider]
+          .where((e)=>e!=null&&e.toString().trim().isNotEmpty)
+          .join(' · ')),
+        if(ready)...[
+          const SizedBox(height:14),
+          if(duration>Duration.zero)Slider(
+            min:0,max:duration.inMilliseconds.toDouble(),
+            value:elapsed.toDouble(),
+            onChanged:(value)=>c!.seekTo(Duration(milliseconds:value.round()))),
+          Row(mainAxisAlignment:MainAxisAlignment.spaceBetween,children:[
+            Text(_clock(position)),
+            Text(duration>Duration.zero?_clock(duration):'LIVE'),
+          ]),
+          Row(mainAxisAlignment:MainAxisAlignment.center,children:[
+            IconButton(tooltip:'Back ten seconds',onPressed:()=>_skip(-10),
+              icon:const Icon(Icons.replay_10)),
+            FilledButton.tonalIcon(
+              onPressed:()=>v.isPlaying?c!.pause():c!.play(),
+              icon:Icon(v!.isPlaying?Icons.pause:Icons.play_arrow),
+              label:Text(v.isPlaying?'Pause':'Play')),
+            IconButton(tooltip:'Forward ten seconds',onPressed:()=>_skip(10),
+              icon:const Icon(Icons.forward_10)),
+            PopupMenuButton<double>(
+              tooltip:'Playback speed',icon:const Icon(Icons.speed),
+              onSelected:(speed)=>c!.setPlaybackSpeed(speed),
+              itemBuilder:(_)=>[
+                for(final speed in [0.75,1.0,1.25,1.5,2.0])
+                  PopupMenuItem(value:speed,child:Text(speed.toString()+'x')),
+              ]),
+          ]),
+        ],
+        const SizedBox(height:17),
+        if((widget.item['description']??'').toString().isNotEmpty)
+          Text((widget.item['description']??'').toString(),
+            style:const TextStyle(height:1.55)),
+        const SizedBox(height:23),
+        Text('Approved direct streams use the native player. YouTube, Vimeo and '
+          'AudioVerse use their official embedded player inside VOP. '
+          'Private or restricted sources cannot be bypassed.',
+          style:TextStyle(fontSize:11,height:1.5,
+            color:Theme.of(context).colorScheme.onSurfaceVariant)),
+      ]),
+    );
+  }
+}
+).hasMatch(path)){
       return RadioMedia(RadioMediaKind.video,uri);
     }
     if(RegExp(r'\.(mp3|m4a|aac|ogg|oga|wav|opus)$').hasMatch(path)){
