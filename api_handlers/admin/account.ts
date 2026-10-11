@@ -4,6 +4,8 @@ import {
 } from '../../server/accountLifecycle.js';
 import { runDailyOperationalMaintenance } from '../../server/operations.js';
 import { getAdminDb } from '../../server/tenant.js';
+import { getAuth } from 'firebase-admin/auth';
+import { getApps } from 'firebase-admin/app';
 
 type Request={method?:string;headers?:Record<string,string|string[]|undefined>;query?:Record<string,string|string[]|undefined>;body?:unknown};
 type Response={status:(code:number)=>Response;json:(body:unknown)=>void;setHeader?:(name:string,value:string)=>void};
@@ -40,6 +42,30 @@ export default async function handler(req:Request,res:Response){
     if(req.method==='GET'&&action==='status'){
       return res.status(200).json({ok:true,...await getAccountLifecycleStatus(ctx.db,ctx.auth.uid)});
     }
+    if(req.method==='GET'&&action==='security-status'){
+      const firebaseAuth=getAuth(getApps()[0]);
+      const record=await firebaseAuth.getUser(ctx.auth.uid);
+      return res.status(200).json({ok:true,
+        emailVerified:record.emailVerified,
+        lastSignInAt:record.metadata.lastSignInTime||null,
+        createdAt:record.metadata.creationTime||null,
+        signInProviders:[...new Set(record.providerData.map(provider=>provider.providerId)
+          .concat(record.passwordHash?['password']:[]))],
+      });
+    }
+    if(req.method==='POST'&&action==='revoke-sessions'){
+      if(String(body.confirmation||'')!=='SIGN OUT ALL DEVICES')
+        return res.status(400).json({error:'Type SIGN OUT ALL DEVICES to confirm.'});
+      const now=Math.floor(Date.now()/1000);
+      const authTime=Number(ctx.auth.auth_time);
+      if(!Number.isSafeInteger(authTime)||authTime<=0||now-authTime>300||authTime>now+60)
+        return res.status(403).json({error:'Sign out and sign in again before ending all sessions.'});
+      const firebaseAuth=getAuth(getApps()[0]);
+      const bearer=header(req,'authorization').replace(/^Bearer\s+/i,'').trim();
+      await firebaseAuth.verifyIdToken(bearer,true);
+      await firebaseAuth.revokeRefreshTokens(ctx.auth.uid);
+      return res.status(200).json({ok:true,revoked:true});
+    }
     if(req.method==='GET'&&action==='export'){
       const exported=await buildAccountExport(ctx.db,ctx.auth.uid);
       res.setHeader?.('Content-Disposition','attachment; filename="vop-account-export.json"');
@@ -56,7 +82,10 @@ export default async function handler(req:Request,res:Response){
     return res.status(405).json({error:'Method not allowed.'});
   }catch(error){
     const message=error instanceof Error?error.message:'Account privacy operation failed.';
-    const status=/sign in/i.test(message)?401:/cannot|must transfer|active learner assignments/i.test(message)?409:/not found/i.test(message)?404:400;
+    const status=/sign out and sign in again/i.test(message)?403
+      :/sign in|invalid.*token|revoked/i.test(message)?401
+      :/cannot|must transfer|active learner assignments/i.test(message)?409
+      :/not found/i.test(message)?404:400;
     return res.status(status).json({error:message});
   }
 }

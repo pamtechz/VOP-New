@@ -1,14 +1,16 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Save, UserRound, Bell, Globe2, Accessibility, ShieldCheck, BookOpen, Fingerprint, Trash2, Download, RotateCcw, CheckCircle, Eye, EyeOff, KeyRound, LoaderCircle, LayoutDashboard, Users, UserCheck } from 'lucide-react';
+import { Save, UserRound, Bell, Globe2, Accessibility, ShieldCheck, BookOpen, Fingerprint, Trash2, Download, RotateCcw, CheckCircle, Eye, EyeOff, KeyRound, LoaderCircle } from 'lucide-react';
 import type { User, CustomLanguage, AppRoute } from '../types';
 import { auth } from '../lib/firebase';
-import { changeUserPassword, resetPassword } from '../services/firebaseAuth';
+import { reload, sendEmailVerification } from 'firebase/auth';
+import { changeUserPassword, resetPassword, firebaseSignOut } from '../services/firebaseAuth';
 import { getTranslation, getAvailableUiLocales, loadUiLocaleRegistry, setUiLocale, getUiLocale } from '../services/i18n';
 import { getActiveLanguage, getStoredSettings } from '../services/storage';
 import { hasTrustedOfflineDeviceConsent, setTrustedOfflineDeviceConsent } from '../services/offlineDeviceConsent';
 import { hasAdminPortalAccess } from '../services/portalAccess';
 import './personalSettings.css';
 import { appConfirm } from '../components/layout/AppDialog';
+import { editableOwnProfile, loadOwnProfile, saveOwnProfile, type EditableOwnProfile, type OwnProfile } from '../services/accountProfile';
 
 const uiT = (key: string, fallback: string) => getTranslation(key, getUiLocale(), undefined, fallback, 'PersonalSettingsPage');
 import { LocalizationParticipation } from '../components/localization/LocalizationParticipation';
@@ -22,8 +24,27 @@ import {
 } from '../services/personalSettings';
 import {
   cancelAccountDeletion, downloadAccountExport, exportAccountData, loadAccountLifecycleStatus, requestAccountDeletion,
-  type AccountLifecycleStatus,
+  loadAccountSecurityStatus, revokeAllSessions, type AccountSecurityStatus, type AccountLifecycleStatus,
 } from '../services/accountLifecycle';
+
+type PasswordInputProps={
+  label:string;placeholder:string;value:string;onChange:(value:string)=>void;
+  autoComplete:'current-password'|'new-password';disabled:boolean;
+};
+function PasswordInput({label,placeholder,value,onChange,autoComplete,disabled}:PasswordInputProps){
+  const [visible,setVisible]=useState(false);
+  return <label className="vop-personal-password-field">
+    <span>{label}</span>
+    <span className="vop-personal-password-wrap">
+      <input type={visible?'text':'password'} value={value} onChange={event=>onChange(event.target.value)}
+        placeholder={placeholder} autoComplete={autoComplete} disabled={disabled}/>
+      <button type="button" disabled={disabled} title={visible?'Hide password':'Show password'}
+        aria-label={visible?'Hide '+label:'Show '+label} onClick={()=>setVisible(current=>!current)}>
+        {visible?<EyeOff size={16}/>:<Eye size={16}/>}
+      </button>
+    </span>
+  </label>;
+}
 
 interface Props { currentUser: User; onBack: () => void; onStudyLanguageChange: (language: string) => void; context?: 'learner'|'organization'; onNavigate?: (route: AppRoute) => void; }
 
@@ -43,6 +64,11 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
     privacy: { profileVisibility: 'organization' }, studyPreferences: { reminders: true, preferredStudyTime: '' },
   });
   const [busy, setBusy] = useState(true);
+  const [profile, setProfile] = useState<OwnProfile>(currentUser);
+  const [profileDraft, setProfileDraft] = useState<EditableOwnProfile>(()=>editableOwnProfile(currentUser));
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileMessage, setProfileMessage] = useState('');
+  const [profileError, setProfileError] = useState('');
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [languages, setLanguages] = useState<CustomLanguage[]>([]);
@@ -54,6 +80,11 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
   const [passkeyBusy,setPasskeyBusy]=useState(false);
   const [notificationCapabilities,setNotificationCapabilities]=useState<NotificationCapabilities|null>(null);
   const [accountLifecycle,setAccountLifecycle]=useState<AccountLifecycleStatus|null>(null);
+  const [securityOverview,setSecurityOverview]=useState<AccountSecurityStatus|null>(null);
+  const [securityBusy,setSecurityBusy]=useState(false);
+  const [verificationBusy,setVerificationBusy]=useState(false);
+  const [verificationMessage,setVerificationMessage]=useState('');
+  const [securityError,setSecurityError]=useState('');
   const [privacyBusy,setPrivacyBusy]=useState(false);
   const [deletionConfirmation,setDeletionConfirmation]=useState('');
   const [deletionReason,setDeletionReason]=useState('');
@@ -61,9 +92,6 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
-  const [showNewPassword, setShowNewPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [passwordBusy, setPasswordBusy] = useState(false);
   const [passwordMessage, setPasswordMessage] = useState('');
   const [passwordError, setPasswordError] = useState('');
@@ -132,6 +160,9 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
 
   useEffect(() => {
     let active = true;
+    const loadProfile=loadOwnProfile()
+      .then(value=>{if(active){setProfile(value);setProfileDraft(editableOwnProfile(value));}})
+      .catch(error=>{if(active)setProfileError(error instanceof Error?error.message:'Could not load your profile.');});
     const loadSettings = loadPersonalSettings()
       .then(value => {
         if (active && value) {
@@ -146,6 +177,9 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
     const loadNotificationStatus=loadNotificationCapabilities()
       .then(value=>{if(active)setNotificationCapabilities(value)})
       .catch(()=>{if(active)setNotificationCapabilities(null)});
+    const loadSecurityOverview=loadAccountSecurityStatus()
+      .then(value=>{if(active)setSecurityOverview(value)})
+      .catch(error=>{if(active)setSecurityError(error instanceof Error?error.message:'Could not retrieve account security status.');});
     const loadLifecycle=loadAccountLifecycleStatus()
       .then(value=>{if(active)setAccountLifecycle(value)})
       .catch(error=>{if(active)setMessage(error instanceof Error?error.message:'Account privacy status could not be loaded.');});
@@ -157,14 +191,39 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
           listPasskeys().then(items=>{if(active)setPasskeys(items)}),
         ]).catch(error=>{if(active)setMessage(error instanceof Error?error.message:'Passkey status could not be loaded.');})
       :Promise.resolve();
-    void Promise.allSettled([loadSettings,loadLanguages,loadSecurity,loadNotificationStatus,loadLifecycle]).finally(() => {
+    void Promise.allSettled([loadProfile,loadSettings]).finally(() => {
       if (active) setBusy(false);
     });
+    void Promise.allSettled([loadLanguages,loadSecurity,loadNotificationStatus,loadLifecycle,loadSecurityOverview]);
     return () => { active = false; };
   }, []);
 
   const patch = <K extends keyof PersonalSettings>(key: K, value: PersonalSettings[K]) =>
     setSettings(previous => ({ ...previous, [key]: value }));
+  const patchProfile = (key:keyof EditableOwnProfile,value:string) =>
+    setProfileDraft(previous=>({...previous,[key]:value}));
+  const profileDirty = (Object.keys(profileDraft) as Array<keyof EditableOwnProfile>)
+    .some(key=>profileDraft[key]!==editableOwnProfile(profile)[key]);
+  const saveProfile = async (event:React.FormEvent) => {
+    event.preventDefault();
+    if(profileSaving || !profileDirty)return;
+    setProfileError('');setProfileMessage('');
+    const changes=Object.fromEntries(
+      (Object.keys(profileDraft) as Array<keyof EditableOwnProfile>)
+        .filter(key=>profileDraft[key]!==editableOwnProfile(profile)[key])
+        .map(key=>[key,profileDraft[key].trim()]),
+    ) as Partial<EditableOwnProfile>;
+    if('displayName' in changes && !changes.displayName){
+      setProfileError('A display name is required.');return;
+    }
+    setProfileSaving(true);
+    try{
+      const saved=await saveOwnProfile(changes);
+      setProfile(saved);setProfileDraft(editableOwnProfile(saved));
+      setProfileMessage('Your profile was updated.');
+    }catch(error){setProfileError(error instanceof Error?error.message:'Could not save your profile.');}
+    finally{setProfileSaving(false);}
+  };
 
   const enablePasskey=async()=>{
     if(!passkeyCapable)return;
@@ -191,6 +250,41 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
     finally{setPasskeyBusy(false);}
   };
 
+  const requestEmailVerification=async()=>{
+    const user=auth?.currentUser;
+    if(!user||user.emailVerified)return;
+    setVerificationBusy(true);setSecurityError('');setVerificationMessage('');
+    try{
+      await sendEmailVerification(user);
+      setVerificationMessage(uiT('personal_settings.verification_email_sent','Verification email sent. Check your inbox.'));
+    }catch(error){setSecurityError(error instanceof Error?error.message:'Could not send verification email.');}
+    finally{setVerificationBusy(false);}
+  };
+  const refreshEmailVerification=async()=>{
+    const user=auth?.currentUser;
+    if(!user)return;
+    setVerificationBusy(true);setSecurityError('');
+    try{
+      await reload(user);
+      const fresh=await loadAccountSecurityStatus();
+      setSecurityOverview(fresh);
+    }catch(error){setSecurityError(error instanceof Error?error.message:'Could not refresh email verification status.');}
+    finally{setVerificationBusy(false);}
+  };
+  const signOutAllDevices=async()=>{
+    const confirmed=await appConfirm(
+      'End VOP sessions on this account, including this device? Sign in again afterwards. Existing access tokens on other devices can remain usable until expiry.',
+      {title:'Sign out all devices',confirmLabel:'Sign out all',tone:'danger'},
+    );
+    if(!confirmed)return;
+    setSecurityBusy(true);setSecurityError('');
+    try{
+      await revokeAllSessions();
+      await firebaseSignOut();
+    }catch(error){
+      setSecurityError(error instanceof Error?error.message:'Could not sign out all devices.');
+    }finally{setSecurityBusy(false);}
+  };
   const downloadMyData=async()=>{
     setPrivacyBusy(true);setMessage('');
     try{
@@ -236,7 +330,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
       const persisted = await savePersonalSettings(settings);
       setSettings(previous => ({ ...previous, ...persisted }));
       applyAccessibilityPreferences(persisted.accessibility);
-      if (persisted.theme) persistThemePreference(persisted.theme==='light'?'light':'dark');
+      if (persisted.theme) persistThemePreference(persisted.theme==='system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light') : persisted.theme);
       if (settings.uiLocale) setUiLocale(settings.uiLocale);
       if (!organizationAccount && settings.studyLanguage !== undefined) onStudyLanguageChange(settings.studyLanguage || appSettings.defaultLanguage || '');
       setMessage(t('settings.saved', 'Your personal settings have been saved.'));
@@ -300,48 +394,37 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
       <div className="vop-personal-tab-content">
         {activeTab === 'account' && (
           <div className="vop-personal-tab-pane">
-            {isAdmin && (
-              <section className="vop-personal-card vop-card">
-                <h2><ShieldCheck size={19}/>{uiT('personal_settings.admin_operations_and_tools',"Admin Operations & Tools")}</h2>
-                <p>{uiT('personal_settings.quickly_access_core_administrative_tools_and_workspaces',"Quickly access core administrative tools and workspaces:")}</p>
-                <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(170px, 1fr))',gap:8,marginTop:2}}>
-                  <button type="button" className="vop-secondary" style={{justifyContent:'flex-start'}} onClick={() => { if (currentUser.uid) { try { sessionStorage.setItem('vop-admin-tab-v1:' + currentUser.uid, 'dashboard'); } catch {} } onNavigate ? onNavigate('admin') : onBack(); }}>
-                    <LayoutDashboard size={14}/> Dashboard
-                  </button>
-                  <button type="button" className="vop-secondary" style={{justifyContent:'flex-start'}} onClick={() => { if (currentUser.uid) { try { sessionStorage.setItem('vop-admin-tab-v1:' + currentUser.uid, 'curriculum'); } catch {} } onNavigate ? onNavigate('admin') : onBack(); }}>
-                    <BookOpen size={14}/> Curriculum Studio
-                  </button>
-                  <button type="button" className="vop-secondary" style={{justifyContent:'flex-start'}} onClick={() => { if (currentUser.uid) { try { sessionStorage.setItem('vop-admin-tab-v1:' + currentUser.uid, 'userManagement'); } catch {} } onNavigate ? onNavigate('admin') : onBack(); }}>
-                    <Users size={14}/> User Management
-                  </button>
-                  <button type="button" className="vop-secondary" style={{justifyContent:'flex-start'}} onClick={() => { if (currentUser.uid) { try { sessionStorage.setItem('vop-admin-tab-v1:' + currentUser.uid, 'candidates'); } catch {} } onNavigate ? onNavigate('admin') : onBack(); }}>
-                    <UserCheck size={14}/> Candidates & Progress
-                  </button>
-                  <button type="button" className="vop-secondary" style={{justifyContent:'flex-start'}} onClick={() => { if (currentUser.uid) { try { sessionStorage.setItem('vop-admin-tab-v1:' + currentUser.uid, 'settings'); } catch {} } onNavigate ? onNavigate('admin') : onBack(); }}>
-                    <ShieldCheck size={14}/> System Settings
-                  </button>
-                </div>
-              </section>
-            )}
-
             <section className="vop-personal-card vop-card">
-              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:8}}>
-                <h2><UserRound size={19}/>{uiT('personal_settings.account',"Account")}</h2>
-                <span className={'vop-chip ' + (currentUser.accountType === 'organization' || currentUser.organizationId ? 'vop-account-type-org' : 'vop-account-type-personal')} style={{fontSize:11.5,fontWeight:750,padding:'4px 10px',borderRadius:6}}>
-                  {currentUser.accountType === 'organization' || currentUser.organizationId ? 'Organisation Account' : 'Personal Account'}
-                </span>
+              <h2><UserRound size={19}/>{t('account.profile','My profile')}</h2>
+              <div className="vop-personal-profile-summary">
+                {profileDraft.photoURL && /^https:\/\//i.test(profileDraft.photoURL)
+                  ? <img className="vop-personal-profile-avatar" src={profileDraft.photoURL} alt="" onError={event=>{event.currentTarget.style.display='none';}}/>
+                  : <span className="vop-personal-profile-avatar vop-personal-profile-initial" aria-hidden="true">{(profileDraft.displayName||profile.email||'?').charAt(0).toUpperCase()}</span>}
+                <div><strong>{profileDraft.displayName||'My account'}</strong><span>{profile.email||currentUser.email}</span></div>
               </div>
-              <p>{currentUser.displayName} · {currentUser.email}</p>
-              {currentUser.accountType === 'organization' || currentUser.organizationId ? (
-                <div style={{margin:'8px 0',padding:'10px 12px',borderRadius:8,background:'var(--theme-surface-soft,#f0f5ff)',border:'1px solid #c7d9fc',fontSize:12,color:'#1e3a8a'}}>
-                  <strong>{uiT('personal_settings.organisation_account_status',"Organisation Account Status:")}</strong> A personal account can manage an organisation account. Immediately an account has been assigned to an organisation, it assumes the organisation account type while retaining your personal identity and credentials.
+              {profileError&&<div role="alert" className="vop-personal-notice error">{profileError}</div>}
+              {profileMessage&&<div role="status" className="vop-personal-notice success"><CheckCircle size={16}/>{profileMessage}</div>}
+              <form className="vop-personal-profile-form" onSubmit={event=>void saveProfile(event)}>
+                <label>{uiT('personal_settings.profile_name','Display name')}<input required maxLength={120} autoComplete="name"
+                  value={profileDraft.displayName} onChange={event=>patchProfile('displayName',event.target.value)}/></label>
+                <label>{uiT('personal_settings.profile_email','Email address')}<input type="email" readOnly value={String(profile.email||currentUser.email||'')}/></label>
+                <label>{uiT('personal_settings.profile_phone','Phone number')}<input type="tel" maxLength={40} autoComplete="tel"
+                  value={profileDraft.phoneNumber} onChange={event=>patchProfile('phoneNumber',event.target.value)}/></label>
+                <label>{uiT('personal_settings.profile_whatsapp','WhatsApp number')}<input type="tel" maxLength={40}
+                  value={profileDraft.whatsappNumber} onChange={event=>patchProfile('whatsappNumber',event.target.value)}/></label>
+                <label>{uiT('personal_settings.profile_address','Address')}<textarea maxLength={500} rows={2} autoComplete="street-address"
+                  value={profileDraft.address} onChange={event=>patchProfile('address',event.target.value)}/></label>
+                <label>{uiT('personal_settings.profile_bio','About me')}<textarea maxLength={1000} rows={3}
+                  value={profileDraft.bio} onChange={event=>patchProfile('bio',event.target.value)}/></label>
+                <label>{uiT('personal_settings.profile_picture_url','Profile picture URL')}<input type="url" maxLength={2048} placeholder={uiT('personal_settings.profile_url_placeholder','https://')}
+                  value={profileDraft.photoURL} onChange={event=>patchProfile('photoURL',event.target.value)}/></label>
+                <div className="vop-personal-profile-actions">
+                  <button type="button" className="vop-secondary" disabled={profileSaving||!profileDirty}
+                    onClick={()=>{setProfileDraft(editableOwnProfile(profile));setProfileError('');}}>{uiT('personal_settings.profile_discard','Discard changes')}</button>
+                  <button type="submit" className="vop-primary" disabled={profileSaving||!profileDirty}>
+                    <Save size={16}/>{profileSaving?'Saving…':'Save profile'}</button>
                 </div>
-              ) : (
-                <div style={{margin:'8px 0',padding:'10px 12px',borderRadius:8,background:'var(--theme-surface-soft,#f8fafc)',border:'1px solid #e2e8f0',fontSize:12,color:'#475569'}}>
-                  <strong>{uiT('personal_settings.personal_account_status',"Personal Account Status:")}</strong> Personal accounts are separate from organisation accounts. If your account is assigned to an organisation, it will immediately assume the Organisation Account type.
-                </div>
-              )}
-              <small>{organizationAccount?'Your organization assignment and permissions are managed separately and cannot be changed here.':'Your role, organization, permissions and learning records are managed separately and cannot be changed here.'}</small>
+              </form>
             </section>
 
             <section className="vop-personal-card vop-card">
@@ -362,81 +445,19 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
                   <span>{passwordError}</span>
                 </div>
               )}
-              <form onSubmit={handlePasswordChange} style={{display:'grid',gap:12,marginTop:2}}>
-                {!isGoogleAccount && (
-                  <label>
-                    <span>{uiT('personal_settings.current_password',"Current password")}</span>
-                    <div style={{position:'relative',display:'flex',alignItems:'center'}}>
-                      <input
-                        type={showCurrentPassword ? 'text' : 'password'}
-                        value={currentPassword}
-                        onChange={e => setCurrentPassword(e.target.value)}
-                        placeholder={uiT('personal_settings.enter_your_current_password',"Enter your current password")}
-                        autoComplete="current-password"
-                        disabled={passwordBusy}
-                        style={{paddingRight:36}}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowCurrentPassword(v => !v)}
-                        style={{position:'absolute',right:8,background:'none',border:'none',padding:3,cursor:'pointer',color:'var(--text-muted,#64748b)',display:'inline-flex',alignItems:'center'}}
-                        title={showCurrentPassword ? 'Hide password' : 'Show password'}
-                        aria-label={showCurrentPassword ? 'Hide current password' : 'Show current password'}
-                      >
-                        {showCurrentPassword ? <EyeOff size={16}/> : <Eye size={16}/>}
-                      </button>
-                    </div>
-                  </label>
-                )}
-
-                <label>
-                  <span>{isGoogleAccount ? 'Password' : 'New password'}</span>
-                  <div style={{position:'relative',display:'flex',alignItems:'center'}}>
-                    <input
-                      type={showNewPassword ? 'text' : 'password'}
-                      value={newPassword}
-                      onChange={e => setNewPassword(e.target.value)}
-                      placeholder={uiT('personal_settings.at_least_6_characters',"At least 6 characters")}
-                      autoComplete="new-password"
-                      disabled={passwordBusy}
-                      style={{paddingRight:36}}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowNewPassword(v => !v)}
-                      style={{position:'absolute',right:8,background:'none',border:'none',padding:3,cursor:'pointer',color:'var(--text-muted,#64748b)',display:'inline-flex',alignItems:'center'}}
-                      title={showNewPassword ? 'Hide password' : 'Show password'}
-                      aria-label={showNewPassword ? 'Hide new password' : 'Show new password'}
-                    >
-                      {showNewPassword ? <EyeOff size={16}/> : <Eye size={16}/>}
-                    </button>
-                  </div>
-                </label>
-
-                <label>
-                  <span>{isGoogleAccount ? 'Confirm password' : 'Confirm new password'}</span>
-                  <div style={{position:'relative',display:'flex',alignItems:'center'}}>
-                    <input
-                      type={showConfirmPassword ? 'text' : 'password'}
-                      value={confirmPassword}
-                      onChange={e => setConfirmPassword(e.target.value)}
-                      placeholder={isGoogleAccount ? 'Re-enter password' : 'Re-enter your new password'}
-                      autoComplete="new-password"
-                      disabled={passwordBusy}
-                      style={{paddingRight:36}}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowConfirmPassword(v => !v)}
-                      style={{position:'absolute',right:8,background:'none',border:'none',padding:3,cursor:'pointer',color:'var(--text-muted,#64748b)',display:'inline-flex',alignItems:'center'}}
-                      title={showConfirmPassword ? 'Hide password' : 'Show password'}
-                      aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
-                    >
-                      {showConfirmPassword ? <EyeOff size={16}/> : <Eye size={16}/>}
-                    </button>
-                  </div>
-                </label>
-
+              <form onSubmit={handlePasswordChange} className="vop-personal-password-form">
+                {!isGoogleAccount&&<PasswordInput label={uiT('personal_settings.current_password','Current password')}
+                  placeholder={uiT('personal_settings.enter_your_current_password','Enter your current password')}
+                  value={currentPassword} onChange={setCurrentPassword}
+                  autoComplete="current-password" disabled={passwordBusy}/>}
+                <PasswordInput label={isGoogleAccount?'Password':'New password'}
+                  placeholder={uiT('personal_settings.at_least_6_characters','At least 6 characters')}
+                  value={newPassword} onChange={setNewPassword}
+                  autoComplete="new-password" disabled={passwordBusy}/>
+                <PasswordInput label={isGoogleAccount?'Confirm password':'Confirm new password'}
+                  placeholder={isGoogleAccount?'Re-enter password':'Re-enter your new password'}
+                  value={confirmPassword} onChange={setConfirmPassword}
+                  autoComplete="new-password" disabled={passwordBusy}/>
                 <div style={{display:'flex',gap:10,alignItems:'center',flexWrap:'wrap',marginTop:4}}>
                   <button
                     type="submit"
@@ -468,7 +489,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
           <div className="vop-personal-tab-pane">
             <section className="vop-personal-card vop-card">
               <h2><Globe2 size={19}/>{uiT('personal_settings.interface',"Interface")}</h2>
-              <label>{uiT('personal_settings.theme',"Theme")}<select value={settings.theme === 'dark' ? 'dark' : 'light'} onChange={e => { const theme=e.target.value as 'light'|'dark'; patch('theme',theme); persistThemePreference(theme); }}><option value="light">{uiT('personal_settings.light_default',"Light (default)")}</option><option value="dark">{uiT('personal_settings.dark',"Dark")}</option></select></label>
+              <label>{uiT('personal_settings.theme',"Theme")}<select value={settings.theme || 'light'} onChange={e => { const theme=e.target.value as 'light'|'dark'|'system'; patch('theme',theme); persistThemePreference(theme==='system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light') : theme); }}><option value="light">{uiT('personal_settings.light_default',"Light (default)")}</option><option value="dark">{uiT('personal_settings.dark',"Dark")}</option><option value="system">Use device theme</option></select></label>
               <label>{t('settings.ui_language', 'Interface language')}<select value={settings.uiLocale || getUiLocale()} onChange={e => { patch('uiLocale', e.target.value); setUiLocale(e.target.value); }}>
                 {uiLocales.map(language => <option key={language.code} value={language.code}>{language.name} · {language.nativeName || language.code}</option>)}
               </select></label>
@@ -515,11 +536,32 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
         {activeTab === 'security' && (
           <div className="vop-personal-tab-pane">
             <section className="vop-personal-card vop-card">
+              <h2><ShieldCheck size={19}/>{uiT('personal_settings.security_overview','Account security')}</h2>
+              {securityError&&<p role="alert">{securityError}</p>}
+              {securityOverview?<>
+                <p>{uiT('personal_settings.email_verification','Email verification')}: <strong>
+                  {securityOverview.emailVerified?uiT('personal_settings.verified_email','Verified'):uiT('personal_settings.unverified_email','Not verified')}
+                </strong></p>
+                {securityOverview.lastSignInAt&&<p>{uiT('personal_settings.last_sign_in','Last sign-in')}: {new Date(securityOverview.lastSignInAt).toLocaleString()}</p>}
+                <p>{uiT('personal_settings.linked_sign_in','Linked providers')}: {securityOverview.signInProviders.join(', ')||'Email'}</p>
+                <div className="vop-personal-profile-actions">
+                  {!securityOverview.emailVerified&&<button type="button" className="vop-secondary" disabled={verificationBusy}
+                    onClick={()=>void requestEmailVerification()}>{uiT('personal_settings.send_verification_email','Send verification email')}</button>}
+                  <button type="button" className="vop-secondary" disabled={verificationBusy}
+                    onClick={()=>void refreshEmailVerification()}>{uiT('personal_settings.refresh_verification','Refresh status')}</button>
+                </div>
+                {verificationMessage&&<small role="status">{verificationMessage}</small>}
+              </>:<p>{uiT('personal_settings.loading_account_security','Account security details unavailable.')}</p>}
+              <p>{uiT('personal_settings.sessions_explanation','Revoking refresh tokens ends sign-in across devices. Existing access tokens may work until expiry.')}</p>
+              <button type="button" className="vop-secondary danger" disabled={securityBusy}
+                onClick={()=>void signOutAllDevices()}><ShieldCheck size={16}/>
+                {securityBusy?'Ending sessions…':uiT('personal_settings.sign_out_all_devices','Sign out all devices')}
+              </button>
+            </section>
+            <section className="vop-personal-card vop-card">
               <h2><Fingerprint size={19}/>{uiT('personal_settings.passkeys_and_device_verification',"Passkeys & device verification")}</h2>
               {!passkeyCapable?<p>{uiT('personal_settings.this_browser_or_connection_does_not_support_secure_passkey_sign_in',"This browser or connection does not support secure passkey sign-in.")}</p>:<>
-                <p>{platformBiometric
-                  ?'Enable a passkey after signing in once. Your device can then verify you using fingerprint, face recognition, PIN or screen lock.'
-                  :'Enable a passkey after signing in once. The available verification method is controlled by your device or passkey provider.'}</p>
+                <p>{platformBiometric?'Use fingerprint, face, PIN or device lock.':'Use a supported passkey provider.'}</p>
                 <small>{uiT('personal_settings.vop_stores_a_public_key_credential_only_biometric_data_remains_on_your_device_and_is_not_u',"VOP stores a public-key credential only. Biometric data remains on your device and is not uploaded to VOP or Firebase.")}</small>
                 <button type="button" className="vop-primary" disabled={passkeyBusy} onClick={()=>void enablePasskey()}>
                   <Fingerprint size={17}/>{passkeyBusy?'Please wait…':'Enable passkey on this device'}
@@ -530,16 +572,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
                     <button type="button" className="vop-secondary danger" disabled={passkeyBusy} onClick={()=>void removePasskey(item)}><Trash2 size={15}/>{uiT('personal_settings.remove',"Remove")}</button>
                   </div>)}
                 </div>}
-                <p style={{marginTop:16,fontSize:13,color:'var(--text-muted,#64748b)'}}>
-                  Looking to update your sign-in password? You can change it anytime in the{' '}
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('account')}
-                    style={{background:'none',border:'none',color:'var(--primary,#1e40af)',textDecoration:'underline',cursor:'pointer',font:'inherit',fontWeight:600,padding:0}}
-                  >
-                    Account tab
-                  </button>.
-                </p>
+                <button type="button" className="vop-secondary" onClick={()=>setActiveTab('account')}>Manage password</button>
               </>}
             </section>
           </div>
