@@ -166,9 +166,10 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
           listPasskeys().then(items=>{if(active)setPasskeys(items)}),
         ]).catch(error=>{if(active)setMessage(error instanceof Error?error.message:'Passkey status could not be loaded.');})
       :Promise.resolve();
-    void Promise.allSettled([loadProfile,loadSettings,loadLanguages,loadSecurity,loadNotificationStatus,loadLifecycle]).finally(() => {
+    void Promise.allSettled([loadProfile,loadSettings]).finally(() => {
       if (active) setBusy(false);
     });
+    void Promise.allSettled([loadLanguages,loadSecurity,loadNotificationStatus,loadLifecycle]);
     return () => { active = false; };
   }, []);
 
