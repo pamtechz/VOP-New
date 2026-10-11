@@ -36,6 +36,8 @@ class VopApi {
       '/api/prayer',
       '/api/certificates',
       '/api/admin/notifications',
+      '/api/admin/users',
+      '/api/account',
     }.contains(path)) {
       throw const VopApiException('Unsupported VOP API endpoint.');
     }
@@ -107,6 +109,22 @@ class VopApi {
       _execute(path, 'POST', body, null);
 
   Future<Map<String, dynamic>> bootstrap() => read('bootstrap');
+  Future<Map<String,dynamic>> accountProfile() =>
+      action('/api/admin/users',{'action':'profile'});
+  Future<Map<String,dynamic>> saveProfile(Map<String,dynamic> profile) =>
+      action('/api/admin/users',{'action':'updateOwnProfile','profile':profile});
+  Future<Map<String,dynamic>> personalSettings() =>
+      action('/api/admin/users',{'action':'personalSettings','operation':'get'});
+  Future<Map<String,dynamic>> savePersonalSettings(Map<String,dynamic> settings) =>
+      action('/api/admin/users',{'action':'personalSettings','settings':settings});
+  Future<Map<String,dynamic>> accountLifecycle() =>
+      _execute('/api/account','GET',null,{'action':'status'});
+  Future<Map<String,dynamic>> requestAccountDeletion() =>
+      action('/api/account',{'action':'request-deletion'});
+  Future<Map<String,dynamic>> cancelAccountDeletion() =>
+      action('/api/account',{'action':'cancel-deletion'});
+  Future<Map<String,dynamic>> supportedLanguages() => read('languages');
+
   Future<Map<String, dynamic>> catalogue() => read('catalog');
   Future<Map<String, dynamic>> resources() => read('resources');
   Future<Map<String, dynamic>> events() => read('events');

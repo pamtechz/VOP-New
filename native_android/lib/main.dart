@@ -21,12 +21,28 @@ class VopAndroidApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable:VopAppearance.mode,
+      builder:(context,mode,child)=>ValueListenableBuilder<bool>(
+        valueListenable:VopAppearance.highContrast,
+        builder:(context,contrast,_)=>MaterialApp(
       title: 'Voice of Prophecy',
       debugShowCheckedModeBanner: false,
-      themeMode: ThemeMode.system,
-      theme: VopTheme.build(Brightness.light),
-      darkTheme: VopTheme.build(Brightness.dark),
+      themeMode: mode,
+      builder:(context,child)=>ValueListenableBuilder<bool>(
+        valueListenable:VopAppearance.largerText,
+        builder:(context,large,_)=>ValueListenableBuilder<bool>(
+          valueListenable:VopAppearance.reducedMotion,
+          builder:(context,reduce,_)=>MediaQuery(
+            data:MediaQuery.of(context).copyWith(
+              textScaler:TextScaler.linear(large?1.16:1.0),
+              disableAnimations:reduce),
+            child:child??const SizedBox.shrink(),
+          ),
+        ),
+      ),
+      theme: VopTheme.build(Brightness.light,highContrast:contrast),
+      darkTheme: VopTheme.build(Brightness.dark,highContrast:contrast),
       home: VopConfig.error != null
           ? Scaffold(
               appBar: AppBar(title: const Text('Configuration required')),
@@ -49,6 +65,6 @@ class VopAndroidApp extends StatelessWidget {
                 return HomeShell(key: ValueKey(snapshot.data!.uid), api: VopApi());
               },
             ),
-    );
+    )));
   }
 }

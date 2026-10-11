@@ -17,21 +17,45 @@ abstract final class VopColors {
   static const darkSurface = Color(0xFF142A46);
   static const darkBorder = Color(0xFF294263);
 }
+/// Appearance is account-backed. This notifier updates the native shell without
+/// restarting the application or affecting saved curriculum data.
+abstract final class VopAppearance {
+  static final mode = ValueNotifier<ThemeMode>(ThemeMode.system);
+  static final largerText = ValueNotifier<bool>(false);
+  static final reducedMotion = ValueNotifier<bool>(false);
+  static final highContrast = ValueNotifier<bool>(false);
+  static void apply(Map<String,dynamic> settings){
+    mode.value=switch(settings['theme']){
+      'light'=>ThemeMode.light,'dark'=>ThemeMode.dark,_=>ThemeMode.system,
+    };
+    final access=settings['accessibility'];
+    if(access is Map){
+      largerText.value=access['largeText']==true;
+      reducedMotion.value=access['reducedMotion']==true;
+      highContrast.value=access['highContrast']==true;
+    }
+  }
+}
 abstract final class VopTheme {
-  static ThemeData build(Brightness brightness) {
+  static ThemeData build(Brightness brightness, {bool highContrast=false}) {
     final dark = brightness == Brightness.dark;
-    final surface = dark ? VopColors.darkSurface : VopColors.card;
+    final surface = highContrast
+      ? (dark ? const Color(0xFF050B15) : Colors.white)
+      : (dark ? VopColors.darkSurface : VopColors.card);
     final colors = ColorScheme.fromSeed(
       seedColor: VopColors.navy,
       brightness: brightness,
       primary: dark ? const Color(0xFF9BC4FF) : VopColors.navy,
       secondary: dark ? VopColors.goldLight : VopColors.gold,
       surface: surface,
+      onSurface: highContrast ? (dark ? Colors.white : Colors.black) : null,
     );
     final base = ThemeData(
       useMaterial3: true, colorScheme: colors,
       brightness: brightness,
-      scaffoldBackgroundColor: dark ? VopColors.darkCanvas : VopColors.canvas,
+      scaffoldBackgroundColor: highContrast
+        ? (dark ? Colors.black : Colors.white)
+        : (dark ? VopColors.darkCanvas : VopColors.canvas),
       splashFactory: InkRipple.splashFactory,
     );
     return base.copyWith(
@@ -58,7 +82,8 @@ abstract final class VopTheme {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(19),
           side: BorderSide(
-            color: dark ? VopColors.darkBorder : VopColors.border)),
+            color: highContrast ? (dark ? Colors.white70 : Colors.black54)
+              : (dark ? VopColors.darkBorder : VopColors.border))),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true, fillColor: surface,
@@ -89,7 +114,8 @@ abstract final class VopTheme {
           fontSize: 10,fontWeight: FontWeight.w700)),
       ),
       dividerTheme: DividerThemeData(
-        color: dark ? VopColors.darkBorder : VopColors.border),
+        color: highContrast ? (dark ? Colors.white70 : Colors.black54)
+          : (dark ? VopColors.darkBorder : VopColors.border)),
       chipTheme: base.chipTheme.copyWith(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
         side: BorderSide.none),

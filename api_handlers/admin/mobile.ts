@@ -90,7 +90,7 @@ export default async function mobile(req:Request,res:Response){
   res.setHeader?.('X-Content-Type-Options','nosniff');
   if(req.method!=='GET')return res.status(405).json({ok:false,code:'METHOD_NOT_ALLOWED',error:'Use GET for read-only mobile endpoints.'});
   const resource=param(req,'resource');
-  if(!['bootstrap','catalog','guide','lesson','progress','announcements','resources','events','radio'].includes(resource))
+  if(!['bootstrap','catalog','guide','lesson','progress','announcements','resources','events','radio','languages'].includes(resource))
     return res.status(404).json({ok:false,code:'NOT_FOUND',error:'Unknown mobile API resource.'});
   try{
     const ctx=await authenticateTenant(req,undefined,true);
@@ -123,6 +123,14 @@ export default async function mobile(req:Request,res:Response){
           progress.lessonResume:{},
         // Assessment marks are intentionally not read from private banks.
       });
+    }
+    if(resource==='languages'){
+      const languages=await db.collection('languages').limit(150).get();
+      return res.status(200).json({ok:true,items:languages.docs.filter(doc=>doc.data().enabled!==false).map(doc=>{
+        const item=doc.data();
+        return {code:doc.id,name:string(item.name)||doc.id,
+          nativeName:string(item.nativeName)||doc.id};
+      })});
     }
     if(resource==='catalog'){
       const guidesRef=db.collection('guides');

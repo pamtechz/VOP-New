@@ -507,7 +507,7 @@ test('organization certification stays visible and degrades to a locked workspac
   const admin=read('src/pages/AdminPage.tsx');
   const certification=read('src/pages/CertificationManager.tsx');
 
-  assert.match(admin,/item\.id!=='certification'&&organizationAdmin&&subscriptionFeature&&subscriptionFeatures/);
+  assert.match(admin,/item\.id!=='certification'&&item\.id!=='radio'&&organizationAdmin&&subscriptionFeature&&subscriptionFeatures/);
   assert.match(admin,/else if\(item\.id==='certification'\)\{[\s\S]*coreTenantAdmin\|\|canSee\(item\.id\)/);
   assert.match(admin,/featureAvailable=\{isSuperAdmin\|\|subscriptionFeatures===null/);
   assert.match(admin,/onOpenBilling=\{\(\)=>navigateAdminTab\('payments'\)\}/);
