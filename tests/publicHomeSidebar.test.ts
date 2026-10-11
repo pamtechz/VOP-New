@@ -32,6 +32,14 @@ test('desktop has permanent collapsible learner sidebar without duplicate accoun
   assert.match(app,/persistSidebarCollapsed/);
   assert.match(sidebar,/onClick=\{onToggle\}/);
   assert.match(sidebar,/isAdmin\?\[\{route:'admin'/);
+  // Admin dashboard, curriculum, users, candidates and settings have the
+  // same route but distinct tab identities and React keys.
+  assert.ok(sidebar.includes('key={item.adminTab ? `${item.route}:${item.adminTab}` : item.route}'));
+  assert.doesNotMatch(sidebar,/key=\{item\.route\}/);
+  for(const tab of ['dashboard','curriculum','userManagement','candidates','settings']) {
+    assert.ok(sidebar.includes(`adminTab: '${tab}'`));
+  }
+
   assert.match(sidebar,/aria-current=\{currentRoute===item\.route\?'page':undefined\}/);
   assert.match(sidebar,/aria-controls="vop-learner-sidebar-links"/);
   assert.doesNotMatch(sidebar,/vop-learner-sidebar-(user|logout|foot)/);
