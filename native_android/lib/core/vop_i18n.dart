@@ -25,45 +25,7 @@ abstract final class VopI18n {
     try{
       final locale=await _secure.read(key:'vop-ui-locale:$owner');
       if(locale==null||locale=='en')return;
-      if(!RegExp(r'^[a-z]{2,3}(?:-[a-z0-9]{2,8})*
-    final clean=code.trim().toLowerCase();
-    final locale=RegExp(r'^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$').hasMatch(clean)
-      ?clean:'en';
-    if(locale=='en'){
-      final owner=FirebaseAuth.instance.currentUser?.uid;
-      if(owner!=null)await _secure.write(key:'vop-ui-locale:$owner',value:'en');
-      bundle.value=const VopLocaleBundle('en',{});
-      return;
-    }
-    final owner=FirebaseAuth.instance.currentUser?.uid;
-    if(owner==null)return;
-    final key='vop-ui-translations:$owner:$locale';
-    await _secure.write(key:'vop-ui-locale:$owner',value:locale);
-    try{
-      final response=await api.translations(locale);
-      final raw=response['translations'];
-      if(raw is! Map)throw const FormatException('Invalid translation payload');
-      final values=raw.map((name,text)=>
-        MapEntry(name.toString(),text.toString()));
-      if(FirebaseAuth.instance.currentUser?.uid!=owner)return;
-      bundle.value=VopLocaleBundle(locale,values);
-      await _secure.write(key:key,value:jsonEncode(values));
-    }catch(_){
-      if(FirebaseAuth.instance.currentUser?.uid!=owner)return;
-      final cached=await _secure.read(key:key);
-      if(cached!=null){
-        final decoded=jsonDecode(cached);
-        if(decoded is Map){
-          bundle.value=VopLocaleBundle(locale,decoded.map(
-            (key,value)=>MapEntry(key.toString(),value.toString())));
-          return;
-        }
-      }
-      bundle.value=VopLocaleBundle(locale,{});
-    }
-  }
-}
-).hasMatch(locale))return;
+      if(!RegExp(r'^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$').hasMatch(locale))return;
       final raw=await _secure.read(key:'vop-ui-translations:$owner:$locale');
       if(raw==null)return;
       final json=jsonDecode(raw);
@@ -73,16 +35,18 @@ abstract final class VopI18n {
       }
     }catch(_){}
   }
+
   static Future<void> load(VopApi api,String code)async{
     final clean=code.trim().toLowerCase();
     final locale=RegExp(r'^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$').hasMatch(clean)
       ?clean:'en';
+    final owner=FirebaseAuth.instance.currentUser?.uid;
+    if(owner==null)return;
+    await _secure.write(key:'vop-ui-locale:$owner',value:locale);
     if(locale=='en'){
       bundle.value=const VopLocaleBundle('en',{});
       return;
     }
-    final owner=FirebaseAuth.instance.currentUser?.uid;
-    if(owner==null)return;
     final key='vop-ui-translations:$owner:$locale';
     try{
       final response=await api.translations(locale);
