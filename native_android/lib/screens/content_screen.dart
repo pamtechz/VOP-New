@@ -80,7 +80,7 @@ class _VopContentScreenState extends State<VopContentScreen> {
                 'Nothing has been published here yet.')),
             ...filtered.map(_item),
             const SizedBox(height:30),
-          ])));
+          ]));
       });
     return widget.embedded?body:Scaffold(
       appBar:AppBar(title:Text(widget.kind.title)),body:body);
