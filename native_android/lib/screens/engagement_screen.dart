@@ -22,16 +22,37 @@ class _EngagementScreenState extends State<EngagementScreen> {
   @override Widget build(BuildContext context)=>Scaffold(
     appBar:AppBar(title:const Text('Scripture & Challenges')),
     body:Column(children:[
-      Padding(padding:const EdgeInsets.all(15),
-        child:SegmentedButton<int>(segments:const [
-          ButtonSegment(value:0,label:Text('Memory decks'),
-            icon:Icon(Icons.psychology_outlined)),
-          ButtonSegment(value:1,label:Text('Challenges'),
-            icon:Icon(Icons.sports_esports_outlined)),
-        ],selected:{tab},onSelectionChanged:(values)=>setState(()=>tab=values.first))),
+      Padding(padding:const EdgeInsets.fromLTRB(12,10,12,4),
+        child:LayoutBuilder(builder:(context,size)=>size.maxWidth<390
+          ?Row(children:[
+              Expanded(child:_tabButton(0,'Memory',Icons.psychology_outlined)),
+              const SizedBox(width:8),
+              Expanded(child:_tabButton(1,'Challenges',Icons.sports_esports_outlined)),
+            ])
+          :SegmentedButton<int>(showSelectedIcon:false,segments:const [
+              ButtonSegment(value:0,label:Text('Memory decks'),icon:Icon(Icons.psychology_outlined)),
+              ButtonSegment(value:1,label:Text('Challenges'),icon:Icon(Icons.sports_esports_outlined)),
+            ],selected:{tab},onSelectionChanged:(values)=>setState(()=>tab=values.first)))),
       Expanded(child:tab==0?_decks():_challenges()),
     ]),
   );
+  Widget _tabButton(int index,String label,IconData icon){
+    final selected=tab==index;
+    return Material(
+      color:selected?Theme.of(context).colorScheme.primaryContainer:
+        Theme.of(context).colorScheme.surface,
+      borderRadius:BorderRadius.circular(12),
+      child:InkWell(borderRadius:BorderRadius.circular(12),
+        onTap:()=>setState(()=>tab=index),
+        child:Padding(padding:const EdgeInsets.symmetric(horizontal:6,vertical:11),
+          child:Row(mainAxisAlignment:MainAxisAlignment.center,children:[
+            Icon(icon,size:18),
+            const SizedBox(width:5),
+            Flexible(child:Text(label,maxLines:1,overflow:TextOverflow.ellipsis,
+              style:const TextStyle(fontSize:12,fontWeight:FontWeight.w700))),
+          ]))),
+    );
+  }
   Widget _decks()=>FutureBuilder<Map<String,dynamic>>(future:decks,
     builder:(context,s){
       if(s.connectionState!=ConnectionState.done)return const VopSkeleton();
@@ -106,8 +127,8 @@ class _EngagementScreenState extends State<EngagementScreen> {
     });
   Widget _score(String label,String number,IconData icon)=>Card(
     child:Padding(padding:const EdgeInsets.symmetric(horizontal:9,vertical:14),
-      child:Column(children:[
-        Icon(icon,color:VopColors.gold,size:25),
+      child:Column(mainAxisSize:MainAxisSize.min,children:[
+        Icon(icon,color:VopColors.gold,size:22),
         const SizedBox(height:7),
         Text(number,style:Theme.of(context).textTheme.titleLarge),
         Text(label,style:const TextStyle(fontSize:9,fontWeight:FontWeight.w800)),
