@@ -142,3 +142,53 @@
   background: #dbeafe;
   border-color: #93c5fd;
 }
+
+.vop-program-guide-lessons{
+  flex:1 1 100%;
+  list-style:none;
+  display:grid;
+  gap:5px;
+  padding:1px 0 8px 41px;
+  margin:0;
+  min-width:0;
+}
+.vop-program-lesson-button{
+  display:flex;
+  align-items:center;
+  width:100%;
+  gap:9px;
+  text-align:left;
+  border:1px solid var(--border-subtle,#dfe8f3);
+  border-radius:8px;
+  background:var(--bg-card,#fff);
+  color:var(--text-primary,#1d456f);
+  padding:10px 12px;
+  cursor:pointer;
+  font-size:12.5px;
+  line-height:1.3;
+}
+.vop-program-lesson-button:hover:not(:disabled),
+.vop-program-lesson-button:focus-visible{
+  border-color:var(--primary,#336cb0);
+  background:var(--bg-muted,#eff6ff);
+}
+.vop-program-lesson-button>span{
+  flex:1;
+  min-width:0;
+  overflow-wrap:anywhere;
+  font-weight:650;
+}
+.vop-program-lesson-button>small{
+  flex-shrink:0;
+  font-size:10px;
+  color:var(--text-secondary,#6a8198);
+}
+.vop-program-lesson-button:disabled{
+  opacity:.58;
+  cursor:not-allowed;
+}
+@media(max-width:600px){
+  .vop-program-guide-lessons{padding-left:6px}
+  .vop-program-lesson-button{padding:10px;gap:7px}
+  .vop-program-lesson-button>small{font-size:9px}
+}
