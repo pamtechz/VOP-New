@@ -47,63 +47,67 @@ class VopSectionTitle extends StatelessWidget {
   );
 }
 
+/// Compact, content-first banner for narrow Android screens.
+/// No giant decorative circles: the study content stays in the first viewport.
 class VopHeroCard extends StatelessWidget {
-  const VopHeroCard({required this.title,required this.description,
-    required this.icon,this.kicker='YOUR JOURNEY',this.cta='Explore',
-    this.onTap,super.key});
+  const VopHeroCard({
+    required this.title,required this.description,required this.icon,
+    this.kicker='YOUR JOURNEY',this.cta='Explore',this.onTap,super.key,
+  });
   final String title,description,kicker,cta;
   final IconData icon;
   final VoidCallback? onTap;
-  @override Widget build(BuildContext context)=>Container(
-    constraints:const BoxConstraints(minHeight:210),
-    decoration:BoxDecoration(
-      borderRadius:BorderRadius.circular(24),
-      gradient:const LinearGradient(
-        colors:[Color(0xFF002D72),Color(0xFF0D47A1),Color(0xFF174B84)],
-        begin:Alignment.topLeft,end:Alignment.bottomRight),
-      boxShadow:[BoxShadow(color:VopColors.navy.withValues(alpha:.16),
-        blurRadius:24,offset:const Offset(0,10))]),
-    clipBehavior:Clip.antiAlias,
-    child:Stack(children:[
-      Positioned(right:-49,top:-70,child:_Halo(size:210,color:Colors.white.withValues(alpha:.06))),
-      Positioned(right:34,bottom:-90,child:_Halo(size:180,color:VopColors.gold.withValues(alpha:.11))),
-      Positioned(right:0,bottom:4,child:Opacity(opacity:.17,
-        child:Icon(icon,size:132,color:Colors.white))),
-      Padding(padding:const EdgeInsets.all(23),
-        child:ConstrainedBox(constraints:const BoxConstraints(maxWidth:385),
-        child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-          Row(mainAxisSize:MainAxisSize.min,children:[
-            const Icon(Icons.auto_awesome_rounded,color:VopColors.goldLight,size:15),
-            const SizedBox(width:6),
-            Text(kicker,style:const TextStyle(
-              fontSize:10,fontWeight:FontWeight.w800,
-              letterSpacing:1.45,color:VopColors.goldLight)),
+  @override Widget build(BuildContext context)=>LayoutBuilder(
+    builder:(context,constraints){
+      final narrow=constraints.maxWidth<360;
+      return Container(
+        decoration:BoxDecoration(
+          borderRadius:BorderRadius.circular(18),
+          gradient:const LinearGradient(
+            colors:[Color(0xFF002D72),Color(0xFF0D47A1)],
+            begin:Alignment.topLeft,end:Alignment.bottomRight),
+          boxShadow:[BoxShadow(color:VopColors.navy.withValues(alpha:.11),
+            blurRadius:14,offset:const Offset(0,5))]),
+        child:Padding(padding:EdgeInsets.all(narrow?16:18),
+          child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+            Row(children:[
+              const Icon(Icons.auto_awesome_rounded,
+                color:VopColors.goldLight,size:14),
+              const SizedBox(width:7),
+              Expanded(child:Text(kicker,maxLines:1,
+                overflow:TextOverflow.ellipsis,style:const TextStyle(
+                  fontSize:10,fontWeight:FontWeight.w800,
+                  letterSpacing:1.25,color:VopColors.goldLight))),
+              Container(width:32,height:32,
+                decoration:BoxDecoration(
+                  borderRadius:BorderRadius.circular(10),
+                  color:Colors.white.withValues(alpha:.12)),
+                child:Icon(icon,size:18,color:Colors.white)),
+            ]),
+            const SizedBox(height:12),
+            Text(title,style:TextStyle(color:Colors.white,
+              fontSize:narrow?20:22,fontWeight:FontWeight.w800,
+              height:1.17,letterSpacing:-.55)),
+            const SizedBox(height:7),
+            Text(description,maxLines:3,overflow:TextOverflow.ellipsis,
+              style:TextStyle(color:Colors.white.withValues(alpha:.88),
+                height:1.4,fontSize:12)),
+            if(onTap!=null)...[
+              const SizedBox(height:13),
+              FilledButton.icon(onPressed:onTap,
+                style:FilledButton.styleFrom(
+                  minimumSize:const Size(0,39),
+                  padding:const EdgeInsets.symmetric(horizontal:16,vertical:0),
+                  backgroundColor:VopColors.goldLight,
+                  foregroundColor:VopColors.navyDeep),
+                icon:const Icon(Icons.arrow_forward_rounded,size:16),
+                label:Text(cta)),
+            ],
           ]),
-          const SizedBox(height:15),
-          Text(title,style:const TextStyle(
-            color:Colors.white,fontSize:25,fontWeight:FontWeight.w900,
-            height:1.15,letterSpacing:-.65)),
-          const SizedBox(height:11),
-          Text(description,style:TextStyle(
-            color:Colors.white.withValues(alpha:.85),
-            height:1.5,fontSize:12.5)),
-          const SizedBox(height:19),
-          if(onTap!=null)FilledButton.icon(
-            onPressed:onTap,style:FilledButton.styleFrom(
-              backgroundColor:VopColors.goldLight,foregroundColor:VopColors.navyDeep),
-            label:Text(cta),icon:const Icon(Icons.arrow_forward_rounded,size:17)),
-        ]))),
-    ]),
+        ),
+      );
+    },
   );
-}
-class _Halo extends StatelessWidget {
-  const _Halo({required this.size,required this.color});
-  final double size;
-  final Color color;
-  @override Widget build(BuildContext context)=>Container(
-    width:size,height:size,
-    decoration:BoxDecoration(shape:BoxShape.circle,
-      border:Border.all(color:color,width:23)));
 }
 
 class VopFeatureTile extends StatelessWidget {
@@ -113,26 +117,34 @@ class VopFeatureTile extends StatelessWidget {
   final IconData icon;
   final Color tint;
   final VoidCallback onTap;
-  @override Widget build(BuildContext context)=>Card(
-    clipBehavior:Clip.antiAlias,
-    child:InkWell(onTap:onTap,child:Padding(
-      padding:const EdgeInsets.all(15),
-      child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-        Container(width:43,height:43,
-          decoration:BoxDecoration(color:tint.withValues(alpha:.12),
-            borderRadius:BorderRadius.circular(12)),
-          child:Icon(icon,color:tint,size:23)),
-        const Spacer(),
-        Text(title,maxLines:1,overflow:TextOverflow.ellipsis,
-          style:const TextStyle(fontWeight:FontWeight.w800,fontSize:13)),
-        const SizedBox(height:4),
-        Text(subtitle,maxLines:2,overflow:TextOverflow.ellipsis,
-          style:TextStyle(fontSize:10.5,height:1.35,
-            color:Theme.of(context).colorScheme.onSurfaceVariant)),
-      ])),
-    ),
-  );
+  @override Widget build(BuildContext context){
+    final dark=Theme.of(context).brightness==Brightness.dark;
+    // Deep-blue icons disappear against dark cards; brighten only in dark mode.
+    final effectiveTint=dark&&tint==VopColors.navyBright
+      ?const Color(0xFF9BC4FF):tint;
+    return Card(
+      clipBehavior:Clip.antiAlias,
+      child:InkWell(onTap:onTap,
+        child:Padding(padding:const EdgeInsets.all(12),
+          child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+            Container(width:35,height:35,
+              decoration:BoxDecoration(
+                color:effectiveTint.withValues(alpha:dark?.18:.10),
+                borderRadius:BorderRadius.circular(10)),
+              child:Icon(icon,color:effectiveTint,size:20)),
+            const Spacer(),
+            Text(title,maxLines:1,overflow:TextOverflow.ellipsis,
+              style:const TextStyle(fontSize:12.5,fontWeight:FontWeight.w800)),
+            const SizedBox(height:2),
+            Text(subtitle,maxLines:2,overflow:TextOverflow.ellipsis,
+              style:TextStyle(fontSize:10.5,height:1.28,
+                color:Theme.of(context).colorScheme.onSurfaceVariant)),
+          ])),
+      ),
+    );
+  }
 }
+
 class VopEmpty extends StatelessWidget {
   const VopEmpty({required this.icon,required this.message,this.onRetry,super.key});
   final IconData icon;
@@ -187,30 +199,38 @@ class VopCourseCard extends StatelessWidget {
   final String title,description,language,imageUrl;
   final VoidCallback onTap;
   @override Widget build(BuildContext context)=>Card(
-    margin:const EdgeInsets.only(bottom:11),
+    margin:const EdgeInsets.only(bottom:9),
     clipBehavior:Clip.antiAlias,
-    child:InkWell(onTap:onTap,child:Row(children:[
-      SizedBox(width:96,height:112,child:imageUrl.startsWith('https://')
-        ?Image.network(imageUrl,fit:BoxFit.cover,
-          errorBuilder:(_,error,stack)=>const _CoursePlaceholder())
-        :const _CoursePlaceholder()),
-      Expanded(child:Padding(padding:const EdgeInsets.symmetric(
-        horizontal:14,vertical:11),
-        child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-          Text(language.toUpperCase(),
-            style:const TextStyle(fontSize:9,fontWeight:FontWeight.w800,
-              letterSpacing:1.1,color:VopColors.gold)),
-          const SizedBox(height:5),
-          Text(title,maxLines:2,overflow:TextOverflow.ellipsis,
-            style:const TextStyle(fontSize:14,fontWeight:FontWeight.w800,height:1.28)),
-          const SizedBox(height:5),
-          Text(description,maxLines:2,overflow:TextOverflow.ellipsis,
-            style:TextStyle(fontSize:11.5,height:1.4,
-              color:Theme.of(context).colorScheme.onSurfaceVariant)),
-        ]))),
-      const Padding(padding:EdgeInsets.only(right:10),
-        child:Icon(Icons.chevron_right_rounded,size:21)),
-    ])),
+    child:InkWell(onTap:onTap,
+      child:Row(children:[
+        SizedBox(width:76,height:86,
+          child:imageUrl.startsWith('https://')
+            ?Image.network(imageUrl,fit:BoxFit.cover,
+              errorBuilder:(_,error,stack)=>const _CoursePlaceholder())
+            :const _CoursePlaceholder()),
+        Expanded(child:Padding(
+          padding:const EdgeInsets.symmetric(horizontal:12,vertical:9),
+          child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+            if(language.isNotEmpty)
+              Text(language.toUpperCase(),maxLines:1,
+                style:const TextStyle(fontSize:9,
+                  fontWeight:FontWeight.w800,letterSpacing:1,color:VopColors.gold)),
+            if(language.isNotEmpty)const SizedBox(height:3),
+            Text(title,maxLines:2,overflow:TextOverflow.ellipsis,
+              style:const TextStyle(fontSize:13.5,fontWeight:FontWeight.w800,
+                height:1.2)),
+            if(description.isNotEmpty)...[
+              const SizedBox(height:3),
+              Text(description,maxLines:2,overflow:TextOverflow.ellipsis,
+                style:TextStyle(fontSize:11,height:1.35,
+                  color:Theme.of(context).colorScheme.onSurfaceVariant)),
+            ],
+          ]),
+        )),
+        const Padding(padding:EdgeInsets.only(right:9),
+          child:Icon(Icons.chevron_right_rounded,size:19)),
+      ]),
+    ),
   );
 }
 class _CoursePlaceholder extends StatelessWidget {
@@ -220,5 +240,5 @@ class _CoursePlaceholder extends StatelessWidget {
       colors:[VopColors.navyDeep,VopColors.navyBright],
       begin:Alignment.topLeft,end:Alignment.bottomRight)),
     child:const Center(child:Icon(Icons.menu_book_rounded,
-      color:VopColors.goldLight,size:36)));
+      color:VopColors.goldLight,size:27)));
 }
