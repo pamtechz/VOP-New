@@ -12,16 +12,27 @@ void main(){
     expect(resolveRadioMedia({'streamUrl':'https://stream.example.com/live.m3u8'}).kind,
       RadioMediaKind.video);
   });
-  test('YouTube embeds in app and AudioVerse provides external CSP-safe playback',(){
+  test('YouTube and AudioVerse use in-app approved embeds',(){
     final youtube=resolveRadioMedia({
       'videoUrl':'https://www.youtube.com/watch?v=abcdefghijk'});
     expect(youtube.kind,RadioMediaKind.provider);
     expect(youtube.url!.host,'www.youtube-nocookie.com');
     final audioverse=resolveRadioMedia({
       'audioUrl':'https://www.audioverse.org/en/media/12345'});
-    expect(audioverse.kind,RadioMediaKind.external);
+    expect(audioverse.kind,RadioMediaKind.provider);
     expect(audioverse.url!.host,'www.audioverse.org');
-    expect(audioverse.url!.path,'/en/media/12345');
+    expect(audioverse.url!.path,'/en/embed/media/12345');
+  });
+  test('AudioVerse provider-supplied audio embed URL takes precedence',(){
+    final media=resolveRadioMedia({
+      'mediaUrl':'https://www.audioverse.org/en/media/12345',
+      'audioEmbedUrl':'https://www.audioverse.org/en/embed/media/98765',
+    });
+    expect(media.kind,RadioMediaKind.provider);
+    expect(media.url!.path,'/en/embed/media/98765');
+    expect(safeAudioVerseEmbedUrl(Uri.parse('https://evil.example/embed/media/5')),false);
+    expect(safeAudioVerseEmbedUrl(Uri.parse('http://www.audioverse.org/en/embed/media/3')),false);
+    expect(safeAudioVerseEmbedUrl(Uri.parse('https://www.audioverse.org/en/embed/media/3')),true);
   });
   test('YouTube iframe carries native identity and a valid referrer policy',(){
     const client='https://com.sda.vop';
