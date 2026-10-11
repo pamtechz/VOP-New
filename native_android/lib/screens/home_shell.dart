@@ -4,6 +4,7 @@ import '../core/vop_api.dart';
 import '../theme/vop_theme.dart';
 import '../widgets/vop_ui.dart';
 import 'certificates_screen.dart';
+import 'account_settings_screen.dart';
 import 'content_screen.dart';
 import 'guide_screen.dart';
 import 'engagement_screen.dart';
@@ -37,7 +38,11 @@ class _HomeShellState extends State<HomeShell> {
   int tab=0;
   String search='';
   late Future<Map<String,dynamic>> profile,catalog,progress;
-  @override void initState(){super.initState();reload();}
+  @override void initState(){super.initState();reload();
+    widget.api.personalSettings().then((result){
+      VopAppearance.apply(asMap(result['settings']));
+    }).catchError((Object ignored){});
+  }
   void reload(){
     profile=widget.api.bootstrap();
     catalog=widget.api.catalogue();
@@ -95,7 +100,7 @@ class _HomeShellState extends State<HomeShell> {
               backgroundColor:Theme.of(context).colorScheme.primaryContainer,
               child:Icon(Icons.person_outline,
                 color:Theme.of(context).colorScheme.primary,size:19)),
-            onPressed:()=>push(_AccountScreen(api:widget.api))),
+            onPressed:()=>push(AccountSettingsScreen(api:widget.api))),
           const SizedBox(width:6),
         ],
       ),
@@ -164,7 +169,9 @@ class _HomeShellState extends State<HomeShell> {
       _destination('Notifications',Icons.notifications_outlined,
         ()=>push(VopNotifications(api:widget.api))),
       _destination('My Profile',Icons.person_outline,
-        ()=>push(_AccountScreen(api:widget.api))),
+        ()=>push(AccountSettingsScreen(api:widget.api))),
+      _destination('Personal Settings',Icons.tune_outlined,
+        ()=>push(AccountSettingsScreen(api:widget.api))),
       _destination('About VOP',Icons.info_outline,
         ()=>push(const _AboutScreen())),
       const SizedBox(height:25),
