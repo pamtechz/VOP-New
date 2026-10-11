@@ -35,23 +35,12 @@ bool safeAudioVerseEmbedUrl(Uri uri) {
   final segments=uri.pathSegments;
   final offset=segments.length==4?1:0;
   if(segments.length!=offset+3)return false;
-  if(offset==1 && !RegExp(r'^[a-z]{2}(?:-[a-z]{2})?, caseSensitive:false).hasMatch(segments[0]))return false;
+  if(offset==1 && !RegExp(r'^[a-z]{2}(?:-[a-z]{2})?$',caseSensitive:false).hasMatch(segments[0]))return false;
   return ['embed','player'].contains(segments[offset]) &&
     segments[offset+1]=='media' &&
-    RegExp(r'^[0-9]+).hasMatch(segments[offset+2]);
+    RegExp(r'^[0-9]+$').hasMatch(segments[offset+2]);
 }
-, caseSensitive:false).hasMatch(segments[0]))return false;
-  return ['embed','player'].contains(segments[offset]) &&
-    segments[offset+1]=='media' &&
-    RegExp(r'^[0-9]+' + '$' + r'').hasMatch(segments[offset+2]);
-}
-).hasMatch(segments[offset+2]);
-}
-, caseSensitive:false).hasMatch(segments[0]))return false;
-  return ['embed','player'].contains(segments[offset]) &&
-    segments[offset+1]=='media' &&
-    RegExp(r'^[0-9]+' + '$' + r'').hasMatch(segments[offset+2]);
-}
+
 /// Only known providers or media file URLs, never unapproved private webpages.
 RadioMedia resolveRadioMedia(Map<String,dynamic> item) {
   for(final name in ['mediaUrl','streamUrl','videoUrl','audioUrl']){
