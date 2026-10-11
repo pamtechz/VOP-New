@@ -17,6 +17,25 @@ abstract final class VopColors {
   static const darkSurface = Color(0xFF142A46);
   static const darkBorder = Color(0xFF294263);
 }
+/// Appearance is account-backed. This notifier updates the native shell without
+/// restarting the application or affecting saved curriculum data.
+abstract final class VopAppearance {
+  static final mode = ValueNotifier<ThemeMode>(ThemeMode.system);
+  static final largerText = ValueNotifier<bool>(false);
+  static final reducedMotion = ValueNotifier<bool>(false);
+  static final highContrast = ValueNotifier<bool>(false);
+  static void apply(Map<String,dynamic> settings){
+    mode.value=switch(settings['theme']){
+      'light'=>ThemeMode.light,'dark'=>ThemeMode.dark,_=>ThemeMode.system,
+    };
+    final access=settings['accessibility'];
+    if(access is Map){
+      largerText.value=access['largeText']==true;
+      reducedMotion.value=access['reducedMotion']==true;
+      highContrast.value=access['highContrast']==true;
+    }
+  }
+}
 abstract final class VopTheme {
   static ThemeData build(Brightness brightness) {
     final dark = brightness == Brightness.dark;
