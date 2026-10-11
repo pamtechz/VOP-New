@@ -22,13 +22,24 @@ class _EngagementScreenState extends State<EngagementScreen> {
   @override Widget build(BuildContext context)=>Scaffold(
     appBar:AppBar(title:const Text('Scripture & Challenges')),
     body:Column(children:[
-      Padding(padding:const EdgeInsets.all(15),
-        child:SegmentedButton<int>(segments:const [
-          ButtonSegment(value:0,label:Text('Memory decks'),
-            icon:Icon(Icons.psychology_outlined)),
-          ButtonSegment(value:1,label:Text('Challenges'),
-            icon:Icon(Icons.sports_esports_outlined)),
-        ],selected:{tab},onSelectionChanged:(values)=>setState(()=>tab=values.first))),
+      Padding(padding:const EdgeInsets.symmetric(horizontal:12,vertical:9),
+        child:LayoutBuilder(builder:(context,constraints){
+          final compact=constraints.maxWidth<410;
+          return SegmentedButton<int>(
+            showSelectedIcon:!compact,
+            style:ButtonStyle(
+              visualDensity:VisualDensity.compact,
+              padding:WidgetStateProperty.all(const EdgeInsets.symmetric(
+                horizontal:6,vertical:7)),
+              textStyle:WidgetStateProperty.all(const TextStyle(fontSize:12))),
+            segments:[
+              ButtonSegment(value:0,label:Text(compact?'Memory':'Memory decks'),
+                icon:const Icon(Icons.psychology_outlined,size:17)),
+              ButtonSegment(value:1,label:const Text('Challenges'),
+                icon:const Icon(Icons.sports_esports_outlined,size:17)),
+            ],
+            selected:{tab},onSelectionChanged:(values)=>setState(()=>tab=values.first));
+        })),
       Expanded(child:tab==0?_decks():_challenges()),
     ]),
   );

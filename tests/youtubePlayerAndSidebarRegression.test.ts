@@ -23,7 +23,7 @@ test('native YouTube player supplies WebView client identity instead of bare emb
   assert.match(source,/referrerpolicy="strict-origin-when-cross-origin"/);
   assert.match(source,/origin':vopYoutubeClientOrigin/);
   assert.match(source,/request\.isMainFrame/);
-  assert.match(source,/YouTube fallback/);
+  assert.doesNotMatch(source,/YouTube fallback|Retry player|Approved direct streams use/);
 });
 
 test('website identifies YouTube embed errors and Android enables modern back navigation',()=>{
