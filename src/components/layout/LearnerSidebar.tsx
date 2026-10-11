@@ -75,7 +75,7 @@ export function LearnerSidebar({currentRoute,currentUser,settings,collapsed,onTo
       ...(localizationAccess?[{route:'localization' as const,label:t('navigation.localization_console','Localization console'),icon:ScrollText}]:[]),
       ...(settings.features?.certification===false?[]:[{route:'certificates' as const,label:t('certificates.my_certificate','Certificates'),icon:GraduationCap}]),
       {route:'about',label:t('navigation.about','About VOP'),icon:BookOpen},
-      ...(isAdmin?[{route:'admin' as const,label:t('navigation.admin','Admin panel'),icon:ShieldCheck}]:[]),
+      // Admin destinations are already listed in Admin Operations above.
     ]},
   ];
   return <aside className={'vop-learner-sidebar'+(collapsed?' is-collapsed':'')} aria-label="Learner sidebar">
@@ -94,9 +94,9 @@ export function LearnerSidebar({currentRoute,currentUser,settings,collapsed,onTo
     <nav id="vop-learner-sidebar-links" className="vop-learner-sidebar-scroll" aria-label="Learner sections">
       {groups.map(group=><div className="vop-learner-sidebar-group" key={group.name}>
         <span className="vop-learner-sidebar-label" aria-hidden="true">{collapsed?'•':group.name}</span>
-        {group.items.map(item=>{
+        {group.items.map((item,itemIndex)=>{
           const Icon=item.icon;
-          return <button type="button" key={item.adminTab ? `${item.route}:${item.adminTab}` : item.route}
+          return <button type="button" key={`${group.name}:${item.route}:${item.adminTab||'base'}:${itemIndex}`}
             className={'vop-learner-sidebar-link'+(currentRoute===item.route?' active':'')}
             title={collapsed?item.label:undefined} aria-label={item.label}
             aria-current={currentRoute===item.route?'page':undefined}
