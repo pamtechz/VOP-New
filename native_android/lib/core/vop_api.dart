@@ -35,6 +35,7 @@ class VopApi {
       '/api/share',
       '/api/prayer',
       '/api/certificates',
+      '/api/admin/notifications',
     }.contains(path)) {
       throw const VopApiException('Unsupported VOP API endpoint.');
     }
@@ -111,6 +112,16 @@ class VopApi {
   Future<Map<String, dynamic>> events() => read('events');
   Future<Map<String, dynamic>> radio() => read('radio');
   Future<Map<String, dynamic>> announcements() => read('announcements');
+  Future<Map<String,dynamic>> notifications()=>
+      _execute('/api/admin/notifications','GET',null,{'action':'list'});
+  Future<Map<String,dynamic>> markNotificationRead(String id)=>
+      action('/api/admin/notifications',
+        {'action':'markRead','notificationId':id});
+  Future<Map<String,dynamic>> markAllNotificationsRead()=>
+      action('/api/admin/notifications',{'action':'markAllRead'});
+  Future<Map<String,dynamic>> deleteNotification(String id)=>
+      action('/api/admin/notifications',
+        {'action':'delete','notificationId':id});
   Future<Map<String, dynamic>> certificates() =>
       _execute('/api/certificates', 'GET', null, {'action': 'mine'});
   Future<Map<String, dynamic>> prayers({bool mine = true}) =>
