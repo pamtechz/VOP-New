@@ -69,7 +69,6 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
   const [settings,setSettings]=useState<PersonalSettings>(defaultPersonalSettings);
   const [savedSettings,setSavedSettings]=useState<PersonalSettings|null>(null);
   const [settingsLoadError,setSettingsLoadError]=useState('');
-  const [settingsReloading,setSettingsReloading]=useState(false);
   const [busy, setBusy] = useState(true);
   const [profile, setProfile] = useState<OwnProfile>(currentUser);
   const [profileDraft, setProfileDraft] = useState<EditableOwnProfile>(()=>editableOwnProfile(currentUser));
@@ -231,8 +230,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
   const settingsChanges=Object.fromEntries(pendingSettings) as PersonalSettings;
   const settingsDirty=Object.keys(settingsChanges).length>0;
   const retrySettings=async()=>{
-    if(settingsReloading)return;
-    setSettingsReloading(true);setSettingsLoadError('');
+    setSettingsLoadError('');
     try{
       const value=await loadPersonalSettings();
       const hydrated={...defaultPersonalSettings,...value};
@@ -241,7 +239,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
     }catch(error){
       setSavedSettings(null);
       setSettingsLoadError(error instanceof Error?error.message:'Could not load your personal settings.');
-    }finally{setSettingsReloading(false);}
+    }
   };
   const patch = <K extends keyof PersonalSettings>(key: K, value: PersonalSettings[K]) =>
     setSettings(previous => ({ ...previous, [key]: value }));
@@ -403,7 +401,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
 
   return <div className="vop-personal-settings vop-page-shell">
     <div className="vop-personal-header vop-page-head">
-      <div><p className="vop-kicker">{organizationAccount?'Organization Account':t('account.my_account','My Account')}</p><h1>{organizationAccount?'Personal Settings':t('settings.personal_title','Personal Settings')}</h1><p>{organizationAccount?'Personal preferences and sign-in security for this staff account.':t('settings.personal_description','These settings apply only to your VOP account.')}</p></div>
+      <div><p className="vop-kicker">{organizationAccount?'Organization Account':t('account.my_account','My Account')}</p><h1>{organizationAccount?'Personal Settings':t('settings.personal_title','Personal Settings')}</h1><p>t('settings.personal_description','These settings apply only to your VOP account.')</p></div>
       <div style={{display:'flex',gap:8,alignItems:'center'}}>
         {isAdmin&&<button type="button" className="vop-secondary" onClick={()=>{
           try{sessionStorage.setItem('vop-admin-tab-v1:'+currentUser.uid,'dashboard');}catch{}
@@ -536,8 +534,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
             {!organizationAccount&&<section className="vop-personal-card vop-card">
               <h2><BookOpen size={19}/>{uiT('personal_settings.offline_study_on_this_device',"Offline study on this device")}</h2>
               <label className="vop-personal-toggle"><input type="checkbox" checked={trustedDevice} onChange={e => void changeTrustedDevice(e.target.checked)}/>{uiT('personal_settings.remember_previously_opened_study_materials_for_offline_reading',"Remember previously opened study materials for offline reading")}</label>
-              <small>{uiT('personal_settings.use_only_on_a_private_device_cached_course_material_can_remain_accessible_to_someone_using',"Use only on a private device. Cached course material can remain accessible to someone using the same browser after sign-out. Lesson completion while offline is saved as pending, not as an official result, until the server verifies it.")}</small>
-              <small>{uiT('personal_settings.reload_while_online_after_changing_this_option_for_complete_removal_of_previously_cached_c',"Reload while online after changing this option. For complete removal of previously cached content, clear the browser’s site data.")}</small>
+              <small>{uiT('personal_settings.offline_storage_privacy',"Private devices only. Cached lessons may remain after sign-out. Offline work syncs after server verification. Reload online after changes; clear browser site data to erase prior caches.")}</small>
             </section>}
             {!organizationAccount&&<LocalizationParticipation/>}
           </div>
@@ -642,8 +639,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
 
         {settingsLoadError&&<div className="vop-personal-notice error" role="alert">
           {settingsLoadError}
-          <button type="button" className="vop-secondary" disabled={settingsReloading}
-            onClick={()=>void retrySettings()}>{uiT('personal_settings.retry_loading','Retry loading settings')}</button>
+          <button type="button" className="vop-secondary" onClick={()=>void retrySettings()}>{uiT('personal_settings.retry_loading','Retry loading settings')}</button>
         </div>}
         {!['account','security'].includes(activeTab)&&<button className="vop-personal-save vop-primary"
           type="button" disabled={saving||!savedSettings||!settingsDirty} onClick={()=>void save()}>
