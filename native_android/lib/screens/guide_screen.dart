@@ -49,23 +49,31 @@ class _GuideScreenState extends State<GuideScreen> {
               child:Text('There are no published lessons in this guide.')),
             ...lessons.map((lesson){
               final isQuiz=lesson['type']=='Test';
+              final locked=lesson['locked']==true;
+              final completed=lesson['completed']==true;
               return Card(margin:const EdgeInsets.only(bottom:10),
                 child:ListTile(
                   contentPadding:const EdgeInsets.all(12),
-                  leading:CircleAvatar(child:Icon(isQuiz
-                    ?Icons.fact_check_outlined:Icons.auto_stories_outlined)),
+                  leading:CircleAvatar(child:Icon(locked?Icons.lock_outline:
+                    completed?Icons.check_circle_outline:
+                    isQuiz?Icons.fact_check_outlined:Icons.auto_stories_outlined)),
                   title:Text('${lesson['title']??'Lesson'}',
                     style:const TextStyle(fontWeight:FontWeight.w700)),
-                  subtitle:Text(isQuiz?'Assessment': '${lesson['estimatedMinutes']??15} min reading'),
-                  trailing:const Icon(Icons.chevron_right),
-                  onTap:()=>Navigator.push(context,MaterialPageRoute<void>(
+                  subtitle:Text(locked?'Finish earlier lessons to unlock':
+                    completed?'Completed':isQuiz?'Assessment':
+                    '${lesson['estimatedMinutes']??15} min reading'),
+                  trailing:Icon(locked?Icons.lock_outline:Icons.chevron_right),
+                  onTap:locked?null:()async{
+                    await Navigator.push(context,MaterialPageRoute<void>(
                     builder:(_)=>isQuiz
                       ?QuizScreen(api:widget.api,guideId:widget.guideId,
                         lessonId:'${lesson['id']}',language:language,
                         title:'${lesson['title']}')
                       :LessonScreen(api:widget.api,guideId:widget.guideId,
                         lessonId:'${lesson['id']}',language:language,
-                        title:'${lesson['title']}'))),
+                        title:'${lesson['title']}')));
+                    if(mounted)setState(reload);
+                  },
                 ));
             }),
           ]),
