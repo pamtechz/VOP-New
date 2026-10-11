@@ -3,6 +3,7 @@ import 'package:video_player/video_player.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../theme/vop_theme.dart';
+import '../core/config.dart';
 
 enum RadioMediaKind { audio, video, provider, external, unsupported }
 class RadioMedia {
@@ -112,7 +113,7 @@ RadioMedia resolveRadioMedia(Map<String,dynamic> item) {
   return const RadioMedia(RadioMediaKind.unsupported,null);
 }
 /// The installed Android package ID identifies this YouTube embed client.
-const vopYoutubeClientOrigin='https://com.sda.vop';
+String get vopYoutubeClientOrigin=>Uri.parse(VopConfig.apiUrl).origin;
 String youtubeEmbedHtml(Uri embedUrl) {
   if(embedUrl.host!='www.youtube-nocookie.com' ||
      !RegExp(r'^/embed/[A-Za-z0-9_-]{11}$').hasMatch(embedUrl.path)) {
@@ -254,9 +255,19 @@ class _RadioPlayerScreenState extends State<RadioPlayerScreen>
             if(source.kind==RadioMediaKind.external)
               const Icon(Icons.open_in_new,size:65,color:VopColors.goldLight),
             if(loading)const CircularProgressIndicator(color:VopColors.goldLight),
-            if(error!=null)Padding(padding:const EdgeInsets.all(18),
-              child:Text(error!,textAlign:TextAlign.center,
-                style:const TextStyle(color:Colors.white))),
+            if(error!=null)Padding(
+              padding:const EdgeInsets.all(18),
+              child:Column(mainAxisSize:MainAxisSize.min,children:[
+                Text(error!,textAlign:TextAlign.center,
+                  style:const TextStyle(color:Colors.white)),
+                const SizedBox(height:12),
+                IconButton.filledTonal(
+                  tooltip:'Retry playback',
+                  onPressed:()=>_prepare(),
+                  icon:const Icon(Icons.refresh_rounded),
+                ),
+              ]),
+            ),
           ]),
         )),
         const SizedBox(height:16),
