@@ -125,8 +125,8 @@ export default async function mobile(req:Request,res:Response){
       });
     }
     if(resource==='languages'){
-      const languages=await db.collection('languages').where('enabled','==',true).limit(150).get();
-      return res.status(200).json({ok:true,items:languages.docs.map(doc=>{
+      const languages=await db.collection('languages').limit(150).get();
+      return res.status(200).json({ok:true,items:languages.docs.filter(doc=>doc.data().enabled!==false).map(doc=>{
         const item=doc.data();
         return {code:doc.id,name:string(item.name)||doc.id,
           nativeName:string(item.nativeName)||doc.id};
