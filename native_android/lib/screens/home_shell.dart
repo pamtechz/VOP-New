@@ -322,9 +322,11 @@ class _HomeShellState extends State<HomeShell> {
                 maxLines:2,overflow:TextOverflow.ellipsis),
               trailing:const Icon(Icons.chevron_right),
               onTap:(){
-                final linked=guides.where((g)=>
-                  (p['guideIds'] as List? ?? []).contains(g['id'])).toList();
-                push(_ProgrammeScreen(title:(p['title']??'Programme').toString(),
+                final byId={for(final guide in guides)
+                   (guide['id']??'').toString():guide};
+                 final linked=(p['guideIds'] as List? ?? [])
+                   .map((id)=>byId[id.toString()]).whereType<Map<String,dynamic>>().toList();
+                 push(_ProgrammeScreen(title:(p['title']??'Programme').toString(),
                   guides:linked,api:widget.api));
               },
             ))),
@@ -349,23 +351,69 @@ class _HomeShellState extends State<HomeShell> {
   );
 }
 
-class _ProgrammeScreen extends StatelessWidget {
+class _ProgrammeScreen extends StatefulWidget {
   const _ProgrammeScreen({required this.title,required this.guides,required this.api});
   final String title;
   final List<Map<String,dynamic>> guides;
   final VopApi api;
+  @override State<_ProgrammeScreen> createState()=>_ProgrammeScreenState();
+}
+class _ProgrammeScreenState extends State<_ProgrammeScreen> {
+  final Map<String,Future<Map<String,dynamic>>> loaded={};
+  Future<Map<String,dynamic>> load(String id)=>loaded.putIfAbsent(
+    id,()=>widget.api.guide(id));
   @override Widget build(BuildContext context)=>Scaffold(
-    appBar:AppBar(title:Text(title)),
-    body:ListView(padding:const EdgeInsets.all(17),children:[
-      if(guides.isEmpty)const VopEmpty(icon:Icons.menu_book_outlined,
-        message:'No published lessons in this programme yet.'),
-      ...guides.map((guide)=>VopCourseCard(
-        title:(guide['title']??'').toString(),
-        description:(guide['description']??'').toString(),
-        language:(guide['language']??'').toString(),
-        imageUrl:(guide['image']??'').toString(),
-        onTap:()=>Navigator.push(context,MaterialPageRoute<void>(
-          builder:(_)=>GuideScreen(api:api,guideId:(guide['id']??'').toString()))))),
+    appBar:AppBar(title:Text(widget.title)),
+    body:ListView(padding:const EdgeInsets.all(16),children:[
+      VopSectionTitle('Courses',subtitle:'${widget.guides.length} study paths'),
+      if(widget.guides.isEmpty)const SizedBox(height:220,
+        child:VopEmpty(icon:Icons.menu_book_outlined,
+          message:'No published courses in this programme yet.')),
+      ...widget.guides.asMap().entries.map((entry){
+        final guide=entry.value;
+        final id=(guide['id']??'').toString();
+        return Card(margin:const EdgeInsets.only(bottom:11),
+          clipBehavior:Clip.antiAlias,
+          child:ExpansionTile(
+            leading:CircleAvatar(child:Text('${entry.key+1}')),
+            title:Text((guide['title']??'Study course').toString(),
+              style:const TextStyle(fontWeight:FontWeight.w800)),
+            subtitle:Text((guide['language']??'').toString().toUpperCase()),
+            childrenPadding:const EdgeInsets.fromLTRB(14,0,14,14),
+            children:[
+              FutureBuilder<Map<String,dynamic>>(
+                future:load(id),
+                builder:(context,s){
+                  if(s.connectionState!=ConnectionState.done)
+                    return const Padding(padding:EdgeInsets.all(12),
+                      child:LinearProgressIndicator());
+                  if(s.hasError)return Padding(padding:const EdgeInsets.all(10),
+                    child:Text('${s.error}',style:TextStyle(
+                      color:Theme.of(context).colorScheme.error)));
+                  final lessons=(s.data?['lessons'] as List? ?? [])
+                    .whereType<Map>().toList();
+                  return Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+                    ...lessons.map((lesson)=>ListTile(
+                      dense:true,
+                      leading:Icon(lesson['type']=='Test'
+                        ?Icons.fact_check_outlined:Icons.auto_stories_outlined,size:20),
+                      title:Text((lesson['title']??'Lesson').toString(),
+                        maxLines:2,overflow:TextOverflow.ellipsis),
+                      onTap:()=>Navigator.push(context,MaterialPageRoute<void>(
+                        builder:(_)=>GuideScreen(api:widget.api,guideId:id))),
+                    )),
+                    const SizedBox(height:8),
+                    FilledButton.icon(
+                      onPressed:()=>Navigator.push(context,MaterialPageRoute<void>(
+                        builder:(_)=>GuideScreen(api:widget.api,guideId:id))),
+                      icon:const Icon(Icons.menu_book_outlined),
+                      label:const Text('Open course')),
+                  ]);
+                },
+              ),
+            ],
+          ));
+      }),
     ]),
   );
 }
