@@ -119,6 +119,8 @@ export default async function mobile(req:Request,res:Response){
       return res.status(200).json({ok:true,
         completedLessons:Array.isArray(progress.completedLessons)?
           progress.completedLessons.filter(v=>typeof v==='string').slice(0,3000):[],
+        completedAssessments:Array.isArray(progress.completedAssessments)?
+          progress.completedAssessments.filter(v=>typeof v==='string').slice(0,3000):[],
         lessonResume:progress.lessonResume&&typeof progress.lessonResume==='object'?
           progress.lessonResume:{},
         // Assessment marks are intentionally not read from private banks.
@@ -224,19 +226,42 @@ export default async function mobile(req:Request,res:Response){
     if(!guideSnap.exists||!hasAccess(guideSnap.data()||{},scope))
       return res.status(404).json({ok:false,code:'NOT_FOUND',error:'Published course not found or not available.'});
     const guide=guideSnap.data()||{};
+    const snapLessons=await guideSnap.ref.collection('lessons')
+      .where('published','==',true).limit(120).get();
+    const lessons=snapLessons.docs.filter(doc=>hasAccess(
+      doc.data(),scope,string(guide.organizationId||guide.ownerOrganizationId)))
+      .map(doc=>plainLesson(doc.id,doc.data()))
+      .sort((a,b)=>a.lessonNumber.localeCompare(b.lessonNumber,undefined,{numeric:true}));
+    const progress=ctx.profile.progress&&typeof ctx.profile.progress==='object'
+      ?ctx.profile.progress as Raw:{};
+    const completedLessons=new Set(
+      Array.isArray(progress.completedLessons)?progress.completedLessons.map(String):[]);
+    const completedAssessments=new Set(
+      Array.isArray(progress.completedAssessments)?progress.completedAssessments.map(String):[]);
+    const studyLanguage=string(guide.language)||'en';
+    const isComplete=(entry:(typeof lessons)[number])=>{
+      const key=`${studyLanguage}:${guideId}:${entry.id}`;
+      return entry.type==='Test' ? completedAssessments.has(key)
+        :completedLessons.has(key);
+    };
+    const annotated=lessons.map((entry,index)=>({
+      ...entry,completed:isComplete(entry),
+      locked:index>0&&!lessons.slice(0,index).every(isComplete),
+    }));
     if(resource==='guide'){
-      const snap=await guideSnap.ref.collection('lessons').where('published','==',true).limit(120).get();
-      const lessons=snap.docs.filter(doc=>{
-        const row=doc.data();
-        return hasAccess(row,scope,string(guide.organizationId||guide.ownerOrganizationId));
-      }).map(doc=>plainLesson(doc.id,doc.data()))
-        .sort((a,b)=>a.lessonNumber.localeCompare(b.lessonNumber,undefined,{numeric:true}));
-      return res.status(200).json({ok:true,guide:plainGuide(guideId,guide),lessons});
+      return res.status(200).json({ok:true,guide:plainGuide(guideId,guide),lessons:annotated});
     }
     const lessonId=cleanId(param(req,'lessonId'));
+    const index=annotated.findIndex(entry=>entry.id===lessonId);
+    if(index<0)return res.status(404).json({ok:false,code:'NOT_FOUND',
+      error:'Published lesson not found or not available.'});
+    if(annotated[index].locked)return res.status(423).json({
+      ok:false,code:'PREREQUISITE_INCOMPLETE',
+      error:'Complete the preceding lessons and assessments to unlock this lesson.',
+    });
     const snap=await guideSnap.ref.collection('lessons').doc(lessonId).get();
-    if(!snap.exists||!hasAccess(snap.data()||{},scope,string(guide.organizationId||guide.ownerOrganizationId)))
-      return res.status(404).json({ok:false,code:'NOT_FOUND',error:'Published lesson not found or not available.'});
+    if(!snap.exists)return res.status(404).json({ok:false,code:'NOT_FOUND',
+      error:'Published lesson not found or not available.'});
     const lesson=snap.data()||{};
     return res.status(200).json({ok:true,guide:plainGuide(guideId,guide),
       lesson:{...plainLesson(lessonId,lesson),pages:lessonPages(lesson)}});
