@@ -231,7 +231,18 @@ export default async function mobile(req:Request,res:Response){
         return hasAccess(row,scope,string(guide.organizationId||guide.ownerOrganizationId));
       }).map(doc=>plainLesson(doc.id,doc.data()))
         .sort((a,b)=>a.lessonNumber.localeCompare(b.lessonNumber,undefined,{numeric:true}));
-      return res.status(200).json({ok:true,guide:plainGuide(guideId,guide),lessons});
+      const progress=ctx.profile.progress&&typeof ctx.profile.progress==='object'
+        ?ctx.profile.progress as Raw:{};
+      const completed=new Set(Array.isArray(progress.completedLessons)
+        ?progress.completedLessons.filter(v=>typeof v==='string'):[]);
+      // The first lesson is always accessible. Later lessons require confirmed
+      // completion of the preceding lesson in this published guide.
+      const lessonsWithAccess=lessons.map((item,index)=>({
+        ...item,locked:index>0&&!completed.has(
+          `${string(guide.language)||'en'}:${guideId}:${lessons[index-1].id}`),
+        completed:completed.has(`${string(guide.language)||'en'}:${guideId}:${item.id}`),
+      }));
+      return res.status(200).json({ok:true,guide:plainGuide(guideId,guide),lessons:lessonsWithAccess});
     }
     const lessonId=cleanId(param(req,'lessonId'));
     const snap=await guideSnap.ref.collection('lessons').doc(lessonId).get();
