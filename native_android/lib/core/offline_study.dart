@@ -177,9 +177,25 @@ class OfflineStudyStore {
       return session;
     }catch(_){return null;}
   }
+  Future<void> saveQuizAnswers(String guide,String lesson,String lang,
+      String sessionId,Map<String,Object?> answers)async{
+    await _secret.write(key:_quizKey(guide,lesson,lang)+':answers',
+      value:jsonEncode({'sessionId':sessionId,'answers':answers}));
+  }
+  Future<Map<String,Object?>> quizAnswers(String guide,String lesson,String lang,
+      String sessionId)async{
+    final raw=await _secret.read(key:_quizKey(guide,lesson,lang)+':answers');
+    if(raw==null)return {};
+    try{
+      final data=Map<String,dynamic>.from(jsonDecode(raw) as Map);
+      if(data['sessionId']!=sessionId || data['answers'] is! Map)return {};
+      return Map<String,Object?>.from(data['answers'] as Map);
+    }catch(_){return {};}
+  }
   Future<void> clearQuiz(String guide,String lesson,String lang)async{
     await _secret.delete(key:_quizKey(guide,lesson,lang));
     await _secret.delete(key:_quizKey(guide,lesson,lang)+':pending');
+    await _secret.delete(key:_quizKey(guide,lesson,lang)+':answers');
   }
   Future<void> queueQuiz(String guide,String lesson,String lang,
       Map<String,dynamic> session,Map<String,Object?> answers)async{
