@@ -16,6 +16,24 @@ function header(req:Request,name:string){
   return Array.isArray(raw)?String(raw[0]||''):String(raw||'');
 }
 
+async function requireVerifiedRecentIdentity(req:Request,uid:string,maxAgeSeconds=300){
+  const bearer=header(req,'authorization').replace(/^Bearer\s+/i,'').trim();
+  if(!bearer)throw new Error('Sign in first.');
+  const identity=await getAuth(getApps()[0]).verifyIdToken(bearer,true);
+  if(identity.uid!==uid)throw new Error('Account identity changed. Sign in again.');
+  const now=Math.floor(Date.now()/1000);
+  const authTime=Number(identity.auth_time);
+  if(!Number.isSafeInteger(authTime)||authTime<=0||now-authTime>maxAgeSeconds||authTime>now+60)
+    throw new Error('Recent sign-in required. Sign out and sign in again to continue.');
+  return identity;
+}
+async function requireVerifiedIdentity(req:Request,uid:string){
+  const bearer=header(req,'authorization').replace(/^Bearer\s+/i,'').trim();
+  if(!bearer)throw new Error('Sign in first.');
+  const identity=await getAuth(getApps()[0]).verifyIdToken(bearer,true);
+  if(identity.uid!==uid)throw new Error('Account identity changed. Sign in again.');
+}
+
 export default async function handler(req:Request,res:Response){
   try{
     const route=value(req.query?.__vopAccountRoute);
@@ -56,34 +74,32 @@ export default async function handler(req:Request,res:Response){
     if(req.method==='POST'&&action==='revoke-sessions'){
       if(String(body.confirmation||'')!=='SIGN OUT ALL DEVICES')
         return res.status(400).json({error:'Type SIGN OUT ALL DEVICES to confirm.'});
-      const now=Math.floor(Date.now()/1000);
-      const authTime=Number(ctx.auth.auth_time);
-      if(!Number.isSafeInteger(authTime)||authTime<=0||now-authTime>300||authTime>now+60)
-        return res.status(403).json({error:'Sign out and sign in again before ending all sessions.'});
-      const firebaseAuth=getAuth(getApps()[0]);
-      const bearer=header(req,'authorization').replace(/^Bearer\s+/i,'').trim();
-      await firebaseAuth.verifyIdToken(bearer,true);
-      await firebaseAuth.revokeRefreshTokens(ctx.auth.uid);
+      await requireVerifiedRecentIdentity(req,ctx.auth.uid);
+      await getAuth(getApps()[0]).revokeRefreshTokens(ctx.auth.uid);
       return res.status(200).json({ok:true,revoked:true});
     }
     if(req.method==='GET'&&action==='export'){
+      await requireVerifiedRecentIdentity(req,ctx.auth.uid);
       const exported=await buildAccountExport(ctx.db,ctx.auth.uid);
       res.setHeader?.('Content-Disposition','attachment; filename="vop-account-export.json"');
       return res.status(200).json({ok:true,export:exported});
     }
     if(req.method==='POST'&&action==='request-deletion'){
+      await requireVerifiedRecentIdentity(req,ctx.auth.uid);
       const confirmation=String(body.confirmation||'');
       const reason=String(body.reason||'');
       return res.status(202).json({ok:true,...await requestAccountDeletion(ctx.db,ctx.auth.uid,confirmation,reason)});
     }
     if(req.method==='POST'&&action==='cancel-deletion'){
+      await requireVerifiedIdentity(req,ctx.auth.uid);
       return res.status(200).json({ok:true,...await cancelAccountDeletion(ctx.db,ctx.auth.uid)});
     }
     return res.status(405).json({error:'Method not allowed.'});
   }catch(error){
     const message=error instanceof Error?error.message:'Account privacy operation failed.';
     const status=/sign out and sign in again/i.test(message)?403
-      :/sign in|invalid.*token|revoked/i.test(message)?401
+      :/recent sign-in required/i.test(message)?403
+      :/sign in|invalid.*token|revoked|id token|auth\/|identity changed/i.test(message)?401
       :/cannot|must transfer|active learner assignments/i.test(message)?409
       :/not found/i.test(message)?404:400;
     return res.status(status).json({error:message});

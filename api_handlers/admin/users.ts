@@ -30,7 +30,7 @@ async function authenticate(request: Request) {
   if (!authorization.startsWith('Bearer ')) throw new Error('Sign in first.');
   const token = authorization.slice('Bearer '.length).trim();
   if (!token) throw new Error('Sign in first.');
-  return getAuth(getFirebaseAdmin()).verifyIdToken(token);
+  return getAuth(getFirebaseAdmin()).verifyIdToken(token,true);
 }
 
 function profileType(profile: Record<string, unknown> | undefined, authUser: UserRecord): ProfileType {

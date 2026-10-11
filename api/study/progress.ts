@@ -258,7 +258,7 @@ export default async function handler(
     const authorization = header(req, 'authorization');
     if (!authorization.startsWith('Bearer ')) return res.status(401).json({ error: 'Sign in first.' });
 
-    const decoded = await getAuth(firebaseAdmin).verifyIdToken(authorization.slice(7).trim());
+    const decoded = await getAuth(firebaseAdmin).verifyIdToken(authorization.slice(7).trim(),true);
     const body = req.body && typeof req.body === 'object' ? req.body as Record<string, unknown> : {};
     const action = String(body.action ?? '').trim();
     requestedAction=action;

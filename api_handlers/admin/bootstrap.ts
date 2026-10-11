@@ -57,7 +57,7 @@ async function authenticate(request: Request) {
   const token = authorization.slice('Bearer '.length).trim();
   if (!token) throw new Error('Sign in first.');
 
-  return getAuth(getFirebaseAdmin()).verifyIdToken(token);
+  return getAuth(getFirebaseAdmin()).verifyIdToken(token,true);
 }
 
 export default async function handler(request: Request, response: Response) {

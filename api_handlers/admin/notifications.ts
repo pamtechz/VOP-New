@@ -23,7 +23,7 @@ async function authenticateNotificationAccount(req:Request):Promise<{db:Firestor
   if(!authorization.startsWith('Bearer '))throw new Error('Sign in first.');
   // Initializing Firestore also initializes the shared Firebase Admin app.
   const db=getAdminDb();
-  const auth=await getAuth().verifyIdToken(authorization.slice(7).trim());
+  const auth=await getAuth().verifyIdToken(authorization.slice(7).trim(),true);
   return {db,auth};
 }
 function timestampValue(value:unknown){

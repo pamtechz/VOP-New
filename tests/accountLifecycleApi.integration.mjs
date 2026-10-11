@@ -106,6 +106,27 @@ test('account privacy export and staged deletion are server authoritative',async
       await auth.deleteUser(securityUser.uid);
     });
 
+    await t.test('revoked access tokens cannot export records or request account deletion',async()=>{
+      const actor=await emulatorSignUp('privacy-revoked@vop-test.invalid');
+      await db.doc('users/'+actor.uid).set({
+        uid:actor.uid,email:actor.email,displayName:'Revocation Test',role:'student',
+      });
+      const before=await call(actor,'GET','export');
+      assert.equal(before.code,200,JSON.stringify(before.payload));
+      await new Promise(resolve=>setTimeout(resolve,1100));
+      await auth.revokeRefreshTokens(actor.uid);
+      const exported=await call(actor,'GET','export');
+      assert.equal(exported.code,401,JSON.stringify(exported.payload));
+      assert.equal(exported.payload.export,undefined);
+      const deletion=await call(actor,'POST','request-deletion',{
+        confirmation:'DELETE MY ACCOUNT',
+      });
+      assert.equal(deletion.code,401,JSON.stringify(deletion.payload));
+      assert.equal((await db.doc('accountLifecycle/'+actor.uid).get()).exists,false);
+      await db.doc('users/'+actor.uid).delete();
+      await auth.deleteUser(actor.uid);
+    });
+
     await t.test('confirmation phrase is mandatory and a valid request remains cancellable',async()=>{
       const rejected=await call(learner,'POST','request-deletion',{confirmation:'delete'});
       assert.equal(rejected.code,400);

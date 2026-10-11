@@ -23,7 +23,7 @@ function header(req: Request, name: string) {
 async function authenticate(req: Request) {
   const authorization = header(req, 'authorization');
   if (!authorization.startsWith('Bearer ')) throw new Error('Sign in first.');
-  return getAuth(admin()).verifyIdToken(authorization.slice(7).trim());
+  return getAuth(admin()).verifyIdToken(authorization.slice(7).trim(),true);
 }
 
 function value(req: Request, key: string) {
