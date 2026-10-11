@@ -167,7 +167,7 @@ class _HomeShellState extends State<HomeShell> {
       dense:true,contentPadding:const EdgeInsets.symmetric(horizontal:19),
       leading:Icon(icon,size:21),
       title:Text(title,style:const TextStyle(fontSize:13.5,
-        fontWeight:FontWeight.w650)),
+        fontWeight:FontWeight.w600)),
       trailing:const Icon(Icons.chevron_right,size:17),
       onTap:(){Navigator.pop(context);go();});
 
