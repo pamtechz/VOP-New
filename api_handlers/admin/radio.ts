@@ -1,6 +1,7 @@
 import { FieldValue } from 'firebase-admin/firestore';
 import { authenticateTenant, canEditCanonicalContent, enforceQuota, requireOrgRole, tenantOwnerKey, writeTenantAudit } from '../../server/tenant.js';
 import { requirePermission } from '../../server/permissions.js';
+import { isSafeHttpsMediaUrl, resolveMediaSource } from '../../shared/mediaSources.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -19,7 +20,7 @@ function header(request: Request, name: string) {
 function validUrl(value: unknown) {
   const raw = String(value || '').trim();
   if (!raw) return false;
-  try { const parsed = new URL(raw); return parsed.protocol === 'http:' || parsed.protocol === 'https:'; } catch { return false; }
+  return isSafeHttpsMediaUrl(raw);
 }
 
 export default async function handler(req: Request, res: Response) {
@@ -51,7 +52,11 @@ export default async function handler(req: Request, res: Response) {
 
     const incoming = body.data && typeof body.data === 'object' ? body.data as Record<string, unknown> : {};
     const urls = ['audioUrl', 'videoUrl', 'streamUrl'].map(key => String(incoming[key] || '').trim()).filter(Boolean);
-    if (!urls.length || urls.some(url => !validUrl(url))) throw new Error('Add at least one valid HTTP(S) Radio media URL.');
+    if (!urls.length || urls.some(url => !validUrl(url))) throw new Error('Add at least one safe HTTPS Radio media URL.');
+    for(const key of ['audioUrl','videoUrl']){
+      const link=String(incoming[key]||'').trim();
+      if(link && !resolveMediaSource(link)) throw new Error('Radio media must be a supported playable file or trusted embed source.');
+    }
     if (!String(incoming.title || '').trim()) throw new Error('Radio title is required.');
 
     if (existing.exists) {
@@ -61,18 +66,33 @@ export default async function handler(req: Request, res: Response) {
       await enforceQuota(ctx, 'radioBroadcasts', 'maxRadioItems');
     }
 
+    const organizationId = ctx.tenantType === 'organization' ? ctx.organizationId : '';
+    const published = incoming.published === true;
+    // An organisation controls its own channel; public sharing is opt-in.
+    // Preserve existing ownership/scope when editing older canonical broadcasts.
     const savedData = {
-      ...incoming,
+      title: String(incoming.title||'').trim().slice(0,160),
+      speaker: String(incoming.speaker||'').trim().slice(0,120),
+      series: String(incoming.series||'').trim().slice(0,120),
+      description: String(incoming.description||'').trim().slice(0,3000),
+      mediaType: String(incoming.mediaType||'audio').trim().slice(0,40),
+      audioUrl: String(incoming.audioUrl||'').trim(),
+      videoUrl: String(incoming.videoUrl||'').trim(),
+      streamUrl: String(incoming.streamUrl||'').trim(),
+      posterUrl: validUrl(incoming.posterUrl) ? String(incoming.posterUrl).trim() : '',
+      broadcastTime: String(incoming.broadcastTime||'').trim().slice(0,50),
       id: documentId,
       title: String(incoming.title).trim(),
-      published: incoming.published === true,
-      organizationId: '',
+      published,
+      organizationId: String(existing.data()?.organizationId||organizationId),
       ownerOrganizationId: existing.data()?.ownerOrganizationId || (ctx.tenantType === 'organization' ? ctx.organizationId : ''),
       ownerTenantId: existing.data()?.ownerTenantId || tenantOwnerKey(ctx),
       ownerUid: existing.data()?.ownerUid || ctx.auth.uid,
-      scope: 'platform',
-      canonical: true,
-      sharingScope: 'shared',
+      scope: existing.data()?.scope || (organizationId?'organization':'platform'),
+      canonical: existing.exists ? existing.data()?.canonical === true : !organizationId,
+      sharingScope: existing.exists
+        ? (existing.data()?.sharingScope || 'organization')
+        : organizationId ? (incoming.sharingScope === 'shared' ? 'shared' : 'organization') : 'shared',
       createdAt: existing.data()?.createdAt || new Date().toISOString(),
       updatedAt: FieldValue.serverTimestamp(),
       updatedBy: ctx.auth.uid,
