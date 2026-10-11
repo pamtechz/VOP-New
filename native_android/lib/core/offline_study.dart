@@ -48,6 +48,14 @@ class OfflineStudyStore {
       _save(_key('lesson',_lessonId(guideId,lessonId)),result);
   Future<Map<String,dynamic>?> lesson(String guideId,String lessonId)=>
       _get(_key('lesson',_lessonId(guideId,lessonId)));
+  Future<int> clearDownloadedLessons()async{
+    final prefs=await SharedPreferences.getInstance();
+    final prefix='$_prefix:$uid:';
+    final keys=prefs.getKeys().where((key)=>key.startsWith(prefix)&&
+      (key.contains(':lesson:')||key.contains(':guide:'))).toList();
+    for(final key in keys){await prefs.remove(key);}
+    return keys.length;
+  }
   Future<bool> hasLesson(String guideId,String lessonId)async=>
       await lesson(guideId,lessonId)!=null;
   Future<int> downloadGuide(VopApi api,String guideId)async{
@@ -57,7 +65,7 @@ class OfflineStudyStore {
     // Assessments cannot be downloaded as answer banks.
     var count=0;
     for(final row in rows.whereType<Map>()){
-      if(row['type']=='Test')continue;
+      if(row['type']=='Test'||row['unlocked']==false)continue;
       final lessonId=(row['id']??'').toString();
       if(lessonId.isEmpty)continue;
       final payload=await api.lesson(guideId,lessonId);
@@ -73,6 +81,7 @@ class OfflineStudyStore {
       await saveGuide(guideId,result);
       return result;
     }catch(error){
+      if(error is VopApiException && error.status>=400 && error.status<500)rethrow;
       final cached=await guide(guideId);
       if(cached!=null)return {...cached,'offlineCopy':true};
       rethrow;
@@ -84,6 +93,7 @@ class OfflineStudyStore {
       await saveLesson(guideId,lessonId,result);
       return result;
     }catch(error){
+      if(error is VopApiException && error.status>=400 && error.status<500)rethrow;
       final cached=await lesson(guideId,lessonId);
       if(cached!=null)return {...cached,'offlineCopy':true};
       rethrow;
