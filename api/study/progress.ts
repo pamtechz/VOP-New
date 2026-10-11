@@ -346,6 +346,29 @@ export default async function handler(
       });
       return res.status(400).json({ error: 'The lesson does not belong to the selected guide.' });
     }
+    if(useTenantGuide && ['startQuiz','completeLesson','saveLessonResume'].includes(action)){
+      const courseLessons=await guideRef.collection('lessons')
+        .where('published','==',true).limit(120).get();
+      const ordered=courseLessons.docs.filter(doc=>doc.data().archived!==true)
+        .map(doc=>({id:doc.id,number:String(doc.data().lessonNumber||doc.id),
+          type:String(doc.data().type||'Lesson')}))
+        .sort((a,b)=>a.number.localeCompare(b.number,undefined,{numeric:true}));
+      const position=ordered.findIndex(item=>item.id===lessonId);
+      const progress=userData.progress&&typeof userData.progress==='object'
+        ?userData.progress as Record<string,unknown>:{};
+      const completed=new Set(Array.isArray(progress.completedLessons)
+        ?progress.completedLessons.map(String):[]);
+      const assessed=new Set(Array.isArray(progress.completedAssessments)
+        ?progress.completedAssessments.map(String):[]);
+      const priorComplete=position<=0||ordered.slice(0,position).every(item=>{
+        const key=`${language}:${guideId}:${item.id}`;
+        return item.type==='Test'?assessed.has(key):completed.has(key);
+      });
+      if(position<0||!priorComplete)return res.status(423).json({
+        ok:false,code:'PREREQUISITE_INCOMPLETE',
+        error:'Complete the preceding lessons and assessments to unlock this item.',
+      });
+    }
     const platformGuide = useTenantGuide && candidateGuideShared
       && (!candidateGuideOrganizationId || String(candidateGuideData.scope || '') === 'platform');
     if (useTenantGuide && candidateGuideOrganizationId !== organizationId && !enrolledForGuide
