@@ -23,6 +23,37 @@ void main(){
     expect(audioverse.url!.host,'www.audioverse.org');
     expect(audioverse.url!.path,'/en/media/12345');
   });
+  test('YouTube iframe carries native identity and a valid referrer policy',(){
+    const client='https://com.sda.vop';
+    expect(vopYoutubeClientOrigin,client);
+    final url=resolveRadioMedia({
+      'mediaUrl':'https://www.youtube.com/watch?v=abcdefghijk',
+    }).url!;
+    final html=youtubeEmbedHtml(url);
+    expect(url.host,'www.youtube-nocookie.com');
+    expect(html,contains('<iframe'));
+    expect(html,contains('referrerpolicy="strict-origin-when-cross-origin"'));
+    expect(html,contains('origin=https%3A%2F%2Fcom.sda.vop'));
+    expect(html,contains('abcdefghijk'));
+    expect(html,contains('allowfullscreen'));
+    expect(html,contains('viewport'));
+    expect(html, isNot(contains('autoplay=1')));
+    expect(()=>youtubeEmbedHtml(Uri.parse('https://malicious.example/embed/abcdefghijk')),
+      throwsArgumentError);
+  });
+  test('YouTube recognised from short, mobile, Shorts and live URLs',(){
+    for(final raw in [
+      'https://youtu.be/abcdefghijk',
+      'https://m.youtube.com/watch?v=abcdefghijk',
+      'https://www.youtube.com/shorts/abcdefghijk',
+      'https://www.youtube.com/live/abcdefghijk',
+    ]){
+      final media=resolveRadioMedia({'mediaUrl':raw});
+      expect(media.provider,'YouTube',reason:raw);
+      expect(media.kind,RadioMediaKind.provider,reason:raw);
+      expect(media.url!.path,'/embed/abcdefghijk',reason:raw);
+    }
+  });
   test('rejects HTTP, private networks, URLs with credentials and unrelated pages',(){
     for(final url in [
       'http://example.com/audio.mp3',

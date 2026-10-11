@@ -22,7 +22,7 @@ type YTPlayer = {
 type YTNamespace = {
   Player: new (element: HTMLElement, options: {
     videoId: string; width?: string; height?: string; playerVars?: Record<string, number | string>;
-    events?: Record<string, (event: { target: YTPlayer }) => void>;
+    events?: Record<string, (event: { target: YTPlayer; data?: number }) => void>;
   }) => YTPlayer;
   PlayerState: { ENDED: number; PLAYING: number; PAUSED: number; BUFFERING: number; CUED: number };
 };
@@ -186,7 +186,7 @@ export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, playlists = []
       if (cancelled || !ytMountRef.current) return;
       const player = new YT.Player(ytMountRef.current, {
         videoId: youtubeVideoId, width: '100%', height: '100%',
-        playerVars: { autoplay: 0, controls: 1, rel: 0, playsinline: 1, enablejsapi: 1 },
+        playerVars: { autoplay: 0, controls: 1, rel: 0, playsinline: 1, enablejsapi: 1, origin: window.location.origin },
         events: {
           onReady: event => { if (cancelled) return; ytPlayerRef.current = event.target; setYtReady(true); setDuration(event.target.getDuration() || 0); event.target.setVolume(volume * 100); },
           onStateChange: event => {
@@ -198,6 +198,20 @@ export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, playlists = []
               const items = playlistItemsRef.current;
               if (index >= 0 && index < items.length - 1) { setSelectedPlaylistId(selectedPlaylistId || ''); setSelected(items[index + 1]); }
               else setPlaying(false);
+            }
+          },
+          onError: event => {
+            if(cancelled)return;
+            const code=event.data||0;
+            setPlaying(false);setWaiting(false);
+            if(code===153){
+              setError('YouTube refused the embed because the player identity or Referer was missing. Please reload the page; if this persists, open the video on YouTube.');
+            }else if(code===101||code===150){
+              setError('The uploader has disabled embedding for this YouTube video.');
+            }else if(code===100){
+              setError('This YouTube video is unavailable, private or has been removed.');
+            }else{
+              setError('YouTube could not play this video (error '+code+'). Check the link or video permissions.');
             }
           }
         }

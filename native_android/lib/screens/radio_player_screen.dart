@@ -111,6 +111,30 @@ RadioMedia resolveRadioMedia(Map<String,dynamic> item) {
   }
   return const RadioMedia(RadioMediaKind.unsupported,null);
 }
+/// The installed Android package ID identifies this YouTube embed client.
+const vopYoutubeClientOrigin='https://com.sda.vop';
+String youtubeEmbedHtml(Uri embedUrl) {
+  if(embedUrl.host!='www.youtube-nocookie.com' ||
+     !RegExp(r'^/embed/[A-Za-z0-9_-]{11}$').hasMatch(embedUrl.path)) {
+    throw ArgumentError('Only validated YouTube embed URLs are accepted.');
+  }
+  // A secure HTTPS baseUrl supplies the required HTTP Referer for the iframe.
+  final identified=embedUrl.replace(queryParameters:{
+    ...embedUrl.queryParameters,'origin':vopYoutubeClientOrigin,
+    'playsinline':'1',
+  });
+  return '''<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<style>html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:#071a33}
+iframe{display:block;width:100%;height:100%;border:0}</style>
+</head><body><iframe title="YouTube video player"
+src="$identified"
+referrerpolicy="strict-origin-when-cross-origin"
+allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture; web-share"
+allowfullscreen></iframe></body></html>''';
+}
 class RadioPlayerScreen extends StatefulWidget {
   const RadioPlayerScreen({required this.item,super.key});
   final Map<String,dynamic> item;
@@ -128,6 +152,8 @@ class _RadioPlayerScreenState extends State<RadioPlayerScreen>
     if(source.url==null){if(mounted)setState((){
       loading=false;error='This programme has no supported playable media URL.';
     });return;}
+    // A retry resets any previous load error.
+    if(mounted)setState((){loading=true;error=null;});
     if(source.kind==RadioMediaKind.external){
       if(mounted)setState(()=>loading=false);
       return;
@@ -144,14 +170,33 @@ class _RadioPlayerScreenState extends State<RadioPlayerScreen>
           });},
           onNavigationRequest:(request){
             final uri=Uri.tryParse(request.url);
-            if(uri==null||uri.scheme!='https')return NavigationDecision.prevent;
+            if(uri==null)return NavigationDecision.prevent;
+            // YouTube may require HTTPS subframe navigation for consent and
+            // its player internals. Main-frame navigation remains restricted.
+            if(!request.isMainFrame){
+              return uri.scheme=='https'||request.url=='about:blank'
+                ?NavigationDecision.navigate:NavigationDecision.prevent;
+            }
+            if(uri.scheme!='https')return NavigationDecision.prevent;
             final host=uri.host.toLowerCase();
             return host==allowed||
-                (source.provider=='YouTube'&&_host(host,'youtube.com'))
+                (source.provider=='YouTube'&&host=='com.sda.vop')
               ?NavigationDecision.navigate:NavigationDecision.prevent;
           },
         ));
-      await embed!.loadRequest(source.url!);
+      try {
+        if(source.provider=='YouTube'){
+          await embed!.loadHtmlString(youtubeEmbedHtml(source.url!),
+            baseUrl:'$vopYoutubeClientOrigin/');
+        }else{
+          await embed!.loadRequest(source.url!);
+        }
+      }catch(_){
+        if(mounted)setState((){
+          loading=false;
+          error='The media player could not initialise. Please retry.';
+        });
+      }
       return;
     }
     try{
@@ -221,6 +266,29 @@ class _RadioPlayerScreenState extends State<RadioPlayerScreen>
         Text([widget.item['speaker'],widget.item['series'],source.provider]
           .where((e)=>e!=null&&e.toString().trim().isNotEmpty)
           .join(' · ')),
+        if(source.provider=='YouTube')...[
+          const SizedBox(height:12),
+          Row(children:[
+            OutlinedButton.icon(
+              onPressed:loading?null:()=>_prepare(),
+              icon:const Icon(Icons.refresh_rounded),
+              label:const Text('Retry player')),
+            const SizedBox(width:10),
+            TextButton.icon(
+              onPressed:() async {
+                final id=source.url!.pathSegments.last;
+                await launchUrl(
+                  Uri.parse('https://www.youtube.com/watch?v=$id'),
+                  mode:LaunchMode.externalApplication);
+              },
+              icon:const Icon(Icons.open_in_new_rounded),
+              label:const Text('YouTube fallback')),
+          ]),
+          Text('This player keeps videos inside VOP where embedding is allowed. '
+            'Private, age-restricted and embed-disabled videos may need YouTube.',
+            style:TextStyle(fontSize:11,height:1.4,
+              color:Theme.of(context).colorScheme.onSurfaceVariant)),
+        ],
         if(source.kind==RadioMediaKind.external)...[
           const SizedBox(height:18),
           Text('AudioVerse prevents third-party apps from embedding its player. '

@@ -5,7 +5,8 @@
         android:label="Voice of Prophecy"
         android:icon="@mipmap/ic_launcher"
         android:usesCleartextTraffic="false"
-        android:allowBackup="false">
+        android:allowBackup="false"
+        android:enableOnBackInvokedCallback="true">
         <activity
             android:name=".MainActivity"
             android:exported="true"
