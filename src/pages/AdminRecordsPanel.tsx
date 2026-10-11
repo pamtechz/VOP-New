@@ -978,10 +978,12 @@ function RadioAdminDashboard({
   const startEditEditor = (item: AdminRecord) => { setMessage(''); setError(''); setImportUrl(String(item.mediaUrl||item.videoUrl||item.audioUrl||item.streamUrl||'')); edit(item); setEditorOpen(true); };
   useEffect(() => { if (editorOpen && message) setEditorOpen(false); }, [editorOpen, message]);
 
-  const live = records.filter(item => Boolean(item.streamUrl) || radioProvider(item) === 'Stream');
+  const live = records.filter(item => Boolean(item.streamUrl) || item.mediaType === 'stream' || radioProvider(item) === 'Stream');
   const nowPlaying = live[0] || records[0] || null;
-  const videos = records.filter(item => ['Video','YouTube'].includes(radioProvider(item)));
-  const audio = records.filter(item => radioProvider(item) === 'Audio' || radioProvider(item) === 'AudioVerse');
+  const videos = records.filter(item => ['video','youtube','embed'].includes(String(item.mediaType||'')) &&
+    !['AudioVerse','SoundCloud'].includes(radioProvider(item)));
+  const audio = records.filter(item => item.mediaType==='audio'||item.mediaType==='audioverse'||
+    ['AudioVerse','SoundCloud','Audio file'].includes(radioProvider(item)));
   const filtered = records.filter(item => !search.trim() || Object.values(item).some(value => String(value ?? '').toLowerCase().includes(search.trim().toLowerCase())));
   const totalPlays = records.reduce((sum, item) => sum + (radioNumeric(item, ['plays','playCount','views']) || 0), 0);
   const listeners = records.reduce((max, item) => Math.max(max, radioNumeric(item, ['listeners','listenerCount','currentListeners']) || 0), 0);
