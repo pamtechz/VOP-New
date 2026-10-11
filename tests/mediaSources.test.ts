@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { isSafeHttpsMediaUrl, resolveMediaSource } from '../shared/mediaSources.ts';
+import { isSafeHttpsMediaUrl, resolveMediaSource, identifyRadioMedia, resolvedRadioRecord } from '../shared/mediaSources.ts';
 
 test('rejects executable protocols, local network destinations and credentials', () => {
   for (const value of ['javascript:alert(1)','data:video/mp4;base64,AA==','http://www.youtube.com/watch?v=dQw4w9WgXcQ',
@@ -26,4 +26,31 @@ test('accepts direct HTTPS media without treating arbitrary pages as video files
   assert.equal(resolveMediaSource('https://blog.wordpress.com/post')?.kind,'external');
   assert.equal(resolveMediaSource('https://example.net/private/1234'),null);
   assert.equal(resolveMediaSource('https://evil-youtube.com/watch?v=dQw4w9WgXcQ'),null);
+});
+
+test('automatic provider identification determines the destination field and category', () => {
+  const examples = [
+    ['https://youtu.be/dQw4w9WgXcQ','youtube','videoUrl'],
+    ['https://www.audioverse.org/en/media/12345','audioverse','audioUrl'],
+    ['https://cdn.example.com/podcast.m4a?signature=abc','audio','audioUrl'],
+    ['https://cdn.example.com/sermon.mp4','video','videoUrl'],
+    ['https://radio.example.com/live.m3u8','stream','streamUrl'],
+    ['https://www.soundcloud.com/channel/episode','embed','audioUrl'],
+    ['https://www.tiktok.com/@channel/video/6718335390845095173','embed','videoUrl'],
+  ] as const;
+  for(const [url,type,field] of examples){
+    const media=resolveMediaSource(url);
+    assert.ok(media, 'Expected supported source '+url);
+    const result=identifyRadioMedia(media);
+    assert.equal(result.mediaType,type,url);
+    assert.equal(result.field,field,url);
+    assert.equal(result.sourceUrl,url);
+  }
+});
+test('legacy records and server-confirmed extensionless sources remain playable',()=>{
+  assert.equal(resolvedRadioRecord({audioUrl:'https://cdn.example.com/talk.mp3'})?.mediaType,'audio');
+  assert.equal(resolvedRadioRecord({mediaUrl:'https://cdn.example.com/file?signature=1',mediaType:'audio'})?.field,'audioUrl');
+  assert.equal(resolvedRadioRecord({mediaUrl:'https://cdn.example.com/watch?id=4',mediaType:'video'})?.field,'videoUrl');
+  assert.equal(resolvedRadioRecord({mediaUrl:'https://cdn.example.com/live',mediaType:'stream'})?.field,'streamUrl');
+  assert.equal(resolvedRadioRecord({mediaUrl:'https://example.com/article'})?.mediaType,undefined);
 });
