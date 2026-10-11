@@ -160,7 +160,7 @@ export const ContentStudio: React.FC<Props> = ({ activeLanguage }) => {
   const edit = (item: ContentItem) => {
     setEditingId(identity(active, item));
     setEditingCanEdit(item.canEdit !== false);
-    setDraft({ ...item });
+    setDraft(active==='radioBroadcasts' ? {...item,mediaUrl:text(item.mediaUrl||item.videoUrl||item.audioUrl||item.streamUrl)} : {...item});
     setTranslationText(JSON.stringify(item.values ?? {}, null, 2));
     setMessage('');
     setError('');
