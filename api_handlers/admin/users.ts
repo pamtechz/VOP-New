@@ -297,7 +297,7 @@ async function syncOwnProfile(decoded: { uid: string; email?: string; name?: str
     uid: decoded.uid,
     email: decoded.email ?? existing.email ?? '',
     displayName: String(existing.displayName||'').trim() || decoded.name || decoded.email?.split('@')[0] || 'VOP Student',
-    photoURL: decoded.picture ?? existing.photoURL ?? null,
+    photoURL: existing.photoURL ?? decoded.picture ?? null,
     accountType,
     role,
     organizationId,
@@ -406,25 +406,45 @@ export default async function handler(request: Request, response: Response) {
       const incoming = body.profile && typeof body.profile === 'object'
         ? body.profile as Record<string, unknown>
         : {};
-      const phoneNumber = typeof incoming.phoneNumber === 'string' ? incoming.phoneNumber.trim() : '';
-      const whatsappNumber = typeof incoming.whatsappNumber === 'string' ? incoming.whatsappNumber.trim() : '';
-      const address = typeof incoming.address === 'string' ? incoming.address.trim() : '';
-      const displayName = typeof incoming.displayName === 'string' ? incoming.displayName.trim() : '';
-      if (displayName.length > 120 || phoneNumber.length > 40 || whatsappNumber.length > 40 || address.length > 500) {
-        return response.status(400).json({ error:'Profile details exceed the allowed length.' });
+      const allowedProfileFields = ['displayName','phoneNumber','whatsappNumber','address','bio','photoURL'] as const;
+      const keys=Object.keys(incoming);
+      if(!keys.length || keys.some(key=>!allowedProfileFields.includes(key as typeof allowedProfileFields[number]))) {
+        return response.status(400).json({ error:'Select supported personal profile fields.' });
       }
-      const ref = db.doc('users/' + decoded.uid);
-      const existing = await ref.get();
-      if (!existing.exists) return response.status(404).json({ error:'VOP account profile was not found.' });
-      await ref.set({
-        ...(displayName ? { displayName } : {}),
-        phoneNumber,
-        whatsappNumber,
-        address,
-        updatedAt: FieldValue.serverTimestamp(),
-      }, { merge:true });
-      const latest = await ref.get();
-      return response.status(200).json({ ok:true, profile:latest.data() || {} });
+      const limits:Record<typeof allowedProfileFields[number],number>={
+        displayName:120,phoneNumber:40,whatsappNumber:40,address:500,bio:1000,photoURL:2048,
+      };
+      const updates:Record<string,unknown>={};
+      for(const key of keys){
+        const value=incoming[key];
+        if(typeof value!=='string' || value.trim().length>limits[key as keyof typeof limits]){
+          return response.status(400).json({ error:'Profile details contain an invalid value or exceed the allowed length.' });
+        }
+        updates[key]=value.trim();
+      }
+      if('displayName' in updates && !updates.displayName){
+        return response.status(400).json({ error:'Your display name cannot be empty.' });
+      }
+      if('photoURL' in updates && updates.photoURL){
+        const value=String(updates.photoURL);
+        let safe=false;
+        try {
+          const parsed=new URL(value);
+          const host=parsed.hostname.toLowerCase();
+          safe=parsed.protocol==='https:' && !parsed.username && !parsed.password &&
+            (!parsed.port||parsed.port==='443') && !parsed.hash && host!=='localhost' &&
+            !host.endsWith('.local') && !host.endsWith('.internal') &&
+            !host.endsWith('.localhost') && !/^(?:\\d{1,3}\\.){3}\\d{1,3}$/.test(host) &&
+            !host.includes(':');
+        }catch { /* rejected below */ }
+        if(!safe)return response.status(400).json({ error:'Use a public HTTPS profile image URL or leave it empty.' });
+      }
+      const ref=db.doc('users/'+decoded.uid);
+      const existing=await ref.get();
+      if(!existing.exists)return response.status(404).json({ error:'VOP account profile was not found.' });
+      await ref.set({...updates,updatedAt:FieldValue.serverTimestamp()},{merge:true});
+      const latest=await ref.get();
+      return response.status(200).json({ok:true,profile:latest.data()||{}});
     }
     if (action === 'personalSettings') {
       const db = getFirestore(getFirebaseAdmin());
