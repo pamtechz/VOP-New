@@ -934,15 +934,16 @@ function RadioAdminDashboard({
       };
       if(requestId!==detectSequence.current)return;
       if(!response.ok||!data.media)throw new Error(data.error||'This link does not expose playable public media.');
-      const detection=identifyRadioMedia(data.media);
+      const media=data.media;
+      const detection=identifyRadioMedia(media);
       setForm(previous=>({
         ...previous,mediaUrl:detection.sourceUrl,mediaType:detection.mediaType,
         mediaProvider:detection.provider,
-        audioEmbedUrl:detection.provider==='AudioVerse'?String(data.media.embedUrl||detection.playbackUrl):'',
-        title:String(previous.title||data.media.title||''),
-        speaker:String(previous.speaker||data.media.speaker||''),
-        description:String(previous.description||data.media.description||''),
-        posterUrl:String(previous.posterUrl||data.media.posterUrl||''),
+        audioEmbedUrl:detection.provider==='AudioVerse'?String(media.embedUrl||detection.playbackUrl):'',
+        title:String(previous.title||media.title||''),
+        speaker:String(previous.speaker||media.speaker||''),
+        description:String(previous.description||media.description||''),
+        posterUrl:String(previous.posterUrl||media.posterUrl||''),
         audioUrl:detection.field==='audioUrl'?detection.sourceUrl:'',
         videoUrl:detection.field==='videoUrl'?detection.sourceUrl:'',
         streamUrl:detection.field==='streamUrl'?detection.sourceUrl:'',
