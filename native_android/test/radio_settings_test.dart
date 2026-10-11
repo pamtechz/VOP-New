@@ -35,6 +35,38 @@ void main(){
         RadioMediaKind.unsupported,reason:url);
     }
   });
+  test('automatic native provider and extensionless media identification',(){
+    expect(resolveRadioMedia({
+      'mediaUrl':'https://cdn.example.com/content?id=32&sig=abc',
+      'mediaType':'audio',
+    }).kind,RadioMediaKind.audio);
+    expect(resolveRadioMedia({
+      'mediaUrl':'https://cdn.example.com/content?id=14',
+      'mediaType':'video',
+    }).kind,RadioMediaKind.video);
+    expect(resolveRadioMedia({
+      'mediaUrl':'https://radio.example.com/master.m3u8',
+      'mediaType':'stream',
+    }).kind,RadioMediaKind.video);
+    final soundcloud=resolveRadioMedia({
+      'mediaUrl':'https://soundcloud.com/channel/episode',
+      'mediaType':'embed',
+    });
+    expect(soundcloud.provider,'SoundCloud');
+    expect(soundcloud.url!.host,'w.soundcloud.com');
+    final tiktok=resolveRadioMedia({
+      'mediaUrl':'https://www.tiktok.com/@church/video/6718335390845095173',
+    });
+    expect(tiktok.provider,'TikTok');
+    final insta=resolveRadioMedia({
+      'mediaUrl':'https://www.instagram.com/reel/CaaBBc_1D2e/',
+    });
+    expect(insta.provider,'Instagram');
+    final facebook=resolveRadioMedia({
+      'mediaUrl':'https://www.facebook.com/page/videos/123456789',
+    });
+    expect(facebook.provider,'Facebook');
+  });
   test('web-backed appearance applies theme/accessibility on Android',(){
     VopAppearance.apply({'theme':'dark','accessibility':{
       'largeText':true,'reducedMotion':true,'highContrast':true,
