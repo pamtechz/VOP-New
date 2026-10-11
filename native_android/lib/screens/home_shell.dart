@@ -92,13 +92,9 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
 
   @override Widget build(BuildContext context){
     final wide=MediaQuery.sizeOf(context).width>=880;
-    final labels=[
-      VopI18n.t('navigation.discover','Discover'),
-      VopI18n.t('navigation.lessons','Lessons'),
-      VopI18n.t('navigation.library','Library'),
-      VopI18n.t('navigation.prayer','Prayer'),
-      VopI18n.t('navigation.radio','Radio'),
-    ];
+    const labels=['Discover','Lessons','Library','Prayer','Radio'];
+    const labelKeys=['navigation.discover','navigation.lessons',
+      'navigation.library','navigation.prayer','navigation.radio'];
     final icons=[
       Icons.home_outlined,Icons.auto_stories_outlined,
       Icons.local_library_outlined,Icons.volunteer_activism_outlined,
@@ -115,7 +111,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
       appBar:AppBar(
         toolbarHeight:58,
         title:tab==0?const VopBrand(compact:true)
-          :Text(labels[tab],style:const TextStyle(fontWeight:FontWeight.w800)),
+          :Text(locale.text(labelKeys[tab],labels[tab]),style:const TextStyle(fontWeight:FontWeight.w800)),
         actions:[
           IconButton(
             tooltip:'Notifications',
@@ -138,7 +134,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
           onDestinationSelected:selectTab,
           destinations:List.generate(labels.length,(index)=>NavigationRailDestination(
             icon:Icon(icons[index]),selectedIcon:Icon(activeIcons[index]),
-            label:Text(labels[index]))),
+            label:Text(locale.text(labelKeys[index],labels[index])))),
         ),
         const VerticalDivider(width:1),
         Expanded(child:body),
@@ -148,7 +144,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
         onDestinationSelected:selectTab,
         destinations:List.generate(labels.length,(index)=>NavigationDestination(
           icon:Icon(icons[index]),selectedIcon:Icon(activeIcons[index]),
-          label:labels[index])),
+          label:locale.text(labelKeys[index],labels[index]))),
       ),
     ));
   }
