@@ -113,7 +113,11 @@ RadioMedia resolveRadioMedia(Map<String,dynamic> item) {
   return const RadioMedia(RadioMediaKind.unsupported,null);
 }
 /// The installed Android package ID identifies this YouTube embed client.
-String get vopYoutubeClientOrigin=>Uri.parse(VopConfig.apiUrl).origin;
+String get vopYoutubeClientOrigin{
+  final configured=Uri.tryParse(VopConfig.apiUrl);
+  return configured!=null&&configured.scheme=='https'&&configured.hasAuthority
+    ?configured.origin:'https://www.youtube-nocookie.com';
+}
 String youtubeEmbedHtml(Uri embedUrl) {
   if(embedUrl.host!='www.youtube-nocookie.com' ||
      !RegExp(r'^/embed/[A-Za-z0-9_-]{11}$').hasMatch(embedUrl.path)) {
