@@ -35,7 +35,7 @@ export function getAdminDb() { return getFirestore(adminApp()); }
 export async function authenticateTenant(request: Request, requestedOrganizationId?: string, allowUnassigned = false): Promise<TenantContext> {
   const authorization = header(request, 'authorization');
   if (!authorization.startsWith('Bearer ')) throw new Error('Sign in first.');
-  const auth = await getAuth(adminApp()).verifyIdToken(authorization.slice(7).trim());
+  const auth = await getAuth(adminApp()).verifyIdToken(authorization.slice(7).trim(),true);
   const db = getAdminDb();
   const profileSnap = await db.doc(`users/${auth.uid}`).get();
   if (!profileSnap.exists) throw new Error('Account profile was not found.');
