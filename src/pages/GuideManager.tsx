@@ -24,6 +24,7 @@ type GuideRecord = {
   certificateTypeName:string;
   certificationRequirementIds:string[];
   learnerEntryMode:'lessons'|'sections';
+  sequentialLearning:boolean;
   requiresFinalExam: boolean;
   published: boolean;
   archived: boolean;
@@ -134,6 +135,7 @@ function makeRecord(value: Record<string, unknown>, fallbackLessons = 0): GuideR
     certificationRequirementIds:Array.isArray(value.certificationRequirementIds)
       ? value.certificationRequirementIds.map(valueText).filter(Boolean) : [],
     learnerEntryMode:value.learnerEntryMode==='sections'?'sections':'lessons',
+    sequentialLearning:value.sequentialLearning===true||value.enforceSequentialProgress===true,
     requiresFinalExam: value.requiresFinalExam === true,
     published: value.published === true,
     archived: value.archived === true,
@@ -309,6 +311,7 @@ export default function GuideManager({
       certificateTypeName:'',
       certificationRequirementIds:[],
       learnerEntryMode:'lessons',
+      sequentialLearning:true,
       requiresFinalExam: true,
       published: false,
       archived: false,
@@ -373,6 +376,7 @@ export default function GuideManager({
         certificateTypeName:editing.certificateTypeName.trim(),
         certificationRequirementIds:[...editing.certificationRequirementIds],
         learnerEntryMode:editing.learnerEntryMode,
+        sequentialLearning:editing.sequentialLearning,
         requiresFinalExam: editing.requiresFinalExam,
         published: editing.published,
         archived: false,
@@ -557,6 +561,13 @@ export default function GuideManager({
               <option value="lessons">Lessons (default)</option>
               <option value="sections">Sections / pages</option>
             </select>
+          </div>
+          <div className="vop-setting-row">
+            <div><div className="vop-setting-name">Sequential learning</div>
+              <div className="vop-setting-help">Require learners to complete earlier lessons and quizzes before opening the next. New guides use this automatically; existing guides can opt in.</div>
+            </div>
+            <input type="checkbox" checked={editing.sequentialLearning}
+              onChange={event=>setEditing({...editing,sequentialLearning:event.target.checked})}/>
           </div>
           <div className="vop-setting-row">
             <div><div className="vop-setting-name">Final guide examination</div><div className="vop-setting-help">A guide-level final examination is required for newly created structured modules.</div></div>
