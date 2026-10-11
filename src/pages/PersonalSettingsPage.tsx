@@ -365,22 +365,22 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
               {profileError&&<div role="alert" className="vop-personal-notice error">{profileError}</div>}
               {profileMessage&&<div role="status" className="vop-personal-notice success"><CheckCircle size={16}/>{profileMessage}</div>}
               <form className="vop-personal-profile-form" onSubmit={event=>void saveProfile(event)}>
-                <label>Display name<input required maxLength={120} autoComplete="name"
+                <label>{uiT('personal_settings.profile_name','Display name')}<input required maxLength={120} autoComplete="name"
                   value={profileDraft.displayName} onChange={event=>patchProfile('displayName',event.target.value)}/></label>
-                <label>Email address<input type="email" readOnly value={String(profile.email||currentUser.email||'')}/></label>
-                <label>Phone number<input type="tel" maxLength={40} autoComplete="tel"
+                <label>{uiT('personal_settings.profile_email','Email address')}<input type="email" readOnly value={String(profile.email||currentUser.email||'')}/></label>
+                <label>{uiT('personal_settings.profile_phone','Phone number')}<input type="tel" maxLength={40} autoComplete="tel"
                   value={profileDraft.phoneNumber} onChange={event=>patchProfile('phoneNumber',event.target.value)}/></label>
-                <label>WhatsApp number<input type="tel" maxLength={40}
+                <label>{uiT('personal_settings.profile_whatsapp','WhatsApp number')}<input type="tel" maxLength={40}
                   value={profileDraft.whatsappNumber} onChange={event=>patchProfile('whatsappNumber',event.target.value)}/></label>
-                <label>Address<textarea maxLength={500} rows={2} autoComplete="street-address"
+                <label>{uiT('personal_settings.profile_address','Address')}<textarea maxLength={500} rows={2} autoComplete="street-address"
                   value={profileDraft.address} onChange={event=>patchProfile('address',event.target.value)}/></label>
-                <label>About me<textarea maxLength={1000} rows={3}
+                <label>{uiT('personal_settings.profile_bio','About me')}<textarea maxLength={1000} rows={3}
                   value={profileDraft.bio} onChange={event=>patchProfile('bio',event.target.value)}/></label>
-                <label>Profile picture URL<input type="url" maxLength={2048} placeholder="https://"
+                <label>{uiT('personal_settings.profile_picture_url','Profile picture URL')}<input type="url" maxLength={2048} placeholder={uiT('personal_settings.profile_url_placeholder','https://')}
                   value={profileDraft.photoURL} onChange={event=>patchProfile('photoURL',event.target.value)}/></label>
                 <div className="vop-personal-profile-actions">
                   <button type="button" className="vop-secondary" disabled={profileSaving||!profileDirty}
-                    onClick={()=>{setProfileDraft(editableOwnProfile(profile));setProfileError('');}}>Discard changes</button>
+                    onClick={()=>{setProfileDraft(editableOwnProfile(profile));setProfileError('');}}>{uiT('personal_settings.profile_discard','Discard changes')}</button>
                   <button type="submit" className="vop-primary" disabled={profileSaving||!profileDirty}>
                     <Save size={16}/>{profileSaving?'Saving…':'Save profile'}</button>
                 </div>
