@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/vop_api.dart';
+import '../core/offline_study.dart';
 import '../widgets/vop_ui.dart';
 import 'lesson_screen.dart';
 import 'quiz_screen.dart';
@@ -18,6 +19,36 @@ class _GuideScreenState extends State<GuideScreen> {
     data=Future.wait([widget.api.guide(widget.guideId),widget.api.progress()]);
   }
   Future<void> refresh()async{setState(reload);await data;}
+  Future<void> download(Map<String,dynamic> lesson,String language,bool quiz)async{
+    final id=(lesson['id']??'').toString();
+    if(quiz){
+      final approved=await showDialog<bool>(context:context,
+        builder:(ctx)=>AlertDialog(
+          title:const Text('Prepare offline assessment'),
+          content:const Text('Downloading starts a server-issued assessment session. '
+            'Its attempt limits and expiry still apply. Results require internet access.'),
+          actions:[
+            TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('Cancel')),
+            FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('Continue')),
+          ]));
+      if(approved!=true)return;
+    }
+    try{
+      if(quiz){
+        final session=await widget.api.startQuiz(widget.guideId,id,language);
+        await OfflineStudy.instance.saveQuiz(widget.guideId,id,language,session,
+          title:(lesson['title']??'Assessment').toString());
+      }else{
+        final content=await widget.api.lesson(widget.guideId,id);
+        await OfflineStudy.instance.saveLesson(widget.guideId,id,language,content);
+      }
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content:Text('Available offline.')));
+    }catch(error){
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content:Text('$error')));
+    }
+  }
   Future<void> openLesson(Map<String,dynamic> lesson,String language,bool isQuiz)async{
     final id=(lesson['id']??'').toString();
     final title=(lesson['title']??'Lesson').toString();
@@ -100,8 +131,11 @@ class _GuideScreenState extends State<GuideScreen> {
                     style:const TextStyle(fontWeight:FontWeight.w700)),
                   subtitle:Text(finished?'Completed':locked?'Locked':
                     isQuiz?'Assessment': '${lesson['estimatedMinutes']??15} min reading'),
-                  trailing:Icon(locked?Icons.lock_outline:
-                    finished?Icons.check_circle:Icons.chevron_right),
+                  trailing:locked?const Icon(Icons.lock_outline):
+                    IconButton(
+                      tooltip:isQuiz?'Prepare offline quiz':'Download lesson',
+                      icon:const Icon(Icons.download_for_offline_outlined),
+                      onPressed:()=>download(lesson,language,isQuiz)),
                   onTap:locked?null:()=>openLesson(lesson,language,isQuiz),
                 ));
             }),
