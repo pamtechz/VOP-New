@@ -537,40 +537,25 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
           <div className="vop-personal-tab-pane">
             <section className="vop-personal-card vop-card">
               <h2><ShieldCheck size={19}/>{uiT('personal_settings.security_overview','Account security')}</h2>
-              {securityError&&<div className="vop-personal-notice error" role="alert">{securityError}</div>}
+              {securityError&&<p role="alert">{securityError}</p>}
               {securityOverview?<>
-                <div className="vop-setting-row"><div>
-                  <strong>{uiT('personal_settings.email_verification','Email verification')}</strong>
-                  <div className="vop-setting-help">{securityOverview.emailVerified
-                    ?uiT('personal_settings.verified_email','Verified')
-                    :uiT('personal_settings.unverified_email','Not verified')}</div>
-                </div>
-                  <div className="vop-personal-profile-actions">
-                    {!securityOverview.emailVerified&&<button type="button" className="vop-secondary"
-                      disabled={verificationBusy} onClick={()=>void requestEmailVerification()}>
-                      {uiT('personal_settings.send_verification_email','Send verification email')}
-                    </button>}
-                    <button type="button" className="vop-secondary" disabled={verificationBusy}
-                      onClick={()=>void refreshEmailVerification()}>
-                      {uiT('personal_settings.refresh_verification','Refresh status')}
-                    </button>
-                  </div>
+                <p>{uiT('personal_settings.email_verification','Email verification')}: <strong>
+                  {securityOverview.emailVerified?uiT('personal_settings.verified_email','Verified'):uiT('personal_settings.unverified_email','Not verified')}
+                </strong></p>
+                {securityOverview.lastSignInAt&&<p>{uiT('personal_settings.last_sign_in','Last sign-in')}: {new Date(securityOverview.lastSignInAt).toLocaleString()}</p>}
+                <p>{uiT('personal_settings.linked_sign_in','Linked providers')}: {securityOverview.signInProviders.join(', ')||'Email'}</p>
+                <div className="vop-personal-profile-actions">
+                  {!securityOverview.emailVerified&&<button type="button" className="vop-secondary" disabled={verificationBusy}
+                    onClick={()=>void requestEmailVerification()}>{uiT('personal_settings.send_verification_email','Send verification email')}</button>}
+                  <button type="button" className="vop-secondary" disabled={verificationBusy}
+                    onClick={()=>void refreshEmailVerification()}>{uiT('personal_settings.refresh_verification','Refresh status')}</button>
                 </div>
                 {verificationMessage&&<small role="status">{verificationMessage}</small>}
-                {securityOverview.lastSignInAt&&<div className="vop-setting-row"><div>
-                  <strong>{uiT('personal_settings.last_sign_in','Last sign-in')}</strong>
-                  <div className="vop-setting-help">{new Date(securityOverview.lastSignInAt).toLocaleString()}</div>
-                </div></div>}
-                <div className="vop-setting-row"><div>
-                  <strong>{uiT('personal_settings.linked_sign_in','Linked providers')}</strong>
-                  <div className="vop-setting-help">{securityOverview.signInProviders.join(', ') || uiT('personal_settings.email_or_custom_login','Email or supported sign-in')}</div>
-                </div></div>
-              </>:<p>{uiT('personal_settings.loading_account_security','Account security details are unavailable.')}</p>}
-              <p>{uiT('personal_settings.sessions_explanation',
-                'Firebase does not provide a device-session list here. You can revoke refresh tokens for all devices, then sign in again. Previously issued access tokens may remain usable until they expire.')}</p>
+              </>:<p>{uiT('personal_settings.loading_account_security','Account security details unavailable.')}</p>}
+              <p>{uiT('personal_settings.sessions_explanation','Revoking refresh tokens ends sign-in across devices. Existing access tokens may work until expiry.')}</p>
               <button type="button" className="vop-secondary danger" disabled={securityBusy}
                 onClick={()=>void signOutAllDevices()}><ShieldCheck size={16}/>
-                {securityBusy?uiT('personal_settings.ending_sessions','Ending sessions…'):uiT('personal_settings.sign_out_all_devices','Sign out all devices')}
+                {securityBusy?'Ending sessions…':uiT('personal_settings.sign_out_all_devices','Sign out all devices')}
               </button>
             </section>
             <section className="vop-personal-card vop-card">
