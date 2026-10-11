@@ -27,6 +27,25 @@ import {
   loadAccountSecurityStatus, revokeAllSessions, type AccountSecurityStatus, type AccountLifecycleStatus,
 } from '../services/accountLifecycle';
 
+type PasswordInputProps={
+  label:string;placeholder:string;value:string;onChange:(value:string)=>void;
+  autoComplete:'current-password'|'new-password';disabled:boolean;
+};
+function PasswordInput({label,placeholder,value,onChange,autoComplete,disabled}:PasswordInputProps){
+  const [visible,setVisible]=useState(false);
+  return <label className="vop-personal-password-field">
+    <span>{label}</span>
+    <span className="vop-personal-password-wrap">
+      <input type={visible?'text':'password'} value={value} onChange={event=>onChange(event.target.value)}
+        placeholder={placeholder} autoComplete={autoComplete} disabled={disabled}/>
+      <button type="button" disabled={disabled} title={visible?'Hide password':'Show password'}
+        aria-label={visible?'Hide '+label:'Show '+label} onClick={()=>setVisible(current=>!current)}>
+        {visible?<EyeOff size={16}/>:<Eye size={16}/>}
+      </button>
+    </span>
+  </label>;
+}
+
 interface Props { currentUser: User; onBack: () => void; onStudyLanguageChange: (language: string) => void; context?: 'learner'|'organization'; onNavigate?: (route: AppRoute) => void; }
 
 export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onStudyLanguageChange, context='learner', onNavigate }) => {
@@ -73,9 +92,6 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
-  const [showNewPassword, setShowNewPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [passwordBusy, setPasswordBusy] = useState(false);
   const [passwordMessage, setPasswordMessage] = useState('');
   const [passwordError, setPasswordError] = useState('');
@@ -429,81 +445,19 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
                   <span>{passwordError}</span>
                 </div>
               )}
-              <form onSubmit={handlePasswordChange} style={{display:'grid',gap:12,marginTop:2}}>
-                {!isGoogleAccount && (
-                  <label>
-                    <span>{uiT('personal_settings.current_password',"Current password")}</span>
-                    <div style={{position:'relative',display:'flex',alignItems:'center'}}>
-                      <input
-                        type={showCurrentPassword ? 'text' : 'password'}
-                        value={currentPassword}
-                        onChange={e => setCurrentPassword(e.target.value)}
-                        placeholder={uiT('personal_settings.enter_your_current_password',"Enter your current password")}
-                        autoComplete="current-password"
-                        disabled={passwordBusy}
-                        style={{paddingRight:36}}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowCurrentPassword(v => !v)}
-                        style={{position:'absolute',right:8,background:'none',border:'none',padding:3,cursor:'pointer',color:'var(--text-muted,#64748b)',display:'inline-flex',alignItems:'center'}}
-                        title={showCurrentPassword ? 'Hide password' : 'Show password'}
-                        aria-label={showCurrentPassword ? 'Hide current password' : 'Show current password'}
-                      >
-                        {showCurrentPassword ? <EyeOff size={16}/> : <Eye size={16}/>}
-                      </button>
-                    </div>
-                  </label>
-                )}
-
-                <label>
-                  <span>{isGoogleAccount ? 'Password' : 'New password'}</span>
-                  <div style={{position:'relative',display:'flex',alignItems:'center'}}>
-                    <input
-                      type={showNewPassword ? 'text' : 'password'}
-                      value={newPassword}
-                      onChange={e => setNewPassword(e.target.value)}
-                      placeholder={uiT('personal_settings.at_least_6_characters',"At least 6 characters")}
-                      autoComplete="new-password"
-                      disabled={passwordBusy}
-                      style={{paddingRight:36}}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowNewPassword(v => !v)}
-                      style={{position:'absolute',right:8,background:'none',border:'none',padding:3,cursor:'pointer',color:'var(--text-muted,#64748b)',display:'inline-flex',alignItems:'center'}}
-                      title={showNewPassword ? 'Hide password' : 'Show password'}
-                      aria-label={showNewPassword ? 'Hide new password' : 'Show new password'}
-                    >
-                      {showNewPassword ? <EyeOff size={16}/> : <Eye size={16}/>}
-                    </button>
-                  </div>
-                </label>
-
-                <label>
-                  <span>{isGoogleAccount ? 'Confirm password' : 'Confirm new password'}</span>
-                  <div style={{position:'relative',display:'flex',alignItems:'center'}}>
-                    <input
-                      type={showConfirmPassword ? 'text' : 'password'}
-                      value={confirmPassword}
-                      onChange={e => setConfirmPassword(e.target.value)}
-                      placeholder={isGoogleAccount ? 'Re-enter password' : 'Re-enter your new password'}
-                      autoComplete="new-password"
-                      disabled={passwordBusy}
-                      style={{paddingRight:36}}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowConfirmPassword(v => !v)}
-                      style={{position:'absolute',right:8,background:'none',border:'none',padding:3,cursor:'pointer',color:'var(--text-muted,#64748b)',display:'inline-flex',alignItems:'center'}}
-                      title={showConfirmPassword ? 'Hide password' : 'Show password'}
-                      aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
-                    >
-                      {showConfirmPassword ? <EyeOff size={16}/> : <Eye size={16}/>}
-                    </button>
-                  </div>
-                </label>
-
+              <form onSubmit={handlePasswordChange} className="vop-personal-password-form">
+                {!isGoogleAccount&&<PasswordInput label={uiT('personal_settings.current_password','Current password')}
+                  placeholder={uiT('personal_settings.enter_your_current_password','Enter your current password')}
+                  value={currentPassword} onChange={setCurrentPassword}
+                  autoComplete="current-password" disabled={passwordBusy}/>}
+                <PasswordInput label={isGoogleAccount?'Password':'New password'}
+                  placeholder={uiT('personal_settings.at_least_6_characters','At least 6 characters')}
+                  value={newPassword} onChange={setNewPassword}
+                  autoComplete="new-password" disabled={passwordBusy}/>
+                <PasswordInput label={isGoogleAccount?'Confirm password':'Confirm new password'}
+                  placeholder={isGoogleAccount?'Re-enter password':'Re-enter your new password'}
+                  value={confirmPassword} onChange={setConfirmPassword}
+                  autoComplete="new-password" disabled={passwordBusy}/>
                 <div style={{display:'flex',gap:10,alignItems:'center',flexWrap:'wrap',marginTop:4}}>
                   <button
                     type="submit"
