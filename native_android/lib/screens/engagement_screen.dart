@@ -61,7 +61,7 @@ class _EngagementScreenState extends State<EngagementScreen> {
                 builder:(_)=>_MemoryDeck(api:widget.api,
                   id:(deck['id']??'').toString(),
                   title:(deck['title']??deck['name']??'Memory deck').toString()))),
-            )),
+            ))),
         ]));
     });
   Widget _challenges()=>FutureBuilder<Map<String,dynamic>>(future:arena,
@@ -97,7 +97,7 @@ class _EngagementScreenState extends State<EngagementScreen> {
               title:Text('Solo challenge'),
               subtitle:Text('${item['answeredCount']??0} of ${item['questionCount']??0} answered'),
               trailing:const Icon(Icons.chevron_right),
-              onTap:()=>_openChallenge((item['id']??'').toString()))),
+              onTap:()=>_openChallenge((item['id']??'').toString())))),
           const SizedBox(height:12),
           OutlinedButton.icon(onPressed:_leaderboard,
             icon:const Icon(Icons.leaderboard_outlined),
@@ -155,7 +155,7 @@ class _EngagementScreenState extends State<EngagementScreen> {
               title:Text('${items[index]['displayName']??'Learner'}'),
               subtitle:Text('${items[index]['rating']??1200} rating'),
               trailing:Text('${items[index]['points']??0} pts')))),
-      ))));
+      )));
     }catch(e){
       if(mounted)ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content:Text('$e')));
@@ -220,7 +220,7 @@ class _MemoryDeckState extends State<_MemoryDeck> {
                     (verse['id']??'').toString(),rating),
                     child:Text(rating==1?'Again':rating==3?'Good':'Easy')),
               ]),
-            ]))),
+            ])))),
       ]);
     }),
   );
