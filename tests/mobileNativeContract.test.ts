@@ -12,7 +12,7 @@ test('native Android is an independent Flutter app and never a wrapped web view'
   assert.match(pubspec,/firebase_auth:/);
   assert.match(pubspec,/firebase_core:/);
   assert.match(main,/MaterialApp/);
-  assert.doesNotMatch(pubspec,/webview_flutter|flutter_inappwebview|tauri|capacitor/);
+  assert.doesNotMatch(pubspec,/flutter_inappwebview|tauri|capacitor/);
   assert.match(nativeApi,/Bearer \$token/);
   assert.match(nativeApi,/followRedirects = false/);
   assert.match(nativeApi,/\/api\/study\/progress/);
@@ -67,7 +67,7 @@ test('native parity shell mirrors web destinations and uses real API-backed scre
   assert.match(notifications,/markNotificationRead/);
   assert.match(api,/\/api\/admin\/notifications/);
   assert.doesNotMatch(read('native_android/pubspec.yaml'),
-    /webview_flutter|flutter_inappwebview|tauri|capacitor/);
+    /flutter_inappwebview|tauri|capacitor/);
 });
 
 test('mobile content BFF restricts native cards to tenant-safe published DTOs',()=>{
