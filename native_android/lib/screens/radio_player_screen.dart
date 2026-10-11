@@ -166,11 +166,18 @@ class _RadioPlayerScreenState extends State<RadioPlayerScreen>
               ?NavigationDecision.navigate:NavigationDecision.prevent;
           },
         ));
-      if(source.provider=='YouTube'){
-        await embed!.loadHtmlString(youtubeEmbedHtml(source.url!),
-          baseUrl:'$vopYoutubeClientOrigin/');
-      }else{
-        await embed!.loadRequest(source.url!);
+      try {
+        if(source.provider=='YouTube'){
+          await embed!.loadHtmlString(youtubeEmbedHtml(source.url!),
+            baseUrl:'$vopYoutubeClientOrigin/');
+        }else{
+          await embed!.loadRequest(source.url!);
+        }
+      }catch(_){
+        if(mounted)setState((){
+          loading=false;
+          error='The media player could not initialise. Please retry.';
+        });
       }
       return;
     }
@@ -250,9 +257,9 @@ class _RadioPlayerScreenState extends State<RadioPlayerScreen>
               label:const Text('Retry player')),
             const SizedBox(width:10),
             TextButton.icon(
-              onPressed:() {
+              onPressed:() async {
                 final id=source.url!.pathSegments.last;
-                return launchUrl(
+                await launchUrl(
                   Uri.parse('https://www.youtube.com/watch?v=$id'),
                   mode:LaunchMode.externalApplication);
               },
