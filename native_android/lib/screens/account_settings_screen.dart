@@ -16,7 +16,8 @@ class AccountSettingsScreen extends StatefulWidget {
 }
 class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
   final name=TextEditingController(),phone=TextEditingController(),
-    whatsapp=TextEditingController(),address=TextEditingController();
+    whatsapp=TextEditingController(),address=TextEditingController(),
+    bio=TextEditingController(),photoUrl=TextEditingController();
   bool loading=true,saving=false;
   String? error,message;
   Map<String,dynamic> profile={},preferences={},deletion={};
@@ -24,7 +25,8 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
   int page=0;
   @override void initState(){super.initState();_load();}
   @override void dispose(){
-    name.dispose();phone.dispose();whatsapp.dispose();address.dispose();super.dispose();
+    name.dispose();phone.dispose();whatsapp.dispose();address.dispose();
+    bio.dispose();photoUrl.dispose();super.dispose();
   }
   Future<void> _load()async{
     setState((){loading=true;error=null;});
@@ -32,7 +34,8 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       final results=await Future.wait([
         widget.api.accountProfile(),
         widget.api.personalSettings(),
-        widget.api.supportedLanguages(),
+        widget.api.supportedLanguages().catchError(
+          (Object _) => <String,dynamic>{'items':<dynamic>[]}),
       ]);
       final p=_map(results[0]['profile']);
       final settings=_map(results[1]['settings']);
@@ -44,6 +47,8 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         phone.text=(p['phoneNumber']??'').toString();
         whatsapp.text=(p['whatsappNumber']??'').toString();
         address.text=(p['address']??'').toString();
+        bio.text=(p['bio']??'').toString();
+        photoUrl.text=(p['photoURL']??'').toString();
         loading=false;
       });
       VopAppearance.apply(settings);
@@ -56,12 +61,24 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     if(name.text.trim().isEmpty){
       setState(()=>error='Your display name cannot be empty.');return;
     }
+    if(name.text.trim().length>120 || phone.text.trim().length>40 ||
+        whatsapp.text.trim().length>40 || address.text.trim().length>500 ||
+        bio.text.trim().length>1000 || photoUrl.text.trim().length>2048){
+      setState(()=>error='One or more profile fields are too long.');return;
+    }
+    final image=photoUrl.text.trim();
+    if(image.isNotEmpty && (!Uri.tryParse(image).toString().startsWith('https://') ||
+        Uri.tryParse(image)?.hasAuthority!=true)){
+      setState(()=>error='Use a public HTTPS profile picture URL.');return;
+    }
     await _perform(()async{
       final result=await widget.api.saveProfile({
         'displayName':name.text.trim(),
         'phoneNumber':phone.text.trim(),
         'whatsappNumber':whatsapp.text.trim(),
         'address':address.text.trim(),
+        'bio':bio.text.trim(),
+        'photoURL':image,
       });
       profile=_map(result['profile']);
     },'Profile updated for web and Android.');
@@ -147,11 +164,18 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         ?VopEmpty(icon:Icons.wifi_off,message:error!,onRetry:_load)
         :Column(children:[
           Padding(padding:const EdgeInsets.fromLTRB(14,12,14,3),
-            child:SegmentedButton<int>(segments:const [
-              ButtonSegment(value:0,label:Text('Profile'),icon:Icon(Icons.person_outline)),
-              ButtonSegment(value:1,label:Text('Settings'),icon:Icon(Icons.tune)),
-              ButtonSegment(value:2,label:Text('Security'),icon:Icon(Icons.shield_outlined)),
-            ],selected:{page},onSelectionChanged:(v)=>setState(()=>page=v.first))),
+            child:LayoutBuilder(builder:(context,constraints){
+              final compact=constraints.maxWidth<410;
+              return SegmentedButton<int>(showSelectedIcon:false,segments:[
+                ButtonSegment(value:0,label:compact?null:const Text('Profile'),
+                  icon:const Icon(Icons.person_outline)),
+                ButtonSegment(value:1,label:compact?null:const Text('Settings'),
+                  icon:const Icon(Icons.tune)),
+                ButtonSegment(value:2,label:compact?null:const Text('Security'),
+                  icon:const Icon(Icons.shield_outlined)),
+              ],selected:{page},
+                onSelectionChanged:(v)=>setState(()=>page=v.first));
+            })),
           if(error!=null)Padding(padding:const EdgeInsets.symmetric(horizontal:18,vertical:5),
             child:Text(error!,style:TextStyle(color:Theme.of(context).colorScheme.error))),
           if(message!=null)Padding(padding:const EdgeInsets.symmetric(horizontal:18,vertical:5),
@@ -167,6 +191,8 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     const SizedBox(height:9),
     Center(child:CircleAvatar(radius:35,
       backgroundColor:Theme.of(context).colorScheme.primaryContainer,
+      foregroundImage:Uri.tryParse((profile['photoURL']??'').toString())?.scheme=='https'
+        ?NetworkImage((profile['photoURL']??'').toString()):null,
       child:const Icon(Icons.person,size:37))),
     const SizedBox(height:12),
     Center(child:Text((profile['email']??FirebaseAuth.instance.currentUser?.email??'').toString(),
@@ -178,6 +204,9 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       _field(phone,'Phone number',Icons.phone_outlined,keyboard:TextInputType.phone),
       _field(whatsapp,'WhatsApp number',Icons.chat_outlined,keyboard:TextInputType.phone),
       _field(address,'Address',Icons.place_outlined,lines:2),
+      _field(bio,'About me',Icons.edit_note_outlined,lines:3),
+      _field(photoUrl,'Profile picture URL',Icons.image_outlined,
+        keyboard:TextInputType.url),
       FilledButton.icon(onPressed:saving?null:_saveProfile,
         icon:const Icon(Icons.save_outlined),
         label:Text(saving?'Saving…':'Save profile')),
@@ -189,7 +218,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         title:const Text('Role'),
         subtitle:Text((profile['organizationRole']??profile['role']??'Learner').toString())),
       ListTile(contentPadding:EdgeInsets.zero,
-        title:const Text('Organisation ID'),
+        title:const Text('Organisation'),
         subtitle:Text((profile['organizationId']??'Personal account').toString())),
     ]),
   ];
