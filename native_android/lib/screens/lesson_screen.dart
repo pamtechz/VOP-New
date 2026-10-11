@@ -20,7 +20,7 @@ class _LessonScreenState extends State<LessonScreen> {
   String? notice;
   @override void initState(){
     super.initState();
-    lesson=widget.api.lesson(widget.guideId,widget.lessonId);
+    lesson=widget.api.lesson(widget.guideId,widget.lessonId,language:widget.language);
     resume=widget.api.progress();
     resume.then((value){
       final rows=value['lessonResume'];
@@ -35,8 +35,10 @@ class _LessonScreenState extends State<LessonScreen> {
   Future<void> _save(int index)async{
     setState(()=>page=index);
     try{
-      await widget.api.saveResume(
+      final response=await widget.api.saveResume(
         widget.guideId,widget.lessonId,widget.language,index);
+      if(response['queued']==true&&mounted)setState(()=>
+        notice='Reading position queued for sync.');
     }catch(error){
       if(mounted)setState(()=>notice='Resume could not sync: $error');
     }
@@ -45,11 +47,13 @@ class _LessonScreenState extends State<LessonScreen> {
     if(busy)return;
     setState((){busy=true;notice=null;});
     try{
-      await widget.api.completeLesson(
+      final result=await widget.api.completeLesson(
         widget.guideId,widget.lessonId,widget.language);
       if(!mounted)return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content:Text('Lesson completion saved to VOP.')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content:Text(result['queued']==true
+          ?'Completion pending until connected.'
+          :'Lesson completion verified.')));
       Navigator.pop(context,true);
     }catch(error){
       if(mounted)setState(()=>notice='Completion failed: $error');
@@ -58,7 +62,23 @@ class _LessonScreenState extends State<LessonScreen> {
     }
   }
   @override Widget build(BuildContext context)=>Scaffold(
-    appBar:AppBar(title:Text(widget.title)),
+    appBar:AppBar(title:Text(widget.title),actions:[
+      IconButton(
+        tooltip:'Download lesson',
+        icon:const Icon(Icons.download_for_offline_outlined),
+        onPressed:()async{
+          try{
+            await widget.api.downloadLesson(
+              widget.guideId,widget.lessonId,widget.language);
+            if(context.mounted)ScaffoldMessenger.of(context)
+              .showSnackBar(const SnackBar(content:Text('Lesson saved for offline use.')));
+          }catch(error){
+            if(context.mounted)ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content:Text('$error')));
+          }
+        },
+      ),
+    ]),
     body:FutureBuilder<Map<String,dynamic>>(
       future:lesson,
       builder:(context,s){
@@ -68,6 +88,7 @@ class _LessonScreenState extends State<LessonScreen> {
         if(s.hasError)return Center(child:Padding(
           padding:const EdgeInsets.all(22),
           child:Text('${s.error}',textAlign:TextAlign.center)));
+        final offline=s.data?['offline']==true;
         final data=s.data?['lesson'];
         final pages=data is Map && data['pages'] is List
           ?(data['pages'] as List).whereType<Map>()
@@ -79,6 +100,10 @@ class _LessonScreenState extends State<LessonScreen> {
         final last=index==pages.length-1;
         return Column(children:[
           LinearProgressIndicator(value:(index+1)/pages.length,minHeight:3),
+          if(offline)const Padding(
+            padding:EdgeInsets.symmetric(horizontal:16,vertical:7),
+            child:Text('Offline • progress pending sync'),
+          ),
           Expanded(child:ListView(
             key:ValueKey(index),
             padding:const EdgeInsets.symmetric(horizontal:20,vertical:22),
