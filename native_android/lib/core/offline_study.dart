@@ -140,6 +140,9 @@ class OfflineStudy {
     await storage.write(key:_key(owner,'pending'),value:jsonEncode(queue));
   }
   Future<int> pendingCount()async=>(await pending()).length;
+  Future<void> clearPending()async=>
+    storage.delete(key:_key(uid,'pending'));
+
 
   /// Replay only against canonical server endpoints. A failed or expired quiz
   /// remains pending and never receives a locally manufactured result.
@@ -187,7 +190,15 @@ class OfflineStudy {
       }
     }
     if(FirebaseAuth.instance.currentUser?.uid==owner){
-      await storage.write(key:_key(owner,'pending'),value:jsonEncode(remaining));
+      // A new page position or quiz answer may be queued while requests are
+      // in flight. Remove only the exact submissions the server accepted.
+      final waiting=remaining.map(jsonEncode).toSet();
+      final accepted=items.map(jsonEncode).where(
+        (entry)=>!waiting.contains(entry)).toSet();
+      final latest=await pending();
+      final updated=latest.where((item)=>
+        !accepted.contains(jsonEncode(item))).toList();
+      await storage.write(key:_key(owner,'pending'),value:jsonEncode(updated));
     }
   }
 }
