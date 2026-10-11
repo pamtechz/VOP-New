@@ -12,11 +12,6 @@ function id(value: unknown) {
   return valueId;
 }
 
-function header(request: Request, name: string) {
-  const value = request.headers?.[name] ?? request.headers?.[name.toLowerCase()];
-  return Array.isArray(value) ? value[0] ?? '' : value ?? '';
-}
-
 function validUrl(value: unknown) {
   const raw = String(value || '').trim();
   if (!raw) return false;
