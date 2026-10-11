@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/vop_api.dart';
+import '../core/offline_study.dart';
 
 class QuizScreen extends StatefulWidget {
   const QuizScreen({
@@ -15,13 +16,34 @@ class _QuizScreenState extends State<QuizScreen> {
   late Future<Map<String,dynamic>> session;
   Map<String,Object?> answers={};
   Map<String,dynamic>? result;
-  bool submitting=false;
+  bool submitting=false,pendingOffline=false;
   String? error;
   @override void initState(){super.initState();start();}
   void start({bool confirmRetake=false}){
-    session=widget.api.startQuiz(
-      widget.guideId,widget.lessonId,widget.language,
-      confirmRetake:confirmRetake);
+    session=_startSession(confirmRetake:confirmRetake);
+  }
+  Future<Map<String,dynamic>> _startSession({bool confirmRetake=false})async{
+    if(!confirmRetake){
+      final stored=await OfflineStudy.instance.quiz(
+        widget.guideId,widget.lessonId,widget.language);
+      if(stored!=null)return stored;
+    }
+    try{
+      final issued=await widget.api.startQuiz(
+        widget.guideId,widget.lessonId,widget.language,
+        confirmRetake:confirmRetake);
+      try{
+        await OfflineStudy.instance.saveQuiz(
+          widget.guideId,widget.lessonId,widget.language,issued);
+      }catch(_){}
+      return issued;
+    }catch(error){
+      if(error is VopApiException&&error.status>=400&&error.status<500)rethrow;
+      final stored=await OfflineStudy.instance.quiz(
+        widget.guideId,widget.lessonId,widget.language);
+      if(stored!=null)return stored;
+      rethrow;
+    }
   }
   Future<void> submit(Map<String,dynamic> data)async{
     if(submitting)return;
@@ -37,14 +59,27 @@ class _QuizScreenState extends State<QuizScreen> {
         '${data['sessionId']}',answers);
       if(mounted)setState(()=>result=response);
     }catch(e){
-      if(mounted)setState(()=>error='$e');
+      if(e is VopApiException&&(e.status>=400&&e.status<500)){
+        if(mounted)setState(()=>error='$e');
+      }else{
+        try{
+          await OfflineStudy.instance.queue('quiz',widget.guideId,
+            widget.lessonId,widget.language,
+            sessionId:(data['sessionId']??'').toString(),
+            expiresAt:(data['expiresAt']??'').toString(),
+            answers:answers);
+          if(mounted)setState(()=>pendingOffline=true);
+        }catch(storageError){
+          if(mounted)setState(()=>error='$storageError');
+        }
+      }
     }finally{
       if(mounted)setState(()=>submitting=false);
     }
   }
   @override Widget build(BuildContext context)=>Scaffold(
     appBar:AppBar(title:Text(widget.title)),
-    body:result!=null?resultView():FutureBuilder<Map<String,dynamic>>(
+    body:pendingOffline?_pendingView():result!=null?resultView():FutureBuilder<Map<String,dynamic>>(
       future:session,builder:(context,s){
         if(s.connectionState!=ConnectionState.done){
           return const Center(child:CircularProgressIndicator());
@@ -74,10 +109,18 @@ class _QuizScreenState extends State<QuizScreen> {
           child:Text('No published questions are available.'));
         final policy=data['assessmentPolicy'] is Map
           ?data['assessmentPolicy'] as Map:{};
-        return ListView(padding:const EdgeInsets.all(18),children:[
+        final answeredCount=answers.length.clamp(0,questions.length);
+        return ListView(padding:const EdgeInsets.all(16),children:[
+          ClipRRect(borderRadius:BorderRadius.circular(8),
+            child:LinearProgressIndicator(
+              value:answeredCount/questions.length,minHeight:7)),
+          const SizedBox(height:8),
+          Text('$answeredCount of ${questions.length} answered',
+            style:Theme.of(context).textTheme.labelMedium),
+          const SizedBox(height:12),
           Card(child:Padding(padding:const EdgeInsets.all(18),
             child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-              Text('Assessment',style:Theme.of(context).textTheme.titleLarge),
+              Text(widget.title,style:Theme.of(context).textTheme.titleLarge),
               const SizedBox(height:6),
               Text('${questions.length} questions · Pass mark ${policy['threshold']??''}%'),
               if((policy['instructions']??'').toString().isNotEmpty)
@@ -102,12 +145,25 @@ class _QuizScreenState extends State<QuizScreen> {
                     final value=question['options'] is List?opt.key:opt.key==0;
                     final label=question['options'] is List
                       ?'${opt.value}':opt.key==0?'True':'False';
-                    return RadioListTile<Object>(
-                      dense:true,contentPadding:EdgeInsets.zero,
-                      title:Text(label),value:value,
-                      groupValue:selected,
-                      onChanged:(answer)=>setState(()=>answers['$index']=answer),
-                    );
+                    final chosen=selected==value;
+                    return Padding(padding:const EdgeInsets.only(bottom:7),
+                      child:Material(
+                        color:chosen?Theme.of(context).colorScheme.primaryContainer:
+                          Theme.of(context).colorScheme.surface,
+                        borderRadius:BorderRadius.circular(12),
+                        child:InkWell(
+                          borderRadius:BorderRadius.circular(12),
+                          onTap:()=>setState(()=>answers['$index']=value),
+                          child:Padding(padding:const EdgeInsets.all(13),
+                            child:Row(children:[
+                              Icon(chosen?Icons.radio_button_checked:
+                                Icons.radio_button_off,size:21,
+                                color:chosen?Theme.of(context).colorScheme.primary:null),
+                              const SizedBox(width:12),
+                              Expanded(child:Text(label,style:TextStyle(
+                                fontWeight:chosen?FontWeight.w700:FontWeight.w400))),
+                            ]))),
+                      ));
                   }),
                 ]),
               ),
@@ -127,6 +183,20 @@ class _QuizScreenState extends State<QuizScreen> {
         ]);
       }),
   );
+  Widget _pendingView()=>Center(child:Padding(
+    padding:const EdgeInsets.all(24),
+    child:Column(mainAxisSize:MainAxisSize.min,children:[
+      const Icon(Icons.cloud_upload_outlined,size:52),
+      const SizedBox(height:16),
+      Text('Awaiting verification',style:Theme.of(context).textTheme.titleLarge),
+      const SizedBox(height:12),
+      const Text('Answers are saved securely on this device. '
+        'The result will only be available after the server accepts the session.',
+        textAlign:TextAlign.center),
+      const SizedBox(height:18),
+      FilledButton(onPressed:()=>Navigator.pop(context,false),
+        child:const Text('Return to study')),
+    ])));
   Widget resultView(){
     final data=result!;
     final passed=data['passed']==true;
@@ -146,7 +216,7 @@ class _QuizScreenState extends State<QuizScreen> {
         const Text('This result was verified and recorded on the VOP server.',
           textAlign:TextAlign.center),
         const SizedBox(height:20),
-        FilledButton(onPressed:()=>Navigator.pop(context),
+        FilledButton(onPressed:()=>Navigator.pop(context,true),
           child:const Text('Return to guide')),
       ])));
   }
