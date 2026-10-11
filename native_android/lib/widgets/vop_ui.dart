@@ -68,7 +68,7 @@ class VopHeroCard extends StatelessWidget {
             begin:Alignment.topLeft,end:Alignment.bottomRight),
           boxShadow:[BoxShadow(color:VopColors.navy.withValues(alpha:.11),
             blurRadius:14,offset:const Offset(0,5))]),
-        child:Padding(padding:EdgeInsets.all(narrow?16:18),
+        child:Padding(padding:EdgeInsets.all(narrow?14:16),
           child:Column(mainAxisSize:MainAxisSize.min,
             crossAxisAlignment:CrossAxisAlignment.start,children:[
             Row(children:[
@@ -79,25 +79,25 @@ class VopHeroCard extends StatelessWidget {
                 overflow:TextOverflow.ellipsis,style:const TextStyle(
                   fontSize:10,fontWeight:FontWeight.w800,
                   letterSpacing:1.25,color:VopColors.goldLight))),
-              Container(width:32,height:32,
+              Container(width:28,height:28,
                 decoration:BoxDecoration(
                   borderRadius:BorderRadius.circular(10),
                   color:Colors.white.withValues(alpha:.12)),
-                child:Icon(icon,size:18,color:Colors.white)),
+                child:Icon(icon,size:17,color:Colors.white)),
             ]),
-            const SizedBox(height:12),
+            const SizedBox(height:9),
             Text(title,style:TextStyle(color:Colors.white,
-              fontSize:narrow?20:22,fontWeight:FontWeight.w800,
+              fontSize:narrow?19:21,fontWeight:FontWeight.w800,
               height:1.17,letterSpacing:-.55)),
-            const SizedBox(height:7),
-            Text(description,maxLines:3,overflow:TextOverflow.ellipsis,
+            const SizedBox(height:6),
+            Text(description,maxLines:2,overflow:TextOverflow.ellipsis,
               style:TextStyle(color:Colors.white.withValues(alpha:.88),
-                height:1.4,fontSize:12)),
+                height:1.33,fontSize:11.5)),
             if(onTap!=null)...[
-              const SizedBox(height:13),
+              const SizedBox(height:9),
               FilledButton.icon(onPressed:onTap,
                 style:FilledButton.styleFrom(
-                  minimumSize:const Size(0,39),
+                  minimumSize:const Size(0,36),
                   padding:const EdgeInsets.symmetric(horizontal:16,vertical:0),
                   backgroundColor:VopColors.goldLight,
                   foregroundColor:VopColors.navyDeep),
