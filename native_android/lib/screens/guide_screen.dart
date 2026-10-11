@@ -62,15 +62,37 @@ class _GuideScreenState extends State<GuideScreen> {
                   subtitle:Text(locked?'Complete the previous lesson':
                     completed?'Completed':isQuiz?'Assessment':
                     '${lesson['estimatedMinutes']??15} min reading'),
-                  trailing:Icon(locked?Icons.lock_outline:Icons.chevron_right),
-                  onTap:locked?null:()=>Navigator.push(context,MaterialPageRoute<void>(
-                    builder:(_)=>isQuiz
-                      ?QuizScreen(api:widget.api,guideId:widget.guideId,
-                        lessonId:'${lesson['id']}',language:language,
-                        title:'${lesson['title']}')
-                      :LessonScreen(api:widget.api,guideId:widget.guideId,
-                        lessonId:'${lesson['id']}',language:language,
-                        title:'${lesson['title']}'))),
+                  trailing:Row(mainAxisSize:MainAxisSize.min,children:[
+                    if(!locked&&!isQuiz)
+                      IconButton(
+                        tooltip:'Save lesson for offline use',
+                        icon:const Icon(Icons.download_for_offline_outlined),
+                        onPressed:()async{
+                          try{
+                            await widget.api.downloadLesson(
+                              widget.guideId,(lesson['id']??'').toString(),language);
+                            if(context.mounted)ScaffoldMessenger.of(context)
+                              .showSnackBar(const SnackBar(
+                                content:Text('Lesson saved for offline use.')));
+                          }catch(error){
+                            if(context.mounted)ScaffoldMessenger.of(context)
+                              .showSnackBar(SnackBar(content:Text('$error')));
+                          }
+                        },
+                      ),
+                    Icon(locked?Icons.lock_outline:Icons.chevron_right),
+                  ]),
+                  onTap:locked?null:()async{
+                    await Navigator.push(context,MaterialPageRoute<void>(
+                      builder:(_)=>isQuiz
+                        ?QuizScreen(api:widget.api,guideId:widget.guideId,
+                          lessonId:(lesson['id']??'').toString(),language:language,
+                          title:(lesson['title']??'Assessment').toString())
+                        :LessonScreen(api:widget.api,guideId:widget.guideId,
+                          lessonId:(lesson['id']??'').toString(),language:language,
+                          title:(lesson['title']??'Lesson').toString())));
+                    if(mounted)setState(reload);
+                  },
                 ));
             }),
           ]),
