@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../core/vop_api.dart';
+import '../core/offline_study.dart';
+import '../widgets/vop_ui.dart';
 import '../widgets/plate_page.dart';
 
 class LessonScreen extends StatefulWidget {
@@ -13,6 +15,7 @@ class LessonScreen extends StatefulWidget {
   @override State<LessonScreen> createState()=>_LessonScreenState();
 }
 class _LessonScreenState extends State<LessonScreen> {
+  final store=OfflineStudyStore();
   late Future<Map<String,dynamic>> lesson;
   late Future<Map<String,dynamic>> resume;
   int page=0;
@@ -20,7 +23,7 @@ class _LessonScreenState extends State<LessonScreen> {
   String? notice;
   @override void initState(){
     super.initState();
-    lesson=widget.api.lesson(widget.guideId,widget.lessonId);
+    lesson=store.loadLesson(widget.api,widget.guideId,widget.lessonId);
     resume=widget.api.progress();
     resume.then((value){
       final rows=value['lessonResume'];
@@ -38,7 +41,10 @@ class _LessonScreenState extends State<LessonScreen> {
       await widget.api.saveResume(
         widget.guideId,widget.lessonId,widget.language,index);
     }catch(error){
-      if(mounted)setState(()=>notice='Resume could not sync: $error');
+      if(error is VopApiException && error.status==0){
+        await store.queueResume(widget.guideId,widget.lessonId,widget.language,index);
+        if(mounted)setState(()=>notice='Reading position saved offline. It will sync once connected.');
+      }else if(mounted)setState(()=>notice='Resume could not sync: $error');
     }
   }
   Future<void> _complete()async{
@@ -52,7 +58,14 @@ class _LessonScreenState extends State<LessonScreen> {
         const SnackBar(content:Text('Lesson completion saved to VOP.')));
       Navigator.pop(context,true);
     }catch(error){
-      if(mounted)setState(()=>notice='Completion failed: $error');
+      if(error is VopApiException && error.status==0){
+        await store.queueCompletion(widget.guideId,widget.lessonId,widget.language);
+        if(mounted){
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text(
+            'Completion saved offline. Next lessons stay locked until VOP confirms it.')));
+          Navigator.pop(context,false);
+        }
+      }else if(mounted)setState(()=>notice='Completion failed: $error');
     }finally{
       if(mounted)setState(()=>busy=false);
     }
@@ -63,7 +76,7 @@ class _LessonScreenState extends State<LessonScreen> {
       future:lesson,
       builder:(context,s){
         if(s.connectionState!=ConnectionState.done){
-          return const Center(child:CircularProgressIndicator());
+          return const VopSkeleton(rows:3);
         }
         if(s.hasError)return Center(child:Padding(
           padding:const EdgeInsets.all(22),
@@ -78,6 +91,9 @@ class _LessonScreenState extends State<LessonScreen> {
         final index=page.clamp(0,pages.length-1).toInt();
         final last=index==pages.length-1;
         return Column(children:[
+          if(s.data?['offlineCopy']==true)const MaterialBanner(
+            content:Text('Offline reading copy · progress syncs when connected.'),
+            actions:[SizedBox.shrink()]),
           LinearProgressIndicator(value:(index+1)/pages.length,minHeight:3),
           Expanded(child:ListView(
             key:ValueKey(index),
