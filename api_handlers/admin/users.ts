@@ -434,8 +434,7 @@ export default async function handler(request: Request, response: Response) {
       const existing=await ref.get();
       if(!existing.exists)return response.status(404).json({ error:'VOP account profile was not found.' });
       await ref.set({...updates,updatedAt:FieldValue.serverTimestamp()},{merge:true});
-      const latest=await ref.get();
-      return response.status(200).json({ok:true,profile:latest.data()||{}});
+      return response.status(200).json({ok:true,profile:{...existing.data(),...updates}});
     }
     if (action === 'personalSettings') {
       const db = getFirestore(getFirebaseAdmin());
