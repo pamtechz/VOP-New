@@ -65,7 +65,7 @@ class _PrayerScreenState extends State<PrayerScreen> {
                 const SizedBox(height:12),
                 Text('${item['requestText']??item['text']??''}',
                   style:const TextStyle(fontSize:14,height:1.55)),
-              ]))),
+              ])))),
           const SizedBox(height:45),
         ]));
     });
@@ -131,8 +131,7 @@ class _PrayerScreenState extends State<PrayerScreen> {
                   },
                   icon:const Icon(Icons.send_outlined),
                   label:Text(saving?'Submitting…':'Submit request')),
-              ]))),
-        );
+              ])));
       }));
     controller.dispose();
     if(done==true&&mounted){
