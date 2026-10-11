@@ -62,6 +62,12 @@ class _QuizScreenState extends State<QuizScreen> {
       if(e is VopApiException&&(e.status>=400&&e.status<500)){
         if(mounted)setState(()=>error='$e');
       }else{
+        final expires=DateTime.tryParse((data['expiresAt']??'').toString());
+        if(expires==null||!expires.isAfter(DateTime.now().toUtc())){
+          if(mounted)setState(()=>error=
+            'This assessment session expired. Reconnect to start a new session.');
+          return;
+        }
         try{
           await OfflineStudy.instance.queue('quiz',widget.guideId,
             widget.lessonId,widget.language,
