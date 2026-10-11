@@ -17,6 +17,26 @@ class _QuizScreenState extends State<QuizScreen> {
   Map<String,dynamic>? result;
   bool submitting=false;
   String? error;
+  String? restoredSession;
+  void _restore(Map<String,dynamic> data){
+    final id=(data['sessionId']??'').toString();
+    if(id.isEmpty||id==restoredSession)return;
+    restoredSession=id;
+    widget.api.quizDraft(widget.language,widget.guideId,
+      widget.lessonId,id).then((value){
+      if(mounted&&value.isNotEmpty&&answers.isEmpty)setState(()=>answers=value);
+    }).catchError((Object ignored){});
+  }
+  void _answer(Map<String,dynamic> data,String key,Object? response){
+    setState(()=>answers[key]=response);
+    final id=(data['sessionId']??'').toString();
+    if(id.isNotEmpty){
+      widget.api.saveQuizDraft(widget.language,widget.guideId,
+        widget.lessonId,id,answers,
+        expiresAt:DateTime.tryParse((data['expiresAt']??'').toString()))
+        .catchError((Object ignored){});
+    }
+  }
   @override void initState(){super.initState();start();}
   void start({bool confirmRetake=false}){
     session=widget.api.startQuiz(
@@ -68,6 +88,7 @@ class _QuizScreenState extends State<QuizScreen> {
             ])));
         }
         final data=s.data??{};
+        _restore(data);
         final questions=(data['questions'] as List? ?? [])
           .whereType<Map>().toList();
         if(questions.isEmpty)return const Center(
@@ -77,7 +98,12 @@ class _QuizScreenState extends State<QuizScreen> {
         return ListView(padding:const EdgeInsets.all(18),children:[
           Card(child:Padding(padding:const EdgeInsets.all(18),
             child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-              Text('Assessment',style:Theme.of(context).textTheme.titleLarge),
+              Row(children:[
+                Expanded(child:Text('Assessment',
+                  style:Theme.of(context).textTheme.titleLarge)),
+                if(data['offline']==true)
+                  const Chip(label:Text('Offline')),
+              ]),
               const SizedBox(height:6),
               Text('${questions.length} questions · Pass mark ${policy['threshold']??''}%'),
               if((policy['instructions']??'').toString().isNotEmpty)
@@ -106,7 +132,7 @@ class _QuizScreenState extends State<QuizScreen> {
                       dense:true,contentPadding:EdgeInsets.zero,
                       title:Text(label),value:value,
                       groupValue:selected,
-                      onChanged:(answer)=>setState(()=>answers['$index']=answer),
+                      onChanged:(answer)=>_answer(data,'$index',answer),
                     );
                   }),
                 ]),
@@ -129,6 +155,33 @@ class _QuizScreenState extends State<QuizScreen> {
   );
   Widget resultView(){
     final data=result!;
+    if(data['queued']==true){
+      return Center(child:Padding(padding:const EdgeInsets.all(22),
+        child:Column(mainAxisSize:MainAxisSize.min,children:[
+          const Icon(Icons.cloud_upload_outlined,size:62),
+          const SizedBox(height:17),
+          Text('Answers saved offline',
+            style:Theme.of(context).textTheme.headlineSmall),
+          const SizedBox(height:10),
+          const Text('Your result will be available once VOP verifies this attempt online.',
+            textAlign:TextAlign.center),
+          const SizedBox(height:18),
+          FilledButton.icon(
+            onPressed:()async{
+              final sync=await widget.api.syncPending();
+              if(!mounted)return;
+              if(sync['pending']==0){
+                Navigator.pop(context,true);
+              }else{
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content:Text('Still waiting for a connection.')));
+              }
+            },
+            icon:const Icon(Icons.sync),label:const Text('Sync now')),
+          TextButton(onPressed:()=>Navigator.pop(context),
+            child:const Text('Return to course')),
+        ])));
+    }
     final passed=data['passed']==true;
     return Center(child:Padding(padding:const EdgeInsets.all(24),
       child:Column(mainAxisSize:MainAxisSize.min,children:[
