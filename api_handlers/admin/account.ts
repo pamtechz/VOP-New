@@ -82,7 +82,10 @@ export default async function handler(req:Request,res:Response){
     return res.status(405).json({error:'Method not allowed.'});
   }catch(error){
     const message=error instanceof Error?error.message:'Account privacy operation failed.';
-    const status=/sign in/i.test(message)?401:/cannot|must transfer|active learner assignments/i.test(message)?409:/not found/i.test(message)?404:400;
+    const status=/sign out and sign in again/i.test(message)?403
+      :/sign in|invalid.*token|revoked/i.test(message)?401
+      :/cannot|must transfer|active learner assignments/i.test(message)?409
+      :/not found/i.test(message)?404:400;
     return res.status(status).json({error:message});
   }
 }
