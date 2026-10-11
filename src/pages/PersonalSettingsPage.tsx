@@ -9,6 +9,7 @@ import { hasTrustedOfflineDeviceConsent, setTrustedOfflineDeviceConsent } from '
 import { hasAdminPortalAccess } from '../services/portalAccess';
 import './personalSettings.css';
 import { appConfirm } from '../components/layout/AppDialog';
+import { editableOwnProfile, loadOwnProfile, saveOwnProfile, type EditableOwnProfile, type OwnProfile } from '../services/accountProfile';
 
 const uiT = (key: string, fallback: string) => getTranslation(key, getUiLocale(), undefined, fallback, 'PersonalSettingsPage');
 import { LocalizationParticipation } from '../components/localization/LocalizationParticipation';
@@ -43,6 +44,11 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
     privacy: { profileVisibility: 'organization' }, studyPreferences: { reminders: true, preferredStudyTime: '' },
   });
   const [busy, setBusy] = useState(true);
+  const [profile, setProfile] = useState<OwnProfile>(currentUser);
+  const [profileDraft, setProfileDraft] = useState<EditableOwnProfile>(()=>editableOwnProfile(currentUser));
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileMessage, setProfileMessage] = useState('');
+  const [profileError, setProfileError] = useState('');
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [languages, setLanguages] = useState<CustomLanguage[]>([]);
@@ -132,6 +138,9 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
 
   useEffect(() => {
     let active = true;
+    const loadProfile=loadOwnProfile()
+      .then(value=>{if(active){setProfile(value);setProfileDraft(editableOwnProfile(value));}})
+      .catch(error=>{if(active)setProfileError(error instanceof Error?error.message:'Could not load your profile.');});
     const loadSettings = loadPersonalSettings()
       .then(value => {
         if (active && value) {
@@ -157,7 +166,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
           listPasskeys().then(items=>{if(active)setPasskeys(items)}),
         ]).catch(error=>{if(active)setMessage(error instanceof Error?error.message:'Passkey status could not be loaded.');})
       :Promise.resolve();
-    void Promise.allSettled([loadSettings,loadLanguages,loadSecurity,loadNotificationStatus,loadLifecycle]).finally(() => {
+    void Promise.allSettled([loadProfile,loadSettings,loadLanguages,loadSecurity,loadNotificationStatus,loadLifecycle]).finally(() => {
       if (active) setBusy(false);
     });
     return () => { active = false; };
@@ -165,6 +174,30 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
 
   const patch = <K extends keyof PersonalSettings>(key: K, value: PersonalSettings[K]) =>
     setSettings(previous => ({ ...previous, [key]: value }));
+  const patchProfile = (key:keyof EditableOwnProfile,value:string) =>
+    setProfileDraft(previous=>({...previous,[key]:value}));
+  const profileDirty = (Object.keys(profileDraft) as Array<keyof EditableOwnProfile>)
+    .some(key=>profileDraft[key]!==editableOwnProfile(profile)[key]);
+  const saveProfile = async (event:React.FormEvent) => {
+    event.preventDefault();
+    if(profileSaving || !profileDirty)return;
+    setProfileError('');setProfileMessage('');
+    const changes=Object.fromEntries(
+      (Object.keys(profileDraft) as Array<keyof EditableOwnProfile>)
+        .filter(key=>profileDraft[key]!==editableOwnProfile(profile)[key])
+        .map(key=>[key,profileDraft[key].trim()]),
+    ) as Partial<EditableOwnProfile>;
+    if('displayName' in changes && !changes.displayName){
+      setProfileError('A display name is required.');return;
+    }
+    setProfileSaving(true);
+    try{
+      const saved=await saveOwnProfile(changes);
+      setProfile(saved);setProfileDraft(editableOwnProfile(saved));
+      setProfileMessage('Your profile was updated.');
+    }catch(error){setProfileError(error instanceof Error?error.message:'Could not save your profile.');}
+    finally{setProfileSaving(false);}
+  };
 
   const enablePasskey=async()=>{
     if(!passkeyCapable)return;
@@ -236,7 +269,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
       const persisted = await savePersonalSettings(settings);
       setSettings(previous => ({ ...previous, ...persisted }));
       applyAccessibilityPreferences(persisted.accessibility);
-      if (persisted.theme) persistThemePreference(persisted.theme==='light'?'light':'dark');
+      if (persisted.theme) persistThemePreference(persisted.theme==='system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light') : persisted.theme);
       if (settings.uiLocale) setUiLocale(settings.uiLocale);
       if (!organizationAccount && settings.studyLanguage !== undefined) onStudyLanguageChange(settings.studyLanguage || appSettings.defaultLanguage || '');
       setMessage(t('settings.saved', 'Your personal settings have been saved.'));
@@ -331,7 +364,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
                   {currentUser.accountType === 'organization' || currentUser.organizationId ? 'Organisation Account' : 'Personal Account'}
                 </span>
               </div>
-              <p>{currentUser.displayName} · {currentUser.email}</p>
+              <p>{profile.displayName || currentUser.displayName} · {profile.email || currentUser.email}</p>
               {currentUser.accountType === 'organization' || currentUser.organizationId ? (
                 <div style={{margin:'8px 0',padding:'10px 12px',borderRadius:8,background:'var(--theme-surface-soft,#f0f5ff)',border:'1px solid #c7d9fc',fontSize:12,color:'#1e3a8a'}}>
                   <strong>{uiT('personal_settings.organisation_account_status',"Organisation Account Status:")}</strong> A personal account can manage an organisation account. Immediately an account has been assigned to an organisation, it assumes the organisation account type while retaining your personal identity and credentials.
@@ -342,6 +375,39 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
                 </div>
               )}
               <small>{organizationAccount?'Your organization assignment and permissions are managed separately and cannot be changed here.':'Your role, organization, permissions and learning records are managed separately and cannot be changed here.'}</small>
+            </section>
+
+            <section className="vop-personal-card vop-card">
+              <h2><UserRound size={19}/>{t('account.profile','My profile')}</h2>
+              <div className="vop-personal-profile-summary">
+                {profileDraft.photoURL && /^https:\/\//i.test(profileDraft.photoURL)
+                  ? <img className="vop-personal-profile-avatar" src={profileDraft.photoURL} alt="" onError={event=>{event.currentTarget.style.display='none';}}/>
+                  : <span className="vop-personal-profile-avatar vop-personal-profile-initial" aria-hidden="true">{(profileDraft.displayName||profile.email||'?').charAt(0).toUpperCase()}</span>}
+                <div><strong>{profileDraft.displayName||'My account'}</strong><span>{profile.email||currentUser.email}</span></div>
+              </div>
+              {profileError&&<div role="alert" className="vop-personal-notice error">{profileError}</div>}
+              {profileMessage&&<div role="status" className="vop-personal-notice success"><CheckCircle size={16}/>{profileMessage}</div>}
+              <form className="vop-personal-profile-form" onSubmit={event=>void saveProfile(event)}>
+                <label>Display name<input required maxLength={120} autoComplete="name"
+                  value={profileDraft.displayName} onChange={event=>patchProfile('displayName',event.target.value)}/></label>
+                <label>Email address<input type="email" readOnly value={String(profile.email||currentUser.email||'')}/></label>
+                <label>Phone number<input type="tel" maxLength={40} autoComplete="tel"
+                  value={profileDraft.phoneNumber} onChange={event=>patchProfile('phoneNumber',event.target.value)}/></label>
+                <label>WhatsApp number<input type="tel" maxLength={40}
+                  value={profileDraft.whatsappNumber} onChange={event=>patchProfile('whatsappNumber',event.target.value)}/></label>
+                <label>Address<textarea maxLength={500} rows={2} autoComplete="street-address"
+                  value={profileDraft.address} onChange={event=>patchProfile('address',event.target.value)}/></label>
+                <label>About me<textarea maxLength={1000} rows={3}
+                  value={profileDraft.bio} onChange={event=>patchProfile('bio',event.target.value)}/></label>
+                <label>Profile picture URL<input type="url" maxLength={2048} placeholder="https://"
+                  value={profileDraft.photoURL} onChange={event=>patchProfile('photoURL',event.target.value)}/></label>
+                <div className="vop-personal-profile-actions">
+                  <button type="button" className="vop-secondary" disabled={profileSaving||!profileDirty}
+                    onClick={()=>{setProfileDraft(editableOwnProfile(profile));setProfileError('');}}>Discard changes</button>
+                  <button type="submit" className="vop-primary" disabled={profileSaving||!profileDirty}>
+                    <Save size={16}/>{profileSaving?'Saving…':'Save profile'}</button>
+                </div>
+              </form>
             </section>
 
             <section className="vop-personal-card vop-card">
@@ -468,7 +534,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
           <div className="vop-personal-tab-pane">
             <section className="vop-personal-card vop-card">
               <h2><Globe2 size={19}/>{uiT('personal_settings.interface',"Interface")}</h2>
-              <label>{uiT('personal_settings.theme',"Theme")}<select value={settings.theme === 'dark' ? 'dark' : 'light'} onChange={e => { const theme=e.target.value as 'light'|'dark'; patch('theme',theme); persistThemePreference(theme); }}><option value="light">{uiT('personal_settings.light_default',"Light (default)")}</option><option value="dark">{uiT('personal_settings.dark',"Dark")}</option></select></label>
+              <label>{uiT('personal_settings.theme',"Theme")}<select value={settings.theme || 'light'} onChange={e => { const theme=e.target.value as 'light'|'dark'|'system'; patch('theme',theme); persistThemePreference(theme==='system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light') : theme); }}><option value="light">{uiT('personal_settings.light_default',"Light (default)")}</option><option value="dark">{uiT('personal_settings.dark',"Dark")}</option><option value="system">Use device theme</option></select></label>
               <label>{t('settings.ui_language', 'Interface language')}<select value={settings.uiLocale || getUiLocale()} onChange={e => { patch('uiLocale', e.target.value); setUiLocale(e.target.value); }}>
                 {uiLocales.map(language => <option key={language.code} value={language.code}>{language.name} · {language.nativeName || language.code}</option>)}
               </select></label>
