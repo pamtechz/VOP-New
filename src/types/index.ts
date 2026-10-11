@@ -516,6 +516,8 @@ export interface RadioBroadcast {
   streamUrl?: string;
   mediaUrl?: string;
   mediaProvider?: string;
+  licensedAudioUrl?: string;
+  hasPlaybackRights?: boolean;
   mediaType?: 'audio' | 'video' | 'stream' | 'youtube' | 'audioverse' | 'embed';
   posterUrl?: string;
   /** System-generated ISO timestamp. Admins do not enter broadcast time manually. */
