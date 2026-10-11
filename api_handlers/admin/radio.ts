@@ -59,6 +59,12 @@ export default async function handler(req: Request, res: Response) {
     const actualField = isOriginalStream && detected.mediaType === 'audio'
       ? 'streamUrl' : detected.field;
     const actualType = actualField === 'streamUrl' ? 'stream' : detected.mediaType;
+    const licensedAudioUrl=String(incoming.licensedAudioUrl||'').trim();
+    if(licensedAudioUrl){
+      if(incoming.hasPlaybackRights!==true)throw new Error('Permission to stream licensed audio must be confirmed.');
+      const permitted=await identifyPublicMedia(licensedAudioUrl);
+      if(permitted.kind!=='direct-audio')throw new Error('Licensed audio must be a public direct HTTPS audio source.');
+    }
     const normalizedMedia = {
       mediaType:actualType, mediaProvider:detected.provider,
       mediaUrl:detected.sourceUrl,
@@ -85,6 +91,10 @@ export default async function handler(req: Request, res: Response) {
       series: String(incoming.series||'').trim().slice(0,120),
       description: String(incoming.description||'').trim().slice(0,3000),
       ...normalizedMedia,
+      licensedAudioUrl,hasPlaybackRights:Boolean(licensedAudioUrl),
+      playbackRightsConfirmedAt:licensedAudioUrl?new Date().toISOString():'',
+      playbackRightsConfirmedBy:licensedAudioUrl?ctx.auth.uid:'',
+
       posterUrl: validUrl(incoming.posterUrl) ? String(incoming.posterUrl).trim() : '',
       broadcastTime: String(incoming.broadcastTime||'').trim().slice(0,50),
       id: documentId,
