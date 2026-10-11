@@ -389,6 +389,12 @@ class _RadioPlayerScreenState extends State<RadioPlayerScreen>
             .where((entry)=>entry!=null&&entry.toString().trim().isNotEmpty)
             .join(' · ')),
         ],
+        if(source.provider=='AudioVerse'&&source.kind==RadioMediaKind.provider)
+          Align(alignment:Alignment.centerLeft,
+            child:TextButton.icon(
+              onPressed:_openInApp,
+              icon:const Icon(Icons.open_in_browser_rounded,size:17),
+              label:const Text('Open AudioVerse tab'))),
         if(ready)...[
           const SizedBox(height:14),
           if(duration>Duration.zero)Slider(
