@@ -26,7 +26,7 @@ test('web security settings surface actionable verification and explicit session
   assert.match(settings,/appConfirm\(/);
   assert.match(settings,/await revokeAllSessions\(\)/);
   assert.match(settings,/await firebaseSignOut\(\)/);
-  assert.match(settings,/Firebase does not provide a device-session list/);
+  assert.match(settings,/Existing access tokens may work until expiry/);
 });
 
 test('native security flows require deletion phrase and read the real account status',()=>{
