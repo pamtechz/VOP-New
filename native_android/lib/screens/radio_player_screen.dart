@@ -252,7 +252,13 @@ class _RadioPlayerScreenState extends State<RadioPlayerScreen>
             if(source.kind==RadioMediaKind.audio)
               const Icon(Icons.graphic_eq,size:74,color:VopColors.goldLight),
             if(source.kind==RadioMediaKind.external)
-              const Icon(Icons.open_in_new,size:65,color:VopColors.goldLight),
+              IconButton(
+                tooltip:'Open with provider',
+                iconSize:48,
+                color:VopColors.goldLight,
+                onPressed:()=>launchUrl(source.url!,
+                  mode:LaunchMode.externalApplication),
+                icon:const Icon(Icons.open_in_new_rounded)),
             if(loading)const CircularProgressIndicator(color:VopColors.goldLight),
             if(error!=null)Padding(padding:const EdgeInsets.all(18),
               child:Text(error!,textAlign:TextAlign.center,
@@ -266,40 +272,6 @@ class _RadioPlayerScreenState extends State<RadioPlayerScreen>
         Text([widget.item['speaker'],widget.item['series'],source.provider]
           .where((e)=>e!=null&&e.toString().trim().isNotEmpty)
           .join(' · ')),
-        if(source.provider=='YouTube')...[
-          const SizedBox(height:12),
-          Row(children:[
-            OutlinedButton.icon(
-              onPressed:loading?null:()=>_prepare(),
-              icon:const Icon(Icons.refresh_rounded),
-              label:const Text('Retry player')),
-            const SizedBox(width:10),
-            TextButton.icon(
-              onPressed:() async {
-                final id=source.url!.pathSegments.last;
-                await launchUrl(
-                  Uri.parse('https://www.youtube.com/watch?v=$id'),
-                  mode:LaunchMode.externalApplication);
-              },
-              icon:const Icon(Icons.open_in_new_rounded),
-              label:const Text('YouTube fallback')),
-          ]),
-          Text('This player keeps videos inside VOP where embedding is allowed. '
-            'Private, age-restricted and embed-disabled videos may need YouTube.',
-            style:TextStyle(fontSize:11,height:1.4,
-              color:Theme.of(context).colorScheme.onSurfaceVariant)),
-        ],
-        if(source.kind==RadioMediaKind.external)...[
-          const SizedBox(height:18),
-          Text('AudioVerse prevents third-party apps from embedding its player. '
-            'You can open this programme on AudioVerse, or your organisation '
-            'can publish an authorised direct audio link for playback in VOP.',
-            style:const TextStyle(height:1.55)),
-          const SizedBox(height:12),
-          FilledButton.icon(
-            onPressed:source.url==null?null:()=>launchUrl(source.url!,mode:LaunchMode.externalApplication),
-            icon:const Icon(Icons.open_in_new),label:const Text('Open on AudioVerse')),
-        ],
         if(ready)...[
           const SizedBox(height:14),
           if(duration>Duration.zero)Slider(
@@ -332,12 +304,6 @@ class _RadioPlayerScreenState extends State<RadioPlayerScreen>
         if((widget.item['description']??'').toString().isNotEmpty)
           Text((widget.item['description']??'').toString(),
             style:const TextStyle(height:1.55)),
-        const SizedBox(height:23),
-        Text('Approved direct streams use the native player. YouTube, Vimeo and '
-          'other embeddable providers play within VOP. AudioVerse restricts '
-          'third-party embedding. Private content cannot be bypassed.',
-          style:TextStyle(fontSize:11,height:1.5,
-            color:Theme.of(context).colorScheme.onSurfaceVariant)),
       ]),
     );
   }
