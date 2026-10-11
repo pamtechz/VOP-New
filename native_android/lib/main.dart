@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import 'core/config.dart';
 import 'core/vop_api.dart';
+import 'theme/vop_theme.dart';
 import 'screens/auth_screen.dart';
 import 'screens/home_shell.dart';
 
@@ -20,35 +21,12 @@ class VopAndroidApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const navy = Color(0xFF102F71);
-    const gold = Color(0xFFE8B536);
     return MaterialApp(
       title: 'Voice of Prophecy',
       debugShowCheckedModeBanner: false,
       themeMode: ThemeMode.system,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: navy,
-          primary: navy,
-          secondary: gold,
-          surface: const Color(0xFFF9FBFE),
-        ),
-        useMaterial3: true,
-        appBarTheme: const AppBarTheme(
-          centerTitle: false,
-          scrolledUnderElevation: 1,
-          backgroundColor: Color(0xFFF9FBFE),
-          foregroundColor: navy,
-        ),
-        inputDecorationTheme: const InputDecorationTheme(
-          border: OutlineInputBorder(),
-          contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-        ),
-      ),
-      darkTheme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: navy,brightness: Brightness.dark),
-        useMaterial3: true,
-      ),
+      theme: VopTheme.build(Brightness.light),
+      darkTheme: VopTheme.build(Brightness.dark),
       home: VopConfig.error != null
           ? Scaffold(
               appBar: AppBar(title: const Text('Configuration required')),
