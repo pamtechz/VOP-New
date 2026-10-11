@@ -17,7 +17,7 @@ class VopBrand extends StatelessWidget {
       Text('Voice of Prophecy',style:TextStyle(
         fontSize:compact?14:16,fontWeight:FontWeight.w900,letterSpacing:-.45)),
       Text('LEARNING WORKSPACE',style:TextStyle(
-        fontSize:compact?8:9.5,fontWeight:FontWeight.w750,
+        fontSize:compact?8:9.5,fontWeight:FontWeight.w700,
         letterSpacing:1.15,color:Theme.of(context).colorScheme.onSurfaceVariant)),
     ]),
   ]);
@@ -198,11 +198,11 @@ class VopCourseCard extends StatelessWidget {
         horizontal:14,vertical:11),
         child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
           Text(language.toUpperCase(),
-            style:const TextStyle(fontSize:9,fontWeight:FontWeight.w850,
+            style:const TextStyle(fontSize:9,fontWeight:FontWeight.w800,
               letterSpacing:1.1,color:VopColors.gold)),
           const SizedBox(height:5),
           Text(title,maxLines:2,overflow:TextOverflow.ellipsis,
-            style:const TextStyle(fontSize:14,fontWeight:FontWeight.w850,height:1.28)),
+            style:const TextStyle(fontSize:14,fontWeight:FontWeight.w800,height:1.28)),
           const SizedBox(height:5),
           Text(description,maxLines:2,overflow:TextOverflow.ellipsis,
             style:TextStyle(fontSize:11.5,height:1.4,
