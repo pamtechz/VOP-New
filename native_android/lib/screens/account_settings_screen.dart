@@ -1,6 +1,8 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../core/vop_api.dart';
+import '../core/vop_i18n.dart';
+import 'offline_downloads_screen.dart';
 import '../theme/vop_theme.dart';
 import '../widgets/vop_ui.dart';
 
@@ -47,6 +49,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         loading=false;
       });
       VopAppearance.apply(settings);
+      VopI18n.load(widget.api,(settings['uiLocale']??'en').toString());
       widget.api.accountLifecycle().then((r){
         if(mounted)setState(()=>deletion=r);
       }).catchError((Object ignored){});
@@ -71,6 +74,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       final result=await widget.api.savePersonalSettings(preferences);
       preferences=_map(result['settings']);
       VopAppearance.apply(preferences);
+      await VopI18n.load(widget.api,(preferences['uiLocale']??'en').toString());
     },'Personal settings saved for web and Android.');
   }
   Future<void> _perform(Future<void> Function() action,String success)async{
@@ -146,12 +150,32 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       error!=null&&profile.isEmpty
         ?VopEmpty(icon:Icons.wifi_off,message:error!,onRetry:_load)
         :Column(children:[
-          Padding(padding:const EdgeInsets.fromLTRB(14,12,14,3),
-            child:SegmentedButton<int>(segments:const [
-              ButtonSegment(value:0,label:Text('Profile'),icon:Icon(Icons.person_outline)),
-              ButtonSegment(value:1,label:Text('Settings'),icon:Icon(Icons.tune)),
-              ButtonSegment(value:2,label:Text('Security'),icon:Icon(Icons.shield_outlined)),
-            ],selected:{page},onSelectionChanged:(v)=>setState(()=>page=v.first))),
+          Padding(padding:const EdgeInsets.fromLTRB(12,10,12,4),
+            child:Row(children:[
+              for(final item in [
+                (0,'Profile',Icons.person_outline),
+                (1,'Settings',Icons.tune),
+                (2,'Security',Icons.shield_outlined),
+              ])...[
+                if(item.$1>0)const SizedBox(width:6),
+                Expanded(child:Material(
+                  color:page==item.$1
+                    ?Theme.of(context).colorScheme.primaryContainer
+                    :Theme.of(context).colorScheme.surface,
+                  borderRadius:BorderRadius.circular(11),
+                  child:InkWell(
+                    onTap:()=>setState(()=>page=item.$1),
+                    borderRadius:BorderRadius.circular(11),
+                    child:Padding(padding:const EdgeInsets.symmetric(vertical:12),
+                      child:Column(mainAxisSize:MainAxisSize.min,children:[
+                        Icon(item.$3,size:19),
+                        const SizedBox(height:3),
+                        Text(item.$2,style:const TextStyle(fontSize:11,
+                          fontWeight:FontWeight.w700)),
+                      ])),
+                  ))),
+              ],
+            ])),
           if(error!=null)Padding(padding:const EdgeInsets.symmetric(horizontal:18,vertical:5),
             child:Text(error!,style:TextStyle(color:Theme.of(context).colorScheme.error))),
           if(message!=null)Padding(padding:const EdgeInsets.symmetric(horizontal:18,vertical:5),
@@ -181,6 +205,18 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       FilledButton.icon(onPressed:saving?null:_saveProfile,
         icon:const Icon(Icons.save_outlined),
         label:Text(saving?'Saving…':'Save profile')),
+    ]),
+    _heading('Offline study','Read downloaded lessons and sync pending work.',
+      Icons.download_for_offline_outlined),
+    _group([
+      ListTile(
+        contentPadding:EdgeInsets.zero,
+        leading:const Icon(Icons.offline_pin_outlined),
+        title:const Text('Downloads & sync'),
+        trailing:const Icon(Icons.chevron_right),
+        onTap:()=>Navigator.push(context,MaterialPageRoute<void>(
+          builder:(_)=>OfflineDownloadsScreen(api:widget.api))),
+      ),
     ]),
     _heading('Organisation & permissions','Your organisation controls these assignments.',
       Icons.apartment_outlined),
@@ -273,12 +309,6 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
             await FirebaseAuth.instance.sendPasswordResetEmail(email:email);
           },'Password reset email requested. Check your inbox.');
         }),
-      const Divider(),
-      const ListTile(contentPadding:EdgeInsets.zero,
-        leading:Icon(Icons.fingerprint),
-        title:Text('Passkeys & biometrics'),
-        subtitle:Text('Native passkey enrollment is not configured on this Android build. '
-          'Your existing password or Google sign-in remains available.')),
       const Divider(),
       _choose('Profile visibility','privacy','profileVisibility',[
         const DropdownMenuItem(value:'organization',child:Text('My organisation')),
