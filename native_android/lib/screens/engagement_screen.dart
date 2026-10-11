@@ -318,7 +318,7 @@ class _SoloChallengeState extends State<_SoloChallenge>{
             onPressed:busy||answered.contains(questionId)
               ?null:()=>answer(questionId,option),
             child:Padding(padding:const EdgeInsets.symmetric(vertical:12),
-              child:Align(alignment:Alignment.centerLeft,child:Text(option))))),
+              child:Align(alignment:Alignment.centerLeft,child:Text(option)))))),
         if(error!=null)Text(error!,style:TextStyle(
           color:Theme.of(context).colorScheme.error)),
         const SizedBox(height:18),
