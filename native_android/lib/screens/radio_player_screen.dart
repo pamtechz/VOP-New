@@ -170,6 +170,7 @@ class _RadioPlayerScreenState extends State<RadioPlayerScreen>
   String? error;
   late List<Map<String,dynamic>> recommendations;
   String category='All';
+  int visibleRecommendations=12;
   @override void initState(){
     super.initState();
     recommendations=List<Map<String,dynamic>>.from(widget.related);
@@ -179,7 +180,7 @@ class _RadioPlayerScreenState extends State<RadioPlayerScreen>
     }
   }
   Future<void> _prepare()async{
-    if(_preparing)return;
+    if(_preparing||loading)return;
     if(source.url==null){if(mounted)setState((){
       loading=false;error='This programme has no supported playable media URL.';
     });return;}
@@ -187,6 +188,7 @@ class _RadioPlayerScreenState extends State<RadioPlayerScreen>
     if(mounted)setState((){loading=true;error=null;});
     if(source.kind==RadioMediaKind.external){
       if(mounted)setState(()=>loading=false);
+      _preparing=false;
       return;
     }
     if(source.kind==RadioMediaKind.provider){
@@ -332,7 +334,7 @@ class _RadioPlayerScreenState extends State<RadioPlayerScreen>
       const SizedBox(height:9),
       if(items.isEmpty)const Padding(padding:EdgeInsets.all(22),
         child:Center(child:Text('No other programmes yet'))),
-      ...items.map((item)=>Card(margin:const EdgeInsets.only(bottom:9),
+      ...items.take(visibleRecommendations).map((item)=>Card(margin:const EdgeInsets.only(bottom:9),
         clipBehavior:Clip.antiAlias,
         child:InkWell(onTap:()=>_select(item),child:Row(children:[
           SizedBox(width:116,height:80,
@@ -355,6 +357,12 @@ class _RadioPlayerScreenState extends State<RadioPlayerScreen>
           const SizedBox(width:10),
         ]))),
       ),
+      if(items.length>visibleRecommendations)
+        Center(child:TextButton.icon(
+          onPressed:()=>setState(()=>visibleRecommendations+=12),
+          icon:const Icon(Icons.expand_more),
+          label:Text('Show more programmes (${items.length-visibleRecommendations})'),
+        )),
     ]);
   }
   Widget _posterPlaceholder(Map<String,dynamic> item)=>Container(
@@ -366,10 +374,6 @@ class _RadioPlayerScreenState extends State<RadioPlayerScreen>
   @override Widget build(BuildContext context){
     final c=player,v=c?.value;
     final ready=v?.isInitialized==true;
-    final duration=v?.duration??Duration.zero;
-    final position=v?.position??Duration.zero;
-    final elapsed=position.inMilliseconds.clamp(0,
-      duration.inMilliseconds>0?duration.inMilliseconds:0);
     return Scaffold(
       appBar:AppBar(title:const Text('VOP Radio & Media')),
       body:RefreshIndicator(onRefresh:_reload,
@@ -421,7 +425,7 @@ class _RadioPlayerScreenState extends State<RadioPlayerScreen>
             .join(' · ')),
         ],
         if(source.provider=='AudioVerse'&&source.kind==RadioMediaKind.provider)
-          Row(children:[
+          Wrap(spacing:8,runSpacing:2,children:[
             TextButton.icon(onPressed:_openInApp,
               icon:const Icon(Icons.play_circle_outline,size:17),
               label:const Text('Listen in app')),
@@ -430,33 +434,44 @@ class _RadioPlayerScreenState extends State<RadioPlayerScreen>
               icon:const Icon(Icons.picture_in_picture_alt_outlined,size:17),
               label:const Text('Embedded player')),
           ]),
-        if(ready)...[
+        if(c!=null&&ready)...[
           const SizedBox(height:14),
-          if(duration>Duration.zero)Slider(
-            min:0,max:duration.inMilliseconds.toDouble(),
-            value:elapsed.toDouble(),
-            onChanged:(value)=>c!.seekTo(Duration(milliseconds:value.round()))),
-          Row(mainAxisAlignment:MainAxisAlignment.spaceBetween,children:[
-            Text(_clock(position)),
-            Text(duration>Duration.zero?_clock(duration):'LIVE'),
-          ]),
-          Row(mainAxisAlignment:MainAxisAlignment.center,children:[
-            IconButton(tooltip:'Back ten seconds',onPressed:()=>_skip(-10),
-              icon:const Icon(Icons.replay_10)),
-            FilledButton.tonalIcon(
-              onPressed:()=>v.isPlaying?c!.pause():c!.play(),
-              icon:Icon(v!.isPlaying?Icons.pause:Icons.play_arrow),
-              label:Text(v.isPlaying?'Pause':'Play')),
-            IconButton(tooltip:'Forward ten seconds',onPressed:()=>_skip(10),
-              icon:const Icon(Icons.forward_10)),
-            PopupMenuButton<double>(
-              tooltip:'Playback speed',icon:const Icon(Icons.speed),
-              onSelected:(speed)=>c!.setPlaybackSpeed(speed),
-              itemBuilder:(_)=>[
-                for(final speed in [0.75,1.0,1.25,1.5,2.0])
-                  PopupMenuItem(value:speed,child:Text(speed.toString()+'x')),
-              ]),
-          ]),
+          ValueListenableBuilder<VideoPlayerValue>(
+            valueListenable:c,
+            builder:(context,state,_){
+              final duration=state.duration;
+              final position=state.position;
+              final maxMs=duration.inMilliseconds;
+              final elapsed=position.inMilliseconds.clamp(0,maxMs>0?maxMs:0);
+              return Column(children:[
+                if(maxMs>0)Slider(
+                  min:0,max:maxMs.toDouble(),
+                  value:elapsed.toDouble(),
+                  onChanged:(value)=>c.seekTo(Duration(milliseconds:value.round()))),
+                Row(mainAxisAlignment:MainAxisAlignment.spaceBetween,children:[
+                  Text(_clock(position)),
+                  Text(duration>Duration.zero?_clock(duration):'LIVE'),
+                ]),
+                Row(mainAxisAlignment:MainAxisAlignment.center,children:[
+                  IconButton(tooltip:'Back ten seconds',onPressed:()=>_skip(-10),
+                    icon:const Icon(Icons.replay_10)),
+                  FilledButton.tonalIcon(
+                    onPressed:()=>state.isPlaying?c.pause():c.play(),
+                    icon:Icon(state.isPlaying?Icons.pause:Icons.play_arrow),
+                    label:Text(state.isPlaying?'Pause':'Play')),
+                  IconButton(tooltip:'Forward ten seconds',onPressed:()=>_skip(10),
+                    icon:const Icon(Icons.forward_10)),
+                  PopupMenuButton<double>(
+                    tooltip:'Playback speed',icon:const Icon(Icons.speed),
+                    onSelected:(speed)=>c.setPlaybackSpeed(speed),
+                    itemBuilder:(_)=>[
+                      for(final speed in [0.75,1.0,1.25,1.5,2.0])
+                        PopupMenuItem(value:speed,child:Text(speed.toString()+'x')),
+                    ]),
+                ]),
+              ]);
+            },
+          ),
         ],
         const SizedBox(height:17),
         if((widget.item['description']??'').toString().isNotEmpty)
