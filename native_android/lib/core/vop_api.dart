@@ -129,7 +129,18 @@ class VopApi {
   Future<Map<String,dynamic>> localizations(String locale) =>
       _execute('/api/localization','GET',null,{'locale':locale});
 
-  Future<Map<String, dynamic>> catalogue() => read('catalog');
+  Future<Map<String,dynamic>> catalogue()async{
+    try{
+      final value=await read('catalog');
+      try{await _offline.savePublishedIndex('catalogue',value);}catch(_){}
+      return value;
+    }catch(error){
+      if(!_connectionFailure(error))rethrow;
+      final cached=await _offline.publishedIndex('catalogue');
+      if(cached==null)rethrow;
+      return {...cached,'offline':true};
+    }
+  }
   Future<Map<String, dynamic>> resources() => read('resources');
   Future<Map<String, dynamic>> events() => read('events');
   Future<Map<String, dynamic>> radio() => read('radio');
@@ -165,7 +176,18 @@ class VopApi {
        error.message.contains('connection timed out'));
 
   Future<Map<String,dynamic>> progress()=>read('progress');
-  Future<Map<String,dynamic>> guide(String id)=>read('guide',{'guideId':id});
+  Future<Map<String,dynamic>> guide(String id)async{
+    try{
+      final data=await read('guide',{'guideId':id});
+      try{await _offline.savePublishedIndex(id,data);}catch(_){}
+      return data;
+    }catch(error){
+      if(!_connectionFailure(error))rethrow;
+      final cached=await _offline.publishedIndex(id);
+      if(cached==null)rethrow;
+      return {...cached,'offline':true};
+    }
+  }
   Future<bool> isLessonDownloaded(String guideId,String lessonId,
     String language)=>_offline.hasLesson(guideId,lessonId,language);
   Future<void> downloadLesson(String guideId,String lessonId,String language)async{
