@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { identifyRadioMedia, isSafeHttpsMediaUrl, resolveMediaSource } from '../../../shared/mediaSources';
 import { BookOpen, Check, Filter, Globe, Landmark, Megaphone, Plus, Radio, RefreshCw, Save, Search, Trash2 } from 'lucide-react';
 import { auth } from '../../lib/firebase';
 import type { CustomLanguage } from '../../types';
@@ -45,18 +46,8 @@ const requiredFields: Record<CollectionName, string[]> = {
 const text = (value: unknown) => value == null ? '' : String(value);
 
 function validateRadioMedia(data: ContentItem) {
-  const urls = ['audioUrl', 'videoUrl', 'streamUrl']
-    .map(key => text(data[key]).trim())
-    .filter(Boolean);
-  if (!urls.length) throw new Error('Add at least one playable audio, video or live stream URL.');
-  urls.forEach(value => {
-    try {
-      const parsed = new URL(value);
-      if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error();
-    } catch {
-      throw new Error('Radio media URLs must be valid HTTP(S) URLs.');
-    }
-  });
+  const url=text(data.mediaUrl||data.videoUrl||data.audioUrl||data.streamUrl).trim();
+  if(!isSafeHttpsMediaUrl(url))throw new Error('Paste a safe public HTTPS media link. VOP identifies its format on save.');
 }
 
 function newRecord(collection: CollectionName, state: ContentState): ContentItem {
@@ -65,7 +56,7 @@ function newRecord(collection: CollectionName, state: ContentState): ContentItem
     case 'translations': return { id: '', values: {} };
     case 'announcements': return { id: '', title: '', tag: '', description: '', imageUrl: '', actionText: '', actionUrl: '', published: false };
     case 'books': return { id: '', name: '', category: '', author: '', imageUrl: '', description: '', downloadUrl: '', published: false };
-    case 'radioBroadcasts': return { id: '', title: '', speaker: '', series: '', audioUrl: '', videoUrl: '', streamUrl: '', mediaType: 'audio', posterUrl: '', broadcastTime: '', description: '', published: false };
+    case 'radioBroadcasts': return { id:'', title:'', speaker:'', series:'', mediaUrl:'', mediaType:'', mediaProvider:'', posterUrl:'', broadcastTime:'', description:'', published:false };
     case 'unions': return { id: '', name: '', code: '', divisionName: '', directorName: '', contactEmail: '', contactPhone: '', headquarters: '' };
     case 'conferences': return { id: '', unionId: '', name: '', code: '', region: '', directorName: '', contactEmail: '' };
     case 'districts': return { id: '', unionId: '', conferenceId: '', name: '', pastorName: '', contactPhone: '' };
@@ -175,7 +166,14 @@ export const ContentStudio: React.FC<Props> = ({ activeLanguage }) => {
     setError('');
   };
 
-  const setField = (key: string, value: unknown) => setDraft(current => ({ ...current, [key]: value }));
+  const setField = (key: string, value: unknown) => setDraft(current => {
+    if(active==='radioBroadcasts'&&key==='mediaUrl'){
+      const resolved=resolveMediaSource(value);
+      const guess=resolved&&resolved.kind!=='external'?identifyRadioMedia(resolved):null;
+      return {...current,mediaUrl:value,mediaType:guess?.mediaType||'',mediaProvider:guess?.provider||''};
+    }
+    return {...current,[key]:value};
+  });
 
   const save = async () => {
     if (editingId && !editingCanEdit) { setError('This record is read-only. Only its contributor or the VOP Super Admin can edit it.'); return; }
@@ -203,11 +201,7 @@ export const ContentStudio: React.FC<Props> = ({ activeLanguage }) => {
         data = { ...draft, id };
         if (active === 'radioBroadcasts') {
           validateRadioMedia(data);
-          const mediaType = text(data.mediaType).trim();
-          const mediaUrl = ['audioUrl', 'videoUrl', 'streamUrl'].map(key => text(data[key]).trim()).find(Boolean) || '';
-          const hostname = new URL(mediaUrl).hostname.toLowerCase();
-          if (mediaType === 'youtube' && !(hostname === 'youtu.be' || hostname.endsWith('youtube.com'))) throw new Error('For YouTube media, enter a valid YouTube URL.');
-          if (mediaType === 'audioverse' && !(hostname === 'audioverse.org' || hostname.endsWith('.audioverse.org'))) throw new Error('For AudioVerse media, enter a valid AudioVerse URL.');
+          // Server checks actual provider and media type on publication.
         }
         if (active === 'radioBroadcasts' && !text(data.broadcastTime).trim()) {
           data.broadcastTime = new Date().toISOString();
@@ -325,8 +319,12 @@ export const ContentStudio: React.FC<Props> = ({ activeLanguage }) => {
     if (active === 'books') return <div className="grid gap-3">{field('Material title','name')}{field('Category','category')}{field('Author','author')}{field('Cover image URL','imageUrl')}{field('Download URL','downloadUrl')}{area('Description','description')}{publicationToggle()}</div>;
     if (active === 'radioBroadcasts') return <div className="grid gap-3">
       {field('Broadcast title','title')}{field('Speaker','speaker')}{field('Series','series')}
-      {select('Primary media type','mediaType',[{value:'audio',label:'Direct Audio'},{value:'video',label:'Direct Video'},{value:'youtube',label:'YouTube'},{value:'audioverse',label:'AudioVerse'}])}
-      {field('Audio / YouTube / AudioVerse URL','audioUrl')}{field('Video URL','videoUrl')}{field('Live stream URL','streamUrl')}{field('Poster image URL','posterUrl')}
+      {field('Public media URL — type detected automatically','mediaUrl','url')}
+      <div role="status" className="rounded-lg border p-3 text-xs">
+        {text(draft.mediaProvider) ? 'Detected '+text(draft.mediaProvider)+' · '+text(draft.mediaType)
+          : 'Paste one public playable HTTPS link. VOP identifies the format when saved.'}
+      </div>
+      {field('Poster image URL','posterUrl')}
       <div className="rounded-lg border p-3 text-[11px] leading-5" style={{background:'var(--bg-card)',borderColor:'var(--border-subtle)',color:'var(--text-secondary)'}}><strong>{t('common.automatic_timing','Automatic timing:')}</strong> do not enter duration or broadcast time. The player detects media duration and playback time automatically, while the system records the creation timestamp.</div>
       {area('Description','description')}{publicationToggle()}
     </div>;
