@@ -349,3 +349,10 @@
 .vop-personal-settings .vop-personal-profile-form input[readonly]{background:var(--bg-elevated,#f4f6f9);color:var(--text-muted,#64748b);cursor:not-allowed}
 .vop-personal-settings .vop-personal-profile-actions{grid-column:1/-1;display:flex;justify-content:flex-end;flex-wrap:wrap;gap:8px}
 @media(max-width:580px){.vop-personal-settings .vop-personal-profile-form{grid-template-columns:minmax(0,1fr)}.vop-personal-settings .vop-personal-profile-form label{grid-column:1/-1}.vop-personal-settings .vop-personal-profile-actions>*{flex:1}}
+
+
+.vop-personal-settings .vop-personal-password-form{display:grid;gap:12px;margin-top:2px}
+.vop-personal-settings .vop-personal-password-field{display:grid;gap:5px;font-size:.83rem;font-weight:650}
+.vop-personal-settings .vop-personal-password-wrap{position:relative;display:block}
+.vop-personal-settings .vop-personal-password-wrap input{padding-right:42px}
+.vop-personal-settings .vop-personal-password-wrap button{position:absolute;right:6px;top:50%;transform:translateY(-50%);background:transparent;border:0;display:grid;place-items:center;min-width:34px;min-height:34px;color:var(--text-muted,#64748b);cursor:pointer}
