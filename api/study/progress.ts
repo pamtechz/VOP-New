@@ -355,7 +355,8 @@ export default async function handler(
 
     // Preserve the guide's prescribed order in the authoritative mutation
     // endpoints. The Android/web lock icon is UX, not an access-control check.
-    if(action==='startQuiz'||action==='completeLesson'){
+    if((guideSnapshot.data()?.sequentialLearning===true || guideSnapshot.data()?.enforceSequentialProgress===true)
+      &&(action==='startQuiz'||action==='completeLesson')){
       const published=await guideRef.collection('lessons')
         .where('published','==',true).limit(120).get();
       const sequenced=published.docs.filter(doc=>doc.data().archived!==true)
