@@ -296,7 +296,7 @@ async function syncOwnProfile(decoded: { uid: string; email?: string; name?: str
   const profile = {
     uid: decoded.uid,
     email: decoded.email ?? existing.email ?? '',
-    displayName: decoded.name ?? existing.displayName ?? decoded.email?.split('@')[0] ?? 'VOP Student',
+    displayName: String(existing.displayName||'').trim() || decoded.name || decoded.email?.split('@')[0] || 'VOP Student',
     photoURL: decoded.picture ?? existing.photoURL ?? null,
     accountType,
     role,
