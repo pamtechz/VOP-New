@@ -45,7 +45,10 @@ test('native personal settings use authoritative web profile/settings actions',(
   assert.match(profile,/Share\.shareXFiles/);
   assert.match(profile,/Export your VOP account data/);
   assert.match(read('native_android/pubspec.yaml'),/share_plus: \^10\.1\.4/);
-  assert.match(profile,/widget\.api\.savePersonalSettings\(preferences\)/);
+  assert.match(profile,/widget\.api\.savePersonalSettings\(changes\)/);
+  assert.match(profile,/settingsLoadError/);
+  assert.match(profile,/if\(!preferencesReady\)return/);
+  assert.match(profile,/Map<String,dynamic> _settingsDelta\(\)/);
   assert.match(profile,/widget\.api\.saveProfile/);
   assert.match(profile,/sendPasswordResetEmail/);
   assert.match(profile,/VopAppearance\.apply/);
