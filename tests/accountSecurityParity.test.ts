@@ -9,8 +9,12 @@ test('sensitive account controls use Firebase Admin, account ownership, recent s
   assert.match(account,/action==='security-status'/);
   assert.match(account,/action==='revoke-sessions'/);
   assert.match(account,/SIGN OUT ALL DEVICES/);
-  assert.match(account,/authTime>300/);
+  assert.match(account,/now-authTime>maxAgeSeconds/);
   assert.match(account,/verifyIdToken\(bearer,true\)/);
+  assert.match(account,/action==='export'[\s\S]*requireVerifiedRecentIdentity/);
+  assert.match(account,/action==='request-deletion'[\s\S]*requireVerifiedRecentIdentity/);
+  assert.match(account,/action==='cancel-deletion'[\s\S]*requireVerifiedIdentity/);
+
   assert.match(account,/revokeRefreshTokens\(ctx\.auth\.uid\)/);
   assert.match(account,/ctx\.auth\.uid/);
   assert.match(client,/loadAccountSecurityStatus/);
