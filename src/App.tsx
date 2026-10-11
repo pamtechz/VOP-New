@@ -502,10 +502,22 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
       return;
     }
     let active=true;
+    let systemTheme:MediaQueryList|null=null;
+    const syncSystemTheme=()=>{if(active&&systemTheme)setIsDarkMode(systemTheme.matches);};
     void loadPersonalSettings()
-      .then(personal=>{ if(active) applyAccessibilityPreferences(personal.accessibility); })
-      .catch(()=>{ if(active) applyAccessibilityPreferences(undefined); });
-    return()=>{ active=false; };
+      .then(personal=>{
+        if(!active)return;
+        applyAccessibilityPreferences(personal.accessibility);
+        if(personal.theme==='system'){
+          systemTheme=window.matchMedia('(prefers-color-scheme: dark)');
+          setIsDarkMode(systemTheme.matches);
+          systemTheme.addEventListener('change',syncSystemTheme);
+        }else if(personal.theme==='dark'||personal.theme==='light'){
+          setIsDarkMode(personal.theme==='dark');
+        }
+      })
+      .catch(()=>{if(active)applyAccessibilityPreferences(undefined);});
+    return()=>{active=false;systemTheme?.removeEventListener('change',syncSystemTheme);};
   }, [currentUser.uid]);
 
   useEffect(() => {
