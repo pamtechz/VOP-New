@@ -14,12 +14,12 @@ type Props = {
 export function ProviderPlaybackNotice({sourceUrl,provider,title}: Props){
   const valid=isSafeHttpsMediaUrl(sourceUrl);
   const label=title || provider + ' programme';
-  return <div className="vop-provider-playback-notice" role="note" aria-label={provider+' playback information'}>
+  return <div className="vop-provider-playback-notice" role="note" aria-label={provider+' playback'}>
     <span className="vop-provider-playback-mark" aria-hidden="true">▶</span>
     <div className="vop-provider-playback-copy">
       <strong>{label}</strong>
-      <p>{provider} restricts playback inside other websites. Open the programme on {provider}, or ask your organisation to supply an authorised direct audio/video URL for playback in VOP.</p>
-      {valid&&<a href={sourceUrl} target="_blank" rel="noopener noreferrer">Open on {provider} <span aria-hidden="true">↗</span></a>}
+
+      {valid&&<a href={sourceUrl} target="_blank" rel="noopener noreferrer">Play on {provider} <span aria-hidden="true">↗</span></a>}
     </div>
   </div>;
 }
