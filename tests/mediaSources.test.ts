@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { isSafeHttpsMediaUrl, resolveMediaSource, identifyRadioMedia, resolvedRadioRecord } from '../shared/mediaSources.ts';
+import { isSafeHttpsMediaUrl, resolveMediaSource, identifyRadioMedia, resolvedRadioRecord, parseAudioVerseEmbedCode } from '../shared/mediaSources.ts';
 
 test('rejects executable protocols, local network destinations and credentials', () => {
   for (const value of ['javascript:alert(1)','data:video/mp4;base64,AA==','http://www.youtube.com/watch?v=dQw4w9WgXcQ',
@@ -70,4 +70,15 @@ test('AudioVerse frame-ancestors restriction is respected in every web player', 
   assert.match(admin,/provider === 'AudioVerse'[\s\S]{0,150}<MediaPlayer/);
   assert.match(fallback,/rel="noopener noreferrer"/);
   assert.match(fallback,/isSafeHttpsMediaUrl\(sourceUrl\)/);
+});
+
+test('AudioVerse audio embed code extracts only approved HTTPS player URLs', () => {
+  const allowed='https://www.audioverse.org/en/embed/media/12345';
+  assert.equal(parseAudioVerseEmbedCode('<iframe width="100%" src="'+allowed+'" allow="autoplay"></iframe>'),allowed);
+  assert.equal(parseAudioVerseEmbedCode(allowed),allowed);
+  assert.equal(parseAudioVerseEmbedCode(''), '');
+  assert.throws(()=>parseAudioVerseEmbedCode('<iframe src="https://evil.example/embed/media/12345"></iframe>'));
+  assert.throws(()=>parseAudioVerseEmbedCode('<script src="https://www.audioverse.org/en/embed/media/12345"></script>'));
+  assert.throws(()=>parseAudioVerseEmbedCode('http://www.audioverse.org/en/embed/media/12345'));
+  assert.throws(()=>parseAudioVerseEmbedCode('https://www.audioverse.org/en/media/12345'));
 });
