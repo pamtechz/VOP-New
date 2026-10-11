@@ -343,10 +343,30 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
           'Your existing password or Google sign-in remains available.')),
       const Divider(),
       if(security.isNotEmpty)...[
-        ListTile(contentPadding:EdgeInsets.zero,
-          leading:const Icon(Icons.verified_user_outlined),
-          title:const Text('Email verification'),
-          subtitle:Text(security['emailVerified']==true?'Verified':'Not verified')),
+        if(security.containsKey('emailVerified'))...[
+          ListTile(contentPadding:EdgeInsets.zero,
+            leading:const Icon(Icons.verified_user_outlined),
+            title:const Text('Email verification'),
+            subtitle:Text(security['emailVerified']==true?'Verified':'Not verified')),
+          if(security['emailVerified']!=true)
+            TextButton.icon(onPressed:saving?null:()async{
+                await _perform(()async{
+                  final user=FirebaseAuth.instance.currentUser;
+                  if(user==null)throw StateError('Sign in first.');
+                  await user.sendEmailVerification();
+                },'Verification email sent. Check your inbox.');
+              },
+              icon:const Icon(Icons.mark_email_unread_outlined),
+              label:const Text('Send verification email')),
+          TextButton.icon(onPressed:saving?null:()async{
+              await _perform(()async{
+                await FirebaseAuth.instance.currentUser?.reload();
+                security=await widget.api.accountSecurityStatus();
+              },'Email verification status refreshed.');
+            },
+            icon:const Icon(Icons.refresh_outlined),
+            label:const Text('Refresh verification')),
+        ],
         if((security['lastSignInAt']??'').toString().isNotEmpty)
           ListTile(contentPadding:EdgeInsets.zero,
             leading:const Icon(Icons.history),
