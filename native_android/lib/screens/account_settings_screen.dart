@@ -107,8 +107,19 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
   Map<String,dynamic> _settingsDelta(){
     final changes=<String,dynamic>{};
     for(final key in preferences.keys){
-      if(jsonEncode(preferences[key])!=jsonEncode(savedPreferences[key])){
-        changes[key]=preferences[key];
+      final current=preferences[key],previous=savedPreferences[key];
+      if(jsonEncode(current)==jsonEncode(previous))continue;
+      if(current is Map && previous is Map){
+        final nested=<String,dynamic>{};
+        for(final entry in current.entries){
+          final field=entry.key.toString();
+          if(jsonEncode(entry.value)!=jsonEncode(previous[field])){
+            nested[field]=entry.value;
+          }
+        }
+        if(nested.isNotEmpty)changes[key]=nested;
+      }else{
+        changes[key]=current;
       }
     }
     return changes;
