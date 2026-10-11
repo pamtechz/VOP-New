@@ -246,6 +246,104 @@ class _RadioPlayerScreenState extends State<RadioPlayerScreen>
     await c.seekTo(target<Duration.zero?Duration.zero:
       target>c.value.duration?c.value.duration:target);
   }
+  String value(Map<String,dynamic> item,String key)=>
+    (item[key]??'').toString().trim();
+  String mediaKey(Map<String,dynamic> item){
+    final id=value(item,'id');
+    return id.isNotEmpty?id:[value(item,'mediaUrl'),value(item,'audioUrl'),
+      value(item,'videoUrl'),value(item,'streamUrl')]
+      .firstWhere((v)=>v.isNotEmpty,orElse:()=>value(item,'title'));
+  }
+  Future<void> _reload()async{
+    final api=widget.api;
+    if(api==null)return;
+    try{
+      final result=await api.radio();
+      final raw=result['items'];
+      if(!mounted)return;
+      setState(()=>recommendations=raw is List
+        ?raw.whereType<Map>().map((e)=>Map<String,dynamic>.from(e)).toList()
+        :<Map<String,dynamic>>[]);
+    }catch(_){
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content:Text('Could not refresh programmes.')));
+    }
+  }
+  void _select(Map<String,dynamic> item){
+    if(mediaKey(item)==mediaKey(widget.item))return;
+    Navigator.pushReplacement(context,MaterialPageRoute<void>(
+      builder:(_)=>RadioPlayerScreen(item:item,api:widget.api,
+        related:recommendations)));
+  }
+  Future<void> _openInApp()async{
+    final raw=[value(widget.item,'mediaUrl'),value(widget.item,'audioUrl'),
+      value(widget.item,'videoUrl'),value(widget.item,'streamUrl')]
+      .firstWhere((value)=>value.isNotEmpty,orElse:()=>'');
+    if(!safeRadioHttps(raw))return;
+    final opened=await launchUrl(Uri.parse(raw),mode:LaunchMode.inAppBrowserView);
+    if(!opened&&mounted)ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content:Text('Unable to open media.')));
+  }
+  Widget _moreProgrammes(){
+    final items=recommendations.where((item)=>
+      mediaKey(item)!=mediaKey(widget.item)).where((item){
+        final result=resolveRadioMedia(item);
+        if(category=='Audio')return result.kind==RadioMediaKind.audio||
+          result.provider=='AudioVerse'||result.provider=='SoundCloud';
+        if(category=='Video')return result.kind==RadioMediaKind.video||
+          (result.kind==RadioMediaKind.provider&&
+            result.provider!='AudioVerse'&&result.provider!='SoundCloud');
+        return true;
+      }).toList();
+    return Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+      Row(children:[
+        Expanded(child:Text('More from VOP',
+          style:Theme.of(context).textTheme.titleLarge)),
+        Text(items.length.toString(),
+          style:Theme.of(context).textTheme.labelMedium),
+      ]),
+      const SizedBox(height:8),
+      SingleChildScrollView(scrollDirection:Axis.horizontal,
+        child:Row(children:[
+          for(final label in const ['All','Video','Audio'])
+            Padding(padding:const EdgeInsets.only(right:8),
+              child:ChoiceChip(label:Text(label),selected:category==label,
+                onSelected:(_)=>setState(()=>category=label))),
+        ])),
+      const SizedBox(height:9),
+      if(items.isEmpty)const Padding(padding:EdgeInsets.all(22),
+        child:Center(child:Text('No other programmes yet'))),
+      ...items.map((item)=>Card(margin:const EdgeInsets.only(bottom:9),
+        clipBehavior:Clip.antiAlias,
+        child:InkWell(onTap:()=>_select(item),child:Row(children:[
+          SizedBox(width:116,height:80,
+            child:value(item,'posterUrl').startsWith('https://')
+              ?Image.network(value(item,'posterUrl'),fit:BoxFit.cover,
+                errorBuilder:(_,error,stack)=>_posterPlaceholder(item))
+              :_posterPlaceholder(item)),
+          Expanded(child:Padding(padding:const EdgeInsets.all(11),
+            child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+              Text(value(item,'title'),maxLines:2,overflow:TextOverflow.ellipsis,
+                style:const TextStyle(fontSize:13,fontWeight:FontWeight.w800)),
+              const SizedBox(height:4),
+              Text(value(item,'speaker').isNotEmpty
+                  ?value(item,'speaker'):resolveRadioMedia(item).provider,
+                maxLines:1,overflow:TextOverflow.ellipsis,
+                style:TextStyle(fontSize:11,
+                  color:Theme.of(context).colorScheme.onSurfaceVariant)),
+            ]))),
+          const Icon(Icons.play_circle_outline),
+          const SizedBox(width:10),
+        ]))),
+      ),
+    ]);
+  }
+  Widget _posterPlaceholder(Map<String,dynamic> item)=>Container(
+    color:VopColors.navy,
+    child:Center(child:Icon(
+      resolveRadioMedia(item).kind==RadioMediaKind.audio
+        ?Icons.graphic_eq:Icons.play_circle_outline,
+      color:VopColors.goldLight,size:30)));
   @override Widget build(BuildContext context){
     final c=player,v=c?.value;
     final ready=v?.isInitialized==true;
@@ -255,7 +353,9 @@ class _RadioPlayerScreenState extends State<RadioPlayerScreen>
       duration.inMilliseconds>0?duration.inMilliseconds:0);
     return Scaffold(
       appBar:AppBar(title:const Text('VOP Radio & Media')),
-      body:ListView(padding:const EdgeInsets.all(16),children:[
+      body:RefreshIndicator(onRefresh:_reload,
+        child:ListView(physics:const AlwaysScrollableScrollPhysics(),
+          padding:const EdgeInsets.all(16),children:[
         AspectRatio(aspectRatio:16/9,child:Container(
           clipBehavior:Clip.antiAlias,
           decoration:BoxDecoration(color:const Color(0xFF071A33),
@@ -269,17 +369,14 @@ class _RadioPlayerScreenState extends State<RadioPlayerScreen>
             if(source.kind==RadioMediaKind.audio)
               const Icon(Icons.graphic_eq,size:74,color:VopColors.goldLight),
             if(source.kind==RadioMediaKind.external)
-              IconButton(
-                tooltip:'Open with provider',
-                iconSize:48,
-                color:VopColors.goldLight,
-                onPressed:()=>launchUrl(source.url!,
-                  mode:LaunchMode.externalApplication),
-                icon:const Icon(Icons.open_in_new_rounded)),
+              FilledButton.icon(onPressed:_openInApp,
+                icon:const Icon(Icons.play_arrow),label:const Text('Play')),
+
             if(loading)const CircularProgressIndicator(color:VopColors.goldLight),
-            if(error!=null)Padding(padding:const EdgeInsets.all(18),
-              child:Text(error!,textAlign:TextAlign.center,
-                style:const TextStyle(color:Colors.white))),
+            if(error!=null)
+              FilledButton.tonalIcon(
+                onPressed:source.provider=='AudioVerse'?_openInApp:_prepare,
+                icon:const Icon(Icons.refresh),label:const Text('Retry')),
           ]),
         )),
         const SizedBox(height:16),
@@ -323,8 +420,12 @@ class _RadioPlayerScreenState extends State<RadioPlayerScreen>
         const SizedBox(height:17),
         if((widget.item['description']??'').toString().isNotEmpty)
           Text((widget.item['description']??'').toString(),
-            style:const TextStyle(height:1.55)),
+            maxLines:4,overflow:TextOverflow.ellipsis,
+            style:const TextStyle(height:1.45)),
+        const SizedBox(height:20),
+        _moreProgrammes(),
       ]),
+      ),
     );
   }
 }
