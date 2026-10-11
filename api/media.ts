@@ -116,6 +116,62 @@ function extractPublicMedia(html: string, source: URL) {
   }
   throw new Error('No publicly playable media was exposed by this page. Use an official embed or direct media link; private content cannot be extracted.');
 }
+
+/** HEAD-only verification for extensionless HTTPS CDN and station links.
+ * The DNS lookup is pinned to a public address, no redirects or body reads.
+ */
+async function probeMediaContentType(source: URL): Promise<string> {
+  const addresses=await lookup(source.hostname,{all:true});
+  if(!addresses.length || addresses.some(address=>!publicAddress(address.address))) {
+    throw new Error('The media host must resolve only to public internet addresses.');
+  }
+  const pinned=addresses[0];
+  return new Promise((resolve,reject)=>{
+    const req=httpsRequest(source,{
+      method:'HEAD',timeout:4500,headers:{Accept:'audio/*, video/*, application/vnd.apple.mpegurl, application/dash+xml'},
+      lookup:(_host,_opts,cb)=>cb(null,pinned.address,pinned.family),
+    },response=>{
+      const status=response.statusCode||0;
+      response.destroy();
+      if(status>=300&&status<400){reject(new Error('Media redirects. Paste its final public HTTPS URL.'));return;}
+      if(status===405||status===501){reject(new Error('This media host does not support metadata inspection. Provide a direct media link with a known file extension.'));return;}
+      if(status<200||status>=300){reject(new Error('This media URL is not publicly accessible.'));return;}
+      resolve(String(response.headers['content-type']||'').split(';')[0].trim().toLowerCase());
+    });
+    req.on('timeout',()=>req.destroy(new Error('Media metadata inspection timed out.')));
+    req.on('error',reject);
+    req.end();
+  });
+}
+export async function identifyPublicMedia(source: string) {
+  if(!isSafeHttpsMediaUrl(source))throw new Error('Use a safe public HTTPS media link.');
+  const known=resolveMediaSource(source);
+  if(known&&known.kind!=='external')return known;
+  const parsed=new URL(source);
+  // Try the original URL's Content-Type before HTML page parsing. Only HEAD
+  // requests are permitted to arbitrary public hosts.
+  let headError:Error|null=null;
+  try{
+    const type=await probeMediaContentType(parsed);
+    if(type.startsWith('audio/'))return {
+      kind:'direct-audio' as const,provider:'Audio file',url:source,originalUrl:source,
+    };
+    if(type.startsWith('video/'))return {
+      kind:'direct-video' as const,provider:'Video file',url:source,originalUrl:source,
+    };
+    if(['application/vnd.apple.mpegurl','application/x-mpegurl',
+      'application/dash+xml'].includes(type))return {
+      kind:'direct-video' as const,provider:'Live stream',url:source,originalUrl:source,
+    };
+  }catch(reason){headError=reason instanceof Error?reason:new Error('Media inspection failed.');}
+  if(!hostAllowed(parsed.hostname.toLowerCase())) {
+    throw headError || new Error('The URL is not a recognised playable audio/video source. Use a public direct media URL or supported provider.');
+  }
+  // Untrusted HTML or redirects never load from arbitrary hosts.
+  const html=await readHeadPage(parsed);
+  return extractPublicMedia(html,parsed);
+}
+
 export default async function handler(req: Request, res: Response) {
   if (req.method !== 'POST') return res.status(405).json({ error:'Method not allowed.' });
   try {
@@ -128,13 +184,8 @@ export default async function handler(req: Request, res: Response) {
     }
     const source = String(body.url || '').trim();
     if (!isSafeHttpsMediaUrl(source)) throw new Error('Use a public HTTPS media URL without credentials, local addresses, fragments or unusual ports.');
-    const direct = resolveMediaSource(source);
-    if (direct && direct.kind !== 'external') return res.status(200).json({ ok:true, media:direct });
-    const parsed = new URL(source);
-    if (!hostAllowed(parsed.hostname.toLowerCase())) throw new Error('This provider does not offer an approved player. Only approved public sites can be inspected.');
-    const html = await readHeadPage(parsed);
-    const media = extractPublicMedia(html, parsed);
-    return res.status(200).json({ ok:true, media });
+    const media=await identifyPublicMedia(source);
+    return res.status(200).json({ok:true,media});
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Could not resolve the media source.';
     return res.status(400).json({ error:message });
