@@ -512,6 +512,7 @@ export default async function handler(
               previousScoreRevoked:activeData.previousScoreRevoked===true,
               startedAt:String(activeData.startedAt||startedAtIso),
               expiresAt:String(activeData.expiresAt||'')||null,
+              resumeUntil:String(activeData.resumeUntil||activeData.expiresAt||'')||null,
               questions:activeData.questionsSnapshot as QuestionRecord[],
               assessmentPolicy:{
                 threshold:Number(activePolicy.threshold)||policy.threshold,
@@ -637,7 +638,7 @@ export default async function handler(
           previousScore:hasCurrentScore?currentScore:null,
           previousScoreRevoked:isRetake&&hasCurrentScore,
           startedAt:startedAtIso,expiresAt:expiresAt?new Date(expiresAt).toISOString():null,
-          questions:attemptQuestions,assessmentPolicy:policySnapshot,
+          resumeUntil:new Date(resumeUntil).toISOString(),questions:attemptQuestions,assessmentPolicy:policySnapshot,
         };
       });
       return res.status(200).json({
@@ -646,6 +647,7 @@ export default async function handler(
         sessionId:reserved.sessionId,
         startedAt:reserved.startedAt,
         expiresAt:reserved.expiresAt,
+        resumeUntil:reserved.resumeUntil,
         questions:reserved.questions,
         previousScore:reserved.previousScore,
         previousScoreRevoked:reserved.previousScoreRevoked,
