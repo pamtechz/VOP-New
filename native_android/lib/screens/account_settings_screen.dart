@@ -260,26 +260,6 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         _switch('notifications','announcements','Announcements'),
         _switch('notifications','certificates','Certificate updates'),
       ]),
-      _heading('Study routine','Make learning fit your schedule.',
-        Icons.schedule_outlined),
-      _group([
-        _switch('studyPreferences','reminders','Study reminders'),
-        TextFormField(
-          initialValue:(_map(preferences['studyPreferences'])['preferredStudyTime']??'').toString(),
-          keyboardType:TextInputType.datetime,
-          decoration:const InputDecoration(
-            labelText:'Preferred study time (HH:MM)',
-            hintText:'18:30'),
-          onChanged:(text)=>_nested('studyPreferences','preferredStudyTime',text),
-        ),
-        const SizedBox(height:10),
-        TextFormField(
-          initialValue:(_map(preferences['studyPreferences'])['timezone']??'').toString(),
-          decoration:const InputDecoration(
-            labelText:'Timezone (e.g. Africa/Lusaka)'),
-          onChanged:(text)=>_nested('studyPreferences','timezone',text),
-        ),
-      ]),
       const SizedBox(height:19),
       FilledButton.icon(onPressed:saving?null:_saveSettings,
         icon:const Icon(Icons.save_outlined),
