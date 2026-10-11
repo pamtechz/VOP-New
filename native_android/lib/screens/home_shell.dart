@@ -43,7 +43,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     _syncing=true;
     try{
       final result=await widget.api.syncOfflineQueue();
-      if(mounted&&result['synced']!=null&&result['synced']!>0){
+      if(mounted&&((result['synced'] as num?)??0)>0){
         setState(reload);
       }
     }catch(_){/* Keep the user's pending changes for the next retry. */}
