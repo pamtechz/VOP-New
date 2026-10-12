@@ -330,7 +330,7 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
           setStudyNotice(`${result.synced} lesson completion${result.synced === 1 ? '' : 's'} and ${resumeResult.synced} reading position${resumeResult.synced === 1 ? '' : 's'} verified and synchronized.`);
         }
       }).catch(() => {
-        if (!cancelled) setStudyNotice('Offline lesson progress is saved on this device and will be retried when connectivity returns.');
+        if (!cancelled) setStudyNotice('Offline progress queued for sync.');
       });
     };
     window.addEventListener('online', replay);
@@ -865,7 +865,7 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
         <img src="/assets/vop_logo_2.png" alt="Voice of Prophecy"/>
         <span>VOICE OF PROPHECY</span>
         <h1>Scheduled maintenance is in progress</h1>
-        <p>The learning workspace is temporarily unavailable while the platform is being maintained. Your saved progress remains attached to your account.</p>
+        <p>VOP is under maintenance. Your saved progress remains available.</p>
         <button type="button" onClick={()=>void firebaseSignOut()}>Sign out</button>
       </section>
     </main>;
