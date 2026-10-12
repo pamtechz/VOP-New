@@ -145,6 +145,24 @@ export function ChatThread({
       row.guide.title,row.lesson.title,row.lesson.lessonNumber,row.lesson.description,row.guide.language,
     ].join(' ').toLowerCase().includes(query)).slice(0,24);
   },[rows,attachmentSearch]);
+  const studyContextReferences=useMemo(()=>{
+    const unique=new Map<string,ChatReference>();
+    const add=(item:ChatReference)=>unique.set(item.type+':'+item.id,item);
+    for(const guide of guides){
+      add({type:'guide',id:guide.id,label:guide.title,route:'lessons'});
+      for(const lesson of guide.lessons||[]){
+        for(const page of lesson.contentPages||[]){
+          if(page.chapterId&&page.chapterTitle)
+            add({type:'chapter',id:guide.id+':'+page.chapterId,label:guide.title+' · '+page.chapterTitle,route:'lessons'});
+          if(page.sectionId||page.sectionTitle)
+            add({type:'section',id:guide.id+':'+lesson.id+':'+(page.sectionId||String(page.pageNumber)),
+              label:lesson.title+' · '+(page.sectionTitle||page.title),route:'lessons'});
+        }
+      }
+    }
+    const query=attachmentSearch.trim().toLowerCase();
+    return [...unique.values()].filter(item=>!query||item.label.toLowerCase().includes(query)).slice(0,30);
+  },[guides,attachmentSearch]);
   const filteredAppReferences=useMemo(()=>{
     const query=attachmentSearch.trim().toLowerCase();
     if(!query)return appReferences;
@@ -285,14 +303,24 @@ export function ChatThread({
         <label className="vop-chat-picker-search"><Search size={15}/><input value={attachmentSearch} onChange={event=>setAttachmentSearch(event.target.value)}
           placeholder={pickerView==='study'?'Search lesson title, number or guide…':'Search Duels, Challenges, games or app features…'}/></label>
         <div className="vop-chat-picker-results">
-          {pickerView==='study'?(!filteredLessons.length?<div className="vop-chat-picker-empty">No lesson matches that search.</div>:filteredLessons.map(row=>{
+          {pickerView==='study'?<React.Fragment>
+            {studyContextReferences.map(reference=>{
+              const attached=pendingReferences.some(item=>referenceKey(item)===referenceKey(reference));
+              return <button type="button" key={referenceKey(reference)} className={attached?'attached':''}
+                onClick={()=>attach(reference)}>
+                <span><strong>{reference.label}</strong><small>{referenceTypeLabel(reference.type)}</small></span>
+                {attached?<Check size={14}/>:<Paperclip size={14}/>}
+              </button>;
+            })}
+            {!filteredLessons.length&&!studyContextReferences.length&&<div className="vop-chat-picker-empty">No matching study content.</div>}
+            {filteredLessons.map(row=>{
             const attached=pendingReferences.some(item=>referenceKey(item)===referenceKey(row.reference));
             return <button type="button" key={row.reference.id} className={attached?'attached':''} onClick={()=>attach(row.reference)}>
               <span className="vop-chat-lesson-number">{row.lesson.lessonNumber}</span>
               <span><strong>{row.lesson.title}</strong><small>{row.guide.title} · {row.guide.language.toUpperCase()}</small></span>
               {attached?<Check size={14}/>:<Paperclip size={14}/>}
             </button>;
-          })):(!filteredAppReferences.length?<div className="vop-chat-picker-empty">No app activity matches that search.</div>:filteredAppReferences.map(reference=>{
+          })}</React.Fragment>:(!filteredAppReferences.length?<div className="vop-chat-picker-empty">No app activity matches that search.</div>:filteredAppReferences.map(reference=>{
             const attached=pendingReferences.some(item=>referenceKey(item)===referenceKey(reference));
             return <button type="button" key={referenceKey(reference)} className={attached?'attached':''} onClick={()=>attach(reference)}>
               <span className="vop-chat-attachment-icon"><ReferenceIcon type={reference.type} size={16}/></span>
