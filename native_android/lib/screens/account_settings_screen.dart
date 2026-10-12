@@ -200,6 +200,9 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
           if(v!=null){
             if(section.isEmpty)_patch(key,v);
             else _nested(section,key,v);
+            if(key=='theme'&&preferencesReady){
+              _saveSettings();
+            }
           }
         }));
   }
