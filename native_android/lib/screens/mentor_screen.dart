@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/vop_api.dart';
+import 'learner_support_screen.dart';
 
 List<Map<String,dynamic>> rows(dynamic input)=>
     input is List?input.whereType<Map>().map((e)=>Map<String,dynamic>.from(e)).toList():[];
@@ -16,7 +17,7 @@ class _MentorScreenState extends State<MentorScreen> {
   void reload(){
     future=widget.api.action('/api/mentorship',{'action':'listMyConversations'});
   }
-  @override Widget build(BuildContext context)=>FutureBuilder<Map<String,dynamic>>(
+  Widget _mentorList(BuildContext context)=>FutureBuilder<Map<String,dynamic>>(
     future:future,builder:(context,s){
       if(s.connectionState!=ConnectionState.done){
         return const Center(child:CircularProgressIndicator());
@@ -49,6 +50,21 @@ class _MentorScreenState extends State<MentorScreen> {
           );
         }));
     });
+
+  @override
+  Widget build(BuildContext context) => DefaultTabController(
+    length: 2,
+    child: Column(children: [
+      const TabBar(tabs: [
+        Tab(text: 'Mentor conversations'),
+        Tab(text: 'Support requests'),
+      ]),
+      Expanded(child: TabBarView(children: [
+        _mentorList(context),
+        LearnerSupportScreen(api: widget.api, embedded: true),
+      ])),
+    ]),
+  );
 }
 
 class MentorConversation extends StatefulWidget {
