@@ -88,7 +88,7 @@ function allowedAndroidPasskeyOrigin(origin:string,payload:PasskeyChallengePaylo
   const expectedPackage=String(process.env.VOP_ANDROID_PACKAGE_NAME||'com.sda.vop');
   if(client.androidPackageName!==undefined&&client.androidPackageName!==expectedPackage)return false;
   const fingerprints=String(process.env.PASSKEY_ANDROID_SHA256_FINGERPRINTS||'')
-    .split(/[\\s,;]+/).filter(Boolean);
+    .split(/[\s,;]+/).filter(Boolean);
   return fingerprints.some(item=>{
     const hex=item.replace(/:/g,'');
     if(!/^[A-Fa-f0-9]{64}$/.test(hex))return false;
