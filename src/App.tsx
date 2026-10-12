@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
-import { applyAccessibilityPreferences, loadPersonalSettings } from './services/personalSettings';
+import { applyAccessibilityPreferences, loadPersonalSettings, savePersonalSettings } from './services/personalSettings';
 import { onAuthStateChanged } from 'firebase/auth';
 import type {
   User, DiscoverGuide, Lesson, AppSettings, LanguageCode, AppRoute,
