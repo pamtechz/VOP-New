@@ -21,13 +21,10 @@ class _MentorScreenState extends State<MentorScreen> {
       if(s.connectionState!=ConnectionState.done){
         return const Center(child:CircularProgressIndicator());
       }
-      if(s.hasError) {
-        return Center(child:Padding(padding:const EdgeInsets.all(22),
+      if(s.hasError)return Center(child:Padding(padding:const EdgeInsets.all(22),
         child:Text('${s.error}',textAlign:TextAlign.center)));
-      }
       final list=rows(s.data?['items']);
-      if(list.isEmpty) {
-        return const Center(child:Padding(
+      if(list.isEmpty)return const Center(child:Padding(
         padding:EdgeInsets.all(24),
         child:Column(mainAxisSize:MainAxisSize.min,children:[
           Icon(Icons.forum_outlined,size:45),
@@ -38,7 +35,6 @@ class _MentorScreenState extends State<MentorScreen> {
           Text('An organisation administrator can assign a mentor to your account.',
             textAlign:TextAlign.center),
         ])));
-      }
       return RefreshIndicator(onRefresh:()async{setState(reload);await future;},
         child:ListView.builder(itemCount:list.length,itemBuilder:(context,index){
           final item=list[index];
@@ -86,10 +82,8 @@ class _MentorConversationState extends State<MentorConversation> {
       composer.clear();
       if(mounted)setState(refresh);
     }catch(error){
-      if(mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content:Text('$error')));
-      }
     }finally{
       if(mounted)setState(()=>sending=false);
     }

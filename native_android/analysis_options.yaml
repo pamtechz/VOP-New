@@ -4,9 +4,6 @@ analyzer:
     invalid_assignment: error
     missing_required_param: error
     dead_code: warning
-  exclude:
-    - build/**
-    - android/**
 linter:
   rules:
     avoid_print: true
