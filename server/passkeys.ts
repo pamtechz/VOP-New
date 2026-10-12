@@ -82,6 +82,21 @@ export function parseClientData(clientDataJSON:string){
   catch{throw new Error('Passkey client data is invalid.');}
   return value;
 }
+function allowedAndroidPasskeyOrigin(origin:string,payload:PasskeyChallengePayload,client:Record<string,unknown>){
+  if(!origin.startsWith('android:apk-key-hash:')||!payload.origin.startsWith('https://'))return false;
+  if(new URL(payload.origin).hostname!==payload.rpId)return false;
+  const expectedPackage=String(process.env.VOP_ANDROID_PACKAGE_NAME||'com.sda.vop');
+  if(client.androidPackageName!==undefined&&client.androidPackageName!==expectedPackage)return false;
+  const fingerprints=String(process.env.PASSKEY_ANDROID_SHA256_FINGERPRINTS||'')
+    .split(/[\\s,;]+/).filter(Boolean);
+  return fingerprints.some(item=>{
+    const hex=item.replace(/:/g,'');
+    if(!/^[A-Fa-f0-9]{64}$/.test(hex))return false;
+    const encoded=Buffer.from(hex,'hex').toString('base64url');
+    return origin==='android:apk-key-hash:'+encoded;
+  });
+}
+
 export function validateClientData(
   clientDataJSON:string,
   payload:PasskeyChallengePayload,
@@ -90,7 +105,9 @@ export function validateClientData(
   const client=parseClientData(clientDataJSON);
   if(String(client.type||'')!==expectedType)throw new Error('Passkey ceremony type is invalid.');
   if(String(client.challenge||'')!==payload.challenge)throw new Error('Passkey challenge does not match.');
-  if(String(client.origin||'')!==payload.origin)throw new Error('Passkey origin does not match this VOP site.');
+  const presentedOrigin=String(client.origin||'');
+  if(presentedOrigin!==payload.origin&&!allowedAndroidPasskeyOrigin(presentedOrigin,payload,client))
+    throw new Error('Passkey origin does not match this VOP site.');
   if(client.crossOrigin===true)throw new Error('Passkey use from a cross-origin frame is not allowed.');
 }
 
