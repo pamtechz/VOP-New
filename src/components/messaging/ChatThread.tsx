@@ -88,7 +88,7 @@ function firstLessonText(lesson:Lesson){
 }
 function referenceTypeLabel(type:string){
   return ({
-    lesson:'Lesson',guide:'Guide / course',activity:'Activity',memory:'Memory game',game:'Game',
+    lesson:'Lesson',guide:'Guide / course',program:'Program',module:'Module',chapter:'Chapter',activity:'Activity',memory:'Memory game',game:'Game',
     challenge:'Challenge',duel:'Duel',resource:'Resource',event:'Event',prayer:'Prayer',
     media:'Media',announcement:'Announcement',topic:'Topic',section:'Section',doctrine:'Doctrine',
     question:'Question',quiz:'Quiz / assessment',scripture:'Scripture',block:'Content block',
