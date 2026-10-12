@@ -194,11 +194,11 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
     });
     if(practice){
       setPracticeVerseId('');
-      setMessage('Practice revisit saved. Your spaced-repetition schedule was left unchanged and no extra points were awarded.');
+      setMessage('Practice saved. Review schedule unchanged.');
       return;
     }
     await refreshMemoryDeck();
-    setMessage(`Review saved · +${Number(saved.pointsAwarded||0)} points · moved to Reviewed and scheduled for later.`);
+    setMessage(`Saved · +${Number(saved.pointsAwarded||0)} points · Reviewed.`);
   };
 
   return (
@@ -307,11 +307,11 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
                     onClick={()=>void run(()=>saveMemoryReview(verse,rating,false))}>{label}</button>)}</div>
                 </div>:<>
                   <div className="vop-memory-revisit">
-                    <div><strong>This verse stays in your deck.</strong><span>You can read it whenever you want. Its scheduled review remains intact.</span></div>
+                    <div><strong>This verse stays in your deck.</strong><span>This review schedule is unchanged.</span></div>
                     <button type="button" className="vop-secondary" disabled={busy} onClick={()=>setPracticeVerseId(current=>current===String(verse.id)?'':String(verse.id))}><RotateCcw size={15}/>{isPractice?'Close practice':'Practice again'}</button>
                   </div>
                   {isPractice&&<div className="vop-memory-rating practice">
-                    <span>Practice revisit · this does not change the schedule or award extra points</span>
+                    <span>Practice only · no points</span>
                     <div>{['0 · Not recalled','1 · Very hard','2 · Partial','3 · Recalled','4 · Strong','5 · Easy'].map((label,rating)=><button key={rating} type="button" aria-label={'Practice '+label} title={label} disabled={busy}
                       onClick={()=>void run(()=>saveMemoryReview(verse,rating,true))}>{label}</button>)}</div>
                   </div>}
@@ -357,7 +357,7 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
           <div className="vop-arena-mode-grid">
             <article className="vop-arena-mode-card solo">
               <div className="vop-arena-mode-icon"><Brain size={25}/></div>
-              <div className="vop-arena-mode-copy"><span>Solo Challenge</span><h2>Test yourself</h2><p>Answer a randomized Scripture set on your own. Your score is private to your attempt and verified by the server.</p>
+              <div className="vop-arena-mode-copy"><span>Solo Challenge</span><h2>Test yourself</h2><p>Practice Scripture with server-verified scoring.</p>
                 <div className="vop-arena-reward"><Star size={14}/> Complete challenge · +{rewards.soloChallenge} configured points</div>
               </div>
               <button type="button" className="vop-primary" disabled={busy} onClick={()=>void run(async()=>{
@@ -392,7 +392,7 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
           </div>
 
           <article className="vop-material-card vop-arena-missions-card"><div className="vop-material-body">
-            <div className="vop-arena-section-head"><div><span className="vop-material-kicker"><Target size={14}/> Milestones</span><h2>Arena missions</h2><p>Long-term goals that sit alongside your normal Challenges and Duels.</p></div></div>
+            <div className="vop-arena-section-head"><div><span className="vop-material-kicker"><Target size={14}/> Milestones</span><h2>Arena missions</h2><p>Track milestones.</p></div></div>
             <div className="vop-arena-missions">
               {arenaMissions.map(item=>{
                 const complete=item.progress>=item.goal;
@@ -405,7 +405,7 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
           </div></article>
 
           {(soloChallenges.length>0||activeMatches.length>0)&&<article className="vop-material-card"><div className="vop-material-body">
-            <div className="vop-arena-section-head"><div><span className="vop-material-kicker"><Clock3 size={14}/> Continue playing</span><h2>Active challenges</h2><p>Resume an unfinished Solo Challenge or open an active Ranked Duel.</p></div></div>
+            <div className="vop-arena-section-head"><div><span className="vop-material-kicker"><Clock3 size={14}/> Continue playing</span><h2>Active challenges</h2><p>Resume a challenge or duel.</p></div></div>
             <div className="vop-arena-active-grid">
               {soloChallenges.map(item=><button type="button" key={item.id} disabled={busy} onClick={()=>void run(async()=>{
                 const result=await engagement({action:'duelSoloJoin',challengeId:item.id});
