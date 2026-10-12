@@ -19,6 +19,7 @@ dependencies:
   shared_preferences: ^2.5.3
   share_plus: ^13.3.1
   local_auth: ^2.3.0
+  passkeys: ^2.23.1
 
 dev_dependencies:
   flutter_test:
