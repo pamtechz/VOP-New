@@ -1,6 +1,7 @@
 import { FieldValue } from 'firebase-admin/firestore';
 import { getAuth, type DecodedIdToken } from 'firebase-admin/auth';
 import { getAdminDb } from '../../server/tenant.js';
+import { recordAccountSecurityEvent } from '../../server/accountSecurityActivity.js';
 import {
   credentialDocumentId, parseRegistrationAttestation, randomChallenge, requestOrigin, signPasskeyChallenge, userHandle,
   validateAuthenticatorData, validateClientData, verifyPasskeyAssertion, verifyPasskeyChallenge,
@@ -174,6 +175,9 @@ export default async function handler(req:Request,res:Response){
       if(authUser.disabled)throw new Error('This VOP account is disabled.');
       if(!profile.exists)throw new Error('This VOP account no longer exists.');
       const customToken=await getAuth().createCustomToken(uid,{authMethod:'passkey'});
+      await recordAccountSecurityEvent(db,uid,'passkey_sign_in').catch(error=>{
+        console.warn('Passkey security activity unavailable',error instanceof Error?error.message:'unknown');
+      });
       return res.status(200).json({ok:true,customToken});
     }
 
@@ -241,6 +245,7 @@ export default async function handler(req:Request,res:Response){
         createdAt:existing.exists?existing.data()?.createdAt||FieldValue.serverTimestamp():FieldValue.serverTimestamp(),
         updatedAt:FieldValue.serverTimestamp(),
       },{merge:true});
+      await recordAccountSecurityEvent(db,actor.uid,'passkey_added');
       return res.status(201).json({ok:true,id:ref.id});
     }
 
@@ -253,6 +258,7 @@ export default async function handler(req:Request,res:Response){
       if(!snapshot.exists)return res.status(200).json({ok:true,deleted:false});
       if(String(snapshot.data()?.uid||'')!==actor.uid)throw new Error('You cannot remove another account passkey.');
       await ref.delete();
+      await recordAccountSecurityEvent(db,actor.uid,'passkey_removed');
       return res.status(200).json({ok:true,deleted:true});
     }
 
