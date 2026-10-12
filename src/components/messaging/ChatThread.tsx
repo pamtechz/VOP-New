@@ -16,16 +16,16 @@ export type ChatReference={
 };
 
 export const APP_CHAT_REFERENCES:ChatReference[]=[
-  {type:'activity',id:'master-guide',label:'Master Guide',route:'master-guide',description:'Youth leadership requirements, portfolio activities and evaluator sign-offs.'},
-  {type:'memory',id:'scripture-memory',label:'Scripture Memory',route:'scripture-memory',description:'Spaced-repetition Scripture memory decks and review practice.'},
-  {type:'game',id:'scripture-arena',label:'Scripture Arena',route:'iron-duels',description:'The gamified Bible knowledge Arena containing Solo Challenges and Ranked Duels.'},
-  {type:'challenge',id:'solo-scripture-challenge',label:'Solo Scripture Challenge',route:'iron-duels',description:'A personal Bible knowledge challenge completed without an opponent.'},
-  {type:'duel',id:'ranked-scripture-duel',label:'Ranked Scripture Duel',route:'iron-duels',description:'A head-to-head Scripture challenge against another opted-in learner.'},
-  {type:'resource',id:'resources',label:'Resources library',route:'resources',description:'Books and study resources available inside VOP.'},
-  {type:'event',id:'events',label:'Events',route:'events',description:'Published ministry and organization events.'},
-  {type:'prayer',id:'prayer',label:'Prayer',route:'prayer',description:'Prayer requests and prayer ministry inside VOP.'},
-  {type:'media',id:'radio',label:'VOP Radio',route:'radio',description:'Published radio broadcasts, audio and playlists.'},
-  {type:'announcement',id:'announcements',label:'Announcements',route:'announcements',description:'Published VOP and organization announcements.'},
+  {type:'activity',id:'master-guide',label:'Master Guide',route:'master-guide'},
+  {type:'memory',id:'scripture-memory',label:'Scripture Memory',route:'scripture-memory'},
+  {type:'game',id:'scripture-arena',label:'Scripture Arena',route:'iron-duels'},
+  {type:'challenge',id:'solo-scripture-challenge',label:'Solo Scripture Challenge',route:'iron-duels'},
+  {type:'duel',id:'ranked-scripture-duel',label:'Ranked Scripture Duel',route:'iron-duels'},
+  {type:'resource',id:'resources',label:'Resources library',route:'resources'},
+  {type:'event',id:'events',label:'Events',route:'events'},
+  {type:'prayer',id:'prayer',label:'Prayer',route:'prayer'},
+  {type:'media',id:'radio',label:'VOP Radio',route:'radio'},
+  {type:'announcement',id:'announcements',label:'Announcements',route:'announcements'},
 ];
 export type ChatMessage={
   id:string;
