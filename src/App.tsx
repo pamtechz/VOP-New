@@ -210,6 +210,7 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
         setLocalizationOrganizationScope('');
         setCurrentUser(EMPTY_USER);
         setAllUsers([]);
+        setPortalPrompt(false);
         restoredNavigationUid.current='';
         try{
           sessionStorage.removeItem(PORTAL_SESSION_STORAGE_KEY);
