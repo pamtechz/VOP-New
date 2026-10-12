@@ -116,10 +116,8 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
   const load=async()=>{
     setLoading(true);
     try{
-      const [supportResult,mentorResult]=await Promise.all([
-        supportApi('listMySupportRequests'),
-        supportApi('listMyConversations').catch(()=>({items:[]})),
-      ]);
+      const supportResult=await supportApi('listMySupportRequests');
+      const mentorResult=await supportApi('listMyConversations').catch(()=>({items:[]}));
       const supportRows=(supportResult.items||[]) as SupportRequest[];
       setRequests(supportRows);
       if(activeRequest){
@@ -131,6 +129,7 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
         ?{id:rawConversation.id,studentId:rawConversation.studentId,mentorId:rawConversation.mentorId,mentorName:rawConversation.mentorName,unread:rawConversation.unread}
         :null;
       setConversation(next);
+      if(!next)setTarget(current=>current==='mentor'?'support_team':current);
       if(next){
         const thread=await supportApi('messages',{conversationId:next.id});
         setMessages((thread.items||[]) as ChatMessage[]);
