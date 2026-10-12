@@ -97,8 +97,7 @@ test('passkey authentication is one-time, server-verified and replay resistant',
       assert.equal(event.size,1);
       assert.equal(event.docs[0].data().action,'passkey_sign_in');
       const notice=await db.collection('notifications').where('recipientId','==',account.uid).get();
-      assert.equal(notice.size,1);
-      assert.equal(notice.docs[0].data().type,'security');
+      assert.equal(notice.size,0,'Routine passkey sign-ins must not flood security notifications.');
       const stored=(await credentialRef.get()).data();
       assert.ok(stored?.lastUsedAt,'lastUsedAt must update even when an authenticator reports signCount 0');
 
