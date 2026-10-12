@@ -187,7 +187,7 @@ function conversationId(studentId: string, mentorId: string) {
 }
 
 const CHAT_REFERENCE_TYPES=new Set([
-  'guide','lesson','section','topic','doctrine','question','quiz','scripture','block',
+  'program','module','chapter','guide','lesson','section','topic','doctrine','question','quiz','scripture','block',
   'activity','memory','game','challenge','duel','resource','event','prayer','media','announcement',
 ]);
 const CHAT_REFERENCE_ROUTES=new Set([

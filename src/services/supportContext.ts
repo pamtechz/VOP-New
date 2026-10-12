@@ -1,4 +1,4 @@
-export type SupportContextReferenceType='section'|'topic'|'doctrine'|'question'|'scripture';
+export type SupportContextReferenceType='program'|'module'|'chapter'|'section'|'topic'|'doctrine'|'question'|'scripture';
 
 export interface SupportContextPrefill{
   guideId:string;
@@ -24,7 +24,7 @@ export function saveSupportContextPrefill(value:SupportContextPrefill){
     category:['lesson_clarification','doctrine','bible_question','assessment','other'].includes(String(value.category||''))
       ?value.category:'lesson_clarification',
     subject:text(value.subject,180),
-    referenceType:['section','topic','doctrine','question','scripture'].includes(String(value.referenceType||''))
+    referenceType:['program','module','chapter','section','topic','doctrine','question','scripture'].includes(String(value.referenceType||''))
       ?value.referenceType:'topic',
     referenceId:text(value.referenceId,220),
     referenceLabel:text(value.referenceLabel,300),
@@ -49,7 +49,7 @@ export function consumeSupportContextPrefill():SupportContextPrefill|null{
       category:['lesson_clarification','doctrine','bible_question','assessment','other'].includes(category)
         ?category as SupportContextPrefill['category']:'lesson_clarification',
       subject:text(parsed.subject,180),
-      referenceType:['section','topic','doctrine','question','scripture'].includes(referenceType)
+      referenceType:['program','module','chapter','section','topic','doctrine','question','scripture'].includes(referenceType)
         ?referenceType as SupportContextReferenceType:'topic',
       referenceId:text(parsed.referenceId,220),
       referenceLabel:text(parsed.referenceLabel,300),

@@ -42,7 +42,14 @@ jobs:
         run: python3 tool/prepare_public_config.py
       - name: Build native Android debug APK
         working-directory: native_android
-        run: flutter build apk --debug --no-pub --dart-define-from-file=android-public-config.json
+        shell: bash
+        run: |
+          set -o pipefail
+          flutter build apk --debug --no-pub --dart-define-from-file=android-public-config.json 2>&1 | tee android-build.log
+          if grep -Fq 'WARNING: Your app uses the following plugins that apply Kotlin Gradle Plugin (KGP)' android-build.log; then
+            echo 'Flutter plugin still applies legacy Kotlin Gradle Plugin. Upgrade the plugin to one supporting built-in Kotlin.' >&2
+            exit 1
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: vop-native-debug-apk

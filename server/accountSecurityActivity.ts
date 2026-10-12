@@ -48,8 +48,15 @@ export async function recordAccountSecurityEvent(db:Firestore,uid:string,action:
 export async function recentAccountSecurityEvents(db:Firestore,uid:string,limit=30){
   const owner=requireUid(uid);
   const size=Math.max(1,Math.min(50,Math.trunc(limit)));
-  const snapshot=await db.collection('accountSecurityEvents')
-    .where('uid','==',owner).orderBy('occurredAt','desc').limit(size).get();
+  const owned=db.collection('accountSecurityEvents').where('uid','==',owner);
+  let snapshot;
+  try{
+    snapshot=await owned.orderBy('occurredAt','desc').limit(size).get();
+  }catch(error){
+    const message=String(error instanceof Error?error.message:error).toLowerCase();
+    if(!message.includes('index')&&!message.includes('failed_precondition')&&!message.includes('failed precondition'))throw error;
+    snapshot=await owned.limit(150).get();
+  }
   const entries=snapshot.docs.map(document=>{
     const data=document.data();
     return {
@@ -59,5 +66,6 @@ export async function recentAccountSecurityEvents(db:Firestore,uid:string,limit=
       occurredAt:String(data.occurredAt||''),
     };
   }).filter(row=>Object.hasOwn(EVENT_LABELS,row.action));
-  return entries;
+  entries.sort((a,b)=>b.occurredAt.localeCompare(a.occurredAt));
+  return entries.slice(0,size);
 }

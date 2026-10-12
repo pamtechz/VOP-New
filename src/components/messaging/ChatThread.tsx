@@ -16,16 +16,16 @@ export type ChatReference={
 };
 
 export const APP_CHAT_REFERENCES:ChatReference[]=[
-  {type:'activity',id:'master-guide',label:'Master Guide',route:'master-guide',description:'Youth leadership requirements, portfolio activities and evaluator sign-offs.'},
-  {type:'memory',id:'scripture-memory',label:'Scripture Memory',route:'scripture-memory',description:'Spaced-repetition Scripture memory decks and review practice.'},
-  {type:'game',id:'scripture-arena',label:'Scripture Arena',route:'iron-duels',description:'The gamified Bible knowledge Arena containing Solo Challenges and Ranked Duels.'},
-  {type:'challenge',id:'solo-scripture-challenge',label:'Solo Scripture Challenge',route:'iron-duels',description:'A personal Bible knowledge challenge completed without an opponent.'},
-  {type:'duel',id:'ranked-scripture-duel',label:'Ranked Scripture Duel',route:'iron-duels',description:'A head-to-head Scripture challenge against another opted-in learner.'},
-  {type:'resource',id:'resources',label:'Resources library',route:'resources',description:'Books and study resources available inside VOP.'},
-  {type:'event',id:'events',label:'Events',route:'events',description:'Published ministry and organization events.'},
-  {type:'prayer',id:'prayer',label:'Prayer',route:'prayer',description:'Prayer requests and prayer ministry inside VOP.'},
-  {type:'media',id:'radio',label:'VOP Radio',route:'radio',description:'Published radio broadcasts, audio and playlists.'},
-  {type:'announcement',id:'announcements',label:'Announcements',route:'announcements',description:'Published VOP and organization announcements.'},
+  {type:'activity',id:'master-guide',label:'Master Guide',route:'master-guide'},
+  {type:'memory',id:'scripture-memory',label:'Scripture Memory',route:'scripture-memory'},
+  {type:'game',id:'scripture-arena',label:'Scripture Arena',route:'iron-duels'},
+  {type:'challenge',id:'solo-scripture-challenge',label:'Solo Scripture Challenge',route:'iron-duels'},
+  {type:'duel',id:'ranked-scripture-duel',label:'Ranked Scripture Duel',route:'iron-duels'},
+  {type:'resource',id:'resources',label:'Resources library',route:'resources'},
+  {type:'event',id:'events',label:'Events',route:'events'},
+  {type:'prayer',id:'prayer',label:'Prayer',route:'prayer'},
+  {type:'media',id:'radio',label:'VOP Radio',route:'radio'},
+  {type:'announcement',id:'announcements',label:'Announcements',route:'announcements'},
 ];
 export type ChatMessage={
   id:string;
@@ -88,7 +88,7 @@ function firstLessonText(lesson:Lesson){
 }
 function referenceTypeLabel(type:string){
   return ({
-    lesson:'Lesson',guide:'Guide / course',activity:'Activity',memory:'Memory game',game:'Game',
+    lesson:'Lesson',guide:'Guide / course',program:'Program',module:'Module',chapter:'Chapter',activity:'Activity',memory:'Memory game',game:'Game',
     challenge:'Challenge',duel:'Duel',resource:'Resource',event:'Event',prayer:'Prayer',
     media:'Media',announcement:'Announcement',topic:'Topic',section:'Section',doctrine:'Doctrine',
     question:'Question',quiz:'Quiz / assessment',scripture:'Scripture',block:'Content block',
@@ -145,6 +145,24 @@ export function ChatThread({
       row.guide.title,row.lesson.title,row.lesson.lessonNumber,row.lesson.description,row.guide.language,
     ].join(' ').toLowerCase().includes(query)).slice(0,24);
   },[rows,attachmentSearch]);
+  const studyContextReferences=useMemo(()=>{
+    const unique=new Map<string,ChatReference>();
+    const add=(item:ChatReference)=>unique.set(item.type+':'+item.id,item);
+    for(const guide of guides){
+      add({type:'guide',id:guide.id,label:guide.title,route:'lessons'});
+      for(const lesson of guide.lessons||[]){
+        for(const page of lesson.contentPages||[]){
+          if(page.chapterId&&page.chapterTitle)
+            add({type:'chapter',id:guide.id+':'+page.chapterId,label:guide.title+' · '+page.chapterTitle,route:'lessons'});
+          if(page.sectionId||page.sectionTitle)
+            add({type:'section',id:guide.id+':'+lesson.id+':'+(page.sectionId||String(page.pageNumber)),
+              label:lesson.title+' · '+(page.sectionTitle||page.title),route:'lessons'});
+        }
+      }
+    }
+    const query=attachmentSearch.trim().toLowerCase();
+    return [...unique.values()].filter(item=>!query||item.label.toLowerCase().includes(query)).slice(0,30);
+  },[guides,attachmentSearch]);
   const filteredAppReferences=useMemo(()=>{
     const query=attachmentSearch.trim().toLowerCase();
     if(!query)return appReferences;
@@ -191,7 +209,7 @@ export function ChatThread({
   };
   const remove=async(message:ChatMessage)=>{
     if(!onDelete||busy||localBusy)return;
-    if(!await appConfirm('Delete this message? The conversation will keep a “Message deleted” placeholder so its history remains understandable.',{
+    if(!await appConfirm('Delete this message? A deletion marker remains.',{
       title:'Delete message',confirmLabel:'Delete',tone:'danger',
     }))return;
     setLocalBusy(true);
@@ -275,7 +293,7 @@ export function ChatThread({
       </div>}
       {pickerOpen&&<div className="vop-chat-lesson-picker">
         <div className="vop-chat-picker-head">
-          <div><Paperclip size={17}/><span><strong>Attach VOP content</strong><small>Attach lessons, Duels, Challenges, games and other in-app destinations.</small></span></div>
+          <div><Paperclip size={17}/><span><strong>Attach VOP content</strong><small>Attach study content or an activity.</small></span></div>
           <button type="button" onClick={()=>setPickerOpen(false)} aria-label="Close attachment picker"><X size={16}/></button>
         </div>
         <div className="vop-chat-picker-tabs" role="tablist" aria-label="Attachment type">
@@ -285,14 +303,24 @@ export function ChatThread({
         <label className="vop-chat-picker-search"><Search size={15}/><input value={attachmentSearch} onChange={event=>setAttachmentSearch(event.target.value)}
           placeholder={pickerView==='study'?'Search lesson title, number or guide…':'Search Duels, Challenges, games or app features…'}/></label>
         <div className="vop-chat-picker-results">
-          {pickerView==='study'?(!filteredLessons.length?<div className="vop-chat-picker-empty">No lesson matches that search.</div>:filteredLessons.map(row=>{
+          {pickerView==='study'?<React.Fragment>
+            {studyContextReferences.map(reference=>{
+              const attached=pendingReferences.some(item=>referenceKey(item)===referenceKey(reference));
+              return <button type="button" key={referenceKey(reference)} className={attached?'attached':''}
+                onClick={()=>attach(reference)}>
+                <span><strong>{reference.label}</strong><small>{referenceTypeLabel(reference.type)}</small></span>
+                {attached?<Check size={14}/>:<Paperclip size={14}/>}
+              </button>;
+            })}
+            {!filteredLessons.length&&!studyContextReferences.length&&<div className="vop-chat-picker-empty">No matching study content.</div>}
+            {filteredLessons.map(row=>{
             const attached=pendingReferences.some(item=>referenceKey(item)===referenceKey(row.reference));
             return <button type="button" key={row.reference.id} className={attached?'attached':''} onClick={()=>attach(row.reference)}>
               <span className="vop-chat-lesson-number">{row.lesson.lessonNumber}</span>
               <span><strong>{row.lesson.title}</strong><small>{row.guide.title} · {row.guide.language.toUpperCase()}</small></span>
               {attached?<Check size={14}/>:<Paperclip size={14}/>}
             </button>;
-          })):(!filteredAppReferences.length?<div className="vop-chat-picker-empty">No app activity matches that search.</div>:filteredAppReferences.map(reference=>{
+          })}</React.Fragment>:(!filteredAppReferences.length?<div className="vop-chat-picker-empty">No app activity matches that search.</div>:filteredAppReferences.map(reference=>{
             const attached=pendingReferences.some(item=>referenceKey(item)===referenceKey(reference));
             return <button type="button" key={referenceKey(reference)} className={attached?'attached':''} onClick={()=>attach(reference)}>
               <span className="vop-chat-attachment-icon"><ReferenceIcon type={reference.type} size={16}/></span>
@@ -314,7 +342,7 @@ export function ChatThread({
           <Send size={17}/><span>{localBusy?'Sending…':sendLabel}</span>
         </button>
       </div>
-      <small className="vop-chat-hint">Enter to send · Shift+Enter for a new line · paperclip attaches lessons, Duels, Challenges, games and other VOP content</small>
+      <small className="vop-chat-hint">Enter: send · Shift+Enter: newline · Attach VOP content</small>
     </div>
   </div>;
 }

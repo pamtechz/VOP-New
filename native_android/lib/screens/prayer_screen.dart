@@ -65,6 +65,15 @@ class _PrayerScreenState extends State<PrayerScreen> {
                 const SizedBox(height:12),
                 Text('${item['requestText']??item['text']??''}',
                   style:const TextStyle(fontSize:14,height:1.55)),
+                if(mine&&item['status']!='Answered')
+                  Wrap(spacing:8,children:[
+                    TextButton.icon(onPressed:()=>_compose(item),
+                      icon:const Icon(Icons.edit_outlined,size:16),
+                      label:const Text('Edit')),
+                    TextButton.icon(onPressed:()=>_markAnswered(item),
+                      icon:const Icon(Icons.check_circle_outline,size:16),
+                      label:const Text('Mark answered')),
+                  ]),
               ])))),
           const SizedBox(height:45),
         ]));
@@ -75,10 +84,22 @@ class _PrayerScreenState extends State<PrayerScreen> {
         onPressed:_compose,icon:const Icon(Icons.edit_outlined),
         label:const Text('Prayer request')));
   }
-  Future<void> _compose()async{
-    final controller=TextEditingController();
-    String category='Spiritual';
-    bool private=true,saving=false;
+  Future<void> _markAnswered(Map<String,dynamic> item)async{
+    final id=(item['id']??'').toString();
+    if(id.isEmpty)return;
+    try{
+      await widget.api.markPrayerAnswered(id);
+      if(mounted)setState(reload);
+    }catch(e){
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content:Text('$e')));
+    }
+  }
+  Future<void> _compose([Map<String,dynamic>? existing])async{
+    final controller=TextEditingController(
+      text:(existing?['requestText']??'').toString());
+    String category=(existing?['category']??'Spiritual').toString();
+    bool private=existing?['isPrivate']!=false,saving=false;
     String? error;
     final done=await showModalBottomSheet<bool>(
       context:context,isScrollControlled:true,useSafeArea:true,
@@ -91,7 +112,7 @@ class _PrayerScreenState extends State<PrayerScreen> {
           child:SingleChildScrollView(
             child:Column(mainAxisSize:MainAxisSize.min,
               crossAxisAlignment:CrossAxisAlignment.stretch,children:[
-                Text('New prayer request',
+                Text(existing==null?'New prayer request':'Edit prayer request',
                   style:Theme.of(context).textTheme.titleLarge),
                 const SizedBox(height:5),
                 const Text('Share what you would like us to pray for.'),
@@ -121,23 +142,30 @@ class _PrayerScreenState extends State<PrayerScreen> {
                     }
                     setSheet((){saving=true;error=null;});
                     try{
-                      await widget.api.submitPrayer(
-                        requestText:controller.text.trim(),
-                        category:category,isPrivate:private);
+                      if(existing!=null){
+                        await widget.api.editPrayer(
+                          id:(existing['id']??'').toString(),
+                          requestText:controller.text.trim(),
+                          category:category,isPrivate:private);
+                      }else{
+                        await widget.api.submitPrayer(
+                          requestText:controller.text.trim(),
+                          category:category,isPrivate:private);
+                      }
                       if(context.mounted)Navigator.pop(context,true);
                     }catch(e){
                       setSheet((){error='$e';saving=false;});
                     }
                   },
                   icon:const Icon(Icons.send_outlined),
-                  label:Text(saving?'Submitting…':'Submit request')),
+                  label:Text(saving?'Saving…':existing==null?'Submit request':'Save changes')),
               ])));
       }));
     controller.dispose();
     if(done==true&&mounted){
       setState(reload);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content:Text('Your prayer request was submitted securely.')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content:Text(existing==null?'Prayer request submitted.':'Prayer request updated.')));
     }
   }
 }

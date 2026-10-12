@@ -161,7 +161,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
     }
     setTrustedDevice(enabled);
     setMessage(enabled
-      ? 'Offline storage enabled. Reload online to activate. Media is not downloaded.'
+      ? 'Reload online to enable offline study.'
       : 'Caching disabled after reload. Clear site data to delete older copies.');
   };
   const appSettings = getStoredSettings();
@@ -184,7 +184,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
       .catch(error=>{
         if(active){
           setSavedSettings(null);
-          setSettingsLoadError(error instanceof Error?error.message:'Could not load your personal settings.');
+          setSettingsLoadError(error instanceof Error?error.message:'Could not load settings.');
         }
       });
     const loadLanguages=loadUiLocaleRegistry()
@@ -241,7 +241,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
       applyAccessibilityPreferences(hydrated.accessibility);
     }catch(error){
       setSavedSettings(null);
-      setSettingsLoadError(error instanceof Error?error.message:'Could not load your personal settings.');
+      setSettingsLoadError(error instanceof Error?error.message:'Could not load settings.');
     }
   };
   const patch = <K extends keyof PersonalSettings>(key: K, value: PersonalSettings[K]) =>
@@ -260,7 +260,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
         .map(key=>[key,profileDraft[key].trim()]),
     ) as Partial<EditableOwnProfile>;
     if('displayName' in changes && !changes.displayName){
-      setProfileError('A display name is required.');return;
+      setProfileError('Enter a name.');return;
     }
     setProfileSaving(true);
     try{
@@ -278,7 +278,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
       await registerPasskey(navigator.platform||'This device');
       setPasskeys(await listPasskeys());
       setMessage('Passkey enabled. Use your device lock or passkey provider to sign in.');
-    }catch(error){setMessage(error instanceof Error?error.message:'Passkey could not be enabled.');}
+    }catch(error){setMessage(error instanceof Error?error.message:'Passkey unavailable.');}
     finally{setPasskeyBusy(false);}
   };
   const removePasskey=async(item:PasskeyRecord)=>{
@@ -290,7 +290,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
       await deletePasskey(item.id);
       setPasskeys(current=>current.filter(entry=>entry.id!==item.id));
       setMessage('Passkey removed.');
-    }catch(error){setMessage(error instanceof Error?error.message:'Passkey could not be removed.');}
+    }catch(error){setMessage(error instanceof Error?error.message:'Could not remove passkey.');}
     finally{setPasskeyBusy(false);}
   };
 
@@ -301,7 +301,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
     try{
       await sendEmailVerification(user);
       setVerificationMessage(uiT('personal_settings.verification_email_sent','Verification email sent. Check your inbox.'));
-    }catch(error){setSecurityError(error instanceof Error?error.message:'Could not send verification email.');}
+    }catch(error){setSecurityError(error instanceof Error?error.message:'Verification email failed.');}
     finally{setVerificationBusy(false);}
   };
   const refreshEmailVerification=async()=>{
@@ -312,7 +312,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
       await reload(user);
       const fresh=await loadAccountSecurityStatus();
       setSecurityOverview(fresh);
-    }catch(error){setSecurityError(error instanceof Error?error.message:'Could not refresh email verification status.');}
+    }catch(error){setSecurityError(error instanceof Error?error.message:'Could not refresh verification.');}
     finally{setVerificationBusy(false);}
   };
   const signOutAllDevices=async()=>{
