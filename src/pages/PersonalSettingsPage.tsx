@@ -266,7 +266,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
     try{
       const saved=await saveOwnProfile(changes);
       setProfile(saved);setProfileDraft(editableOwnProfile(saved));
-      setProfileMessage('Your profile was updated.');
+      setProfileMessage('Profile saved.');
     }catch(error){setProfileError(error instanceof Error?error.message:'Could not save your profile.');}
     finally{setProfileSaving(false);}
   };
@@ -277,9 +277,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
     try{
       await registerPasskey(navigator.platform||'This device');
       setPasskeys(await listPasskeys());
-      setMessage(platformBiometric
-        ?'Passkey enabled. You can now sign in using this device’s fingerprint, face, PIN or screen lock.'
-        :'Passkey enabled. You can now use this device or its passkey provider to sign in.');
+      setMessage('Passkey enabled. Use your device lock or passkey provider to sign in.');
     }catch(error){setMessage(error instanceof Error?error.message:'Passkey could not be enabled.');}
     finally{setPasskeyBusy(false);}
   };
@@ -625,8 +623,8 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
                   <div><strong>{item.title}</strong><small>{new Date(item.occurredAt).toLocaleString()}</small></div>
                 </div>)}
               </div>
-              {!securityActivity.length&&<small>No recorded actions yet.</small>}
-              <small>Recorded actions only; not a device list.</small>
+              {!securityActivity.length&&<small>No activity yet.</small>
+              <small>Not a device list.</small>
               <button type="button" className="vop-secondary" onClick={()=>void loadAccountSecurityActivity()
                 .then(setSecurityActivity).catch(()=>setActivityError('Activity unavailable.'))}>Refresh activity</button>
             </section>
