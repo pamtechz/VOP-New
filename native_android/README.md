@@ -95,6 +95,43 @@ Actions artifact. The CI-built debug APK uses VOP's existing public Firebase And
 Google OAuth still requires the Android debug signing fingerprints to be
 registered. A debug APK is not a signed production release.
 
+## Native passkeys (Android)
+
+VOP now uses Android's Credential Manager through the `passkeys` Flutter package.
+Registration and sign-in use the existing server-owned WebAuthn challenges,
+signature/UV verification and Firebase custom tokens. Fingerprints, PINs and
+face unlock are verified by the device, not uploaded to VOP.
+
+Native passkeys are **disabled until the server trusts the Android signing
+certificate**. To enable them for a release:
+
+1. Obtain the SHA-256 fingerprint of the certificate actually signing the app.
+   For Play releases use **Play App Signing**, which can differ from an upload key.
+2. Add the exact certificate fingerprint to
+   `public/.well-known/assetlinks.json`, under
+   `delegate_permission/common.get_login_creds` for `com.sda.vop`.
+3. Set the production **server-only** variable
+   `PASSKEY_ANDROID_SHA256_FINGERPRINTS` to the same colon-separated SHA-256
+   fingerprint. Configure multiple values as a comma-separated list only when
+   each certificate is independently trusted. Optionally set
+   `VOP_ANDROID_PACKAGE_NAME=com.sda.vop`.
+4. Verify `https://vopafrica.vercel.app/.well-known/assetlinks.json` is
+   publicly accessible via HTTPS as JSON with no redirect, then deploy the
+   updated server and asset links.
+5. On a signed physical Android device, sign in with Google/password, open
+   Account Security, enroll a passkey, sign out, then sign back in with the
+   passkey. Verify a wrong certificate, different account and replayed
+   WebAuthn challenges are rejected.
+
+A CI debug APK is signed with a different debug certificate and will not
+necessarily have the release signing fingerprint. Do not add unknown debug
+certificates to production trust just to make testing pass; use a controlled
+test environment and separately configured trust.
+
+If a signing certificate is not configured, the native passkey setup/sign-in
+flow stops **before** showing the OS credential prompt and keeps Google and
+password sign-in available.
+
 ## Mobile API contract (v1)
 
 All reads require `Authorization: Bearer <Firebase ID token>` and return
