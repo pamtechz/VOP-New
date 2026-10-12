@@ -32,7 +32,7 @@ class VopPasskeys {
     final request=http.Request('POST',url)
       ..followRedirects=false
       ..headers.addAll(headers)
-      ..body=jsonEncode({'action':action,...payload});
+      ..body=jsonEncode({'action':action,'clientPlatform':'android',...payload});
     try{
       final stream=await _client.send(request).timeout(const Duration(seconds:25));
       if(stream.statusCode>=300&&stream.statusCode<400)throw StateError('Unexpected passkey API redirect.');
