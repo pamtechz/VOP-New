@@ -19,8 +19,8 @@
   margin-bottom: 16px;
   border: 1px solid var(--border-subtle, #d7e4f3);
   border-radius: 12px;
-  background: linear-gradient(115deg, var(--bg-elevated, #f0f6ff), var(--bg-card, #fff) 68%);
-  box-shadow: 0 4px 18px rgba(9, 39, 95, .04);
+  background: var(--bg-card, #fff);
+  box-shadow: none;
 }
 
 .vop-personal-settings .vop-personal-header h1 {
@@ -106,7 +106,7 @@
   border: 1px solid var(--border-subtle, #dce5f0);
   border-radius: 12px;
   background: var(--bg-card, #fff);
-  box-shadow: 0 3px 14px rgba(15, 41, 79, .035);
+  box-shadow: none;
 }
 
 .vop-personal-settings .vop-personal-card:first-child,
@@ -240,7 +240,7 @@
   background: #0a438e;
   color: #fff;
   border-color: #0a438e;
-  box-shadow: 0 2px 8px rgba(10, 67, 142, .2);
+  box-shadow: none;
 }
 
 .vop-personal-settings .vop-personal-tab-btn svg {
@@ -356,3 +356,32 @@
 .vop-personal-settings .vop-personal-password-wrap{position:relative;display:block}
 .vop-personal-settings .vop-personal-password-wrap input{padding-right:42px}
 .vop-personal-settings .vop-personal-password-wrap button{position:absolute;right:6px;top:50%;transform:translateY(-50%);background:transparent;border:0;display:grid;place-items:center;min-width:34px;min-height:34px;color:var(--text-muted,#64748b);cursor:pointer}
+
+[data-theme="dark"] .vop-personal-settings .vop-personal-header,
+[data-theme="dark"] .vop-personal-settings .vop-personal-card,
+[data-theme="dark"] .vop-personal-settings .vop-secondary,
+[data-theme="dark"] .vop-personal-settings .vop-personal-tab-btn:not(.active) {
+  background: var(--theme-surface, #142a46);
+  border-color: var(--theme-border, #294263);
+  color: var(--theme-title, #f7faff);
+  box-shadow: none;
+}
+[data-theme="dark"] .vop-personal-settings .vop-personal-card h2,
+[data-theme="dark"] .vop-personal-settings .vop-personal-header h1 {
+  color: var(--theme-title, #f7faff);
+}
+[data-theme="dark"] .vop-personal-settings :is(input:not([type="checkbox"]), select, textarea) {
+  background: var(--theme-surface-elevated, #1b334f);
+  color: var(--theme-title, #f7faff);
+  border-color: var(--theme-border, #294263);
+}
+[data-theme="dark"] .vop-personal-settings .vop-personal-card h2 svg {
+  background: transparent;
+  color: var(--theme-accent, #fac659);
+}
+[data-theme="dark"] .vop-personal-settings .vop-personal-message,
+[data-theme="dark"] .vop-personal-settings .vop-personal-notice.info {
+  background: var(--theme-surface-elevated, #1b334f);
+  color: var(--theme-title, #f7faff);
+  border-color: var(--theme-border, #294263);
+}
