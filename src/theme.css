@@ -1629,3 +1629,29 @@ hr,
 .vop-portal-choice-backdrop{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:20px;background:rgba(0,0,0,.68)}
 .vop-portal-choice{width:min(100%,410px);display:grid;gap:10px;padding:22px;border-radius:16px;background:var(--bg-primary);color:var(--text-primary);box-shadow:0 25px 70px #0005}
 .vop-portal-choice h2{font-size:1.2rem;margin:0 0 4px}
+
+/* Shared, restrained account and learner screen treatments. */
+.vop-personal-settings,.vop-support-page,.vop-prayer-page,.vop-engagement-page{font-family:inherit;letter-spacing:normal}
+.vop-personal-settings :is(button,input,select,textarea),
+.vop-support-page :is(button,input,select,textarea),
+.vop-prayer-page :is(button,input,select,textarea),
+.vop-engagement-page :is(button,input,select,textarea){font:inherit}
+.vop-personal-settings :is(button,input,select,textarea):focus-visible,
+.vop-support-page :is(button,input,select,textarea):focus-visible,
+.vop-prayer-page :is(button,input,select,textarea):focus-visible,
+.vop-engagement-page :is(button,input,select,textarea):focus-visible{outline:2px solid var(--theme-primary,#3973b8);outline-offset:2px}
+.vop-personal-settings .vop-personal-card,
+.vop-engagement-page .vop-material-card{box-shadow:none;border:1px solid var(--theme-border,rgba(107,119,130,.26));border-radius:12px}
+.vop-personal-settings .vop-personal-card h2,
+.vop-engagement-page .vop-material-card h2{letter-spacing:-.015em;font-weight:650}
+.vop-support-page .vop-support-chat,
+.vop-support-page .vop-support-compose{min-width:0}
+.vop-support-page .vop-support-compose textarea{width:100%;resize:vertical;min-height:88px}
+.vop-prayer-page .vop-prayer-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px}
+.vop-prayer-page .vop-prayer-actions button{min-height:36px}
+@media(max-width:600px){
+  .vop-personal-settings .vop-personal-card,
+  .vop-engagement-page .vop-material-card{border-radius:10px}
+  .vop-prayer-page .vop-prayer-actions button{min-height:42px}
+  .vop-support-page .vop-support-compose{gap:8px}
+}
