@@ -81,14 +81,14 @@
 /* Scripture Arena — gamification sits around the existing Solo Challenge and Ranked Duel flows. */
 .vop-arena{display:grid;gap:14px;min-width:0}
 .vop-arena-dashboard{
-  border:1px solid var(--theme-border);border-radius:20px;padding:clamp(18px,3vw,28px);
-  background:linear-gradient(145deg,color-mix(in srgb,var(--theme-accent) 12%,var(--theme-surface)) 0%,var(--theme-surface) 58%,color-mix(in srgb,var(--theme-surface-soft) 88%,var(--theme-accent)) 100%);
-  box-shadow:0 16px 38px color-mix(in srgb,var(--theme-accent) 10%,transparent);min-width:0
+  border:1px solid var(--theme-border);border-radius:14px;padding:clamp(16px,2.6vw,24px);
+  background:var(--theme-surface);
+  box-shadow:none;min-width:0
 }
 .vop-arena-dashboard-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:18px}
 .vop-arena-dashboard-head h2{margin:4px 0 5px;font-size:clamp(25px,3vw,36px);color:var(--theme-title)}
 .vop-arena-dashboard-head p{max-width:760px;margin:0;color:var(--theme-text);font-size:13px;line-height:1.55}
-.vop-arena-level-badge{flex:0 0 auto;width:82px;height:82px;border-radius:50%;display:grid;place-items:center;align-content:center;border:1px solid color-mix(in srgb,var(--theme-accent) 30%,var(--theme-border));background:color-mix(in srgb,var(--theme-accent) 12%,var(--theme-surface));box-shadow:inset 0 0 0 7px color-mix(in srgb,var(--theme-accent) 6%,transparent)}
+.vop-arena-level-badge{flex:0 0 auto;width:74px;height:74px;border-radius:10px;display:grid;place-items:center;align-content:center;border:1px solid var(--theme-border);background:var(--theme-surface-soft);box-shadow:none}
 .vop-arena-level-badge span{font-size:9px;font-weight:850;text-transform:uppercase;letter-spacing:.08em;color:var(--theme-muted)}.vop-arena-level-badge strong{font-size:28px;line-height:1;color:var(--theme-accent)}
 .vop-arena-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin-bottom:16px}
 .vop-arena-stats>div{display:grid;grid-template-columns:30px 1fr;grid-template-areas:"icon label" "icon value";gap:1px 8px;align-items:center;padding:12px;border:1px solid var(--theme-border);border-radius:12px;background:color-mix(in srgb,var(--theme-surface) 92%,transparent)}
@@ -120,7 +120,7 @@
 .vop-engagement-page .vop-arena-active-grid>button{margin:0!important;display:grid!important;grid-template-columns:38px minmax(0,1fr) 18px!important;gap:9px!important;align-items:center!important;text-align:left!important;background:var(--theme-surface-soft)!important;color:var(--theme-text)!important;border-color:var(--theme-border)!important}
 .vop-arena-active-icon{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;background:var(--theme-surface);color:var(--theme-accent);border:1px solid var(--theme-border)}
 .vop-arena-active-grid button>div{display:grid;gap:1px}.vop-arena-active-grid button strong{font-size:10px;color:var(--theme-title)}.vop-arena-active-grid button span:not(.vop-arena-active-icon){font-size:9px;color:var(--theme-text)}.vop-arena-active-grid button small{font-size:8px;color:var(--theme-muted)}
-.vop-arena-live-card{border-color:color-mix(in srgb,var(--theme-accent) 25%,var(--theme-border))!important;box-shadow:0 12px 30px color-mix(in srgb,var(--theme-accent) 8%,transparent)}
+.vop-arena-live-card{border-color:var(--theme-border)!important;box-shadow:none}
 .vop-arena-live-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}.vop-arena-live-head h2{margin:3px 0 3px!important}.vop-arena-live-head p{margin:0!important;font-size:10px!important;color:var(--theme-muted)!important}
 .vop-arena-progress-ring{width:68px;height:68px;border-radius:50%;display:grid;place-items:center;align-content:center;flex:0 0 auto;border:5px solid color-mix(in srgb,var(--theme-accent) 24%,var(--theme-border));background:var(--theme-surface-soft)}.vop-arena-progress-ring strong{font-size:17px;color:var(--theme-accent)}.vop-arena-progress-ring span{font-size:8px;color:var(--theme-muted)}
 .vop-arena-question-list{display:grid;gap:10px;margin-top:14px}.vop-arena-question{padding:14px;border:1px solid var(--theme-border);border-radius:13px;background:var(--theme-surface-soft)}.vop-arena-question.answered{opacity:.78}.vop-arena-question-head{display:flex;justify-content:space-between;gap:10px;margin-bottom:8px}.vop-arena-question-head>span{font-size:9px;color:var(--theme-muted);font-weight:800;text-transform:uppercase;letter-spacing:.05em}.vop-arena-question-head b{display:inline-flex;align-items:center;gap:4px;font-size:8px;color:var(--theme-accent)}
