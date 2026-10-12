@@ -78,7 +78,7 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
   const [spiritualInterest,setSpiritualInterest]=useState('none');
   const [selectedGuide,setSelectedGuide]=useState('');
   const [selectedLesson,setSelectedLesson]=useState('');
-  const [referenceType,setReferenceType]=useState<'section'|'topic'|'doctrine'|'question'|'scripture'>('topic');
+  const [referenceType,setReferenceType]=useState<'program'|'module'|'chapter'|'section'|'topic'|'doctrine'|'question'|'scripture'>('topic');
   const [referenceLabel,setReferenceLabel]=useState('');
   const [selectedAppReference,setSelectedAppReference]=useState('');
   const [whatsappHandoff,setWhatsappHandoff]=useState<Array<WhatsAppTarget&{text:string}>>([]);
@@ -387,6 +387,7 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
             {lessons.map(item=><option key={item.id} value={item.id}>{item.lessonNumber} · {item.title}</option>)}
           </select>
           <select value={referenceType} onChange={e=>setReferenceType(e.target.value as typeof referenceType)}>
+            <option value="program">Program</option><option value="module">Module</option><option value="chapter">Chapter</option>
             <option value="topic">Topic</option><option value="section">Section</option><option value="doctrine">Doctrine</option>
             <option value="question">Question</option><option value="scripture">Scripture</option>
           </select>
