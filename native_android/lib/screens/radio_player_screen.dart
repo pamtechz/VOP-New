@@ -16,14 +16,16 @@ bool safeRadioHttps(String value) {
   if(value.length>2048)return false;
   final url=Uri.tryParse(value);
   if(url==null||url.scheme!='https'||url.host.isEmpty||
-      url.userInfo.isNotEmpty||url.hasFragment||(url.hasPort&&url.port!=443))return false;
+      url.userInfo.isNotEmpty||url.hasFragment||(url.hasPort&&url.port!=443)) {
+    return false;
+  }
   final host=url.host.toLowerCase();
   return host!='localhost'&&!host.endsWith('.local')&&
     !host.endsWith('.internal')&&!host.endsWith('.localhost')&&
     !RegExp(r'^\d{1,3}(?:\.\d{1,3}){3}$').hasMatch(host)&&!host.contains(':');
 }
 bool _host(String host,String domain)=>
-    host==domain||host.endsWith('.'+domain);
+    host==domain||host.endsWith('.$domain');
 String? audioVerseMediaId(Uri uri) =>
     RegExp(r'/(?:media|teachings)/(\d+)(?:/|$)')
       .firstMatch(uri.path)?.group(1) ??
@@ -31,7 +33,9 @@ String? audioVerseMediaId(Uri uri) =>
       .firstMatch(uri.path)?.group(1);
 bool safeAudioVerseEmbedUrl(Uri uri) {
   if(!safeRadioHttps(uri.toString()) ||
-      !_host(uri.host.toLowerCase(),'audioverse.org'))return false;
+      !_host(uri.host.toLowerCase(),'audioverse.org')) {
+    return false;
+  }
   final segments=uri.pathSegments;
   final offset=segments.length==4?1:0;
   if(segments.length!=offset+3)return false;
@@ -55,7 +59,7 @@ RadioMedia resolveRadioMedia(Map<String,dynamic> item) {
           ?segments[1]:'';
       if(RegExp(r'^[A-Za-z0-9_-]{11}$').hasMatch(id)){
         return RadioMedia(RadioMediaKind.provider,
-          Uri.parse('https://www.youtube-nocookie.com/embed/'+id+'?playsinline=1'),
+          Uri.parse('https://www.youtube-nocookie.com/embed/$id?playsinline=1'),
           provider:'YouTube');
       }
       continue;
@@ -68,27 +72,33 @@ RadioMedia resolveRadioMedia(Map<String,dynamic> item) {
           id!=null && audioVerseMediaId(parsed)==id){
         return RadioMedia(RadioMediaKind.provider,parsed,provider:'AudioVerse');
       }
-      if(id!=null)return RadioMedia(RadioMediaKind.provider,
-        Uri.parse('https://www.audioverse.org/en/embed/media/'+id),
+      if(id!=null) {
+        return RadioMedia(RadioMediaKind.provider,
+        Uri.parse('https://www.audioverse.org/en/embed/media/$id'),
         provider:'AudioVerse');
+      }
       return RadioMedia(RadioMediaKind.external,uri,provider:'AudioVerse');
     }
     if(_host(host,'vimeo.com')){
       final id=RegExp(r'^/(?:video/)?(\d+)(?:/|$)').firstMatch(uri.path)?.group(1);
-      if(id!=null)return RadioMedia(RadioMediaKind.provider,
-        Uri.parse('https://player.vimeo.com/video/'+id),provider:'Vimeo');
+      if(id!=null) {
+        return RadioMedia(RadioMediaKind.provider,
+        Uri.parse('https://player.vimeo.com/video/$id'),provider:'Vimeo');
+      }
       continue;
     }
     if(_host(host,'soundcloud.com')){
       return RadioMedia(RadioMediaKind.provider,
-        Uri.parse('https://w.soundcloud.com/player/?url='+Uri.encodeComponent(raw)),
+        Uri.parse('https://w.soundcloud.com/player/?url=${Uri.encodeComponent(raw)}'),
         provider:'SoundCloud');
     }
     if(_host(host,'tiktok.com')){
       final id=RegExp(r'/@[^/]+/video/(\d+)(?:/|$)').firstMatch(uri.path)?.group(1)
         ??RegExp(r'/player/v1/(\d+)(?:/|$)').firstMatch(uri.path)?.group(1);
-      if(id!=null)return RadioMedia(RadioMediaKind.provider,
-        Uri.parse('https://www.tiktok.com/player/v1/'+id),provider:'TikTok');
+      if(id!=null) {
+        return RadioMedia(RadioMediaKind.provider,
+        Uri.parse('https://www.tiktok.com/player/v1/$id'),provider:'TikTok');
+      }
       continue;
     }
     if(_host(host,'instagram.com')){
@@ -96,8 +106,7 @@ RadioMedia resolveRadioMedia(Map<String,dynamic> item) {
         .firstMatch(uri.path);
       if(match!=null){
         return RadioMedia(RadioMediaKind.provider,
-          Uri.parse('https://www.instagram.com/'+match.group(1)!+'/'
-            +match.group(2)!+'/embed/'),provider:'Instagram');
+          Uri.parse('https://www.instagram.com/${match.group(1)!}/${match.group(2)!}/embed/'),provider:'Instagram');
       }
       continue;
     }
@@ -108,8 +117,7 @@ RadioMedia resolveRadioMedia(Map<String,dynamic> item) {
         RegExp(r'^\d+$').hasMatch(uri.queryParameters['v']??'');
       if(media&&validWatch){
         return RadioMedia(RadioMediaKind.provider,
-          Uri.parse('https://www.facebook.com/plugins/video.php?href='+
-            Uri.encodeComponent(raw)+'&show_text=0'),provider:'Facebook');
+          Uri.parse('https://www.facebook.com/plugins/video.php?href=${Uri.encodeComponent(raw)}&show_text=0'),provider:'Facebook');
       }
       continue;
     }
@@ -188,9 +196,11 @@ class _RadioPlayerScreenState extends State<RadioPlayerScreen>
   }
   Future<void> _prepare()async{
     if(_preparing||loading)return;
-    if(source.url==null){if(mounted)setState((){
+    if(source.url==null){if(mounted) {
+      setState((){
       loading=false;error='This programme has no supported playable media URL.';
-    });return;}
+    });
+    }return;}
     _preparing=true;
     if(mounted)setState((){loading=true;error=null;});
     if(source.kind==RadioMediaKind.external){
@@ -205,9 +215,11 @@ class _RadioPlayerScreenState extends State<RadioPlayerScreen>
         ..setBackgroundColor(const Color(0xFF071A33))
         ..setNavigationDelegate(NavigationDelegate(
           onPageFinished:(_){if(mounted)setState(()=>loading=false);},
-          onWebResourceError:(e){if(e.isForMainFrame==true&&mounted)setState((){
+          onWebResourceError:(e){if(e.isForMainFrame==true&&mounted) {
+            setState((){
             loading=false;error='The media provider could not load.';
-          });},
+          });
+          }},
           onNavigationRequest:(request){
             final uri=Uri.tryParse(request.url);
             if(uri==null)return NavigationDecision.prevent;
@@ -232,10 +244,12 @@ class _RadioPlayerScreenState extends State<RadioPlayerScreen>
           await embed!.loadRequest(source.url!);
         }
       }catch(_){
-        if(mounted)setState((){
+        if(mounted) {
+          setState((){
           loading=false;
           error='The media player could not initialise. Please retry.';
         });
+        }
       }finally{_preparing=false;}
       return;
     }
@@ -245,9 +259,11 @@ class _RadioPlayerScreenState extends State<RadioPlayerScreen>
       player=controller;
       await controller.initialize();
       if(mounted){setState(()=>loading=false);await controller.play();}
-    }catch(_){if(mounted)setState((){
+    }catch(_){if(mounted) {
+      setState((){
       loading=false;error='Unable to play this media. Verify the URL and connection.';
-    });}finally{_preparing=false;}
+    });
+    }}finally{_preparing=false;}
   }
   @override void didChangeAppLifecycleState(AppLifecycleState state){
     if(state==AppLifecycleState.paused||state==AppLifecycleState.inactive)player?.pause();
@@ -258,7 +274,7 @@ class _RadioPlayerScreenState extends State<RadioPlayerScreen>
   }
   String _clock(Duration value){
     final minutes=value.inMinutes,seconds=value.inSeconds.remainder(60);
-    return minutes.toString()+':'+seconds.toString().padLeft(2,'0');
+    return '$minutes:${seconds.toString().padLeft(2,'0')}';
   }
   Future<void> _skip(int offset)async{
     final c=player;
@@ -286,8 +302,10 @@ class _RadioPlayerScreenState extends State<RadioPlayerScreen>
         ?raw.whereType<Map>().map((e)=>Map<String,dynamic>.from(e)).toList()
         :<Map<String,dynamic>>[]);
     }catch(_){
-      if(mounted)ScaffoldMessenger.of(context).showSnackBar(
+      if(mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content:Text('Could not refresh programmes.')));
+      }
     }
   }
   void _select(Map<String,dynamic> item){
@@ -305,22 +323,30 @@ class _RadioPlayerScreenState extends State<RadioPlayerScreen>
     _openingInApp=true;
     try{
       final opened=await launchUrl(Uri.parse(raw),mode:LaunchMode.inAppBrowserView);
-      if(!opened&&mounted)ScaffoldMessenger.of(context).showSnackBar(
+      if(!opened&&mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content:Text('Unable to open media.')));
+      }
     }catch(_){
-      if(mounted)ScaffoldMessenger.of(context).showSnackBar(
+      if(mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content:Text('Unable to open media.')));
+      }
     }finally{_openingInApp=false;}
   }
   Widget _moreProgrammes(){
     final items=recommendations.where((item)=>
       mediaKey(item)!=mediaKey(widget.item)).where((item){
         final result=resolveRadioMedia(item);
-        if(category=='Audio')return result.kind==RadioMediaKind.audio||
+        if(category=='Audio') {
+          return result.kind==RadioMediaKind.audio||
           result.provider=='AudioVerse'||result.provider=='SoundCloud';
-        if(category=='Video')return result.kind==RadioMediaKind.video||
+        }
+        if(category=='Video') {
+          return result.kind==RadioMediaKind.video||
           (result.kind==RadioMediaKind.provider&&
             result.provider!='AudioVerse'&&result.provider!='SoundCloud');
+        }
         return true;
       }).toList();
     return Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
@@ -473,7 +499,7 @@ class _RadioPlayerScreenState extends State<RadioPlayerScreen>
                     onSelected:(speed)=>c.setPlaybackSpeed(speed),
                     itemBuilder:(_)=>[
                       for(final speed in [0.75,1.0,1.25,1.5,2.0])
-                        PopupMenuItem(value:speed,child:Text(speed.toString()+'x')),
+                        PopupMenuItem(value:speed,child:Text('${speed}x')),
                     ]),
                 ]),
               ]);

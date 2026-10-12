@@ -24,8 +24,10 @@ class _GuideScreenState extends State<GuideScreen> {
         if(s.connectionState!=ConnectionState.done){
           return const Center(child:CircularProgressIndicator());
         }
-        if(s.hasError)return Center(child:Padding(padding:const EdgeInsets.all(20),
+        if(s.hasError) {
+          return Center(child:Padding(padding:const EdgeInsets.all(20),
           child:Text('${s.error}',textAlign:TextAlign.center)));
+        }
         final data=s.data??{};
         final details=data['guide'] as Map? ?? {};
         final lessons=(data['lessons'] as List? ?? [])

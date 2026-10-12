@@ -70,8 +70,10 @@ class _QuizScreenState extends State<QuizScreen> {
         final data=s.data??{};
         final questions=(data['questions'] as List? ?? [])
           .whereType<Map>().toList();
-        if(questions.isEmpty)return const Center(
+        if(questions.isEmpty) {
+          return const Center(
           child:Text('No published questions are available.'));
+        }
         final policy=data['assessmentPolicy'] is Map
           ?data['assessmentPolicy'] as Map:{};
         return ListView(padding:const EdgeInsets.all(18),children:[
