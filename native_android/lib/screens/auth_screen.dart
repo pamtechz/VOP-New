@@ -92,16 +92,18 @@ class _AuthScreenState extends State<AuthScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Icon(Icons.menu_book_rounded,
-                    size: 74, color: Color(0xFF173E96)),
-                const SizedBox(height: 14),
-                Text('Voice of Prophecy',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.w800)),
-                const SizedBox(height: 5),
-                const Text('Learn, grow and share hope.',textAlign: TextAlign.center),
-                const SizedBox(height: 30),
+                Text('VOP',textAlign:TextAlign.center,
+                  style:Theme.of(context).textTheme.headlineLarge?.copyWith(
+                    fontWeight:FontWeight.w900,letterSpacing:1.6,
+                    color:Theme.of(context).colorScheme.primary)),
+                const SizedBox(height: 4),
+                Text('VOICE OF PROPHECY',textAlign:TextAlign.center,
+                  style:Theme.of(context).textTheme.labelMedium?.copyWith(
+                    letterSpacing:1.8,fontWeight:FontWeight.w700)),
+                const SizedBox(height: 20),
+                Text('Sign in to continue studying',
+                  textAlign:TextAlign.center,style:Theme.of(context).textTheme.titleLarge),
+                const SizedBox(height: 24),
                 Form(
                   key: _form,
                   child: Column(children: [
