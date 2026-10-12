@@ -126,6 +126,8 @@ class VopApi {
         'confirmation':confirmation,'reason':reason});
   Future<Map<String,dynamic>> accountSecurityStatus() =>
       _execute('/api/account','GET',null,{'action':'security-status'});
+  Future<Map<String,dynamic>> accountSecurityActivity() =>
+      _execute('/api/account','GET',null,{'action':'security-activity'});
   Future<Map<String,dynamic>> revokeAllSessions() =>
       action('/api/account',{'action':'revoke-sessions',
         'confirmation':'SIGN OUT ALL DEVICES'});

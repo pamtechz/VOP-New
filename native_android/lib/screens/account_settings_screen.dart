@@ -27,7 +27,8 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
   bool preferencesReady=false;
   String? settingsLoadError;
   bool notificationStatusLoaded=false;
-  List<Map<String,dynamic>> languages=[];
+  List<Map<String,dynamic>> languages=[],securityActivity=[];
+  String? securityActivityError;
   int page=0;
   @override void initState(){super.initState();_load();}
   @override void dispose(){
@@ -71,6 +72,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       widget.api.accountSecurityStatus().then((r){
         if(mounted)setState(()=>security=r);
       }).catchError((Object ignored){if(mounted)setState(()=>security={'error':'Security details unavailable.'});});
+      _loadSecurityActivity();
       widget.api.notificationCapabilities().then((r){
         if(mounted)setState((){notificationCapabilities=r;notificationStatusLoaded=true;});
       }).catchError((Object ignored){
@@ -331,6 +333,17 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         label:Text(saving?'Saving…':'Save preferences')),
     ];
   }
+  Future<void> _loadSecurityActivity()async{
+    try{
+      final result=await widget.api.accountSecurityActivity();
+      if(mounted)setState((){
+        securityActivity=_rows(result['items']);
+        securityActivityError=null;
+      });
+    }catch(e){
+      if(mounted)setState(()=>securityActivityError='Could not load your security activity.');
+    }
+  }
   Future<void> _exportData()async{
     final accepted=await showDialog<bool>(context:context,
       builder:(ctx)=>AlertDialog(
@@ -471,6 +484,29 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
             :'Email or supported sign-in')),
         const Divider(),
       ],
+      const Divider(),
+      ListTile(contentPadding:EdgeInsets.zero,
+        leading:const Icon(Icons.history_outlined),
+        title:const Text('Recent security activity'),
+        subtitle:const Text('Recorded account and passkey events'),
+        trailing:IconButton(tooltip:'Refresh activity',
+          onPressed:_loadSecurityActivity,
+          icon:const Icon(Icons.refresh_outlined))),
+      if(securityActivityError!=null)
+        Text(securityActivityError!,style:TextStyle(
+          color:Theme.of(context).colorScheme.error)),
+      if(securityActivity.isEmpty)
+        const Padding(padding:EdgeInsets.only(bottom:10),
+          child:Text('No recorded security actions yet.'))
+      else
+        ...securityActivity.take(30).map((event)=>ListTile(
+          contentPadding:EdgeInsets.zero,
+          dense:true,
+          title:Text((event['title']??'Security activity').toString()),
+          subtitle:Text((event['occurredAt']??'').toString()))),
+      const Text('This history is not an inventory of devices or all Google sign-ins.',
+        style:TextStyle(fontSize:12)),
+      const Divider(),
       ListTile(contentPadding:EdgeInsets.zero,
         leading:const Icon(Icons.devices_other_outlined),
         title:const Text('Sign out all devices'),

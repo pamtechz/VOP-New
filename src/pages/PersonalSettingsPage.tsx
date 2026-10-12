@@ -24,7 +24,8 @@ import {
 } from '../services/personalSettings';
 import {
   cancelAccountDeletion, downloadAccountExport, exportAccountData, loadAccountLifecycleStatus, requestAccountDeletion,
-  loadAccountSecurityStatus, revokeAllSessions, type AccountSecurityStatus, type AccountLifecycleStatus,
+  loadAccountSecurityStatus, loadAccountSecurityActivity, revokeAllSessions,
+  type AccountSecurityStatus, type AccountLifecycleStatus, type AccountSecurityEvent,
 } from '../services/accountLifecycle';
 
 type PasswordInputProps={
@@ -87,6 +88,8 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
   const [notificationCapabilities,setNotificationCapabilities]=useState<NotificationCapabilities|null>(null);
   const [accountLifecycle,setAccountLifecycle]=useState<AccountLifecycleStatus|null>(null);
   const [securityOverview,setSecurityOverview]=useState<AccountSecurityStatus|null>(null);
+  const [securityActivity,setSecurityActivity]=useState<AccountSecurityEvent[]>([]);
+  const [activityError,setActivityError]=useState('');
   const [securityBusy,setSecurityBusy]=useState(false);
   const [verificationBusy,setVerificationBusy]=useState(false);
   const [verificationMessage,setVerificationMessage]=useState('');
@@ -116,13 +119,13 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
       return;
     }
     if (newPassword !== confirmPassword) {
-      setPasswordError('New password and confirmation do not match.');
+      setPasswordError('Passwords do not match.');
       return;
     }
     setPasswordBusy(true);
     try {
       await changeUserPassword(currentPassword, newPassword, isGoogleAccount);
-      setPasswordMessage(isGoogleAccount ? 'Password has been set successfully for your account.' : 'Your password has been successfully updated.');
+      setPasswordMessage(isGoogleAccount ? 'Password set.' : 'Password updated.');
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
@@ -140,7 +143,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
     setResetEmailBusy(true);
     try {
       await resetPassword(currentUser.email);
-      setPasswordMessage(`A password reset link has been sent to ${currentUser.email}. Check your inbox to proceed.`);
+      setPasswordMessage('Password reset requested. Check your inbox.');
     } catch (err) {
       setPasswordError(err instanceof Error ? err.message : 'Could not send reset email.');
     } finally {
@@ -149,17 +152,17 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
   };
   const changeTrustedDevice = async (enabled: boolean) => {
     if (enabled && !await appConfirm(
-      'Store previously opened study materials on this device for offline reading? Only enable this on a private, trusted device. Other users of this browser may be able to access cached content.',
+      'Store lessons offline on this device? Other browser users could read cached material.',
       {title:'Enable offline study storage',confirmLabel:'Enable'}
     )) return;
     if (!setTrustedOfflineDeviceConsent(enabled)) {
-      setMessage('This browser does not permit persistent offline storage.');
+      setMessage('Offline storage is unavailable.');
       return;
     }
     setTrustedDevice(enabled);
     setMessage(enabled
-      ? 'Offline study storage enabled. Reload while online to activate and cache your study content. This does not download media.'
-      : 'Future persistent study caching disabled after reload. To remove previously cached content, clear this website’s browser storage.');
+      ? 'Offline storage enabled. Reload online to activate. Media is not downloaded.'
+      : 'Caching disabled after reload. Clear site data to delete older copies.');
   };
   const appSettings = getStoredSettings();
   const t = (key: string, fallback: string) => getTranslation(key, getUiLocale(), appSettings.customTranslations, fallback, 'PersonalSettingsPage');
@@ -263,7 +266,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
     try{
       const saved=await saveOwnProfile(changes);
       setProfile(saved);setProfileDraft(editableOwnProfile(saved));
-      setProfileMessage('Your profile was updated.');
+      setProfileMessage('Profile saved.');
     }catch(error){setProfileError(error instanceof Error?error.message:'Could not save your profile.');}
     finally{setProfileSaving(false);}
   };
@@ -274,9 +277,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
     try{
       await registerPasskey(navigator.platform||'This device');
       setPasskeys(await listPasskeys());
-      setMessage(platformBiometric
-        ?'Passkey enabled. You can now sign in using this device’s fingerprint, face, PIN or screen lock.'
-        :'Passkey enabled. You can now use this device or its passkey provider to sign in.');
+      setMessage('Passkey enabled. Use your device lock or passkey provider to sign in.');
     }catch(error){setMessage(error instanceof Error?error.message:'Passkey could not be enabled.');}
     finally{setPasskeyBusy(false);}
   };
@@ -316,7 +317,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
   };
   const signOutAllDevices=async()=>{
     const confirmed=await appConfirm(
-      'End VOP sessions on this account, including this device? Sign in again afterwards. Existing access tokens on other devices can remain usable until expiry.',
+      'Sign out all sessions? Existing access tokens may remain usable until expiry.',
       {title:'Sign out all devices',confirmLabel:'Sign out all',tone:'danger'},
     );
     if(!confirmed)return;
@@ -389,6 +390,14 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
 
   type PersonalTab = 'account' | 'interface' | 'notifications' | 'accessibility' | 'security' | 'privacy';
   const [activeTab, setActiveTab] = useState<PersonalTab>('account');
+  useEffect(()=>{
+    if(activeTab!=='security')return;
+    let active=true;
+    void loadAccountSecurityActivity()
+      .then(items=>{if(active){setSecurityActivity(items);setActivityError('');}})
+      .catch(error=>{if(active)setActivityError(error instanceof Error?error.message:'Activity could not be loaded.');});
+    return ()=>{active=false;};
+  },[activeTab]);
 
   const personalTabs: { id: PersonalTab; label: string; icon: React.ReactNode }[] = [
     { id: 'account', label: t('settings.tab_account', 'Account'), icon: <UserRound size={17} /> },
@@ -401,7 +410,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
 
   return <div className="vop-personal-settings vop-page-shell">
     <div className="vop-personal-header vop-page-head">
-      <div><p className="vop-kicker">{organizationAccount?'Organization Account':t('account.my_account','My Account')}</p><h1>{organizationAccount?'Personal Settings':t('settings.personal_title','Personal Settings')}</h1><p>t('settings.personal_description','These settings apply only to your VOP account.')</p></div>
+      <div><p className="vop-kicker">{organizationAccount?'Organization Account':t('account.my_account','My Account')}</p><h1>{organizationAccount?'Personal Settings':t('settings.personal_title','Personal Settings')}</h1><p>{t('settings.personal_description','Settings for your VOP account.')}</p></div>
       <div style={{display:'flex',gap:8,alignItems:'center'}}>
         {isAdmin&&<button type="button" className="vop-secondary" onClick={()=>{
           try{sessionStorage.setItem('vop-admin-tab-v1:'+currentUser.uid,'dashboard');}catch{}
@@ -534,7 +543,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
             {!organizationAccount&&<section className="vop-personal-card vop-card">
               <h2><BookOpen size={19}/>{uiT('personal_settings.offline_study_on_this_device',"Offline study on this device")}</h2>
               <label className="vop-personal-toggle"><input type="checkbox" checked={trustedDevice} onChange={e => void changeTrustedDevice(e.target.checked)}/>{uiT('personal_settings.remember_previously_opened_study_materials_for_offline_reading',"Remember previously opened study materials for offline reading")}</label>
-              <small>{uiT('personal_settings.offline_storage_privacy',"Private devices only. Cached lessons may remain after sign-out. Offline work syncs after server verification. Reload online after changes; clear browser site data to erase prior caches.")}</small>
+              <small>{uiT('personal_settings.offline_storage_privacy',"Use trusted devices only. Cached lessons may remain after sign-out. Clear site data to remove them.")}</small>
             </section>}
             {!organizationAccount&&<LocalizationParticipation/>}
           </div>
@@ -584,7 +593,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
                 </div>
                 {verificationMessage&&<small role="status">{verificationMessage}</small>}
               </>:<p>{uiT('personal_settings.loading_account_security','Account security details unavailable.')}</p>}
-              <p>{uiT('personal_settings.sessions_explanation','Revoking refresh tokens ends sign-in across devices. Existing access tokens may work until expiry.')}</p>
+              <small>Revoked sessions may remain active until their access tokens expire.</small>
               <button type="button" className="vop-secondary danger" disabled={securityBusy}
                 onClick={()=>void signOutAllDevices()}><ShieldCheck size={16}/>
                 {securityBusy?'Ending sessions…':uiT('personal_settings.sign_out_all_devices','Sign out all devices')}
@@ -593,8 +602,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
             <section className="vop-personal-card vop-card">
               <h2><Fingerprint size={19}/>{uiT('personal_settings.passkeys_and_device_verification',"Passkeys & device verification")}</h2>
               {!passkeyCapable?<p>{uiT('personal_settings.this_browser_or_connection_does_not_support_secure_passkey_sign_in',"This browser or connection does not support secure passkey sign-in.")}</p>:<>
-                <p>{platformBiometric?'Use fingerprint, face, PIN or device lock.':'Use a supported passkey provider.'}</p>
-                <small>{uiT('personal_settings.vop_stores_a_public_key_credential_only_biometric_data_remains_on_your_device_and_is_not_u',"VOP stores a public-key credential only. Biometric data remains on your device and is not uploaded to VOP or Firebase.")}</small>
+                <small>{platformBiometric?'Use fingerprint, face or device lock.':'Use a passkey provider.'} Biometrics stay on your device.</small>
                 <button type="button" className="vop-primary" disabled={passkeyBusy} onClick={()=>void enablePasskey()}>
                   <Fingerprint size={17}/>{passkeyBusy?'Please wait…':'Enable passkey on this device'}
                 </button>
@@ -606,6 +614,19 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
                 </div>}
                 <button type="button" className="vop-secondary" onClick={()=>setActiveTab('account')}>Manage password</button>
               </>}
+            </section>
+            <section className="vop-personal-card vop-card">
+              <h2>Recent security activity</h2>
+              {activityError&&<p role="alert">{activityError}</p>}
+              <div className="vop-setting-list">
+                {securityActivity.map(item=><div key={item.id} className="vop-setting-row">
+                  <div><strong>{item.title}</strong><small>{new Date(item.occurredAt).toLocaleString()}</small></div>
+                </div>)}
+              </div>
+              {!securityActivity.length&&<small>No activity yet.</small>}
+              <small>Not a device list.</small>
+              <button type="button" className="vop-secondary" onClick={()=>void loadAccountSecurityActivity()
+                .then(setSecurityActivity).catch(()=>setActivityError('Activity unavailable.'))}>Refresh activity</button>
             </section>
           </div>
         )}
@@ -628,7 +649,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
                 {accountLifecycle.status!=='processing'&&<button type="button" className="vop-secondary" disabled={privacyBusy} onClick={()=>void undoDeletionRequest()}><RotateCcw size={16}/>{uiT('personal_settings.cancel_deletion_request',"Cancel deletion request")}</button>}
               </div>:<div style={{display:'grid',gap:8,marginTop:12}}>
                 <strong>{uiT('personal_settings.request_account_deletion',"Request account deletion")}</strong>
-                <small>{uiT('personal_settings.a_30_day_recovery_period_applies_organization_owners_super_admins_and_mentors_with_active',"A 30-day recovery period applies. Organization owners, Super Admins and mentors with active learner assignments must transfer those responsibilities first. Some certificate, financial and audit records are retained or pseudonymized under the Privacy Policy.")}</small>
+                <small>{uiT('personal_settings.a_30_day_recovery_period_applies_organization_owners_super_admins_and_mentors_with_active',"Deletion has a 30-day recovery period. Transfer administrative or mentoring responsibilities first. Financial, audit and certificate records follow the Privacy Policy.")}</small>
                 <label>{uiT('personal_settings.optional_reason',"Optional reason")}<textarea value={deletionReason} maxLength={500} onChange={e=>setDeletionReason(e.target.value)} placeholder={uiT('personal_settings.optional',"Optional")}/></label>
                 <label>{uiT('personal_settings.type_delete_my_account_to_confirm',"Type DELETE MY ACCOUNT to confirm")}<input value={deletionConfirmation} autoComplete="off" onChange={e=>setDeletionConfirmation(e.target.value)}/></label>
                 <button type="button" className="vop-secondary danger" disabled={privacyBusy||deletionConfirmation!=='DELETE MY ACCOUNT'} onClick={()=>void submitDeletionRequest()}><Trash2 size={16}/>{uiT('personal_settings.request_account_deletion',"Request account deletion")}</button>
