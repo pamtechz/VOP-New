@@ -422,7 +422,7 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
       if (!cancelled) {
         setContentHydrated(true);
         console.error('VOP public content load failed', error);
-        setStudyError(error instanceof Error ? error.message : 'VOP content could not be loaded.');
+        setStudyError(error instanceof Error ? error.message : 'Content loading failed.');
       }
     });
     return () => { cancelled = true; };
@@ -476,7 +476,7 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
       if(snapshot.churches){setChurches(snapshot.churches);saveChurches(snapshot.churches);}
     }).catch(error=>{
       lazyRouteLoadsRef.current.delete(cacheKey);
-      if(!cancelled)setStudyError(error instanceof Error?error.message:'This page data could not be loaded.');
+      if(!cancelled)setStudyError(error instanceof Error?error.message:'Page loading failed.');
     });
     return()=>{cancelled=true};
   },[
@@ -551,7 +551,7 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
     const feature=routeFeature[currentRoute];
     if(feature&&settings.features?.[feature]===false){
       setCurrentRoute('home');
-      setStudyNotice('This module is disabled by your administrator.');
+      setStudyNotice('Module unavailable.');
     }
   }, [currentRoute,settings.features?.radio,settings.features?.announcements,settings.features?.certification]);
 
@@ -839,7 +839,7 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
     };
     const feature=routeFeature[route];
     if(feature&&settings.features?.[feature]===false){
-      setStudyNotice('This module is disabled by your administrator.');
+      setStudyNotice('Module unavailable.');
       setCurrentRoute('home');
       rememberLocation({route:'home'});
       return;
