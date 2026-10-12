@@ -74,6 +74,15 @@ export async function loadAccountSecurityStatus(){
   return request<AccountSecurityStatus>('/api/account?action=security-status');
 }
 
+export type AccountSecurityEvent={
+  id:string;action:string;title:string;occurredAt:string;
+};
+
+export async function loadAccountSecurityActivity(){
+  const result=await request<{ok:true;items:AccountSecurityEvent[]}>('/api/account?action=security-activity');
+  return result.items;
+}
+
 export async function revokeAllSessions(){
   return request<{ok:true;revoked:true}>('/api/account',{
     method:'POST',
