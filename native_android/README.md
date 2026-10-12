@@ -1,7 +1,8 @@
 # VOP native Android (Flutter)
 
-This directory is a **real Flutter/Android app**. It does not use Tauri,
-Capacitor, a WebView, or a copy of the React DOM.
+This directory is a **real Flutter/Android app**, not a Tauri,
+Capacitor, or React-DOM wrapper. Individual publisher-authorized media
+players may use embedded WebViews inside native Flutter screens.
 
 Existing VOP Android Capacitor sources remain in the repository's root
 `android/` directory for transition/rollback. This independent native
@@ -20,12 +21,14 @@ app ID as the legacy Android package. Install only one signed app for that ID.
   images, media links, and read-only merged table layouts).
 - Responsive native navigation, loading, refresh and errors.
 
-**Important scope:** This is the Android learner app first implementation,
-not yet a feature-by-feature reproduction of the organisation and Super Admin
-editor, all games, radio, certificates, payments, passkeys or offline
-synchronisation. Those modules require their own native UI, API contract,
-permission/security tests and device verification. Do not market the current
-build as full parity.
+**Important scope:** The learner app now includes a native radio viewer,
+certificate viewing, account-security controls and conditional Android passkeys,
+plus encrypted offline reading and saved assessment drafts with server-verified
+sync. It is **not** yet feature-for-feature parity with the web, organisation,
+or Super Admin experiences. Offline audio/video downloads, brand-new offline
+quiz attempts, production signing, complete payments/gameplay parity, and
+physical-device security verification are not implied by a successful CI build.
+Do not market the current build as full parity.
 
 The Android app intentionally does not send private quiz keys, mark
 assessments locally, create certificates locally or bypass organisation
@@ -84,15 +87,20 @@ Android files from the documented native workflow. Do **not** globally
 suppress Kotlin warnings or override Gradle metadata to hide an incompatible
 plugin. CI builds a debug APK but production signing and real-device
 credential-manager verification are still separate release requirements.
+The app's `MainActivity` must remain a `FlutterFragmentActivity` for Android
+biometric integration. Regenerate the Gradle scaffold using the documented
+Flutter toolchain rather than replacing it with stale checked-in generated
+files or release builds configured with debug signing.
 
 ## Native biometric scope
 
 The Android Security screen uses the operating system biometric/device-lock
 prompt as a local step before private account exports, account-deletion requests
 and global sign-out. Server-side Firebase recent-login requirements still apply.
-This is *not* passkey enrollment or passwordless native sign-in; those require
-Android Credential Manager, verified relying-party association with VOP's
-domain and end-to-end sign-in tests.
+Passkey enrollment and passwordless sign-in use a separate Android Credential
+Manager flow. They are enabled only after signed-app certificate trust, the
+VOP domain association, and server-side WebAuthn verification are configured
+and independently verified as described below.
 
 ## Build an APK
 
