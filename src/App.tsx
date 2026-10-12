@@ -156,8 +156,20 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
   const [studyNotice, setStudyNotice] = useState('');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(() => readThemePreference()==='dark');
+  const themeChangeSequence=useRef(0);
   const [isMobileShell, setIsMobileShell] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsed);
+  const toggleTheme=()=>{
+    const next=isDarkMode?'light':'dark';
+    themeChangeSequence.current+=1;
+    persistThemePreference(next);
+    setIsDarkMode(next==='dark');
+    if(auth?.currentUser){
+      void savePersonalSettings({theme:next}).catch(error=>{
+        setStudyNotice(error instanceof Error?error.message:'Theme could not be saved to this account.');
+      });
+    }
+  };
   const toggleDesktopSidebar = () => setSidebarCollapsed(value => {
     const next = !value;
     persistSidebarCollapsed(next);
@@ -481,13 +493,16 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
   }, []);
 
   useEffect(() => {
-    persistThemePreference(isDarkMode?'dark':'light');
+    applyThemePreference(isDarkMode?'dark':'light');
   }, [isDarkMode]);
   useEffect(() => {
     applyThemePreference(readThemePreference());
     const sync=(event:Event)=>{
       const theme=(event as CustomEvent<{theme?:string}>).detail?.theme;
-      if(theme==='dark'||theme==='light')setIsDarkMode(theme==='dark');
+      if(theme==='dark'||theme==='light'){
+        themeChangeSequence.current+=1;
+        setIsDarkMode(theme==='dark');
+      }
     };
     window.addEventListener('vop_theme_changed',sync);
     return()=>window.removeEventListener('vop_theme_changed',sync);
@@ -504,10 +519,12 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
     let active=true;
     let systemTheme:MediaQueryList|null=null;
     const syncSystemTheme=()=>{if(active&&systemTheme)setIsDarkMode(systemTheme.matches);};
+    const startingThemeSequence=themeChangeSequence.current;
     void loadPersonalSettings()
       .then(personal=>{
         if(!active)return;
         applyAccessibilityPreferences(personal.accessibility);
+        if(startingThemeSequence!==themeChangeSequence.current)return;
         if(personal.theme==='system'){
           systemTheme=window.matchMedia('(prefers-color-scheme: dark)');
           setIsDarkMode(systemTheme.matches);
@@ -863,7 +880,7 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
         {currentRoute !== 'admin' && currentRoute !== 'radio' && (
           <Header currentUser={currentUser} settings={settings} activeLanguage={uiLocale}
             onChangeLanguage={language => setUiLocale(language)}
-            isDarkMode={isDarkMode} onToggleDarkMode={() => setIsDarkMode(value => !value)} isMobileShell={isMobileShell}
+            isDarkMode={isDarkMode} onToggleDarkMode={toggleTheme} isMobileShell={isMobileShell}
             onToggleMobileShell={() => setIsMobileShell(value => !value)} onOpenMenu={() => setIsMenuOpen(true)} onLogout={() => void firebaseSignOut()} currentRoute={currentRoute} onNavigate={navigate} />
         )}
         {studyNotice && <div role="status" style={{ margin: '.75rem auto', padding: '1rem', maxWidth: '60rem', width: 'min(100% - 2rem, 60rem)', background: '#eef6ff', color: '#12457e', border: '1px solid #a9ccf5', borderRadius: '.75rem' }}>{studyNotice}</div>}
