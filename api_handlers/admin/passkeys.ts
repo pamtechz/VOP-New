@@ -3,7 +3,7 @@ import { getAuth, type DecodedIdToken } from 'firebase-admin/auth';
 import { getAdminDb } from '../../server/tenant.js';
 import { recordAccountSecurityEvent } from '../../server/accountSecurityActivity.js';
 import {
-  credentialDocumentId, parseRegistrationAttestation, randomChallenge, requestOrigin, signPasskeyChallenge, userHandle,
+  androidPasskeyConfigured, credentialDocumentId, parseRegistrationAttestation, randomChallenge, requestOrigin, signPasskeyChallenge, userHandle,
   validateAuthenticatorData, validateClientData, verifyPasskeyAssertion, verifyPasskeyChallenge,
 } from '../../server/passkeys.js';
 
@@ -111,6 +111,10 @@ export default async function handler(req:Request,res:Response){
     const action=clean(input.action,60);
     const site=requestOrigin(req.headers);
     const db=getAdminDb();
+    if(input.clientPlatform==='android'
+      &&(action==='beginRegistration'||action==='beginAuthentication')
+      &&!androidPasskeyConfigured())
+      return res.status(503).json({error:'Native passkeys are not configured for this Android signing certificate. Use Google or password sign-in.'});
 
     if(action==='beginAuthentication'||action==='finishAuthentication'){
       // One WebAuthn sign-in uses a begin + finish pair. Keep the network
