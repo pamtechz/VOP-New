@@ -376,7 +376,7 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
 
         <aside className="vop-support-reference-panel">
           <div className="vop-support-panel-title"><Tag size={19}/><strong>Tag the exact study context</strong></div>
-          <p>Study references are attached.</p>
+          <p>{t('support.attach_study_context','Study references are attached.')}</p>
           <select value={selectedGuide} onChange={e=>{setSelectedGuide(e.target.value);setSelectedLesson('')}}>
             <option value="">Select guide / course (optional)</option>
             {guides.map(item=><option key={item.id} value={item.id}>{item.title} · {item.language}</option>)}
@@ -401,7 +401,7 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
 
           <hr/>
           <div className="vop-support-panel-title"><UserRound size={19}/><strong>Direct mentor conversation</strong></div>
-          {!conversation?<p>No mentor assigned. Ask organization support.</p>:<>
+          {!conversation?<p>{t('support.no_mentor','No mentor assigned. Ask organization support.')}</p>:<>
             <p>{conversation.mentorName||'Your mentor'} · private assigned-mentor channel.</p>
             <ChatThread currentUserId={currentUser.uid} messages={messages} draft={mentorMessage} onDraftChange={setMentorMessage}
               guides={guides} busy={sending} placeholder="Message your mentor…" emptyText="No direct messages yet."
