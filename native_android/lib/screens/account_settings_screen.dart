@@ -5,6 +5,8 @@ import 'package:share_plus/share_plus.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:flutter/material.dart';
 import '../core/vop_api.dart';
+import '../core/vop_i18n.dart';
+import 'offline_studies_screen.dart';
 import '../core/vop_passkeys.dart';
 import '../theme/vop_theme.dart';
 import '../widgets/vop_ui.dart';
@@ -151,6 +153,15 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       preferences=_map(result['settings']);
       savedPreferences=Map<String,dynamic>.from(preferences);
       VopAppearance.apply(preferences);
+      if(changes.containsKey('uiLocale')){
+        final locale=(preferences['uiLocale']??'en').toString().trim().toLowerCase();
+        if(locale.isNotEmpty){
+          try{
+            final published=await widget.api.languagePack(locale);
+            VopI18n.apply(locale,published);
+          }catch(_){}
+        }
+      }
       if(changes.containsKey('theme')){
         final uid=FirebaseAuth.instance.currentUser?.uid;
         if(uid!=null)await VopAppearance.persistTheme(
@@ -655,6 +666,33 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         subtitle:const Text('Create a JSON account export and choose where to save it.'),
         trailing:const Icon(Icons.chevron_right),
         enabled:!saving,onTap:_exportData),
+    ]),
+    _heading('Offline study','Manage encrypted downloads and pending changes.',Icons.download_outlined),
+    _group([
+      ListTile(contentPadding:EdgeInsets.zero,
+        leading:const Icon(Icons.folder_outlined),
+        title:const Text('Saved lessons and sync'),
+        trailing:const Icon(Icons.chevron_right),
+        onTap:()=>Navigator.push(context,MaterialPageRoute<void>(
+          builder:(_)=>OfflineStudiesScreen(api:widget.api))),
+      ),
+      OutlinedButton.icon(
+        onPressed:()async{
+          final confirmed=await showDialog<bool>(context:context,
+            builder:(ctx)=>AlertDialog(
+              title:const Text('Clear offline data?'),
+              content:const Text('This deletes downloaded lessons, quiz drafts and pending progress from this device.'),
+              actions:[
+                TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('Cancel')),
+                FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('Clear')),
+              ]));
+          if(confirmed==true){
+            await widget.api.clearOfflineStudies();
+            if(mounted)ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content:Text('Offline data cleared.')));
+          }
+        },
+        icon:const Icon(Icons.delete_outline),label:const Text('Clear downloads')),
     ]),
     _heading('Account lifecycle','A deletion request follows the VOP retention process.',
       Icons.manage_accounts_outlined),
