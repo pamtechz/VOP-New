@@ -24,7 +24,8 @@ import {
 } from '../services/personalSettings';
 import {
   cancelAccountDeletion, downloadAccountExport, exportAccountData, loadAccountLifecycleStatus, requestAccountDeletion,
-  loadAccountSecurityStatus, revokeAllSessions, type AccountSecurityStatus, type AccountLifecycleStatus,
+  loadAccountSecurityStatus, loadAccountSecurityActivity, revokeAllSessions,
+  type AccountSecurityStatus, type AccountLifecycleStatus, type AccountSecurityEvent,
 } from '../services/accountLifecycle';
 
 type PasswordInputProps={
@@ -87,6 +88,8 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
   const [notificationCapabilities,setNotificationCapabilities]=useState<NotificationCapabilities|null>(null);
   const [accountLifecycle,setAccountLifecycle]=useState<AccountLifecycleStatus|null>(null);
   const [securityOverview,setSecurityOverview]=useState<AccountSecurityStatus|null>(null);
+  const [securityActivity,setSecurityActivity]=useState<AccountSecurityEvent[]>([]);
+  const [activityError,setActivityError]=useState('');
   const [securityBusy,setSecurityBusy]=useState(false);
   const [verificationBusy,setVerificationBusy]=useState(false);
   const [verificationMessage,setVerificationMessage]=useState('');
@@ -389,6 +392,14 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
 
   type PersonalTab = 'account' | 'interface' | 'notifications' | 'accessibility' | 'security' | 'privacy';
   const [activeTab, setActiveTab] = useState<PersonalTab>('account');
+  useEffect(()=>{
+    if(activeTab!=='security')return;
+    let active=true;
+    void loadAccountSecurityActivity()
+      .then(items=>{if(active){setSecurityActivity(items);setActivityError('');}})
+      .catch(error=>{if(active)setActivityError(error instanceof Error?error.message:'Activity could not be loaded.');});
+    return ()=>{active=false;};
+  },[activeTab]);
 
   const personalTabs: { id: PersonalTab; label: string; icon: React.ReactNode }[] = [
     { id: 'account', label: t('settings.tab_account', 'Account'), icon: <UserRound size={17} /> },
@@ -606,6 +617,23 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
                 </div>}
                 <button type="button" className="vop-secondary" onClick={()=>setActiveTab('account')}>Manage password</button>
               </>}
+            </section>
+            <section className="vop-personal-card vop-card">
+              <h2><ShieldCheck size={19}/>Recent security activity</h2>
+              {activityError&&<p role="alert">{activityError}</p>}
+              {securityActivity.length? <div className="vop-setting-list">
+                {securityActivity.map(event=><div className="vop-setting-row" key={event.id}>
+                  <div><strong>{event.title}</strong><div className="vop-setting-help">
+                    {event.occurredAt?new Date(event.occurredAt).toLocaleString():''}
+                  </div></div>
+                </div>)}
+              </div>:<small>No recorded security actions yet.</small>}
+              <small>Includes recorded passkey and account-security actions, not a list of all devices or Google sign-ins.</small>
+              <button type="button" className="vop-secondary" onClick={()=>void loadAccountSecurityActivity()
+                .then(setSecurityActivity).then(()=>setActivityError(''))
+                .catch(error=>setActivityError(error instanceof Error?error.message:'Activity could not be loaded.'))}>
+                Refresh activity
+              </button>
             </section>
           </div>
         )}
