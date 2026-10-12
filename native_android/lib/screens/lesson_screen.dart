@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/vop_api.dart';
+import 'learner_support_screen.dart';
 import '../widgets/plate_page.dart';
 
 class LessonScreen extends StatefulWidget {
@@ -60,7 +61,22 @@ class _LessonScreenState extends State<LessonScreen> {
     }
   }
   @override Widget build(BuildContext context)=>Scaffold(
-    appBar:AppBar(title:Text(widget.title)),
+    appBar:AppBar(title:Text(widget.title), actions: [
+      IconButton(
+        tooltip: 'Ask for help with this lesson',
+        icon: const Icon(Icons.support_agent_outlined),
+        onPressed: () => Navigator.push<void>(context, MaterialPageRoute(
+          builder: (_) => LearnerSupportScreen(
+            api: widget.api,
+            initialReference: StudySupportReference(
+              type: 'lesson', id: widget.lessonId, label: widget.title,
+              route: 'lesson', description: 'Guide: ' + widget.guideId,
+            ),
+            openComposerOnStart: true,
+          ),
+        )),
+      ),
+    ]),
     body:FutureBuilder<Map<String,dynamic>>(
       future:lesson,
       builder:(context,s){
