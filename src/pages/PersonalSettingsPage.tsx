@@ -623,7 +623,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
                   <div><strong>{item.title}</strong><small>{new Date(item.occurredAt).toLocaleString()}</small></div>
                 </div>)}
               </div>
-              {!securityActivity.length&&<small>No activity yet.</small>
+              {!securityActivity.length&&<small>No activity yet.</small>}
               <small>Not a device list.</small>
               <button type="button" className="vop-secondary" onClick={()=>void loadAccountSecurityActivity()
                 .then(setSecurityActivity).catch(()=>setActivityError('Activity unavailable.'))}>Refresh activity</button>
