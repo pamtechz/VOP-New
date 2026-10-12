@@ -246,7 +246,8 @@ class _ReferenceSectionsState extends State<_ReferenceSections> {
               title: Text(label),
               subtitle: Text(chapterId.isEmpty ? 'Section' : (page['chapterTitle'] ?? 'Chapter').toString()),
               onTap: () => Navigator.pop(context, StudySupportReference(
-                type: sectionId.isNotEmpty ? 'section' : 'chapter',
+                type: sectionId.isNotEmpty ? 'section'
+                  : chapterId.isNotEmpty ? 'chapter' : 'lesson',
                 id: sectionId.isNotEmpty ? sectionId
                   : chapterId.isNotEmpty ? chapterId
                   : (widget.lesson['id'] ?? '').toString(),
