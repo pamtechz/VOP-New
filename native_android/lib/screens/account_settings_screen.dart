@@ -213,14 +213,17 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         options.first.value;
     return Padding(padding:const EdgeInsets.only(bottom:15),
       child:DropdownButtonFormField<String>(
+        key:ValueKey('$section:$key:$current'),
         initialValue:value,
         isExpanded:true,
         decoration:InputDecoration(labelText:label),
-        items:options,onChanged:(v){
+        items:options,onChanged:saving?null:(v){
           if(v!=null){
             if(section.isEmpty)_patch(key,v);
             else _nested(section,key,v);
             if(key=='theme'&&preferencesReady){
+              final uid=FirebaseAuth.instance.currentUser?.uid;
+              if(uid!=null)VopAppearance.persistTheme(uid,v);
               _saveSettings();
             }
           }
@@ -421,7 +424,10 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
   Future<bool> _confirmDeviceIdentity()async{
     final verifier=LocalAuthentication();
     try{
-      if(!await verifier.isDeviceSupported())return true;
+      if(!await verifier.isDeviceSupported()){
+        if(mounted)setState(()=>error='Configure a screen lock to confirm sensitive account actions.');
+        return false;
+      }
       return await verifier.authenticate(
         localizedReason:'Confirm your identity for this VOP account action',
         options:const AuthenticationOptions(
