@@ -6,6 +6,7 @@ import { runDailyOperationalMaintenance } from '../../server/operations.js';
 import { getAdminDb } from '../../server/tenant.js';
 import { getAuth } from 'firebase-admin/auth';
 import { getApps } from 'firebase-admin/app';
+import { recordAccountSecurityEvent, recentAccountSecurityEvents } from '../../server/accountSecurityActivity.js';
 
 type Request={method?:string;headers?:Record<string,string|string[]|undefined>;query?:Record<string,string|string[]|undefined>;body?:unknown};
 type Response={status:(code:number)=>Response;json:(body:unknown)=>void;setHeader?:(name:string,value:string)=>void};
@@ -71,16 +72,21 @@ export default async function handler(req:Request,res:Response){
           .concat(record.passwordHash?['password']:[]))],
       });
     }
+    if(req.method==='GET'&&action==='security-activity'){
+      return res.status(200).json({ok:true,items:await recentAccountSecurityEvents(ctx.db,ctx.auth.uid)});
+    }
     if(req.method==='POST'&&action==='revoke-sessions'){
       if(String(body.confirmation||'')!=='SIGN OUT ALL DEVICES')
         return res.status(400).json({error:'Type SIGN OUT ALL DEVICES to confirm.'});
       await requireVerifiedRecentIdentity(req,ctx.auth.uid);
       await getAuth(getApps()[0]).revokeRefreshTokens(ctx.auth.uid);
+      await recordAccountSecurityEvent(ctx.db,ctx.auth.uid,'sessions_revoked');
       return res.status(200).json({ok:true,revoked:true});
     }
     if(req.method==='GET'&&action==='export'){
       await requireVerifiedRecentIdentity(req,ctx.auth.uid);
       const exported=await buildAccountExport(ctx.db,ctx.auth.uid);
+      await recordAccountSecurityEvent(ctx.db,ctx.auth.uid,'account_exported');
       res.setHeader?.('Content-Disposition','attachment; filename="vop-account-export.json"');
       return res.status(200).json({ok:true,export:exported});
     }
@@ -88,11 +94,15 @@ export default async function handler(req:Request,res:Response){
       await requireVerifiedRecentIdentity(req,ctx.auth.uid);
       const confirmation=String(body.confirmation||'');
       const reason=String(body.reason||'');
-      return res.status(202).json({ok:true,...await requestAccountDeletion(ctx.db,ctx.auth.uid,confirmation,reason)});
+      const result=await requestAccountDeletion(ctx.db,ctx.auth.uid,confirmation,reason);
+      await recordAccountSecurityEvent(ctx.db,ctx.auth.uid,'deletion_requested');
+      return res.status(202).json({ok:true,...result});
     }
     if(req.method==='POST'&&action==='cancel-deletion'){
       await requireVerifiedIdentity(req,ctx.auth.uid);
-      return res.status(200).json({ok:true,...await cancelAccountDeletion(ctx.db,ctx.auth.uid)});
+      const result=await cancelAccountDeletion(ctx.db,ctx.auth.uid);
+      await recordAccountSecurityEvent(ctx.db,ctx.auth.uid,'deletion_cancelled');
+      return res.status(200).json({ok:true,...result});
     }
     return res.status(405).json({error:'Method not allowed.'});
   }catch(error){
