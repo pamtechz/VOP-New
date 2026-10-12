@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/vop_api.dart';
+import 'learner_support_screen.dart';
 import 'lesson_screen.dart';
 import 'quiz_screen.dart';
 
@@ -25,11 +26,37 @@ class _GuideScreenState extends State<GuideScreen> {
         SnackBar(content:Text('Download failed: '+error.toString())));
     }finally{if(mounted)setState(()=>downloading=false);}
   }
+  Future<void> askForHelp() async {
+    try {
+      final result = await guide;
+      final details = result['guide'];
+      final title = details is Map
+        ? (details['title'] ?? 'Study guide').toString()
+        : 'Study guide';
+      if (!mounted) return;
+      await Navigator.push<void>(context, MaterialPageRoute(
+        builder: (_) => LearnerSupportScreen(
+          api: widget.api,
+          initialReference: StudySupportReference(
+            type: 'guide', id: widget.guideId,
+            label: title, route: 'guide',
+          ),
+          openComposerOnStart: true,
+        ),
+      ));
+    } catch (error) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.toString())));
+    }
+  }
   @override void initState(){super.initState();reload();}
   void reload(){guide=widget.api.guide(widget.guideId);}
   @override Widget build(BuildContext context)=>Scaffold(
     appBar:AppBar(title:const Text('Study guide'),
       actions:[
+        IconButton(onPressed:askForHelp,
+          icon:const Icon(Icons.support_agent_outlined),
+          tooltip:'Ask for help with this course'),
         IconButton(onPressed:downloading?null:download,
           tooltip:'Download lessons',
           icon:downloading?const SizedBox(width:18,height:18,
