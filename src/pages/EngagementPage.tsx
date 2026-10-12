@@ -161,7 +161,7 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
       const updated=await engagement({action:'portfolioGet'});
       setPortfolio(updated.portfolio as Record<string,unknown>);
       setEvidenceTitle('');setEvidenceUrl('');setEvidenceNote('');
-      setMessage('Evidence submitted for evaluator review.');
+      setMessage('Evidence sent for review.');
     });
   };
 
@@ -209,7 +209,7 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
           <div className="vop-engagement-hero-content">
             <span className="vop-materials-kicker"><Sparkles size={14}/> {tab === 'master-guide' ? 'Youth & leadership' : tab === 'memory' ? 'Scripture engagement' : 'Bible knowledge challenge'}</span>
             <h1>{tab === 'master-guide' ? 'Master Guide' : tab === 'memory' ? 'Scripture Memory' : 'Iron Duels'}</h1>
-            <p>{tab === 'master-guide' ? 'Submit evidence for ministry requirements.' : tab === 'memory' ? 'Review Scripture verses and track progress.' : 'Play Scripture challenges and track results.'}</p>
+            <p>{tab === 'master-guide' ? 'Submit evidence for ministry requirements.' : tab === 'memory' ? 'Review Scripture verses and track progress.' : 'Play and review results.'}</p>
           </div>
         </div>
       </header>
@@ -218,7 +218,7 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
         {error && <div role="alert" style={{ padding:'.8rem 1rem', borderRadius:12, marginBottom:'1rem', background:'#fff1f2', color:'#9f1239' }}>{error}</div>}
 
         {tab === 'master-guide' && <section style={{ display:'grid', gap:'1rem' }}>
-          <article className="vop-material-card"><div className="vop-material-body"><div className="vop-material-meta"><span>Digital portfolio</span><b>{String(portfolio?.status || 'active')}</b></div><h2>Master Guide Portfolio</h2><p>Track your requirements and evidence.</p><div style={{ display:'flex', gap:'.7rem', flexWrap:'wrap' }}><strong>{activities.length} activities</strong><strong>{evidence.length} evidence records</strong><strong>{signoffs.filter(item => item.decision === 'approved').length} approved sign-offs</strong><button type="button" disabled={busy} onClick={() => void run(async () => { const result = await engagement({ action:'portfolioShare' }); setShareUrl(String(result.url || '')); setMessage('Portfolio sharing link created.'); })}><Share2 size={15}/> Share portfolio</button></div>{shareUrl && <p><a href={shareUrl}>{shareUrl}</a></p>}</div></article>
+          <article className="vop-material-card"><div className="vop-material-body"><div className="vop-material-meta"><span>Digital portfolio</span><b>{String(portfolio?.status || 'active')}</b></div><h2>Master Guide Portfolio</h2><p>Track your requirements and evidence.</p><div style={{ display:'flex', gap:'.7rem', flexWrap:'wrap' }}><strong>{activities.length} activities</strong><strong>{evidence.length} evidence records</strong><strong>{signoffs.filter(item => item.decision === 'approved').length} approved sign-offs</strong><button type="button" disabled={busy} onClick={() => void run(async () => { const result = await engagement({ action:'portfolioShare' }); setShareUrl(String(result.url || '')); setMessage('Portfolio link ready.'); })}><Share2 size={15}/> Share portfolio</button></div>{shareUrl && <p><a href={shareUrl}>{shareUrl}</a></p>}</div></article>
           <article className="vop-material-card"><div className="vop-material-body"><h2>Requirements</h2>{requirements.length ? <div style={{ display:'grid', gap:'.6rem' }}>{requirements.map(req => {
             const state=requirementState(req,activities,signoffs);
             const feedback=state.changes?String(state.changes.notes||'Please revise this submission and resubmit it.'):''; 
@@ -233,10 +233,10 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
               {!state.approved&&!state.pending&&<button type="button" disabled={busy} onClick={() => void run(async () => {
                 await engagement({ action:'portfolioSaveActivity', requirementId:String(req.id), title:String(req.title || req.name || 'Activity'), status:'submitted' });
                 const refreshed=await engagement({action:'portfolioGet'}); setPortfolio(refreshed.portfolio as Record<string, unknown>);
-                setMessage(state.changes?'Activity resubmitted as a new revision.':'Activity submitted.');
+                setMessage(state.changes?'Activity resubmitted.':'Activity submitted.');
               })}>{state.changes?'Resubmit activity':'Submit activity'}</button>}
             </div>;
-          })}</div> : <p>No published Master Guide requirements are available for your organization yet.</p>}</div></article>
+          })}</div> : <p>No published requirements yet.</p>}</div></article>
           <article className="vop-material-card"><div className="vop-material-body">
             <h2>Submit supporting evidence</h2><p>Attach an HTTPS link for evaluator review. Submission does not award approval.</p>
             {requirements.length ? <form onSubmit={event=>void submitEvidence(event)} style={{display:'grid',gap:'.75rem'}}>
@@ -375,7 +375,7 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
               </div>
               <label className="vop-arena-optin"><input type="checkbox" checked={duelOptIn} disabled={busy} onChange={event=>{
                 const enabled=event.target.checked;
-                void run(async()=>{const result=await engagement({action:'duelAvailability',enabled});setDuelOptIn(result.optIn===true);setMessage(enabled?'You can now receive ranked Duel invitations.':'You are hidden from new Duel invitations.');});
+                void run(async()=>{const result=await engagement({action:'duelAvailability',enabled});setDuelOptIn(result.optIn===true);setMessage(enabled?'Duel invitations enabled.':'Duel invitations disabled.');});
               }}/><span>Allow Duel invitations</span></label>
               <div className="vop-arena-duel-controls">
                 <select value={opponentId} onChange={event=>setOpponentId(event.target.value)} aria-label="Choose a Scripture Duel opponent">
@@ -448,7 +448,7 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
               })}
             </div>
             <div className="vop-arena-finish-bar">
-              <div><strong>{answeredQuestionIds.length===duelQuestions.length?'Your answers are complete':'Keep going'}</strong><span>{challengeMode==='duel'&&answeredQuestionIds.length===duelQuestions.length?'Awaiting the other player.':'Answer every question to complete this challenge.'}</span></div>
+              <div><strong>{answeredQuestionIds.length===duelQuestions.length?'Answers complete':'Keep going'}</strong><span>{challengeMode==='duel'&&answeredQuestionIds.length===duelQuestions.length?'Awaiting the other player.':'Answer every question to complete this challenge.'}</span></div>
               <button type="button" className="vop-primary" disabled={busy||answeredQuestionIds.length<duelQuestions.length} onClick={()=>void run(async()=>{
                 const result=challengeMode==='solo'
                   ?await engagement({action:'duelSoloFinish',challengeId:matchId})
@@ -476,7 +476,7 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
 
           <div className="vop-arena-bottom-grid">
             <article className="vop-material-card"><div className="vop-material-body">
-              <div className="vop-arena-section-head"><div><span className="vop-material-kicker"><Medal size={14}/> Rankings</span><h2>Organization leaderboard</h2><p>Only opted-in learners appear in rankings.</p></div>
+              <div className="vop-arena-section-head"><div><span className="vop-material-kicker"><Medal size={14}/> Rankings</span><h2>Leaderboard</h2><p>Only opted-in learners appear in rankings.</p></div>
                 <button type="button" className="vop-secondary" disabled={busy} onClick={()=>void run(async()=>{
                   const ranking=await engagement({action:'duelLeaderboard'});
                   setLeaderboard((ranking.leaderboard as Array<{rank:number;displayName:string;rating:number;points?:number}>)||[]);
