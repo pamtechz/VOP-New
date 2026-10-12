@@ -1629,3 +1629,29 @@ hr,
 .vop-portal-choice-backdrop{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:20px;background:rgba(0,0,0,.68)}
 .vop-portal-choice{width:min(100%,410px);display:grid;gap:10px;padding:22px;border-radius:16px;background:var(--bg-primary);color:var(--text-primary);box-shadow:0 25px 70px #0005}
 .vop-portal-choice h2{font-size:1.2rem;margin:0 0 4px}
+
+[data-theme="dark"] :is(.vop-support-chat,.vop-support-reference-panel,
+  .vop-support-compose,.vop-support-messages article,.vop-support-selected) {
+  background:var(--theme-surface)!important;
+  border-color:var(--theme-border)!important;
+  color:var(--theme-title)!important;
+  box-shadow:none!important;
+}
+[data-theme="dark"] .vop-support-messages{
+  background:var(--theme-surface-soft)!important;
+}
+[data-theme="dark"] .vop-support-messages article.mine{
+  background:var(--theme-surface-elevated)!important;
+  border-color:var(--theme-border-strong)!important;
+}
+[data-theme="dark"] :is(.vop-support-head h1,.vop-support-messages p,
+  .vop-support-chat-head strong,.vop-support-selected strong,
+  .vop-support-panel-title){
+  color:var(--theme-title)!important;
+}
+[data-theme="dark"] :is(.vop-support-compose textarea,
+  .vop-support-reference-panel select){
+  background:var(--theme-surface-elevated)!important;
+  border-color:var(--theme-border)!important;
+  color:var(--theme-title)!important;
+}
