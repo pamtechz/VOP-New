@@ -307,7 +307,6 @@ class VopApi {
         'language':language,'confirmRetake':confirmRetake,
       });
       if(_uid.isNotEmpty&&result['sessionId'] is String){
-        final started=DateTime.tryParse((result['startedAt']??'').toString());
         final deadline=DateTime.tryParse((result['expiresAt']??'').toString());
         if(deadline!=null&&DateTime.now().toUtc().isBefore(deadline)){
           await _offline.save(_uid,'quiz',key,result,
@@ -327,7 +326,6 @@ class VopApi {
       String sessionId,Map<String,Object?> answers)async{
     final cache=await _offline.read(_uid,'quiz',
       language+'_'+guideId+'_'+lessonId);
-    final started=DateTime.tryParse((cache?['startedAt']??'').toString());
     final deadline=DateTime.tryParse((cache?['expiresAt']??'').toString());
     final body=<String,dynamic>{
       'action':'submitQuiz','guideId':guideId,'lessonId':lessonId,
