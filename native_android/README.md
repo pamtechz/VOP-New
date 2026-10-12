@@ -72,6 +72,28 @@ To override the server origin or Firebase public client, create
 backup protections and cleartext-traffic restrictions are checked into
 `android/app/src/main/AndroidManifest.xml`.
 
+## Android Kotlin Gradle Plugin compatibility
+
+The native application uses `share_plus: ^13.3.1` and `SharePlus.instance.share` with
+the newer plugin implementation, which supports Flutter's built-in Kotlin
+migration. This also requires a current Dart SDK (>=3.10), Flutter toolchain,
+Android Gradle Plugin and Kotlin version. Run `flutter pub get` and rebuild
+after upgrading Flutter. If an old `share_plus` warning persists on a developer
+computer, run `flutter clean`, `flutter pub get`, then recreate generated
+Android files from the documented native workflow. Do **not** globally
+suppress Kotlin warnings or override Gradle metadata to hide an incompatible
+plugin. CI builds a debug APK but production signing and real-device
+credential-manager verification are still separate release requirements.
+
+## Native biometric scope
+
+The Android Security screen uses the operating system biometric/device-lock
+prompt as a local step before private account exports, account-deletion requests
+and global sign-out. Server-side Firebase recent-login requirements still apply.
+This is *not* passkey enrollment or passwordless native sign-in; those require
+Android Credential Manager, verified relying-party association with VOP's
+domain and end-to-end sign-in tests.
+
 ## Build an APK
 
 After one-time Flutter scaffold generation, from `native_android`:
