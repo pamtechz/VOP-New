@@ -38,6 +38,7 @@ export const PrayerPage: React.FC<PrayerPageProps> = ({ currentUser, onBack }) =
   const [filter, setFilter] = useState<'All' | PrayerRequest['category']>('All');
   const [statusFilter, setStatusFilter] = useState<'All' | PrayerRequest['status']>('All');
   const [showComposer, setShowComposer] = useState(false);
+  const [editingId,setEditingId]=useState('');
   const [requestText, setRequestText] = useState('');
   const [category, setCategory] = useState<PrayerRequest['category']>('Spiritual');
   const [isPrivate, setIsPrivate] = useState(true);
@@ -88,14 +89,33 @@ export const PrayerPage: React.FC<PrayerPageProps> = ({ currentUser, onBack }) =
     if (text.length < 5) { setError('Please share a little more so the ministry team can understand your request.'); return; }
     setSaving(true); setError(''); setNotice('');
     try {
-      const result = await prayerApi('create', { requestText: text, category, isPrivate });
-      if (result.item) setRequests(current => [result.item!, ...current]);
-      setRequestText(''); setCategory('Spiritual'); setIsPrivate(true); setShowComposer(false);
-      setNotice('Your prayer request has been received. The ministry team will pray with you.');
+      const result = await prayerApi(editingId?'edit':'create',
+        {...(editingId?{id:editingId}:{}),requestText:text,category,isPrivate});
+      if (result.item) setRequests(current=>editingId
+        ?current.map(item=>item.id===editingId?result.item!:item)
+        :[result.item!,...current]);
+      setRequestText('');setCategory('Spiritual');setIsPrivate(true);setShowComposer(false);setEditingId('');
+      setNotice(editingId?'Prayer request updated.':'Prayer request received.');
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not submit your prayer request.'); }
     finally { setSaving(false); }
   };
 
+  const editOwn=(item:PrayerRequest)=>{
+    setEditingId(item.id);
+    setRequestText(item.requestText);
+    setCategory(item.category);
+    setIsPrivate(item.isPrivate);
+    setError('');
+    setShowComposer(true);
+  };
+  const markAnswered=async(item:PrayerRequest)=>{
+    if(!await appConfirm('Mark this prayer request as answered?',{title:'Prayer answered',confirmLabel:'Mark answered'}))return;
+    try{
+      const result=await prayerApi('markAnswered',{id:item.id});
+      if(result.item)setRequests(current=>current.map(row=>row.id===item.id?result.item!:row));
+      setNotice('Prayer request marked as answered.');
+    }catch(reason){setError(reason instanceof Error?reason.message:'Could not update the prayer request.');}
+  };
   const updateStatus = async (id: string, status: PrayerRequest['status']) => {
     try {
       await prayerApi('status', { id, status });
@@ -166,7 +186,11 @@ export const PrayerPage: React.FC<PrayerPageProps> = ({ currentUser, onBack }) =
                 <p className="vop-prayer-text">{request.requestText}</p>
                 <div className="vop-prayer-card-foot">
                   <span>{request.isPrivate ? <><Lock size={13}/> Private to ministry</> : <><Users size={13}/> Shared for prayer</>}</span>
-                  {tab === 'mine' && <button className="vop-prayer-delete" onClick={() => void remove(request.id)}><Trash2 size={14}/> Delete</button>}
+                  {tab === 'mine' && <div className="vop-prayer-actions">
+                    {request.status!=='Answered'&&<button type="button" onClick={()=>editOwn(request)}>Edit</button>}
+                    {request.status!=='Answered'&&<button type="button" onClick={()=>void markAnswered(request)}><Check size={14}/> Mark answered</button>}
+                    <button type="button" className="vop-prayer-delete" onClick={()=>void remove(request.id)}><Trash2 size={14}/> Delete</button>
+                  </div>}
                   {isAdmin && tab !== 'mine' && <div className="vop-prayer-actions"><button onClick={() => void updateStatus(request.id,'Praying')}>Mark praying</button><button onClick={() => void updateStatus(request.id,'Answered')}>Mark answered</button></div>}
                 </div>
               </article>
@@ -174,15 +198,15 @@ export const PrayerPage: React.FC<PrayerPageProps> = ({ currentUser, onBack }) =
           </section>}
       </main>
 
-      {showComposer && <ModalLayer><div className="vop-prayer-modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setShowComposer(false); }}>
+      {showComposer && <ModalLayer><div className="vop-prayer-modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) {setShowComposer(false);setEditingId('');} }}>
         <form className="vop-prayer-composer" onSubmit={submit}>
-          <div className="vop-prayer-composer-head"><div><span>Prayer Ministry</span><h2>{t('prayer.composer_title','What would you like us to pray about?')}</h2></div><button type="button" onClick={() => setShowComposer(false)}>×</button></div>
+          <div className="vop-prayer-composer-head"><div><span>Prayer Ministry</span><h2>{editingId?'Edit prayer request':t('prayer.composer_title','What would you like us to pray about?')}</h2></div><button type="button" onClick={() => {setShowComposer(false);setEditingId('');}}>×</button></div>
           <div className="vop-prayer-composer-body">
             <label>{t('prayer.topic','Topic')}<select value={category} onChange={e => setCategory(e.target.value as PrayerRequest['category'])}>{categories.map(item => <option key={item}>{item}</option>)}</select></label>
             <label>{t('prayer.request','Your request')}<textarea value={requestText} onChange={e => setRequestText(e.target.value)} maxLength={3000} rows={7} placeholder="Share only what you are comfortable sharing with the ministry…"/></label>
             <div className="vop-prayer-privacy-choice"><div><strong>{isPrivate ? 'Private prayer' : 'Community prayer'}</strong><span>{isPrivate ? 'Visible to you and authorized ministry administrators.' : 'Visible to signed-in members of your organization.'}</span></div><button type="button" onClick={() => setIsPrivate(value => !value)}>{isPrivate ? 'Make community' : 'Keep private'}</button></div>
           </div>
-          <footer><button type="button" onClick={() => setShowComposer(false)}>{t('common.cancel','Cancel')}</button><button className="primary" type="submit" disabled={saving || requestText.trim().length < 5}><Send size={16}/>{saving ? t('common.sending','Sending…') : t('prayer.send','Send request')}</button></footer>
+          <footer><button type="button" onClick={() => {setShowComposer(false);setEditingId('');}}>{t('common.cancel','Cancel')}</button><button className="primary" type="submit" disabled={saving || requestText.trim().length < 5}><Send size={16}/>{saving?'Saving…':editingId?'Save changes':t('prayer.send','Send request')}</button></footer>
         </form>
       </div></ModalLayer>}
     </div>
