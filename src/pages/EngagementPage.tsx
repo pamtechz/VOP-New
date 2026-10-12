@@ -238,7 +238,7 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
             </div>;
           })}</div> : <p>No published requirements yet.</p>}</div></article>
           <article className="vop-material-card"><div className="vop-material-body">
-            <h2>Submit supporting evidence</h2><p>Attach an HTTPS link for evaluator review. Submission does not award approval.</p>
+            <h2>Submit supporting evidence</h2><p>Send evidence link for review.</p>
             {requirements.length ? <form onSubmit={event=>void submitEvidence(event)} style={{display:'grid',gap:'.75rem'}}>
               <label>Requirement<select required value={evidenceRequirement} onChange={event=>setEvidenceRequirement(event.target.value)}><option value="">Choose the requirement</option>
                 {requirements.map(item=><option key={String(item.id)} value={String(item.id)}>{String(item.title || item.name || 'Requirement')}</option>)}</select></label>
@@ -246,7 +246,7 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
               <label>Evidence link<input required type="url" maxLength={2048} value={evidenceUrl} onChange={event=>setEvidenceUrl(event.target.value)} placeholder="https://example.org/my-work" pattern="https://.*"/></label>
               <label>Notes for the evaluator<textarea value={evidenceNote} onChange={event=>setEvidenceNote(event.target.value)} maxLength={2000}/></label>
               <button type="submit" disabled={busy||!evidenceRequirement}>{busy?'Submitting…':'Submit evidence'}</button>
-            </form>:<p>Requirements will appear here when your ministry publishes them.</p>}
+            </form>:<p>Await published requirements.</p>}
             {evidence.length>0 && <div style={{marginTop:'1rem'}}><h3>Submitted evidence</h3>
               {evidence.map(item=><p key={String(item.id)}><a href={String(item.url || '#')} target="_blank" rel="noopener noreferrer">{String(item.title || 'Supporting evidence')}</a>{item.revision ? ` · revision ${item.revision}` : ''}</p>)}
             </div>}
@@ -324,8 +324,8 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
             {memoryView==='due'?<Clock3 size={40}/>:<BookmarkCheck size={40}/>}
             <h2>{memoryView==='due'?'Nothing due right now':memoryView==='reviewed'?'No reviewed verses yet':'This deck is empty'}</h2>
             <p>{memoryView==='due'
-              ?(memorySummary.reviewed?'Your due queue is clear. Reviewed verses are still available under Reviewed.':'Start reviewing this deck when cards become available.')
-              :memoryView==='reviewed'?'Verses move here after you complete a review, and they remain available for revisit.':'There are no Scripture cards in this deck.'}</p>
+              ?(memorySummary.reviewed?'No reviews due. See Reviewed.':'No reviews available yet.')
+              :memoryView==='reviewed'?'Completed reviews remain here.':'There are no Scripture cards in this deck.'}</p>
             {memoryView==='due'&&memorySummary.reviewed>0&&<button type="button" className="vop-secondary" onClick={()=>setMemoryView('reviewed')}><BookmarkCheck size={15}/>Open Reviewed</button>}
           </div>}
         </section>}
@@ -364,7 +364,7 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
                 const result=await engagement({action:'duelSoloCreate'});
                 setChallengeMode('solo');setMatchId(String(result.challengeId));setChallengeExpiresAt(result.expiresAt||'');
                 setDuelQuestions((result.questions as Array<Record<string,unknown>>)||[]);setAnsweredQuestionIds([]);
-                setMessage('Solo Scripture challenge started. Complete every question before time expires.');
+                setMessage('Challenge started. Finish before timeout.');
               })}><Brain size={16}/> Start solo challenge</button>
             </article>
 
@@ -385,7 +385,7 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
                   const result=await engagement({action:'duelCreate',opponentId});
                   setChallengeMode('duel');setMatchId(String(result.matchId));setChallengeExpiresAt(result.expiresAt||'');
                   setDuelQuestions((result.questions as Array<Record<string,unknown>>)||[]);setAnsweredQuestionIds([]);
-                  setMessage('Ranked Duel created. Both players must answer every question before the match can be ranked.');
+                  setMessage('Duel created. Both players must finish.');
                 })}><Swords size={16}/> Start Duel</button>
               </div>
             </article>
@@ -448,7 +448,7 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
               })}
             </div>
             <div className="vop-arena-finish-bar">
-              <div><strong>{answeredQuestionIds.length===duelQuestions.length?'Answers complete':'Keep going'}</strong><span>{challengeMode==='duel'&&answeredQuestionIds.length===duelQuestions.length?'Awaiting the other player.':'Answer every question to complete this challenge.'}</span></div>
+              <div><strong>{answeredQuestionIds.length===duelQuestions.length?'Answers complete':'Keep going'}</strong><span>{challengeMode==='duel'&&answeredQuestionIds.length===duelQuestions.length?'Awaiting the other player.':'Answer all questions to finish.'}</span></div>
               <button type="button" className="vop-primary" disabled={busy||answeredQuestionIds.length<duelQuestions.length} onClick={()=>void run(async()=>{
                 const result=challengeMode==='solo'
                   ?await engagement({action:'duelSoloFinish',challengeId:matchId})
@@ -476,7 +476,7 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
 
           <div className="vop-arena-bottom-grid">
             <article className="vop-material-card"><div className="vop-material-body">
-              <div className="vop-arena-section-head"><div><span className="vop-material-kicker"><Medal size={14}/> Rankings</span><h2>Leaderboard</h2><p>Only opted-in learners appear in rankings.</p></div>
+              <div className="vop-arena-section-head"><div><span className="vop-material-kicker"><Medal size={14}/> Rankings</span><h2>Leaderboard</h2><p>Opted-in learners only.</p></div>
                 <button type="button" className="vop-secondary" disabled={busy} onClick={()=>void run(async()=>{
                   const ranking=await engagement({action:'duelLeaderboard'});
                   setLeaderboard((ranking.leaderboard as Array<{rank:number;displayName:string;rating:number;points?:number}>)||[]);
@@ -492,7 +492,7 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
                 <span className={'vop-arena-result-icon '+item.outcome}>{item.kind==='duel'?<Swords size={16}/>:<Brain size={16}/>}</span>
                 <div><strong>{item.kind==='duel'?`Duel vs ${item.opponentName||'Learner'}`:'Solo Challenge'}</strong><span>{item.kind==='solo'?`${Number(item.score||0)}/${Number(item.questionCount||0)} correct`:item.outcome==='win'?'Victory':item.outcome==='draw'?'Draw':item.outcome==='loss'?'Defeat':'Expired'}</span></div>
                 <b>{item.outcome}</b>
-              </div>)}</div>:<div className="vop-materials-empty compact"><Trophy size={30}/><h3>No completed Arena activity</h3><p>Complete a Solo Challenge or Ranked Duel to start your history.</p></div>}
+              </div>)}</div>:<div className="vop-materials-empty compact"><Trophy size={30}/><h3>No completed Arena activity</h3><p>Complete a challenge to see history.</p></div>}
             </div></article>
           </div>
 
