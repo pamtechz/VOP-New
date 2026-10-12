@@ -236,8 +236,9 @@ test('admin UX consolidation, portal isolation, audit controls and engagement re
   assert.match(admin,/accountAbout/);
   assert.match(admin,/Organization portal/);
   assert.match(admin,/Admin panel/);
-  assert.match(app,/isOrganizationPortalAccount\(currentUser\)/);
-  assert.match(app,/Organization staff accounts use the organization portal/);
+  assert.match(app,/assignedPortalChoices\(currentUser\)/);
+  assert.match(app,/setPortalPrompt\(true\)/);
+  assert.doesNotMatch(app,/Organization staff accounts use the organization portal/);
   assert.match(organizationAccount,/Organization account profile/);
   assert.match(organizationAccount,/saveOwnProfile/);
   assert.match(read('src/services/accountProfile.ts'),/profileAction\('updateOwnProfile'/);
