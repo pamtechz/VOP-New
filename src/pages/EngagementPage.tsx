@@ -209,7 +209,7 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
           <div className="vop-engagement-hero-content">
             <span className="vop-materials-kicker"><Sparkles size={14}/> {tab === 'master-guide' ? 'Youth & leadership' : tab === 'memory' ? 'Scripture engagement' : 'Bible knowledge challenge'}</span>
             <h1>{tab === 'master-guide' ? 'Master Guide' : tab === 'memory' ? 'Scripture Memory' : 'Iron Duels'}</h1>
-            <p>{tab === 'master-guide' ? 'Complete your published ministry requirements, submit evidence and follow mentor approvals.' : tab === 'memory' ? 'Practice the memory decks published by your organization, with reviews saved to your account.' : 'Compete in organization-scoped Scripture challenges, track your matches and review the standings.'}</p>
+            <p>{tab === 'master-guide' ? 'Submit evidence for ministry requirements.' : tab === 'memory' ? 'Review Scripture verses and track progress.' : 'Play Scripture challenges and track results.'}</p>
           </div>
         </div>
       </header>
@@ -218,7 +218,7 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
         {error && <div role="alert" style={{ padding:'.8rem 1rem', borderRadius:12, marginBottom:'1rem', background:'#fff1f2', color:'#9f1239' }}>{error}</div>}
 
         {tab === 'master-guide' && <section style={{ display:'grid', gap:'1rem' }}>
-          <article className="vop-material-card"><div className="vop-material-body"><div className="vop-material-meta"><span>Digital portfolio</span><b>{String(portfolio?.status || 'active')}</b></div><h2>Master Guide Portfolio</h2><p>Track requirements, activities, evidence and authorized sign-offs in one learner-owned portfolio.</p><div style={{ display:'flex', gap:'.7rem', flexWrap:'wrap' }}><strong>{activities.length} activities</strong><strong>{evidence.length} evidence records</strong><strong>{signoffs.filter(item => item.decision === 'approved').length} approved sign-offs</strong><button type="button" disabled={busy} onClick={() => void run(async () => { const result = await engagement({ action:'portfolioShare' }); setShareUrl(String(result.url || '')); setMessage('Portfolio sharing link created.'); })}><Share2 size={15}/> Share portfolio</button></div>{shareUrl && <p><a href={shareUrl}>{shareUrl}</a></p>}</div></article>
+          <article className="vop-material-card"><div className="vop-material-body"><div className="vop-material-meta"><span>Digital portfolio</span><b>{String(portfolio?.status || 'active')}</b></div><h2>Master Guide Portfolio</h2><p>Track your requirements and evidence.</p><div style={{ display:'flex', gap:'.7rem', flexWrap:'wrap' }}><strong>{activities.length} activities</strong><strong>{evidence.length} evidence records</strong><strong>{signoffs.filter(item => item.decision === 'approved').length} approved sign-offs</strong><button type="button" disabled={busy} onClick={() => void run(async () => { const result = await engagement({ action:'portfolioShare' }); setShareUrl(String(result.url || '')); setMessage('Portfolio sharing link created.'); })}><Share2 size={15}/> Share portfolio</button></div>{shareUrl && <p><a href={shareUrl}>{shareUrl}</a></p>}</div></article>
           <article className="vop-material-card"><div className="vop-material-body"><h2>Requirements</h2>{requirements.length ? <div style={{ display:'grid', gap:'.6rem' }}>{requirements.map(req => {
             const state=requirementState(req,activities,signoffs);
             const feedback=state.changes?String(state.changes.notes||'Please revise this submission and resubmit it.'):''; 
@@ -238,7 +238,7 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
             </div>;
           })}</div> : <p>No published Master Guide requirements are available for your organization yet.</p>}</div></article>
           <article className="vop-material-card"><div className="vop-material-body">
-            <h2>Submit supporting evidence</h2><p>Choose the requirement, then attach a public HTTPS link to your work. A mentor or evaluator reviews it; submitting evidence does not award sign-off automatically.</p>
+            <h2>Submit supporting evidence</h2><p>Attach an HTTPS link for evaluator review. Submission does not award approval.</p>
             {requirements.length ? <form onSubmit={event=>void submitEvidence(event)} style={{display:'grid',gap:'.75rem'}}>
               <label>Requirement<select required value={evidenceRequirement} onChange={event=>setEvidenceRequirement(event.target.value)}><option value="">Choose the requirement</option>
                 {requirements.map(item=><option key={String(item.id)} value={String(item.id)}>{String(item.title || item.name || 'Requirement')}</option>)}</select></label>
@@ -256,7 +256,7 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
         {tab === 'memory' && <section className="vop-memory-workspace">
           <article className="vop-material-card vop-memory-overview"><div className="vop-material-body">
             <div className="vop-memory-head">
-              <div><span className="vop-material-kicker"><Brain size={14}/> Scripture engagement</span><h2>Scripture Memory</h2><p>Reviewed verses never disappear. They move to Reviewed, keep their mastery and next-review schedule, and remain available for revisit at any time.</p></div>
+              <div><span className="vop-material-kicker"><Brain size={14}/> Scripture engagement</span><h2>Scripture Memory</h2><p>Reviewed verses remain available for practice.</p></div>
               <select value={deckId} onChange={event=>{setDeckId(event.target.value);setMemoryView('due')}} disabled={busy} aria-label="Scripture memory deck">
                 <option value="">Select a deck</option>{decks.map(deck=><option key={String(deck.id)} value={String(deck.id)}>{String(deck.title||deck.name||deck.id)}</option>)}
               </select>
@@ -333,7 +333,7 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
         {tab === 'duels' && <section className="vop-arena">
           <article className="vop-arena-dashboard">
             <div className="vop-arena-dashboard-head">
-              <div><span className="vop-material-kicker"><Crown size={14}/> Scripture Arena</span><h2>Level {arena.level}</h2><p>Challenges and Duels still work as before. The Arena adds visible progress, milestones and achievements around them.</p></div>
+              <div><span className="vop-material-kicker"><Crown size={14}/> Scripture Arena</span><h2>Level {arena.level}</h2><p>Track your Scripture progress and milestones.</p></div>
               <div className="vop-arena-level-badge"><span>Level</span><strong>{arena.level}</strong></div>
             </div>
             <div className="vop-arena-stats" aria-label="Scripture Arena statistics">
@@ -370,7 +370,7 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
 
             <article className="vop-arena-mode-card duel">
               <div className="vop-arena-mode-icon"><Swords size={25}/></div>
-              <div className="vop-arena-mode-copy"><span>Ranked Duel</span><h2>Challenge a learner</h2><p>Go head-to-head with another opted-in learner in your organization. Both players answer the same questions and ratings update after a ranked finish.</p>
+              <div className="vop-arena-mode-copy"><span>Ranked Duel</span><h2>Challenge a learner</h2><p>Challenge an opted-in learner in your organization.</p>
                 <div className="vop-arena-reward"><Trophy size={14}/> Complete ranked duel · +{rewards.duelChallenge} configured points</div>
               </div>
               <label className="vop-arena-optin"><input type="checkbox" checked={duelOptIn} disabled={busy} onChange={event=>{
@@ -448,7 +448,7 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
               })}
             </div>
             <div className="vop-arena-finish-bar">
-              <div><strong>{answeredQuestionIds.length===duelQuestions.length?'Your answers are complete':'Keep going'}</strong><span>{challengeMode==='duel'&&answeredQuestionIds.length===duelQuestions.length?'Your opponent must also complete the Duel before a ranked result can finish.':'Answer every question to complete this challenge.'}</span></div>
+              <div><strong>{answeredQuestionIds.length===duelQuestions.length?'Your answers are complete':'Keep going'}</strong><span>{challengeMode==='duel'&&answeredQuestionIds.length===duelQuestions.length?'Waiting for your opponent's answers.':'Answer every question to complete this challenge.'}</span></div>
               <button type="button" className="vop-primary" disabled={busy||answeredQuestionIds.length<duelQuestions.length} onClick={()=>void run(async()=>{
                 const result=challengeMode==='solo'
                   ?await engagement({action:'duelSoloFinish',challengeId:matchId})
@@ -476,7 +476,7 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
 
           <div className="vop-arena-bottom-grid">
             <article className="vop-material-card"><div className="vop-material-body">
-              <div className="vop-arena-section-head"><div><span className="vop-material-kicker"><Medal size={14}/> Rankings</span><h2>Organization leaderboard</h2><p>Only opted-in learners appear. Ranked Duel results update rating; total configured engagement points remain visible.</p></div>
+              <div className="vop-arena-section-head"><div><span className="vop-material-kicker"><Medal size={14}/> Rankings</span><h2>Organization leaderboard</h2><p>Only opted-in learners appear in rankings.</p></div>
                 <button type="button" className="vop-secondary" disabled={busy} onClick={()=>void run(async()=>{
                   const ranking=await engagement({action:'duelLeaderboard'});
                   setLeaderboard((ranking.leaderboard as Array<{rank:number;displayName:string;rating:number;points?:number}>)||[]);
@@ -496,7 +496,7 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
             </div></article>
           </div>
 
-          {!matchId&&!activeMatches.length&&!soloChallenges.length&&<div className="vop-materials-empty"><Swords size={40}/><h2>Your Arena is ready</h2><p>Start a Solo Challenge for personal Scripture practice or invite another learner to a Ranked Duel.</p></div>}
+          {!matchId&&!activeMatches.length&&!soloChallenges.length&&<div className="vop-materials-empty"><Swords size={40}/><h2>Your Arena is ready</h2><p>Play solo or invite a learner.</p></div>}
         </section>}
       </div>
     </main>
