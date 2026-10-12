@@ -53,8 +53,9 @@ class _VopNotificationsState extends State<VopNotifications> {
     body: FutureBuilder<Map<String, dynamic>>(
       future: inbox,
       builder: (context, s) {
-        if (s.connectionState != ConnectionState.done)
+        if (s.connectionState != ConnectionState.done) {
           return const VopSkeleton();
+        }
         if (s.hasError) {
           return VopEmpty(
             icon: Icons.wifi_off,

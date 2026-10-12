@@ -403,10 +403,12 @@ class _MemoryDeckState extends State<_MemoryDeck> {
     body: FutureBuilder<Map<String, dynamic>>(
       future: due,
       builder: (context, s) {
-        if (s.connectionState != ConnectionState.done)
+        if (s.connectionState != ConnectionState.done) {
           return const VopSkeleton();
-        if (s.hasError)
+        }
+        if (s.hasError) {
           return VopEmpty(icon: Icons.wifi_off, message: '${s.error}');
+        }
         final verses = engagementRows(s.data?['due']);
         final summary = s.data?['summary'] is Map
             ? Map<String, dynamic>.from(s.data!['summary'] as Map)
@@ -556,11 +558,12 @@ class _SoloChallengeState extends State<_SoloChallenge> {
         'action': 'duelSoloFinish',
         'challengeId': id,
       });
-      if (mounted)
+      if (mounted) {
         setState(() {
           completed = true;
           results = result;
         });
+      }
     } catch (e) {
       if (mounted) setState(() => error = '$e');
     } finally {

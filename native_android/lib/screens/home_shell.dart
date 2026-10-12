@@ -78,8 +78,9 @@ class _HomeShellState extends State<HomeShell> {
   ) => FutureBuilder<Map<String, dynamic>>(
     future: future,
     builder: (context, result) {
-      if (result.connectionState != ConnectionState.done)
+      if (result.connectionState != ConnectionState.done) {
         return const VopSkeleton();
+      }
       if (result.hasError) {
         return VopEmpty(
           icon: Icons.wifi_off,
@@ -361,8 +362,9 @@ class _HomeShellState extends State<HomeShell> {
   Widget home() => FutureBuilder<List<Map<String, dynamic>>>(
     future: Future.wait([profile, catalog, progress]),
     builder: (context, s) {
-      if (s.connectionState != ConnectionState.done)
+      if (s.connectionState != ConnectionState.done) {
         return const VopSkeleton(rows: 5);
+      }
       if (s.hasError) {
         return VopEmpty(
           icon: Icons.wifi_off,
@@ -804,10 +806,12 @@ class _ProgressScreen extends StatelessWidget {
     body: FutureBuilder<Map<String, dynamic>>(
       future: api.progress(),
       builder: (context, s) {
-        if (s.connectionState != ConnectionState.done)
+        if (s.connectionState != ConnectionState.done) {
           return const VopSkeleton();
-        if (s.hasError)
+        }
+        if (s.hasError) {
           return VopEmpty(icon: Icons.wifi_off, message: '${s.error}');
+        }
         final progress = s.data ?? {};
         final count = (progress['completedLessons'] as List?)?.length ?? 0;
         return ListView(

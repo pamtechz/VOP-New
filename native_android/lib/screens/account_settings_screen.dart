@@ -112,30 +112,33 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
             if (mounted) setState(() => security = r);
           })
           .catchError((Object ignored) {
-            if (mounted)
+            if (mounted) {
               setState(
                 () => security = {'error': 'Security details unavailable.'},
               );
+            }
           });
       _loadSecurityActivity();
       widget.api
           .notificationCapabilities()
           .then((r) {
-            if (mounted)
+            if (mounted) {
               setState(() {
                 notificationCapabilities = r;
                 notificationStatusLoaded = true;
               });
+            }
           })
           .catchError((Object ignored) {
             if (mounted) setState(() => notificationStatusLoaded = true);
           });
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         setState(() {
           error = '$e';
           loading = false;
         });
+      }
     }
   }
 
@@ -225,8 +228,9 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
 
   void _patch(String key, dynamic value) {
     setState(() => preferences = {...preferences, key: value});
-    if (key == 'theme' || key == 'accessibility')
+    if (key == 'theme' || key == 'accessibility') {
       VopAppearance.apply(preferences);
+    }
   }
 
   void _nested(String section, String key, dynamic value) {
@@ -627,11 +631,12 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         });
       }
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         setState(
           () =>
               securityActivityError = 'Could not load your security activity.',
         );
+      }
     }
   }
 
@@ -659,8 +664,9 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     await _perform(() async {
       final result = await widget.api.exportOwnAccount();
       final export = result['export'];
-      if (export is! Map)
+      if (export is! Map) {
         throw StateError('The server did not return a valid account export.');
+      }
       final bytes = Uint8List.fromList(
         utf8.encode(const JsonEncoder.withIndent('  ').convert(export)),
       );

@@ -43,8 +43,9 @@ class _CertificatesScreenState extends State<CertificatesScreen> {
     body: FutureBuilder<Map<String, dynamic>>(
       future: certificate,
       builder: (context, s) {
-        if (s.connectionState != ConnectionState.done)
+        if (s.connectionState != ConnectionState.done) {
           return const VopSkeleton(rows: 2);
+        }
         if (s.hasError) {
           return VopEmpty(
             icon: Icons.wifi_off,

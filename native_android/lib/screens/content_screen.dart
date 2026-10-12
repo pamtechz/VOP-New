@@ -74,8 +74,9 @@ class _VopContentScreenState extends State<VopContentScreen> {
     final body = FutureBuilder<Map<String, dynamic>>(
       future: content,
       builder: (context, s) {
-        if (s.connectionState != ConnectionState.done)
+        if (s.connectionState != ConnectionState.done) {
           return const VopSkeleton();
+        }
         if (s.hasError) {
           return VopEmpty(
             icon: Icons.wifi_off,
