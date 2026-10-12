@@ -354,7 +354,7 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
 
           <div className={'vop-support-messages'+(loading&&requests.length?' vop-refreshing vop-shimmer-overlay':'')} style={{marginTop:14}}>
             {loading&&requests.length===0?<ShimmerList rows={4} compact label="Loading support requests"/>:requests.length===0
-              ?<div className="vop-support-empty-inline">No requests yet. Ask for help here.</div>
+              ?<div className="vop-support-empty-inline">No requests yet.</div>
               :requests.map(item=><article key={item.id} className={activeRequest?.id===item.id?'mine':'theirs'} style={{cursor:'pointer'}} onClick={()=>void openRequest(item)}>
                 <strong>{item.subject||labelForCategory(item.category)}{item.unread?' · New':''}</strong>
                 <p>{labelForCategory(item.category)} · {item.target.replace('_',' ')} · {item.channel.replace('_',' ')}</p>
@@ -376,7 +376,7 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
 
         <aside className="vop-support-reference-panel">
           <div className="vop-support-panel-title"><Tag size={19}/><strong>Tag the exact study context</strong></div>
-          <p>Your support team sees attached study references.</p>
+          <p>Study references are attached.</p>
           <select value={selectedGuide} onChange={e=>{setSelectedGuide(e.target.value);setSelectedLesson('')}}>
             <option value="">Select guide / course (optional)</option>
             {guides.map(item=><option key={item.id} value={item.id}>{item.title} · {item.language}</option>)}
@@ -401,7 +401,7 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
 
           <hr/>
           <div className="vop-support-panel-title"><UserRound size={19}/><strong>Direct mentor conversation</strong></div>
-          {!conversation?<p>No assigned mentor. Use Organization support.</p>:<>
+          {!conversation?<p>No mentor assigned. Ask organization support.</p>:<>
             <p>{conversation.mentorName||'Your mentor'} · private assigned-mentor channel.</p>
             <ChatThread currentUserId={currentUser.uid} messages={messages} draft={mentorMessage} onDraftChange={setMentorMessage}
               guides={guides} busy={sending} placeholder="Message your mentor…" emptyText="No direct messages yet."
