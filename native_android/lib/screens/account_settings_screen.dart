@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:local_auth/local_auth.dart';
 import 'package:flutter/material.dart';
 import '../core/vop_api.dart';
 import '../theme/vop_theme.dart';
@@ -344,6 +345,25 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       if(mounted)setState(()=>securityActivityError='Could not load your security activity.');
     }
   }
+  Future<bool> _confirmDeviceIdentity()async{
+    final verifier=LocalAuthentication();
+    try{
+      if(!await verifier.isDeviceSupported())return true;
+      return await verifier.authenticate(
+        localizedReason:'Confirm your identity for this VOP account action',
+        options:const AuthenticationOptions(
+          biometricOnly:false,stickyAuth:true),
+      );
+    }catch(e){
+      if(mounted)setState(()=>error='Device verification could not be completed: $e');
+      return false;
+    }
+  }
+  Future<void> _checkBiometrics()async{
+    if(!await _confirmDeviceIdentity())return;
+    if(mounted)setState(()=>message='Device verification succeeded. Server sign-in remains required for account changes.');
+  }
+
   Future<void> _exportData()async{
     final accepted=await showDialog<bool>(context:context,
       builder:(ctx)=>AlertDialog(
@@ -355,7 +375,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
           FilledButton(onPressed:()=>Navigator.pop(ctx,true),
             child:const Text('Prepare export')),
         ]));
-    if(accepted!=true||!mounted)return;
+    if(accepted!=true||!mounted||!await _confirmDeviceIdentity())return;
     await _perform(()async{
       final result=await widget.api.exportOwnAccount();
       final export=result['export'];
@@ -383,7 +403,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
           FilledButton(onPressed:()=>Navigator.pop(ctx,true),
             child:const Text('Sign out all')),
         ]));
-    if(accepted!=true||!mounted)return;
+    if(accepted!=true||!mounted||!await _confirmDeviceIdentity())return;
     await _perform(()async{
       await widget.api.revokeAllSessions();
       await FirebaseAuth.instance.signOut();
@@ -417,6 +437,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         setState(()=>error='Type DELETE MY ACCOUNT exactly.');
         return;
       }
+      if(!await _confirmDeviceIdentity())return;
       await _perform(()async{
         deletion=await widget.api.requestAccountDeletion(text);
       },'Account deletion requested. You can cancel before the scheduled date.');
@@ -439,11 +460,12 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
           },'Password reset email requested. Check your inbox.');
         }),
       const Divider(),
-      const ListTile(contentPadding:EdgeInsets.zero,
-        leading:Icon(Icons.fingerprint),
-        title:Text('Passkeys & biometrics'),
-        subtitle:Text('Native passkey enrollment is not configured on this Android build. '
-          'Your existing password or Google sign-in remains available.')),
+      ListTile(contentPadding:EdgeInsets.zero,
+        leading:const Icon(Icons.fingerprint),
+        title:const Text('Verify with biometrics or screen lock'),
+        subtitle:const Text('Check your device security for sensitive actions. Account login still uses Firebase.'),
+        trailing:const Icon(Icons.chevron_right),
+        onTap:_checkBiometrics),
       const Divider(),
       if(security.isNotEmpty)...[
         if(security.containsKey('emailVerified'))...[
