@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 import '../core/config.dart';
+import '../core/vop_passkeys.dart';
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -44,6 +45,17 @@ class _AuthScreenState extends State<AuthScreen> {
       if (mounted) setState(() => _busy = false);
     }
   }
+  Future<void> _signInWithPasskey()async{
+    setState((){_busy=true;_error=null;});
+    try{
+      await VopPasskeys().signIn();
+    }catch(e){
+      if(mounted)setState(()=>_error=e.toString().replaceFirst('Bad state: ',''));
+    }finally{
+      if(mounted)setState(()=>_busy=false);
+    }
+  }
+
   Future<void> _googleSignIn() async {
     setState(() { _busy = true; _error = null; });
     try {
@@ -143,6 +155,12 @@ class _AuthScreenState extends State<AuthScreen> {
                   onPressed: _busy ? null : _googleSignIn,
                   icon: const Icon(Icons.login_rounded),
                   label: const Text('Continue with Google'),
+                ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed:_busy?null:_signInWithPasskey,
+                  icon:const Icon(Icons.fingerprint_outlined),
+                  label:const Text('Continue with passkey'),
                 ),
                 const SizedBox(height: 22),
                 const Text(
