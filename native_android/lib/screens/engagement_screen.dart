@@ -14,10 +14,18 @@ class EngagementScreen extends StatefulWidget {
 class _EngagementScreenState extends State<EngagementScreen> {
   int tab=0;
   late Future<Map<String,dynamic>> decks,arena;
-  @override void initState(){super.initState();reload();}
-  void reload(){
+  bool challengesLoaded=false;
+  @override void initState(){super.initState();
     decks=widget.api.action('/api/engagement',{'action':'memoryDecks'});
-    arena=widget.api.action('/api/engagement',{'action':'duelOverview'});
+    arena=Future.value(<String,dynamic>{});
+  }
+  void reload(){
+    if(tab==0){
+      decks=widget.api.action('/api/engagement',{'action':'memoryDecks'});
+    }else{
+      arena=widget.api.action('/api/engagement',{'action':'duelOverview'});
+      challengesLoaded=true;
+    }
   }
   @override Widget build(BuildContext context)=>Scaffold(
     appBar:AppBar(title:const Text('Scripture & Challenges')),
@@ -38,7 +46,10 @@ class _EngagementScreenState extends State<EngagementScreen> {
               ButtonSegment(value:1,label:const Text('Challenges'),
                 icon:const Icon(Icons.sports_esports_outlined,size:17)),
             ],
-            selected:{tab},onSelectionChanged:(values)=>setState(()=>tab=values.first));
+            selected:{tab},onSelectionChanged:(values)=>setState((){
+              tab=values.first;
+              if(tab==1&&!challengesLoaded)reload();
+            }));
         })),
       Expanded(child:tab==0?_decks():_challenges()),
     ]),
