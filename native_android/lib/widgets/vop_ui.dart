@@ -64,7 +64,7 @@ class VopHeroCard extends StatelessWidget {
         decoration:BoxDecoration(
           borderRadius:BorderRadius.circular(14),
           color:VopColors.navyDeep,
-          border:Border.all(color:VopColors.navyBright),
+          border:Border.all(color:VopColors.navyBright)),
         child:Padding(padding:EdgeInsets.all(narrow?14:16),
           child:Column(mainAxisSize:MainAxisSize.min,
             crossAxisAlignment:CrossAxisAlignment.start,children:[
