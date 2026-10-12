@@ -138,6 +138,11 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       preferences=_map(result['settings']);
       savedPreferences=Map<String,dynamic>.from(preferences);
       VopAppearance.apply(preferences);
+      if(changes.containsKey('theme')){
+        final uid=FirebaseAuth.instance.currentUser?.uid;
+        if(uid!=null)await VopAppearance.persistTheme(
+          uid,(preferences['theme']??'system').toString());
+      }
     },'Personal settings saved for web and Android.');
   }
   Future<void> _perform(Future<void> Function() action,String success)async{
