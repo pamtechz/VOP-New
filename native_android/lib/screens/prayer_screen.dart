@@ -164,7 +164,7 @@ class _PrayerScreenState extends State<PrayerScreen> {
     controller.dispose();
     if(done==true&&mounted){
       setState(reload);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content:Text(existing==null?'Prayer request submitted.':'Prayer request updated.')));
     }
   }
