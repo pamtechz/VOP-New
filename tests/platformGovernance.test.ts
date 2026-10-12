@@ -236,8 +236,9 @@ test('admin UX consolidation, portal isolation, audit controls and engagement re
   assert.match(admin,/accountAbout/);
   assert.match(admin,/Organization portal/);
   assert.match(admin,/Admin panel/);
-  assert.match(app,/isOrganizationPortalAccount\(currentUser\)/);
-  assert.match(app,/Organization staff accounts use the organization portal/);
+  assert.match(app,/assignedPortalChoices\(currentUser\)/);
+  assert.match(app,/setPortalPrompt\(true\)/);
+  assert.doesNotMatch(app,/Organization staff accounts use the organization portal/);
   assert.match(organizationAccount,/Organization account profile/);
   assert.match(organizationAccount,/saveOwnProfile/);
   assert.match(read('src/services/accountProfile.ts'),/profileAction\('updateOwnProfile'/);
@@ -274,11 +275,11 @@ test('admin UX consolidation, portal isolation, audit controls and engagement re
   assert.match(engagement,/timestampMillis/);
   assert.match(points,/pointsLedger/);
   assert.match(engagementPage,/Scripture Memory/);
-  assert.match(engagementPage,/Reviewed verses never disappear/);
+  assert.match(engagementPage,/Completed reviews remain here/);
   assert.match(engagementPage,/memoryView==='reviewed'/);
   assert.match(engagementPage,/Practice again/);
   assert.match(engagementPage,/practice:true/);
-  assert.match(engagementPage,/moved to Reviewed and scheduled for later/);
+  assert.match(engagementPage,/points · Reviewed/);
   assert.match(engagement,/reviewed,scheduled,all/);
   assert.match(engagement,/practice=b\.practice===true/);
   assert.match(engagement,/pointsAwarded:0,practice:true/);

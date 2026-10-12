@@ -104,6 +104,38 @@ export default async function handler(req: Request, res: Response) {
       return res.status(201).json({ ok:true, item:record });
     }
 
+    if(action==='edit'||action==='markAnswered'){
+      const requestId=id(body.id);
+      const ref=collection.doc(requestId);
+      const existing=await ref.get();
+      if(!existing.exists)return res.status(404).json({error:'Prayer request not found.'});
+      const data=existing.data()||{};
+      if(String(data.candidateId||'')!==ctx.auth.uid)
+        return res.status(403).json({error:'Only the person who submitted this prayer request may change it.'});
+      if(!ctx.isSuperAdmin && !(ctx.tenantType==='hierarchy'
+        ?await organizationInHierarchyScope(ctx,String(data.organizationId||''))
+        :String(data.organizationId||'')===ctx.organizationId))
+        return res.status(403).json({error:'Prayer request belongs to another organization.'});
+      const now=new Date().toISOString();
+      if(action==='markAnswered'){
+        await ref.update({status:'Answered',updatedAt:now,answeredAt:now,answeredBy:ctx.auth.uid});
+        await writeTenantAudit(ctx,'prayer.answered',ref.path,data,{...data,status:'Answered'});
+        return res.status(200).json({ok:true,item:{...data,status:'Answered',updatedAt:now,answeredAt:now}});
+      }
+      if(String(data.status||'')==='Answered')
+        return res.status(409).json({error:'Answered requests cannot be edited. You can submit a new request.'});
+      const requestText=String(body.requestText||'').trim();
+      const category=String(body.category||'');
+      if(requestText.length<5||requestText.length>3000)
+        return res.status(400).json({error:'Prayer request must be between 5 and 3000 characters.'});
+      if(!categories.has(category))
+        return res.status(400).json({error:'Choose a valid prayer category.'});
+      const changes={requestText,category,isPrivate:body.isPrivate===true,updatedAt:now};
+      await ref.update(changes);
+      await writeTenantAudit(ctx,'prayer.edit',ref.path,data,{...data,...changes});
+      return res.status(200).json({ok:true,item:{...data,...changes}});
+    }
+
     if (action === 'status') {
       await requirePermission(ctx, 'prayer', 'update');
       if (!admin) throw new Error('Only authorized ministry administrators can update prayer status.');

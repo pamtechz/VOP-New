@@ -1345,7 +1345,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
               <button type="button" role="menuitem" onClick={()=>{setProfileOpen(false);navigateAdminTab('accountNotifications')}}><Bell size={16}/>Notifications</button>
             </>:<>
               <button type="button" role="menuitem" onClick={()=>{navigateAdminTab('settings');setSettingsSubtab('general')}}><Settings size={16}/>Account & Settings</button>
-              <button type="button" role="menuitem" onClick={()=>{setProfileOpen(false);onBack()}}><ArrowLeft size={16}/>Back to App</button>
+              <button type="button" role="menuitem" onClick={()=>{setProfileOpen(false);onNavigate('home')}}><ArrowLeft size={16}/>Learner workspace</button>
             </>}
             <button type="button" role="menuitem" onClick={()=>{setProfileOpen(false);onLogout()}}><LogOut size={16}/>Sign out</button>
           </div>}

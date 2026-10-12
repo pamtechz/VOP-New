@@ -161,6 +161,14 @@ class VopApi {
       required bool isPrivate}) =>
       action('/api/prayer',{'action':'create',
         'requestText':requestText,'category':category,'isPrivate':isPrivate});
+  Future<Map<String,dynamic>> editPrayer({
+      required String id,required String requestText,required String category,
+      required bool isPrivate}) =>
+      action('/api/prayer',{'action':'edit','id':id,
+        'requestText':requestText,'category':category,'isPrivate':isPrivate});
+  Future<Map<String,dynamic>> markPrayerAnswered(String id) =>
+      action('/api/prayer',{'action':'markAnswered','id':id});
+
 
   Future<Map<String, dynamic>> progress() => read('progress');
   Future<Map<String, dynamic>> guide(String id) => read('guide', {'guideId': id});

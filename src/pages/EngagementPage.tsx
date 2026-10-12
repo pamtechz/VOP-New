@@ -125,12 +125,12 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
   useEffect(() => {
     if (tab === 'master-guide') void run(async () => { const result = await engagement({ action: 'portfolioGet' }); setPortfolio(result.portfolio as Record<string, unknown>); setRequirements((result.requirements as Array<Record<string, unknown>>) || []); });
     if (tab === 'memory') void run(async () => { const result = await engagement({ action: 'memoryDecks' }); const next = (result.decks as Array<Record<string, unknown>>) || []; setDecks(next); if (!deckId && next[0]) setDeckId(String(next[0].id)); });
-    if (tab === 'duels') void run(async () => {
-      const [result, standings] = await Promise.all([
-        engagement({action:'duelOverview'}),engagement({action:'duelLeaderboard'}),
-      ]);
-      applyDuelOverview(result);
-      setLeaderboard((standings.leaderboard as Array<{rank:number;displayName:string;rating:number;points?:number}>) || []);
+    if(tab==='duels')void run(async()=>{
+      const overview=await engagement({action:'duelOverview'});
+      applyDuelOverview(overview);
+      void engagement({action:'duelLeaderboard'}).then(standings=>{
+        setLeaderboard((standings.leaderboard as Array<{rank:number;displayName:string;rating:number;points?:number}>)||[]);
+      }).catch(()=>setLeaderboard([]));
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab]);
@@ -161,7 +161,7 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
       const updated=await engagement({action:'portfolioGet'});
       setPortfolio(updated.portfolio as Record<string,unknown>);
       setEvidenceTitle('');setEvidenceUrl('');setEvidenceNote('');
-      setMessage('Evidence submitted for evaluator review.');
+      setMessage('Evidence sent for review.');
     });
   };
 
@@ -194,11 +194,11 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
     });
     if(practice){
       setPracticeVerseId('');
-      setMessage('Practice revisit saved. Your spaced-repetition schedule was left unchanged and no extra points were awarded.');
+      setMessage('Practice saved. Review schedule unchanged.');
       return;
     }
     await refreshMemoryDeck();
-    setMessage(`Review saved · +${Number(saved.pointsAwarded||0)} points · moved to Reviewed and scheduled for later.`);
+    setMessage(`Saved · +${Number(saved.pointsAwarded||0)} points · Reviewed.`);
   };
 
   return (
@@ -209,7 +209,7 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
           <div className="vop-engagement-hero-content">
             <span className="vop-materials-kicker"><Sparkles size={14}/> {tab === 'master-guide' ? 'Youth & leadership' : tab === 'memory' ? 'Scripture engagement' : 'Bible knowledge challenge'}</span>
             <h1>{tab === 'master-guide' ? 'Master Guide' : tab === 'memory' ? 'Scripture Memory' : 'Iron Duels'}</h1>
-            <p>{tab === 'master-guide' ? 'Complete your published ministry requirements, submit evidence and follow mentor approvals.' : tab === 'memory' ? 'Practice the memory decks published by your organization, with reviews saved to your account.' : 'Compete in organization-scoped Scripture challenges, track your matches and review the standings.'}</p>
+            <p>{tab === 'master-guide' ? 'Submit evidence for ministry requirements.' : tab === 'memory' ? 'Review Scripture verses and track progress.' : 'Play and review results.'}</p>
           </div>
         </div>
       </header>
@@ -218,7 +218,7 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
         {error && <div role="alert" style={{ padding:'.8rem 1rem', borderRadius:12, marginBottom:'1rem', background:'#fff1f2', color:'#9f1239' }}>{error}</div>}
 
         {tab === 'master-guide' && <section style={{ display:'grid', gap:'1rem' }}>
-          <article className="vop-material-card"><div className="vop-material-body"><div className="vop-material-meta"><span>Digital portfolio</span><b>{String(portfolio?.status || 'active')}</b></div><h2>Master Guide Portfolio</h2><p>Track requirements, activities, evidence and authorized sign-offs in one learner-owned portfolio.</p><div style={{ display:'flex', gap:'.7rem', flexWrap:'wrap' }}><strong>{activities.length} activities</strong><strong>{evidence.length} evidence records</strong><strong>{signoffs.filter(item => item.decision === 'approved').length} approved sign-offs</strong><button type="button" disabled={busy} onClick={() => void run(async () => { const result = await engagement({ action:'portfolioShare' }); setShareUrl(String(result.url || '')); setMessage('Portfolio sharing link created.'); })}><Share2 size={15}/> Share portfolio</button></div>{shareUrl && <p><a href={shareUrl}>{shareUrl}</a></p>}</div></article>
+          <article className="vop-material-card"><div className="vop-material-body"><div className="vop-material-meta"><span>Digital portfolio</span><b>{String(portfolio?.status || 'active')}</b></div><h2>Master Guide Portfolio</h2><p>Track your requirements and evidence.</p><div style={{ display:'flex', gap:'.7rem', flexWrap:'wrap' }}><strong>{activities.length} activities</strong><strong>{evidence.length} evidence records</strong><strong>{signoffs.filter(item => item.decision === 'approved').length} approved sign-offs</strong><button type="button" disabled={busy} onClick={() => void run(async () => { const result = await engagement({ action:'portfolioShare' }); setShareUrl(String(result.url || '')); setMessage('Portfolio link ready.'); })}><Share2 size={15}/> Share portfolio</button></div>{shareUrl && <p><a href={shareUrl}>{shareUrl}</a></p>}</div></article>
           <article className="vop-material-card"><div className="vop-material-body"><h2>Requirements</h2>{requirements.length ? <div style={{ display:'grid', gap:'.6rem' }}>{requirements.map(req => {
             const state=requirementState(req,activities,signoffs);
             const feedback=state.changes?String(state.changes.notes||'Please revise this submission and resubmit it.'):''; 
@@ -233,12 +233,12 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
               {!state.approved&&!state.pending&&<button type="button" disabled={busy} onClick={() => void run(async () => {
                 await engagement({ action:'portfolioSaveActivity', requirementId:String(req.id), title:String(req.title || req.name || 'Activity'), status:'submitted' });
                 const refreshed=await engagement({action:'portfolioGet'}); setPortfolio(refreshed.portfolio as Record<string, unknown>);
-                setMessage(state.changes?'Activity resubmitted as a new revision.':'Activity submitted.');
+                setMessage(state.changes?'Activity resubmitted.':'Activity submitted.');
               })}>{state.changes?'Resubmit activity':'Submit activity'}</button>}
             </div>;
-          })}</div> : <p>No published Master Guide requirements are available for your organization yet.</p>}</div></article>
+          })}</div> : <p>No published requirements yet.</p>}</div></article>
           <article className="vop-material-card"><div className="vop-material-body">
-            <h2>Submit supporting evidence</h2><p>Choose the requirement, then attach a public HTTPS link to your work. A mentor or evaluator reviews it; submitting evidence does not award sign-off automatically.</p>
+            <h2>Submit supporting evidence</h2><p>Send evidence link for review.</p>
             {requirements.length ? <form onSubmit={event=>void submitEvidence(event)} style={{display:'grid',gap:'.75rem'}}>
               <label>Requirement<select required value={evidenceRequirement} onChange={event=>setEvidenceRequirement(event.target.value)}><option value="">Choose the requirement</option>
                 {requirements.map(item=><option key={String(item.id)} value={String(item.id)}>{String(item.title || item.name || 'Requirement')}</option>)}</select></label>
@@ -246,7 +246,7 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
               <label>Evidence link<input required type="url" maxLength={2048} value={evidenceUrl} onChange={event=>setEvidenceUrl(event.target.value)} placeholder="https://example.org/my-work" pattern="https://.*"/></label>
               <label>Notes for the evaluator<textarea value={evidenceNote} onChange={event=>setEvidenceNote(event.target.value)} maxLength={2000}/></label>
               <button type="submit" disabled={busy||!evidenceRequirement}>{busy?'Submitting…':'Submit evidence'}</button>
-            </form>:<p>Requirements will appear here when your ministry publishes them.</p>}
+            </form>:<p>Await published requirements.</p>}
             {evidence.length>0 && <div style={{marginTop:'1rem'}}><h3>Submitted evidence</h3>
               {evidence.map(item=><p key={String(item.id)}><a href={String(item.url || '#')} target="_blank" rel="noopener noreferrer">{String(item.title || 'Supporting evidence')}</a>{item.revision ? ` · revision ${item.revision}` : ''}</p>)}
             </div>}
@@ -256,7 +256,7 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
         {tab === 'memory' && <section className="vop-memory-workspace">
           <article className="vop-material-card vop-memory-overview"><div className="vop-material-body">
             <div className="vop-memory-head">
-              <div><span className="vop-material-kicker"><Brain size={14}/> Scripture engagement</span><h2>Scripture Memory</h2><p>Reviewed verses never disappear. They move to Reviewed, keep their mastery and next-review schedule, and remain available for revisit at any time.</p></div>
+              <div><span className="vop-material-kicker"><Brain size={14}/> Scripture engagement</span><h2>Scripture Memory</h2><p>Reviewed verses remain available for practice.</p></div>
               <select value={deckId} onChange={event=>{setDeckId(event.target.value);setMemoryView('due')}} disabled={busy} aria-label="Scripture memory deck">
                 <option value="">Select a deck</option>{decks.map(deck=><option key={String(deck.id)} value={String(deck.id)}>{String(deck.title||deck.name||deck.id)}</option>)}
               </select>
@@ -307,11 +307,11 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
                     onClick={()=>void run(()=>saveMemoryReview(verse,rating,false))}>{label}</button>)}</div>
                 </div>:<>
                   <div className="vop-memory-revisit">
-                    <div><strong>This verse stays in your deck.</strong><span>You can read it whenever you want. Its scheduled review remains intact.</span></div>
+                    <div><strong>This verse stays in your deck.</strong><span>This review schedule is unchanged.</span></div>
                     <button type="button" className="vop-secondary" disabled={busy} onClick={()=>setPracticeVerseId(current=>current===String(verse.id)?'':String(verse.id))}><RotateCcw size={15}/>{isPractice?'Close practice':'Practice again'}</button>
                   </div>
                   {isPractice&&<div className="vop-memory-rating practice">
-                    <span>Practice revisit · this does not change the schedule or award extra points</span>
+                    <span>Practice only · no points</span>
                     <div>{['0 · Not recalled','1 · Very hard','2 · Partial','3 · Recalled','4 · Strong','5 · Easy'].map((label,rating)=><button key={rating} type="button" aria-label={'Practice '+label} title={label} disabled={busy}
                       onClick={()=>void run(()=>saveMemoryReview(verse,rating,true))}>{label}</button>)}</div>
                   </div>}
@@ -324,8 +324,8 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
             {memoryView==='due'?<Clock3 size={40}/>:<BookmarkCheck size={40}/>}
             <h2>{memoryView==='due'?'Nothing due right now':memoryView==='reviewed'?'No reviewed verses yet':'This deck is empty'}</h2>
             <p>{memoryView==='due'
-              ?(memorySummary.reviewed?'Your due queue is clear. Reviewed verses are still available under Reviewed.':'Start reviewing this deck when cards become available.')
-              :memoryView==='reviewed'?'Verses move here after you complete a review, and they remain available for revisit.':'There are no Scripture cards in this deck.'}</p>
+              ?(memorySummary.reviewed?'No reviews due. See Reviewed.':'No reviews available yet.')
+              :memoryView==='reviewed'?'Completed reviews remain here.':'There are no Scripture cards in this deck.'}</p>
             {memoryView==='due'&&memorySummary.reviewed>0&&<button type="button" className="vop-secondary" onClick={()=>setMemoryView('reviewed')}><BookmarkCheck size={15}/>Open Reviewed</button>}
           </div>}
         </section>}
@@ -333,7 +333,7 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
         {tab === 'duels' && <section className="vop-arena">
           <article className="vop-arena-dashboard">
             <div className="vop-arena-dashboard-head">
-              <div><span className="vop-material-kicker"><Crown size={14}/> Scripture Arena</span><h2>Level {arena.level}</h2><p>Challenges and Duels still work as before. The Arena adds visible progress, milestones and achievements around them.</p></div>
+              <div><span className="vop-material-kicker"><Crown size={14}/> Scripture Arena</span><h2>Level {arena.level}</h2><p>Track your Scripture progress and milestones.</p></div>
               <div className="vop-arena-level-badge"><span>Level</span><strong>{arena.level}</strong></div>
             </div>
             <div className="vop-arena-stats" aria-label="Scripture Arena statistics">
@@ -357,25 +357,25 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
           <div className="vop-arena-mode-grid">
             <article className="vop-arena-mode-card solo">
               <div className="vop-arena-mode-icon"><Brain size={25}/></div>
-              <div className="vop-arena-mode-copy"><span>Solo Challenge</span><h2>Test yourself</h2><p>Answer a randomized Scripture set on your own. Your score is private to your attempt and verified by the server.</p>
+              <div className="vop-arena-mode-copy"><span>Solo Challenge</span><h2>Test yourself</h2><p>Practice Scripture with server-verified scoring.</p>
                 <div className="vop-arena-reward"><Star size={14}/> Complete challenge · +{rewards.soloChallenge} configured points</div>
               </div>
               <button type="button" className="vop-primary" disabled={busy} onClick={()=>void run(async()=>{
                 const result=await engagement({action:'duelSoloCreate'});
                 setChallengeMode('solo');setMatchId(String(result.challengeId));setChallengeExpiresAt(result.expiresAt||'');
                 setDuelQuestions((result.questions as Array<Record<string,unknown>>)||[]);setAnsweredQuestionIds([]);
-                setMessage('Solo Scripture challenge started. Complete every question before time expires.');
+                setMessage('Challenge started. Finish before timeout.');
               })}><Brain size={16}/> Start solo challenge</button>
             </article>
 
             <article className="vop-arena-mode-card duel">
               <div className="vop-arena-mode-icon"><Swords size={25}/></div>
-              <div className="vop-arena-mode-copy"><span>Ranked Duel</span><h2>Challenge a learner</h2><p>Go head-to-head with another opted-in learner in your organization. Both players answer the same questions and ratings update after a ranked finish.</p>
+              <div className="vop-arena-mode-copy"><span>Ranked Duel</span><h2>Challenge a learner</h2><p>Challenge an opted-in learner in your organization.</p>
                 <div className="vop-arena-reward"><Trophy size={14}/> Complete ranked duel · +{rewards.duelChallenge} configured points</div>
               </div>
               <label className="vop-arena-optin"><input type="checkbox" checked={duelOptIn} disabled={busy} onChange={event=>{
                 const enabled=event.target.checked;
-                void run(async()=>{const result=await engagement({action:'duelAvailability',enabled});setDuelOptIn(result.optIn===true);setMessage(enabled?'You can now receive ranked Duel invitations.':'You are hidden from new Duel invitations.');});
+                void run(async()=>{const result=await engagement({action:'duelAvailability',enabled});setDuelOptIn(result.optIn===true);setMessage(enabled?'Duel invitations enabled.':'Duel invitations disabled.');});
               }}/><span>Allow Duel invitations</span></label>
               <div className="vop-arena-duel-controls">
                 <select value={opponentId} onChange={event=>setOpponentId(event.target.value)} aria-label="Choose a Scripture Duel opponent">
@@ -385,14 +385,14 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
                   const result=await engagement({action:'duelCreate',opponentId});
                   setChallengeMode('duel');setMatchId(String(result.matchId));setChallengeExpiresAt(result.expiresAt||'');
                   setDuelQuestions((result.questions as Array<Record<string,unknown>>)||[]);setAnsweredQuestionIds([]);
-                  setMessage('Ranked Duel created. Both players must answer every question before the match can be ranked.');
+                  setMessage('Duel created. Both players must finish.');
                 })}><Swords size={16}/> Start Duel</button>
               </div>
             </article>
           </div>
 
           <article className="vop-material-card vop-arena-missions-card"><div className="vop-material-body">
-            <div className="vop-arena-section-head"><div><span className="vop-material-kicker"><Target size={14}/> Milestones</span><h2>Arena missions</h2><p>Long-term goals that sit alongside your normal Challenges and Duels.</p></div></div>
+            <div className="vop-arena-section-head"><div><span className="vop-material-kicker"><Target size={14}/> Milestones</span><h2>Arena missions</h2><p>Track milestones.</p></div></div>
             <div className="vop-arena-missions">
               {arenaMissions.map(item=>{
                 const complete=item.progress>=item.goal;
@@ -405,7 +405,7 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
           </div></article>
 
           {(soloChallenges.length>0||activeMatches.length>0)&&<article className="vop-material-card"><div className="vop-material-body">
-            <div className="vop-arena-section-head"><div><span className="vop-material-kicker"><Clock3 size={14}/> Continue playing</span><h2>Active challenges</h2><p>Resume an unfinished Solo Challenge or open an active Ranked Duel.</p></div></div>
+            <div className="vop-arena-section-head"><div><span className="vop-material-kicker"><Clock3 size={14}/> Continue playing</span><h2>Active challenges</h2><p>Resume a challenge or duel.</p></div></div>
             <div className="vop-arena-active-grid">
               {soloChallenges.map(item=><button type="button" key={item.id} disabled={busy} onClick={()=>void run(async()=>{
                 const result=await engagement({action:'duelSoloJoin',challengeId:item.id});
@@ -448,7 +448,7 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
               })}
             </div>
             <div className="vop-arena-finish-bar">
-              <div><strong>{answeredQuestionIds.length===duelQuestions.length?'Your answers are complete':'Keep going'}</strong><span>{challengeMode==='duel'&&answeredQuestionIds.length===duelQuestions.length?'Your opponent must also complete the Duel before a ranked result can finish.':'Answer every question to complete this challenge.'}</span></div>
+              <div><strong>{answeredQuestionIds.length===duelQuestions.length?'Answers complete':'Keep going'}</strong><span>{challengeMode==='duel'&&answeredQuestionIds.length===duelQuestions.length?'Awaiting the other player.':'Answer all questions to finish.'}</span></div>
               <button type="button" className="vop-primary" disabled={busy||answeredQuestionIds.length<duelQuestions.length} onClick={()=>void run(async()=>{
                 const result=challengeMode==='solo'
                   ?await engagement({action:'duelSoloFinish',challengeId:matchId})
@@ -476,7 +476,7 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
 
           <div className="vop-arena-bottom-grid">
             <article className="vop-material-card"><div className="vop-material-body">
-              <div className="vop-arena-section-head"><div><span className="vop-material-kicker"><Medal size={14}/> Rankings</span><h2>Organization leaderboard</h2><p>Only opted-in learners appear. Ranked Duel results update rating; total configured engagement points remain visible.</p></div>
+              <div className="vop-arena-section-head"><div><span className="vop-material-kicker"><Medal size={14}/> Rankings</span><h2>Leaderboard</h2><p>Opted-in learners only.</p></div>
                 <button type="button" className="vop-secondary" disabled={busy} onClick={()=>void run(async()=>{
                   const ranking=await engagement({action:'duelLeaderboard'});
                   setLeaderboard((ranking.leaderboard as Array<{rank:number;displayName:string;rating:number;points?:number}>)||[]);
@@ -492,11 +492,11 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
                 <span className={'vop-arena-result-icon '+item.outcome}>{item.kind==='duel'?<Swords size={16}/>:<Brain size={16}/>}</span>
                 <div><strong>{item.kind==='duel'?`Duel vs ${item.opponentName||'Learner'}`:'Solo Challenge'}</strong><span>{item.kind==='solo'?`${Number(item.score||0)}/${Number(item.questionCount||0)} correct`:item.outcome==='win'?'Victory':item.outcome==='draw'?'Draw':item.outcome==='loss'?'Defeat':'Expired'}</span></div>
                 <b>{item.outcome}</b>
-              </div>)}</div>:<div className="vop-materials-empty compact"><Trophy size={30}/><h3>No completed Arena activity</h3><p>Complete a Solo Challenge or Ranked Duel to start your history.</p></div>}
+              </div>)}</div>:<div className="vop-materials-empty compact"><Trophy size={30}/><h3>No completed Arena activity</h3><p>Complete a challenge to see history.</p></div>}
             </div></article>
           </div>
 
-          {!matchId&&!activeMatches.length&&!soloChallenges.length&&<div className="vop-materials-empty"><Swords size={40}/><h2>Your Arena is ready</h2><p>Start a Solo Challenge for personal Scripture practice or invite another learner to a Ranked Duel.</p></div>}
+          {!matchId&&!activeMatches.length&&!soloChallenges.length&&<div className="vop-materials-empty"><Swords size={40}/><h2>Your Arena is ready</h2><p>Play solo or invite a learner.</p></div>}
         </section>}
       </div>
     </main>

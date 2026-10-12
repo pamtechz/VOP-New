@@ -190,21 +190,21 @@ class _HomeShellState extends State<HomeShell> {
       trailing:const Icon(Icons.chevron_right,size:17),
       onTap:(){Navigator.pop(context);go();});
 
-  Widget home()=>FutureBuilder<List<Map<String,dynamic>>>(
-    future:Future.wait([profile,catalog,progress]),
+  Widget home()=>FutureBuilder<Map<String,dynamic>>(future:profile,
     builder:(context,s){
-      if(s.connectionState!=ConnectionState.done)return const VopSkeleton(rows:5);
+      if(s.connectionState!=ConnectionState.done)return const VopSkeleton(rows:3);
       if(s.hasError)return VopEmpty(icon:Icons.wifi_off,
         message:'${s.error}',onRetry:()=>setState(reload));
-      final result=s.data??[];
-      if(result.length<3)return const VopEmpty(icon:Icons.error_outline,
-        message:'The dashboard could not load.');
-      final user=asMap(result[0]['account']);
-      final guides=asRows(result[1]['guides']);
-      final completed=(result[2]['completedLessons'] as List?)?.length??0;
-      final greeting=welcomeGreeting(user['displayName']);
-      return RefreshIndicator(onRefresh:()async{
-        setState(reload);await Future.wait([profile,catalog,progress]);},
+      final user=asMap(s.data?['account']);
+      return FutureBuilder<Map<String,dynamic>>(future:catalog,
+        builder:(context,course){
+          final guides=asRows(course.data?['guides']);
+          return FutureBuilder<Map<String,dynamic>>(future:progress,
+            builder:(context,activity){
+              final completed=(activity.data?['completedLessons'] as List?)?.length??0;
+              final greeting=welcomeGreeting(user['displayName']);
+              return RefreshIndicator(onRefresh:()async{
+                setState(reload);await profile;},
         child:ListView(key:const PageStorageKey<String>('vop-discover-scroll'),
           padding:const EdgeInsets.all(15),children:[
           Row(children:[
@@ -234,7 +234,7 @@ class _HomeShellState extends State<HomeShell> {
               value:'${guides.length}',label:'Study guides')),
             const SizedBox(width:12),
             Expanded(child:_metric(icon:Icons.task_alt,
-              value:'$completed',label:'Lessons completed')),
+              value:activity.connectionState!=ConnectionState.done?'…':'$completed',label:'Lessons completed')),
           ]),
           const SizedBox(height:14),
           VopSectionTitle('Explore VOP',
@@ -266,10 +266,18 @@ class _HomeShellState extends State<HomeShell> {
             const SizedBox(height:130,child:VopEmpty(
               icon:Icons.menu_book_outlined,
               message:'No published guides are available yet.')),
-          ...guides.take(4).map(guideCard),
+          if(course.connectionState!=ConnectionState.done)
+            const VopSkeleton(rows:2)
+          else if(course.hasError)
+            VopEmpty(icon:Icons.wifi_off,message:'Could not load study guides.',
+              onRetry:()=>setState(reload))
+          else
+            ...guides.take(4).map(guideCard),
           const SizedBox(height:28),
         ]),
       );
+            });
+        });
     });
   Widget _metric({required IconData icon,required String value,required String label})=>
     Card(child:Padding(padding:const EdgeInsets.all(10),child:Row(children:[

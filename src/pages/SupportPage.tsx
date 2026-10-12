@@ -78,7 +78,7 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
   const [spiritualInterest,setSpiritualInterest]=useState('none');
   const [selectedGuide,setSelectedGuide]=useState('');
   const [selectedLesson,setSelectedLesson]=useState('');
-  const [referenceType,setReferenceType]=useState<'section'|'topic'|'doctrine'|'question'|'scripture'>('topic');
+  const [referenceType,setReferenceType]=useState<'program'|'module'|'chapter'|'section'|'topic'|'doctrine'|'question'|'scripture'>('topic');
   const [referenceLabel,setReferenceLabel]=useState('');
   const [selectedAppReference,setSelectedAppReference]=useState('');
   const [whatsappHandoff,setWhatsappHandoff]=useState<Array<WhatsAppTarget&{text:string}>>([]);
@@ -116,10 +116,8 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
   const load=async()=>{
     setLoading(true);
     try{
-      const [supportResult,mentorResult]=await Promise.all([
-        supportApi('listMySupportRequests'),
-        supportApi('listMyConversations').catch(()=>({items:[]})),
-      ]);
+      const supportResult=await supportApi('listMySupportRequests');
+      const mentorResult=await supportApi('listMyConversations').catch(()=>({items:[]}));
       const supportRows=(supportResult.items||[]) as SupportRequest[];
       setRequests(supportRows);
       if(activeRequest){
@@ -131,6 +129,7 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
         ?{id:rawConversation.id,studentId:rawConversation.studentId,mentorId:rawConversation.mentorId,mentorName:rawConversation.mentorName,unread:rawConversation.unread}
         :null;
       setConversation(next);
+      if(!next)setTarget(current=>current==='mentor'?'support_team':current);
       if(next){
         const thread=await supportApi('messages',{conversationId:next.id});
         setMessages((thread.items||[]) as ChatMessage[]);
@@ -152,7 +151,7 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
       setSubject(prefill.subject||'');
       setReferenceType(prefill.referenceType||'topic');
       setReferenceLabel(prefill.referenceLabel||'');
-      setNotice('The lesson context has been attached. Write your question and choose who should help you.');
+      setNotice('Lesson attached. Describe your question.');
     }
     void load();
   },[]);
@@ -183,12 +182,12 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
       const item=result.item as SupportRequest;
       setRequests(current=>[item,...current.filter(existing=>existing.id!==item.id)]);
       setQuestion('');setSubject('');setReferenceLabel('');setSelectedAppReference('');setPriority('normal');
-      setNotice('Your support request has been sent. You can continue the conversation here in the app.');
+      setNotice('Request sent. Reply here to continue.');
       if((channel==='whatsapp'||channel==='both')&&(item.whatsappTargets||[]).length){
         const text=item.whatsappText||`VOP Support #${item.id}\n${item.subject}`;
         setWhatsappHandoff((item.whatsappTargets||[]).map(target=>({...target,text})));
       }else if(channel==='whatsapp'||channel==='both'){
-        setNotice('Your request was saved in VOP, but the selected mentor or organization has not configured a WhatsApp number yet.');
+        setNotice('Request saved. WhatsApp is not configured for this recipient.');
       }
       await openRequest(item);
     }catch(reason){setError(reason instanceof Error?reason.message:'Could not create the support request.');}
@@ -281,7 +280,7 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
         <div>
           <span>{t('support.title','Learning & Spiritual Support')}</span>
           <h1>{t('support.ask_for_help','Ask. Understand. Grow.')}</h1>
-          <p>{t('support.subtitle','Ask about a lesson, Bible topic, doctrine, assessment or spiritual decision. Tag the exact study content and choose your mentor, organization support team, or both.')}</p>
+          <p>{t('support.subtitle','Ask a mentor or support team for Bible-study help. Attach the relevant lesson.')}</p>
         </div>
       </div>
 
@@ -291,7 +290,7 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
         <MessageCircle size={16}/><span>You have {unreadConversationCount} unread conversation{unreadConversationCount===1?'':'s'}.</span>
       </div>}
       {whatsappHandoff.length>0&&<div className="vop-support-selected">
-        <span>Your VOP request is saved. Continue on WhatsApp with the configured recipient if you prefer.</span>
+        <span>Request saved. Continue on WhatsApp if you prefer.</span>
         <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
           {whatsappHandoff.map(target=><button type="button" key={target.kind+target.number} className="vop-secondary" onClick={()=>openWhatsApp(target)}>
             <ExternalLink size={15}/>Message {target.label} on WhatsApp
@@ -303,7 +302,7 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
         <section className="vop-support-chat">
           <div className="vop-support-chat-head">
             <div><HeartHandshake size={22}/></div>
-            <div><strong>New support request</strong><span>{openCount} open · {resolvedCount} resolved</span></div>
+            <div><strong>{t('support.new_request','New support request')}</strong><span>{openCount} open · {resolvedCount} resolved</span></div>
           </div>
           <div className="vop-support-compose" style={{display:'grid',gap:10}}>
             <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:10}}>
@@ -319,9 +318,9 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
                 <option value="other">Other</option>
               </select>
               <select value={target} onChange={e=>setTarget(e.target.value as typeof target)}>
-                <option value="mentor">My assigned mentor</option>
-                <option value="support_team">Organization support team</option>
-                <option value="both">Mentor + support team</option>
+                <option value="mentor">{t('support.mentor_target','My assigned mentor')}</option>
+                <option value="support_team">{t('support.organization_target','Organization support team')}</option>
+                <option value="both">{t('support.both_target','Mentor + support team')}</option>
               </select>
               <select value={channel} onChange={e=>setChannel(e.target.value as typeof channel)}>
                 <option value="in_app">In-app</option>
@@ -335,7 +334,7 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
             </div>
             <input value={subject} maxLength={180} onChange={e=>setSubject(e.target.value)} placeholder="Short subject (optional)"/>
             <textarea value={question} maxLength={10000} onChange={e=>setQuestion(e.target.value)}
-              placeholder="What do you not fully understand? Ask the question in your own words."/>
+              placeholder="Describe your question."/>
             <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:10}}>
               <select value={spiritualInterest} onChange={e=>setSpiritualInterest(e.target.value)}>
                 <option value="none">No additional follow-up</option>
@@ -355,7 +354,7 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
 
           <div className={'vop-support-messages'+(loading&&requests.length?' vop-refreshing vop-shimmer-overlay':'')} style={{marginTop:14}}>
             {loading&&requests.length===0?<ShimmerList rows={4} compact label="Loading support requests"/>:requests.length===0
-              ?<div className="vop-support-empty-inline">No support requests yet. Ask whenever a lesson, doctrine or Bible topic is unclear.</div>
+              ?<div className="vop-support-empty-inline">{t('support.empty_requests','No requests yet.')}</div>
               :requests.map(item=><article key={item.id} className={activeRequest?.id===item.id?'mine':'theirs'} style={{cursor:'pointer'}} onClick={()=>void openRequest(item)}>
                 <strong>{item.subject||labelForCategory(item.category)}{item.unread?' · New':''}</strong>
                 <p>{labelForCategory(item.category)} · {item.target.replace('_',' ')} · {item.channel.replace('_',' ')}</p>
@@ -377,7 +376,7 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
 
         <aside className="vop-support-reference-panel">
           <div className="vop-support-panel-title"><Tag size={19}/><strong>Tag the exact study context</strong></div>
-          <p>Your support team will see these references with the question. This avoids asking you to explain where the problem came from.</p>
+          <p>{t('support.attach_study_context','Study references are attached.')}</p>
           <select value={selectedGuide} onChange={e=>{setSelectedGuide(e.target.value);setSelectedLesson('')}}>
             <option value="">Select guide / course (optional)</option>
             {guides.map(item=><option key={item.id} value={item.id}>{item.title} · {item.language}</option>)}
@@ -387,6 +386,7 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
             {lessons.map(item=><option key={item.id} value={item.id}>{item.lessonNumber} · {item.title}</option>)}
           </select>
           <select value={referenceType} onChange={e=>setReferenceType(e.target.value as typeof referenceType)}>
+            <option value="program">Program</option><option value="module">Module</option><option value="chapter">Chapter</option>
             <option value="topic">Topic</option><option value="section">Section</option><option value="doctrine">Doctrine</option>
             <option value="question">Question</option><option value="scripture">Scripture</option>
           </select>
@@ -396,15 +396,15 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
             <option value="">Attach VOP activity / game (optional)</option>
             {APP_CHAT_REFERENCES.map(item=><option key={item.type+':'+item.id} value={item.type+':'+item.id}>{item.label} · {item.type}</option>)}
           </select>
-          <small>Attach a Duel, Solo Challenge, Scripture Arena, Scripture Memory, Master Guide, resource, event, prayer item, radio or another VOP destination.</small>
+          <small>Attach VOP content and activities.</small>
           {buildReferences().length>0&&<div className="vop-support-selected"><span>Will attach</span><strong>{buildReferences().map(item=>item.label).join(' · ')}</strong></div>}
 
           <hr/>
           <div className="vop-support-panel-title"><UserRound size={19}/><strong>Direct mentor conversation</strong></div>
-          {!conversation?<p>No mentor is currently assigned. You can still use Organization support team above.</p>:<>
+          {!conversation?<p>{t('support.no_mentor','No mentor assigned. Ask organization support.')}</p>:<>
             <p>{conversation.mentorName||'Your mentor'} · private assigned-mentor channel.</p>
             <ChatThread currentUserId={currentUser.uid} messages={messages} draft={mentorMessage} onDraftChange={setMentorMessage}
-              guides={guides} busy={sending} placeholder="Quick message to your mentor…" emptyText="No direct messages yet."
+              guides={guides} busy={sending} placeholder="Message your mentor…" emptyText="No direct messages yet."
               sendLabel="Send" onSend={sendMentorMessage} onEdit={editMentorMessage} onDelete={deleteMentorMessage}/>
           </>}
         </aside>

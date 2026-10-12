@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
-import { applyAccessibilityPreferences, loadPersonalSettings } from './services/personalSettings';
+import { applyAccessibilityPreferences, loadPersonalSettings, savePersonalSettings } from './services/personalSettings';
 import { onAuthStateChanged } from 'firebase/auth';
 import type {
   User, DiscoverGuide, Lesson, AppSettings, LanguageCode, AppRoute,
@@ -32,7 +32,7 @@ import './components/layout/navigation-header.css';
 import { applyThemePreference, persistThemePreference, readThemePreference } from './services/themePreference';
 import { lessonScoreForDisplay } from './services/lessonProgress';
 import { saveSupportContextPrefill } from './services/supportContext';
-import { canAccessPortalRoute, defaultPortalRoute, hasAdminPortalAccess, hasMentorPortalAccess, isOrganizationPortalAccount, isPortalRoute } from './services/portalAccess';
+import { canAccessPortalRoute, assignedPortalChoices, defaultPortalRoute, hasAdminPortalAccess, hasMentorPortalAccess, isOrganizationPortalAccount, isPortalRoute } from './services/portalAccess';
 import { RouteShimmer } from './components/layout/Shimmer';
 
 const loadDiscoverGuideView=()=>import('./components/guide/DiscoverGuideView');
@@ -119,6 +119,7 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
   const [contentLoadMode,setContentLoadMode]=useState<PublicContentLoadMode>(()=>
     dataModeForRoute(initialUser?.uid?defaultPortalRoute(initialUser):'home'));
   const [contentRefresh, setContentRefresh] = useState(0);
+  const [portalPrompt,setPortalPrompt]=useState(false);
   const [contentHydrated,setContentHydrated] = useState(()=>Boolean(startupSeed));
   const lastPublicContentLoadAt=useRef(0);
   const lazyRouteLoadsRef=useRef(new Map<string,number>());
@@ -156,8 +157,20 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
   const [studyNotice, setStudyNotice] = useState('');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(() => readThemePreference()==='dark');
+  const themeChangeSequence=useRef(0);
   const [isMobileShell, setIsMobileShell] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsed);
+  const toggleTheme=()=>{
+    const next=isDarkMode?'light':'dark';
+    themeChangeSequence.current+=1;
+    persistThemePreference(next);
+    setIsDarkMode(next==='dark');
+    if(auth?.currentUser){
+      void savePersonalSettings({theme:next}).catch(error=>{
+        setStudyNotice(error instanceof Error?error.message:'Theme could not be saved to this account.');
+      });
+    }
+  };
   const toggleDesktopSidebar = () => setSidebarCollapsed(value => {
     const next = !value;
     persistSidebarCollapsed(next);
@@ -197,6 +210,7 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
         setLocalizationOrganizationScope('');
         setCurrentUser(EMPTY_USER);
         setAllUsers([]);
+        setPortalPrompt(false);
         restoredNavigationUid.current='';
         try{
           sessionStorage.removeItem(PORTAL_SESSION_STORAGE_KEY);
@@ -219,7 +233,7 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
         if (!profile) {
           setCurrentUser(EMPTY_USER);
           setAllUsers([]);
-          setStudyError(previous => previous || 'Your Firebase account profile is not configured. Ask an administrator to complete account setup.');
+          setStudyError(previous => previous || 'Account setup is incomplete. Contact your administrator.');
           return;
         }
         setLocalizationOrganizationScope(profile.organizationId || '');
@@ -250,11 +264,16 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
           let alreadyInPortalSession=false;
           try{alreadyInPortalSession=sessionStorage.getItem(PORTAL_SESSION_STORAGE_KEY)===profile.uid;}catch{/* storage may be unavailable */}
           if(!alreadyInPortalSession&&!explicitNavigation.current){
-            const target=defaultPortalRoute(profile);
-            if(target!=='home'){
-              setCurrentRoute(target);
-              replaceLearnerLocation(profile.uid,{route:target},0);
-              restoredNavigationUid.current=profile.uid;
+            const choices=assignedPortalChoices(profile);
+            if(choices.length>1){
+              setPortalPrompt(true);
+            }else{
+              const target=defaultPortalRoute(profile);
+              if(target!=='home'){
+                setCurrentRoute(target);
+                replaceLearnerLocation(profile.uid,{route:target},0);
+                restoredNavigationUid.current=profile.uid;
+              }
             }
           }
         }
@@ -311,7 +330,7 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
           setStudyNotice(`${result.synced} lesson completion${result.synced === 1 ? '' : 's'} and ${resumeResult.synced} reading position${resumeResult.synced === 1 ? '' : 's'} verified and synchronized.`);
         }
       }).catch(() => {
-        if (!cancelled) setStudyNotice('Offline lesson progress is saved on this device and will be retried when connectivity returns.');
+        if (!cancelled) setStudyNotice('Offline progress queued for sync.');
       });
     };
     window.addEventListener('online', replay);
@@ -403,7 +422,7 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
       if (!cancelled) {
         setContentHydrated(true);
         console.error('VOP public content load failed', error);
-        setStudyError(error instanceof Error ? error.message : 'VOP content could not be loaded.');
+        setStudyError(error instanceof Error ? error.message : 'Content loading failed.');
       }
     });
     return () => { cancelled = true; };
@@ -457,7 +476,7 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
       if(snapshot.churches){setChurches(snapshot.churches);saveChurches(snapshot.churches);}
     }).catch(error=>{
       lazyRouteLoadsRef.current.delete(cacheKey);
-      if(!cancelled)setStudyError(error instanceof Error?error.message:'This page data could not be loaded.');
+      if(!cancelled)setStudyError(error instanceof Error?error.message:'Page loading failed.');
     });
     return()=>{cancelled=true};
   },[
@@ -481,13 +500,16 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
   }, []);
 
   useEffect(() => {
-    persistThemePreference(isDarkMode?'dark':'light');
+    applyThemePreference(isDarkMode?'dark':'light');
   }, [isDarkMode]);
   useEffect(() => {
     applyThemePreference(readThemePreference());
     const sync=(event:Event)=>{
       const theme=(event as CustomEvent<{theme?:string}>).detail?.theme;
-      if(theme==='dark'||theme==='light')setIsDarkMode(theme==='dark');
+      if(theme==='dark'||theme==='light'){
+        themeChangeSequence.current+=1;
+        setIsDarkMode(theme==='dark');
+      }
     };
     window.addEventListener('vop_theme_changed',sync);
     return()=>window.removeEventListener('vop_theme_changed',sync);
@@ -504,10 +526,12 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
     let active=true;
     let systemTheme:MediaQueryList|null=null;
     const syncSystemTheme=()=>{if(active&&systemTheme)setIsDarkMode(systemTheme.matches);};
+    const startingThemeSequence=themeChangeSequence.current;
     void loadPersonalSettings()
       .then(personal=>{
         if(!active)return;
         applyAccessibilityPreferences(personal.accessibility);
+        if(startingThemeSequence!==themeChangeSequence.current)return;
         if(personal.theme==='system'){
           systemTheme=window.matchMedia('(prefers-color-scheme: dark)');
           setIsDarkMode(systemTheme.matches);
@@ -527,7 +551,7 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
     const feature=routeFeature[currentRoute];
     if(feature&&settings.features?.[feature]===false){
       setCurrentRoute('home');
-      setStudyNotice('This module is currently disabled by the VOP platform administrator.');
+      setStudyNotice('Module unavailable.');
     }
   }, [currentRoute,settings.features?.radio,settings.features?.announcements,settings.features?.certification]);
 
@@ -805,15 +829,9 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
     }
     if(isPortalRoute(route)&&!canAccessPortalRoute(currentUser,route)){
       const fallback=defaultPortalRoute(currentUser);
-      setStudyNotice('This account does not have access to the requested workspace.');
+      setStudyNotice('Workspace access is not assigned to this account.');
       setCurrentRoute(fallback);
       rememberLocation({route:fallback},true);
-      return;
-    }
-    if(isOrganizationPortalAccount(currentUser)&&route!=='admin'&&route!=='certificate-verification'){
-      setStudyNotice('Organization staff accounts use the organization portal. Learner pages are kept separate.');
-      setCurrentRoute('admin');
-      rememberLocation({route:'admin'},true);
       return;
     }
     const routeFeature:Partial<Record<AppRoute,keyof NonNullable<AppSettings['features']>>> = {
@@ -821,7 +839,7 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
     };
     const feature=routeFeature[route];
     if(feature&&settings.features?.[feature]===false){
-      setStudyNotice('This module is currently disabled by the VOP platform administrator.');
+      setStudyNotice('Module unavailable.');
       setCurrentRoute('home');
       rememberLocation({route:'home'});
       return;
@@ -847,7 +865,7 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
         <img src="/assets/vop_logo_2.png" alt="Voice of Prophecy"/>
         <span>VOICE OF PROPHECY</span>
         <h1>Scheduled maintenance is in progress</h1>
-        <p>The learning workspace is temporarily unavailable while the platform is being maintained. Your saved progress remains attached to your account.</p>
+        <p>VOP is under maintenance. Your saved progress remains available.</p>
         <button type="button" onClick={()=>void firebaseSignOut()}>Sign out</button>
       </section>
     </main>;
@@ -863,7 +881,7 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
         {currentRoute !== 'admin' && currentRoute !== 'radio' && (
           <Header currentUser={currentUser} settings={settings} activeLanguage={uiLocale}
             onChangeLanguage={language => setUiLocale(language)}
-            isDarkMode={isDarkMode} onToggleDarkMode={() => setIsDarkMode(value => !value)} isMobileShell={isMobileShell}
+            isDarkMode={isDarkMode} onToggleDarkMode={toggleTheme} isMobileShell={isMobileShell}
             onToggleMobileShell={() => setIsMobileShell(value => !value)} onOpenMenu={() => setIsMenuOpen(true)} onLogout={() => void firebaseSignOut()} currentRoute={currentRoute} onNavigate={navigate} />
         )}
         {studyNotice && <div role="status" style={{ margin: '.75rem auto', padding: '1rem', maxWidth: '60rem', width: 'min(100% - 2rem, 60rem)', background: '#eef6ff', color: '#12457e', border: '1px solid #a9ccf5', borderRadius: '.75rem' }}>{studyNotice}</div>}
@@ -925,6 +943,18 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
         </main>
         {currentRoute !== 'admin' && <BottomNav currentRoute={currentRoute} onNavigate={navigate} currentUser={currentUser} />}
       </div>
+      {portalPrompt&&currentUser.uid&&<div className="vop-portal-choice-backdrop"
+        role="dialog" aria-modal="true" aria-label="Choose workspace">
+        <section className="vop-portal-choice">
+          <h2>Choose workspace</h2>
+          {assignedPortalChoices(currentUser).map(choice=><button key={choice.route}
+            type="button" className="vop-primary" onClick={()=>{
+              if(choice.route!=='home'&&!canAccessPortalRoute(currentUser,choice.route))return;
+              setPortalPrompt(false);setCurrentRoute(choice.route);
+              rememberLocation({route:choice.route},true);
+            }}>{choice.label}</button>)}
+        </section>
+      </div>}
       <MenuDrawer isOpen={isMenuOpen} onClose={() => setIsMenuOpen(false)} currentRoute={currentRoute} currentUser={currentUser} guides={guides} settings={settings} activeLanguage={activeLanguage} onNavigate={navigate} />
       <React.Suspense fallback={<RouteLoading/>}>
       {activeLesson?.type === 'Lesson' && activeGuide && <LessonReaderModal lesson={activeLesson} guide={activeGuide} currentUser={currentUser} initialPageIndex={deepLinkPageIndex}
@@ -939,10 +969,10 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
         onNextLesson={() => { if (nextLesson) openStudyItem(activeGuide,nextLesson,undefined,currentRoute); }}
         onComplete={async () => {
         const accepted = await completeLesson(activeGuide.id, activeLesson.id, activeGuide.language);
-        if (accepted === 'failed') { setStudyError('Lesson completion was not accepted or could not be safely queued. Check your connection and sign-in status, then retry.'); return false; }
+        if (accepted === 'failed') { setStudyError('Lesson not saved. Check your connection and try again.'); return false; }
         setStudyError('');
         if (accepted === 'queued') {
-          setStudyNotice('Lesson completion saved on this device. Official credit will appear after server verification when you reconnect.');
+          setStudyNotice('Lesson queued offline; credit follows server verification.');
         } else if (auth?.currentUser) {
           setStudyNotice('');
           const refreshedUser = await loadFirestoreUser(auth.currentUser.uid).catch(() => null);
@@ -953,7 +983,7 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
       }} />}
       {activeLesson?.type === 'Test' && activeGuide && <QuizModal lesson={activeLesson} guide={activeGuide} previousScore={lessonScoreForDisplay(activeGuide,activeLesson,currentUser)} previouslyAttempted={lessonScoreForDisplay(activeGuide,activeLesson,currentUser)!==undefined} passThreshold={settings.quizPassThreshold} maxAttempts={settings.quizMaxAttempts || 0} retakeCooldownMinutes={settings.quizRetakeCooldownMinutes || 0} onClose={goBack} hasNextLesson={false} onContinue={goBack} onAttemptStarted={async()=>{if(auth?.currentUser){const refreshedUser=await loadFirestoreUser(auth.currentUser.uid).catch(()=>null);if(refreshedUser){setCurrentUser(refreshedUser);setAllUsers([refreshedUser]);}}}} onSubmitScore={async (answers,sessionId) => {
         const result = await submitQuizAnswers(activeGuide.id, activeLesson.id, answers, activeGuide.language,sessionId);
-        if (result === null) { setStudyError('Test results were not saved. Check your connection, sign-in status, and assessment configuration.'); return null; }
+        if (result === null) { setStudyError('Test results were not saved. Check your connection.'); return null; }
         setStudyError('');
         if (auth?.currentUser) { const refreshedUser = await loadFirestoreUser(auth.currentUser.uid); if (refreshedUser) { setCurrentUser(refreshedUser); setAllUsers([refreshedUser]); } }
         return result;

@@ -69,7 +69,7 @@ test('admin persists its collapse state while preserving the accessible mobile d
   assert.match(page,/onClick=\{\(\)=>\{setProfileOpen\(false\);onLogout\(\)\}\}/);
 });
 
-test('all portal sign-out controls live in top account dropdowns and learners have no Back to App',()=>{
+test('all portal sign-out controls stay in account menus and authorized administrators can switch to learner view',()=>{
   const learner=read('src/components/layout/Header.tsx');
   const admin=read('src/pages/AdminPage.tsx');
   const mobile=read('src/components/layout/MenuDrawer.tsx');
@@ -79,7 +79,7 @@ test('all portal sign-out controls live in top account dropdowns and learners ha
   assert.doesNotMatch(learner,/Back to App/);
   assert.doesNotMatch(learner,/accountNav\('home'\)/);
   assert.match(admin,/vop-profile-menu/);
-  assert.match(admin,/Back to App/);
+  assert.match(admin,/Learner workspace/);
   assert.match(admin,/onLogout\(\)/);
   assert.doesNotMatch(mobile,/vop-account-logout/);
   assert.doesNotMatch(mobile,/onLogout/);
