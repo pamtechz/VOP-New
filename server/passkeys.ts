@@ -82,6 +82,12 @@ export function parseClientData(clientDataJSON:string){
   catch{throw new Error('Passkey client data is invalid.');}
   return value;
 }
+export function androidPasskeyConfigured(){
+  return String(process.env.PASSKEY_ANDROID_SHA256_FINGERPRINTS||'')
+    .split(/[\s,;]+/).map(value=>value.replace(/:/g,''))
+    .some(value=>/^[A-Fa-f0-9]{64}$/.test(value));
+}
+
 function allowedAndroidPasskeyOrigin(origin:string,payload:PasskeyChallengePayload,client:Record<string,unknown>){
   if(!origin.startsWith('android:apk-key-hash:')||!payload.origin.startsWith('https://'))return false;
   if(new URL(payload.origin).hostname!==payload.rpId)return false;
