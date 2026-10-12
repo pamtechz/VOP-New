@@ -388,10 +388,11 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         throw StateError('This export is too large to share from the device.');
       }
       final date=DateTime.now().toIso8601String().substring(0,10);
-      await Share.shareXFiles([
-        XFile.fromData(bytes,mimeType:'application/json'),
-      ],fileNameOverrides:['vop-account-export-$date.json'],
-        subject:'VOP account data export');
+      await SharePlus.instance.share(ShareParams(
+        files:[XFile.fromData(bytes,mimeType:'application/json')],
+        fileNameOverrides:['vop-account-export-$date.json'],
+        subject:'VOP account data export',
+      ));
     },'Your export was prepared. Keep any saved copy secure.');
   }
 
