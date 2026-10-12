@@ -45,11 +45,13 @@ class _LessonScreenState extends State<LessonScreen> {
     if(busy)return;
     setState((){busy=true;notice=null;});
     try{
-      await widget.api.completeLesson(
+      final result=await widget.api.completeLesson(
         widget.guideId,widget.lessonId,widget.language);
       if(!mounted)return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content:Text('Lesson completion saved to VOP.')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content:Text(result['queued']==true
+          ?'Completion saved offline. It will sync when connected.'
+          :'Lesson completion saved to VOP.')));
       Navigator.pop(context,true);
     }catch(error){
       if(mounted)setState(()=>notice='Completion failed: $error');
@@ -69,6 +71,7 @@ class _LessonScreenState extends State<LessonScreen> {
           padding:const EdgeInsets.all(22),
           child:Text('${s.error}',textAlign:TextAlign.center)));
         final data=s.data?['lesson'];
+        final offline=s.data?['offline']==true;
         final pages=data is Map && data['pages'] is List
           ?(data['pages'] as List).whereType<Map>()
               .map((v)=>Map<String,dynamic>.from(v)).toList()
@@ -83,8 +86,11 @@ class _LessonScreenState extends State<LessonScreen> {
             key:ValueKey(index),
             padding:const EdgeInsets.symmetric(horizontal:20,vertical:22),
             children:[
-              Text('Page ${index+1} of ${pages.length}',
-                style:Theme.of(context).textTheme.labelLarge),
+              Row(children:[
+                Expanded(child:Text('Page ${index+1} of ${pages.length}',
+                  style:Theme.of(context).textTheme.labelLarge)),
+                if(offline)const Chip(label:Text('Offline')),
+              ]),
               const SizedBox(height:18),
               PlatePageView(page:pages[index]),
               const SizedBox(height:25),

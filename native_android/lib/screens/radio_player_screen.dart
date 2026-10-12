@@ -16,18 +16,34 @@ bool safeRadioHttps(String value) {
   if(value.length>2048)return false;
   final url=Uri.tryParse(value);
   if(url==null||url.scheme!='https'||url.host.isEmpty||
-      url.userInfo.isNotEmpty||url.hasFragment||(url.hasPort&&url.port!=443))return false;
+      url.userInfo.isNotEmpty||url.hasFragment||(url.hasPort&&url.port!=443)) {
+    return false;
+  }
   final host=url.host.toLowerCase();
   return host!='localhost'&&!host.endsWith('.local')&&
     !host.endsWith('.internal')&&!host.endsWith('.localhost')&&
     !RegExp(r'^\d{1,3}(?:\.\d{1,3}){3}$').hasMatch(host)&&!host.contains(':');
 }
 bool _host(String host,String domain)=>
-    host==domain||host.endsWith('.'+domain);
-bool safeAudioVerseEmbedUrl(Uri uri) =>
-    safeRadioHttps(uri.toString()) &&
-    _host(uri.host.toLowerCase(),'audioverse.org') &&
-    (uri.path.contains('/embed/')||uri.path.contains('/player/'));
+    host==domain||host.endsWith('.$domain');
+String? audioVerseMediaId(Uri uri) =>
+    RegExp(r'/(?:media|teachings)/(\d+)(?:/|$)')
+      .firstMatch(uri.path)?.group(1) ??
+    RegExp(r'/(?:embed|player)/media/(\d+)(?:/|$)')
+      .firstMatch(uri.path)?.group(1);
+bool safeAudioVerseEmbedUrl(Uri uri) {
+  if(!safeRadioHttps(uri.toString()) ||
+      !_host(uri.host.toLowerCase(),'audioverse.org')) {
+    return false;
+  }
+  final segments=uri.pathSegments;
+  final offset=segments.length==4?1:0;
+  if(segments.length!=offset+3)return false;
+  if(offset==1 && !RegExp(r'^[a-z]{2}(?:-[a-z]{2})?$',caseSensitive:false).hasMatch(segments[0]))return false;
+  return ['embed','player'].contains(segments[offset]) &&
+    segments[offset+1]=='media' &&
+    RegExp(r'^[0-9]+$').hasMatch(segments[offset+2]);
+}
 
 /// Only known providers or media file URLs, never unapproved private webpages.
 RadioMedia resolveRadioMedia(Map<String,dynamic> item) {
@@ -43,41 +59,46 @@ RadioMedia resolveRadioMedia(Map<String,dynamic> item) {
           ?segments[1]:'';
       if(RegExp(r'^[A-Za-z0-9_-]{11}$').hasMatch(id)){
         return RadioMedia(RadioMediaKind.provider,
-          Uri.parse('https://www.youtube-nocookie.com/embed/'+id+'?playsinline=1'),
+          Uri.parse('https://www.youtube-nocookie.com/embed/$id?playsinline=1'),
           provider:'YouTube');
       }
       continue;
     }
     if(_host(host,'audioverse.org')){
-      final match=RegExp(r'/(?:media|teachings)/(\d+)(?:/|$)').firstMatch(uri.path);
-      final embed=RegExp(r'/embed/media/(\d+)(?:/|$)').firstMatch(uri.path);
-      final id=match?.group(1)??embed?.group(1);
+      final id=audioVerseMediaId(uri);
       final approved=(item['audioEmbedUrl']??'').toString().trim();
       final parsed=Uri.tryParse(approved);
-      if(parsed!=null&&safeAudioVerseEmbedUrl(parsed)){
+      if(parsed!=null && safeAudioVerseEmbedUrl(parsed) &&
+          id!=null && audioVerseMediaId(parsed)==id){
         return RadioMedia(RadioMediaKind.provider,parsed,provider:'AudioVerse');
       }
-      if(id!=null)return RadioMedia(RadioMediaKind.provider,
-        Uri.parse('https://www.audioverse.org/en/embed/media/'+id),
+      if(id!=null) {
+        return RadioMedia(RadioMediaKind.provider,
+        Uri.parse('https://www.audioverse.org/en/embed/media/$id'),
         provider:'AudioVerse');
+      }
       return RadioMedia(RadioMediaKind.external,uri,provider:'AudioVerse');
     }
     if(_host(host,'vimeo.com')){
       final id=RegExp(r'^/(?:video/)?(\d+)(?:/|$)').firstMatch(uri.path)?.group(1);
-      if(id!=null)return RadioMedia(RadioMediaKind.provider,
-        Uri.parse('https://player.vimeo.com/video/'+id),provider:'Vimeo');
+      if(id!=null) {
+        return RadioMedia(RadioMediaKind.provider,
+        Uri.parse('https://player.vimeo.com/video/$id'),provider:'Vimeo');
+      }
       continue;
     }
     if(_host(host,'soundcloud.com')){
       return RadioMedia(RadioMediaKind.provider,
-        Uri.parse('https://w.soundcloud.com/player/?url='+Uri.encodeComponent(raw)),
+        Uri.parse('https://w.soundcloud.com/player/?url=${Uri.encodeComponent(raw)}'),
         provider:'SoundCloud');
     }
     if(_host(host,'tiktok.com')){
       final id=RegExp(r'/@[^/]+/video/(\d+)(?:/|$)').firstMatch(uri.path)?.group(1)
         ??RegExp(r'/player/v1/(\d+)(?:/|$)').firstMatch(uri.path)?.group(1);
-      if(id!=null)return RadioMedia(RadioMediaKind.provider,
-        Uri.parse('https://www.tiktok.com/player/v1/'+id),provider:'TikTok');
+      if(id!=null) {
+        return RadioMedia(RadioMediaKind.provider,
+        Uri.parse('https://www.tiktok.com/player/v1/$id'),provider:'TikTok');
+      }
       continue;
     }
     if(_host(host,'instagram.com')){
@@ -85,8 +106,7 @@ RadioMedia resolveRadioMedia(Map<String,dynamic> item) {
         .firstMatch(uri.path);
       if(match!=null){
         return RadioMedia(RadioMediaKind.provider,
-          Uri.parse('https://www.instagram.com/'+match.group(1)!+'/'
-            +match.group(2)!+'/embed/'),provider:'Instagram');
+          Uri.parse('https://www.instagram.com/${match.group(1)!}/${match.group(2)!}/embed/'),provider:'Instagram');
       }
       continue;
     }
@@ -97,8 +117,7 @@ RadioMedia resolveRadioMedia(Map<String,dynamic> item) {
         RegExp(r'^\d+$').hasMatch(uri.queryParameters['v']??'');
       if(media&&validWatch){
         return RadioMedia(RadioMediaKind.provider,
-          Uri.parse('https://www.facebook.com/plugins/video.php?href='+
-            Uri.encodeComponent(raw)+'&show_text=0'),provider:'Facebook');
+          Uri.parse('https://www.facebook.com/plugins/video.php?href=${Uri.encodeComponent(raw)}&show_text=0'),provider:'Facebook');
       }
       continue;
     }
@@ -160,19 +179,33 @@ class _RadioPlayerScreenState extends State<RadioPlayerScreen>
   late final RadioMedia source=resolveRadioMedia(widget.item);
   VideoPlayerController? player;
   WebViewController? embed;
-  bool loading=true;
+  bool loading=false;
+  bool _preparing=false;
+  bool _openingInApp=false;
   String? error;
   late List<Map<String,dynamic>> recommendations;
   String category='All';
-  @override void initState(){super.initState();recommendations=List<Map<String,dynamic>>.from(widget.related);WidgetsBinding.instance.addObserver(this);_prepare();}
+  int visibleRecommendations=12;
+  @override void initState(){
+    super.initState();
+    recommendations=List<Map<String,dynamic>>.from(widget.related);
+    WidgetsBinding.instance.addObserver(this);
+    if(source.kind==RadioMediaKind.audio||source.kind==RadioMediaKind.video){
+      _prepare();
+    }
+  }
   Future<void> _prepare()async{
-    if(source.url==null){if(mounted)setState((){
+    if(_preparing||loading)return;
+    if(source.url==null){if(mounted) {
+      setState((){
       loading=false;error='This programme has no supported playable media URL.';
-    });return;}
-    // A retry resets any previous load error.
+    });
+    }return;}
+    _preparing=true;
     if(mounted)setState((){loading=true;error=null;});
     if(source.kind==RadioMediaKind.external){
       if(mounted)setState(()=>loading=false);
+      _preparing=false;
       return;
     }
     if(source.kind==RadioMediaKind.provider){
@@ -182,9 +215,11 @@ class _RadioPlayerScreenState extends State<RadioPlayerScreen>
         ..setBackgroundColor(const Color(0xFF071A33))
         ..setNavigationDelegate(NavigationDelegate(
           onPageFinished:(_){if(mounted)setState(()=>loading=false);},
-          onWebResourceError:(e){if(e.isForMainFrame==true&&mounted)setState((){
+          onWebResourceError:(e){if(e.isForMainFrame==true&&mounted) {
+            setState((){
             loading=false;error='The media provider could not load.';
-          });},
+          });
+          }},
           onNavigationRequest:(request){
             final uri=Uri.tryParse(request.url);
             if(uri==null)return NavigationDecision.prevent;
@@ -209,11 +244,13 @@ class _RadioPlayerScreenState extends State<RadioPlayerScreen>
           await embed!.loadRequest(source.url!);
         }
       }catch(_){
-        if(mounted)setState((){
+        if(mounted) {
+          setState((){
           loading=false;
           error='The media player could not initialise. Please retry.';
         });
-      }
+        }
+      }finally{_preparing=false;}
       return;
     }
     try{
@@ -221,23 +258,23 @@ class _RadioPlayerScreenState extends State<RadioPlayerScreen>
         videoPlayerOptions:VideoPlayerOptions(mixWithOthers:false));
       player=controller;
       await controller.initialize();
-      controller.addListener(_refresh);
       if(mounted){setState(()=>loading=false);await controller.play();}
-    }catch(_){if(mounted)setState((){
+    }catch(_){if(mounted) {
+      setState((){
       loading=false;error='Unable to play this media. Verify the URL and connection.';
-    });}
+    });
+    }}finally{_preparing=false;}
   }
-  void _refresh(){if(mounted)setState((){});}
   @override void didChangeAppLifecycleState(AppLifecycleState state){
     if(state==AppLifecycleState.paused||state==AppLifecycleState.inactive)player?.pause();
   }
   @override void dispose(){
     WidgetsBinding.instance.removeObserver(this);
-    player?.removeListener(_refresh);player?.dispose();embed=null;super.dispose();
+    player?.dispose();embed=null;super.dispose();
   }
   String _clock(Duration value){
     final minutes=value.inMinutes,seconds=value.inSeconds.remainder(60);
-    return minutes.toString()+':'+seconds.toString().padLeft(2,'0');
+    return '$minutes:${seconds.toString().padLeft(2,'0')}';
   }
   Future<void> _skip(int offset)async{
     final c=player;
@@ -265,8 +302,10 @@ class _RadioPlayerScreenState extends State<RadioPlayerScreen>
         ?raw.whereType<Map>().map((e)=>Map<String,dynamic>.from(e)).toList()
         :<Map<String,dynamic>>[]);
     }catch(_){
-      if(mounted)ScaffoldMessenger.of(context).showSnackBar(
+      if(mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content:Text('Could not refresh programmes.')));
+      }
     }
   }
   void _select(Map<String,dynamic> item){
@@ -276,23 +315,38 @@ class _RadioPlayerScreenState extends State<RadioPlayerScreen>
         related:recommendations)));
   }
   Future<void> _openInApp()async{
+    if(_openingInApp)return;
     final raw=[value(widget.item,'mediaUrl'),value(widget.item,'audioUrl'),
       value(widget.item,'videoUrl'),value(widget.item,'streamUrl')]
       .firstWhere((value)=>value.isNotEmpty,orElse:()=>'');
     if(!safeRadioHttps(raw))return;
-    final opened=await launchUrl(Uri.parse(raw),mode:LaunchMode.inAppBrowserView);
-    if(!opened&&mounted)ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content:Text('Unable to open media.')));
+    _openingInApp=true;
+    try{
+      final opened=await launchUrl(Uri.parse(raw),mode:LaunchMode.inAppBrowserView);
+      if(!opened&&mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content:Text('Unable to open media.')));
+      }
+    }catch(_){
+      if(mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content:Text('Unable to open media.')));
+      }
+    }finally{_openingInApp=false;}
   }
   Widget _moreProgrammes(){
     final items=recommendations.where((item)=>
       mediaKey(item)!=mediaKey(widget.item)).where((item){
         final result=resolveRadioMedia(item);
-        if(category=='Audio')return result.kind==RadioMediaKind.audio||
+        if(category=='Audio') {
+          return result.kind==RadioMediaKind.audio||
           result.provider=='AudioVerse'||result.provider=='SoundCloud';
-        if(category=='Video')return result.kind==RadioMediaKind.video||
+        }
+        if(category=='Video') {
+          return result.kind==RadioMediaKind.video||
           (result.kind==RadioMediaKind.provider&&
             result.provider!='AudioVerse'&&result.provider!='SoundCloud');
+        }
         return true;
       }).toList();
     return Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
@@ -313,7 +367,7 @@ class _RadioPlayerScreenState extends State<RadioPlayerScreen>
       const SizedBox(height:9),
       if(items.isEmpty)const Padding(padding:EdgeInsets.all(22),
         child:Center(child:Text('No other programmes yet'))),
-      ...items.map((item)=>Card(margin:const EdgeInsets.only(bottom:9),
+      ...items.take(visibleRecommendations).map((item)=>Card(margin:const EdgeInsets.only(bottom:9),
         clipBehavior:Clip.antiAlias,
         child:InkWell(onTap:()=>_select(item),child:Row(children:[
           SizedBox(width:116,height:80,
@@ -336,6 +390,12 @@ class _RadioPlayerScreenState extends State<RadioPlayerScreen>
           const SizedBox(width:10),
         ]))),
       ),
+      if(items.length>visibleRecommendations)
+        Center(child:TextButton.icon(
+          onPressed:()=>setState(()=>visibleRecommendations+=12),
+          icon:const Icon(Icons.expand_more),
+          label:Text('Show more programmes (${items.length-visibleRecommendations})'),
+        )),
     ]);
   }
   Widget _posterPlaceholder(Map<String,dynamic> item)=>Container(
@@ -347,10 +407,6 @@ class _RadioPlayerScreenState extends State<RadioPlayerScreen>
   @override Widget build(BuildContext context){
     final c=player,v=c?.value;
     final ready=v?.isInitialized==true;
-    final duration=v?.duration??Duration.zero;
-    final position=v?.position??Duration.zero;
-    final elapsed=position.inMilliseconds.clamp(0,
-      duration.inMilliseconds>0?duration.inMilliseconds:0);
     return Scaffold(
       appBar:AppBar(title:const Text('VOP Radio & Media')),
       body:RefreshIndicator(onRefresh:_reload,
@@ -366,6 +422,18 @@ class _RadioPlayerScreenState extends State<RadioPlayerScreen>
                 child:VideoPlayer(c!)),
             if(source.kind==RadioMediaKind.provider&&embed!=null)
               WebViewWidget(controller:embed!),
+            if(source.kind==RadioMediaKind.provider&&embed==null)
+              Positioned.fill(child:Stack(fit:StackFit.expand,children:[
+                if(safeRadioHttps(value(widget.item,'posterUrl')))
+                  Image.network(value(widget.item,'posterUrl'),fit:BoxFit.cover,
+                    errorBuilder:(_,__,___)=>const SizedBox.shrink()),
+                Container(color:Colors.black38),
+                Center(child:FilledButton.icon(
+                  onPressed:source.provider=='AudioVerse'?_openInApp:_prepare,
+                  icon:const Icon(Icons.play_arrow_rounded),
+                  label:const Text('Play'),
+                )),
+              ])),
             if(source.kind==RadioMediaKind.audio)
               const Icon(Icons.graphic_eq,size:74,color:VopColors.goldLight),
             if(source.kind==RadioMediaKind.external)
@@ -390,38 +458,53 @@ class _RadioPlayerScreenState extends State<RadioPlayerScreen>
             .join(' · ')),
         ],
         if(source.provider=='AudioVerse'&&source.kind==RadioMediaKind.provider)
-          Align(alignment:Alignment.centerLeft,
-            child:TextButton.icon(
-              onPressed:_openInApp,
-              icon:const Icon(Icons.open_in_browser_rounded,size:17),
-              label:const Text('Open AudioVerse tab'))),
-        if(ready)...[
+          Wrap(spacing:8,runSpacing:2,children:[
+            TextButton.icon(onPressed:_openInApp,
+              icon:const Icon(Icons.play_circle_outline,size:17),
+              label:const Text('Listen in app')),
+            const SizedBox(width:8),
+            TextButton.icon(onPressed:_prepare,
+              icon:const Icon(Icons.picture_in_picture_alt_outlined,size:17),
+              label:const Text('Embedded player')),
+          ]),
+        if(c!=null&&ready)...[
           const SizedBox(height:14),
-          if(duration>Duration.zero)Slider(
-            min:0,max:duration.inMilliseconds.toDouble(),
-            value:elapsed.toDouble(),
-            onChanged:(value)=>c!.seekTo(Duration(milliseconds:value.round()))),
-          Row(mainAxisAlignment:MainAxisAlignment.spaceBetween,children:[
-            Text(_clock(position)),
-            Text(duration>Duration.zero?_clock(duration):'LIVE'),
-          ]),
-          Row(mainAxisAlignment:MainAxisAlignment.center,children:[
-            IconButton(tooltip:'Back ten seconds',onPressed:()=>_skip(-10),
-              icon:const Icon(Icons.replay_10)),
-            FilledButton.tonalIcon(
-              onPressed:()=>v.isPlaying?c!.pause():c!.play(),
-              icon:Icon(v!.isPlaying?Icons.pause:Icons.play_arrow),
-              label:Text(v.isPlaying?'Pause':'Play')),
-            IconButton(tooltip:'Forward ten seconds',onPressed:()=>_skip(10),
-              icon:const Icon(Icons.forward_10)),
-            PopupMenuButton<double>(
-              tooltip:'Playback speed',icon:const Icon(Icons.speed),
-              onSelected:(speed)=>c!.setPlaybackSpeed(speed),
-              itemBuilder:(_)=>[
-                for(final speed in [0.75,1.0,1.25,1.5,2.0])
-                  PopupMenuItem(value:speed,child:Text(speed.toString()+'x')),
-              ]),
-          ]),
+          ValueListenableBuilder<VideoPlayerValue>(
+            valueListenable:c,
+            builder:(context,state,_){
+              final duration=state.duration;
+              final position=state.position;
+              final maxMs=duration.inMilliseconds;
+              final elapsed=position.inMilliseconds.clamp(0,maxMs>0?maxMs:0);
+              return Column(children:[
+                if(maxMs>0)Slider(
+                  min:0,max:maxMs.toDouble(),
+                  value:elapsed.toDouble(),
+                  onChanged:(value)=>c.seekTo(Duration(milliseconds:value.round()))),
+                Row(mainAxisAlignment:MainAxisAlignment.spaceBetween,children:[
+                  Text(_clock(position)),
+                  Text(duration>Duration.zero?_clock(duration):'LIVE'),
+                ]),
+                Row(mainAxisAlignment:MainAxisAlignment.center,children:[
+                  IconButton(tooltip:'Back ten seconds',onPressed:()=>_skip(-10),
+                    icon:const Icon(Icons.replay_10)),
+                  FilledButton.tonalIcon(
+                    onPressed:()=>state.isPlaying?c.pause():c.play(),
+                    icon:Icon(state.isPlaying?Icons.pause:Icons.play_arrow),
+                    label:Text(state.isPlaying?'Pause':'Play')),
+                  IconButton(tooltip:'Forward ten seconds',onPressed:()=>_skip(10),
+                    icon:const Icon(Icons.forward_10)),
+                  PopupMenuButton<double>(
+                    tooltip:'Playback speed',icon:const Icon(Icons.speed),
+                    onSelected:(speed)=>c.setPlaybackSpeed(speed),
+                    itemBuilder:(_)=>[
+                      for(final speed in [0.75,1.0,1.25,1.5,2.0])
+                        PopupMenuItem(value:speed,child:Text('${speed}x')),
+                    ]),
+                ]),
+              ]);
+            },
+          ),
         ],
         const SizedBox(height:17),
         if((widget.item['description']??'').toString().isNotEmpty)
