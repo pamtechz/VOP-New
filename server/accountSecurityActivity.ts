@@ -47,7 +47,7 @@ export async function recentAccountSecurityEvents(db:Firestore,uid:string,limit=
   const owner=requireUid(uid);
   const size=Math.max(1,Math.min(50,Math.trunc(limit)));
   const snapshot=await db.collection('accountSecurityEvents')
-    .where('uid','==',owner).limit(150).get();
+    .where('uid','==',owner).orderBy('occurredAt','desc').limit(size).get();
   const entries=snapshot.docs.map(document=>{
     const data=document.data();
     return {
@@ -57,6 +57,5 @@ export async function recentAccountSecurityEvents(db:Firestore,uid:string,limit=
       occurredAt:String(data.occurredAt||''),
     };
   }).filter(row=>Object.hasOwn(EVENT_LABELS,row.action));
-  entries.sort((a,b)=>b.occurredAt.localeCompare(a.occurredAt));
-  return entries.slice(0,size);
+  return entries;
 }
