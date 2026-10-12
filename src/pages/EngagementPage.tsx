@@ -125,12 +125,12 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
   useEffect(() => {
     if (tab === 'master-guide') void run(async () => { const result = await engagement({ action: 'portfolioGet' }); setPortfolio(result.portfolio as Record<string, unknown>); setRequirements((result.requirements as Array<Record<string, unknown>>) || []); });
     if (tab === 'memory') void run(async () => { const result = await engagement({ action: 'memoryDecks' }); const next = (result.decks as Array<Record<string, unknown>>) || []; setDecks(next); if (!deckId && next[0]) setDeckId(String(next[0].id)); });
-    if (tab === 'duels') void run(async () => {
-      const [result, standings] = await Promise.all([
-        engagement({action:'duelOverview'}),engagement({action:'duelLeaderboard'}),
-      ]);
-      applyDuelOverview(result);
-      setLeaderboard((standings.leaderboard as Array<{rank:number;displayName:string;rating:number;points?:number}>) || []);
+    if(tab==='duels')void run(async()=>{
+      const overview=await engagement({action:'duelOverview'});
+      applyDuelOverview(overview);
+      void engagement({action:'duelLeaderboard'}).then(standings=>{
+        setLeaderboard((standings.leaderboard as Array<{rank:number;displayName:string;rating:number;points?:number}>)||[]);
+      }).catch(()=>setLeaderboard([]));
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab]);
