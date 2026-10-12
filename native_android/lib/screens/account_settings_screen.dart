@@ -31,8 +31,15 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
   bool notificationStatusLoaded=false;
   List<Map<String,dynamic>> languages=[],securityActivity=[],passkeyItems=[];
   String? securityActivityError,passkeyError;
+  bool securityActivityLoading=false;
   int page=0;
-  @override void initState(){super.initState();_load();}
+  @override void initState(){
+    super.initState();
+    _load();
+    _loadSecurityActivity();
+    _loadNativePasskeys();
+    _loadAuxiliary();
+  }
   @override void dispose(){
     name.dispose();phone.dispose();whatsapp.dispose();address.dispose();
     bio.dispose();photoUrl.dispose();super.dispose();
@@ -68,20 +75,26 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         loading=false;
       });
       if(settingsAvailable)VopAppearance.apply(settings);
+    }catch(e){if(mounted)setState((){error='$e';loading=false;});}
+  }
+  void _loadAuxiliary(){
       widget.api.accountLifecycle().then((r){
         if(mounted)setState(()=>deletion=r);
       }).catchError((Object ignored){});
       widget.api.accountSecurityStatus().then((r){
         if(mounted)setState(()=>security=r);
       }).catchError((Object ignored){if(mounted)setState(()=>security={'error':'Security details unavailable.'});});
-      _loadSecurityActivity();
-      _loadNativePasskeys();
       widget.api.notificationCapabilities().then((r){
         if(mounted)setState((){notificationCapabilities=r;notificationStatusLoaded=true;});
       }).catchError((Object ignored){
         if(mounted)setState(()=>notificationStatusLoaded=true);
       });
-    }catch(e){if(mounted)setState((){error='$e';loading=false;});}
+  }
+  void _reloadAccount(){
+    _load();
+    _loadSecurityActivity();
+    _loadNativePasskeys();
+    _loadAuxiliary();
   }
   Future<void> _saveProfile()async{
     if(name.text.trim().isEmpty){
@@ -215,7 +228,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
   }
   @override Widget build(BuildContext context)=>Scaffold(
     appBar:AppBar(title:const Text('My Account & Settings'),
-      actions:[IconButton(tooltip:'Reload account',onPressed:_load,
+      actions:[IconButton(tooltip:'Reload account',onPressed:_reloadAccount,
         icon:const Icon(Icons.refresh_rounded))]),
     body:loading?const VopSkeleton(rows:4):
       error!=null&&profile.isEmpty
