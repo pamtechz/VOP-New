@@ -801,7 +801,7 @@ test('passkey sign-in is server-verified and keeps biometric data on the device'
 
   assert.match(signIn,/<strong>Passkey<\/strong>/);
   assert.match(settings,/Enable passkey on this device/);
-  assert.match(settings,/Biometric data remains on your device/);
+  assert.match(settings,/Biometrics stay on your device/);
   assert.match(client,/fetch\('\/api\/admin\/passkeys'/);
   assert.match(client,/navigator\.credentials\.create/);
   assert.match(client,/navigator\.credentials\.get/);
