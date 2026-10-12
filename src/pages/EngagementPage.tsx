@@ -448,7 +448,7 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
               })}
             </div>
             <div className="vop-arena-finish-bar">
-              <div><strong>{answeredQuestionIds.length===duelQuestions.length?'Your answers are complete':'Keep going'}</strong><span>{challengeMode==='duel'&&answeredQuestionIds.length===duelQuestions.length?'Waiting for your opponent's answers.':'Answer every question to complete this challenge.'}</span></div>
+              <div><strong>{answeredQuestionIds.length===duelQuestions.length?'Your answers are complete':'Keep going'}</strong><span>{challengeMode==='duel'&&answeredQuestionIds.length===duelQuestions.length?'Awaiting the other player.':'Answer every question to complete this challenge.'}</span></div>
               <button type="button" className="vop-primary" disabled={busy||answeredQuestionIds.length<duelQuestions.length} onClick={()=>void run(async()=>{
                 const result=challengeMode==='solo'
                   ?await engagement({action:'duelSoloFinish',challengeId:matchId})
