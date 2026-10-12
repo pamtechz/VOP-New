@@ -30,7 +30,7 @@ test('web security settings surface actionable verification and explicit session
   assert.match(settings,/appConfirm\(/);
   assert.match(settings,/await revokeAllSessions\(\)/);
   assert.match(settings,/await firebaseSignOut\(\)/);
-  assert.match(settings,/Existing access tokens may work until expiry/);
+  assert.match(settings,/Revoked sessions may remain active until their access tokens expire/);
 });
 
 test('native security flows require deletion phrase and read the real account status',()=>{
