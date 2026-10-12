@@ -302,7 +302,7 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
         <section className="vop-support-chat">
           <div className="vop-support-chat-head">
             <div><HeartHandshake size={22}/></div>
-            <div><strong>New support request</strong><span>{openCount} open · {resolvedCount} resolved</span></div>
+            <div><strong>{t('support.new_request','New support request')}</strong><span>{openCount} open · {resolvedCount} resolved</span></div>
           </div>
           <div className="vop-support-compose" style={{display:'grid',gap:10}}>
             <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:10}}>
@@ -318,9 +318,9 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
                 <option value="other">Other</option>
               </select>
               <select value={target} onChange={e=>setTarget(e.target.value as typeof target)}>
-                <option value="mentor">My assigned mentor</option>
-                <option value="support_team">Organization support team</option>
-                <option value="both">Mentor + support team</option>
+                <option value="mentor">{t('support.mentor_target','My assigned mentor')}</option>
+                <option value="support_team">{t('support.organization_target','Organization support team')}</option>
+                <option value="both">{t('support.both_target','Mentor + support team')}</option>
               </select>
               <select value={channel} onChange={e=>setChannel(e.target.value as typeof channel)}>
                 <option value="in_app">In-app</option>
@@ -354,7 +354,7 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
 
           <div className={'vop-support-messages'+(loading&&requests.length?' vop-refreshing vop-shimmer-overlay':'')} style={{marginTop:14}}>
             {loading&&requests.length===0?<ShimmerList rows={4} compact label="Loading support requests"/>:requests.length===0
-              ?<div className="vop-support-empty-inline">No requests yet.</div>
+              ?<div className="vop-support-empty-inline">{t('support.empty_requests','No requests yet.')}</div>
               :requests.map(item=><article key={item.id} className={activeRequest?.id===item.id?'mine':'theirs'} style={{cursor:'pointer'}} onClick={()=>void openRequest(item)}>
                 <strong>{item.subject||labelForCategory(item.category)}{item.unread?' · New':''}</strong>
                 <p>{labelForCategory(item.category)} · {item.target.replace('_',' ')} · {item.channel.replace('_',' ')}</p>
