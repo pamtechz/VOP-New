@@ -61,3 +61,20 @@ test('Android biometric verification augments, but never replaces, Firebase iden
   assert.match(settings,/local_auth: \^2\.3\.0/);
   assert.match(manifest,/USE_BIOMETRIC/);
 });
+
+test('Android share plugin uses the built-in Kotlin compatible release and current share API',()=>{
+  const pubspec=read('native_android/pubspec.yaml');
+  const account=read('native_android/lib/screens/account_settings_screen.dart');
+  assert.match(pubspec,/share_plus: \^13\.3\.1/);
+  assert.match(pubspec,/sdk: ">=3\.10\.0 <4\.0\.0"/);
+  assert.match(account,/SharePlus\.instance\.share\(ShareParams\(/);
+  assert.doesNotMatch(account,/Share\.shareXFiles/);
+});
+
+test('security activity uses an owner-filtered, bounded query when the composite index is unavailable',()=>{
+  const activity=read('server/accountSecurityActivity.ts');
+  assert.match(activity,/where\('uid','==',owner\)/);
+  assert.match(activity,/orderBy\('occurredAt','desc'\)/);
+  assert.match(activity,/owned\.limit\(150\)\.get\(\)/);
+  assert.match(activity,/entries\.slice\(0,size\)/);
+});
