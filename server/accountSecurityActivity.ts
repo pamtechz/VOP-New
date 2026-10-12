@@ -26,13 +26,15 @@ export async function recordAccountSecurityEvent(db:Firestore,uid:string,action:
   if(!label)throw new Error('Unsupported account security event.');
   const occurredAt=new Date().toISOString();
   const event=db.collection('accountSecurityEvents').doc();
+  const notificationNeeded=action!=='passkey_sign_in';
   const notice=db.collection('notifications').doc();
   const batch=db.batch();
   batch.create(event,{
     uid:owner,action,title:label.title,occurredAt,
-    createdAt:FieldValue.serverTimestamp(),source:'server',notificationId:notice.id,
+    createdAt:FieldValue.serverTimestamp(),source:'server',
+    ...(notificationNeeded?{notificationId:notice.id}:{}),
   });
-  batch.create(notice,{
+  if(notificationNeeded)batch.create(notice,{
     recipientId:owner,type:'security',channel:'in_app',
     title:label.title,body:label.body,
     mandatory:true,sourceSecurityEventId:event.id,
