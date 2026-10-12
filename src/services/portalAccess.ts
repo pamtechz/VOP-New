@@ -40,6 +40,22 @@ export function canAccessPortalRoute(user: User, route: AppRoute): boolean {
   return true;
 }
 
+export function assignedPortalChoices(user:User):Array<{route:AppRoute;label:string}>{
+  const entries:Array<{route:AppRoute;label:string}>=[];
+  if(hasAdminPortalAccess(user)){
+    const role=normalized(user.role);
+    const title=role==='super_admin'?'Super Administrator'
+      :['union_admin','conference_admin','district_admin','church_admin'].includes(role)
+      ?role.replace('_',' ').replace(/\b\w/g,letter=>letter.toUpperCase())
+      :('Organization '+normalized(user.organizationRole).replace(/\b\w/g,letter=>letter.toUpperCase()));
+    entries.push({route:'admin',label:title});
+  }
+  if(hasMentorPortalAccess(user))entries.push({route:'mentor',label:'Mentor'});
+  if(hasLocalizationPortalAccess(user))entries.push({route:'localization',label:'Translator'});
+  entries.push({route:'home',label:'Learner workspace'});
+  return entries;
+}
+
 export function defaultPortalRoute(user: User): AppRoute {
   if (hasAdminPortalAccess(user)) return 'admin';
   if (hasMentorPortalAccess(user)) return 'mentor';
