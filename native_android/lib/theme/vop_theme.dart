@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Shared with the web application src/index.css (primary brand tokens).
 abstract final class VopColors {
@@ -21,6 +22,20 @@ abstract final class VopColors {
 /// restarting the application or affecting saved curriculum data.
 abstract final class VopAppearance {
   static final mode = ValueNotifier<ThemeMode>(ThemeMode.system);
+  static int revision=0;
+  static Future<void> restoreTheme(String uid)async{
+    final storage=await SharedPreferences.getInstance();
+    final saved=storage.getString('vop:theme:'+uid);
+    if(saved=='dark')mode.value=ThemeMode.dark;
+    else if(saved=='light')mode.value=ThemeMode.light;
+    else mode.value=ThemeMode.system;
+  }
+  static Future<void> persistTheme(String uid,String theme)async{
+    if(!['light','dark','system'].contains(theme))return;
+    revision++;
+    final storage=await SharedPreferences.getInstance();
+    await storage.setString('vop:theme:'+uid,theme);
+  }
   static final largerText = ValueNotifier<bool>(false);
   static final reducedMotion = ValueNotifier<bool>(false);
   static final highContrast = ValueNotifier<bool>(false);
