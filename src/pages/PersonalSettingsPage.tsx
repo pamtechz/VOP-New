@@ -595,7 +595,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
                 </div>
                 {verificationMessage&&<small role="status">{verificationMessage}</small>}
               </>:<p>{uiT('personal_settings.loading_account_security','Account security details unavailable.')}</p>}
-              <p>{uiT('personal_settings.sessions_explanation','Revoking refresh tokens ends sign-in across devices. Existing access tokens may work until expiry.')}</p>
+              <small>Revoked sessions may remain active until their access tokens expire.</small>
               <button type="button" className="vop-secondary danger" disabled={securityBusy}
                 onClick={()=>void signOutAllDevices()}><ShieldCheck size={16}/>
                 {securityBusy?'Ending sessions…':uiT('personal_settings.sign_out_all_devices','Sign out all devices')}
@@ -604,8 +604,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
             <section className="vop-personal-card vop-card">
               <h2><Fingerprint size={19}/>{uiT('personal_settings.passkeys_and_device_verification',"Passkeys & device verification")}</h2>
               {!passkeyCapable?<p>{uiT('personal_settings.this_browser_or_connection_does_not_support_secure_passkey_sign_in',"This browser or connection does not support secure passkey sign-in.")}</p>:<>
-                <p>{platformBiometric?'Use fingerprint, face, PIN or device lock.':'Use a supported passkey provider.'}</p>
-                <small>{uiT('personal_settings.vop_stores_a_public_key_credential_only_biometric_data_remains_on_your_device_and_is_not_u',"VOP stores a public-key credential only. Biometric data remains on your device and is not uploaded to VOP or Firebase.")}</small>
+                <small>{platformBiometric?'Use fingerprint, face or device lock.':'Use a passkey provider.'} Biometrics stay on your device.</small>
                 <button type="button" className="vop-primary" disabled={passkeyBusy} onClick={()=>void enablePasskey()}>
                   <Fingerprint size={17}/>{passkeyBusy?'Please wait…':'Enable passkey on this device'}
                 </button>
@@ -619,21 +618,17 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
               </>}
             </section>
             <section className="vop-personal-card vop-card">
-              <h2><ShieldCheck size={19}/>Recent security activity</h2>
+              <h2>Recent security activity</h2>
               {activityError&&<p role="alert">{activityError}</p>}
-              {securityActivity.length? <div className="vop-setting-list">
-                {securityActivity.map(event=><div className="vop-setting-row" key={event.id}>
-                  <div><strong>{event.title}</strong><div className="vop-setting-help">
-                    {event.occurredAt?new Date(event.occurredAt).toLocaleString():''}
-                  </div></div>
+              <div className="vop-setting-list">
+                {securityActivity.map(item=><div key={item.id} className="vop-setting-row">
+                  <div><strong>{item.title}</strong><small>{new Date(item.occurredAt).toLocaleString()}</small></div>
                 </div>)}
-              </div>:<small>No recorded security actions yet.</small>}
-              <small>Includes recorded passkey and account-security actions, not a list of all devices or Google sign-ins.</small>
+              </div>
+              {!securityActivity.length&&<small>No recorded actions yet.</small>}
+              <small>Recorded actions only; not a device list.</small>
               <button type="button" className="vop-secondary" onClick={()=>void loadAccountSecurityActivity()
-                .then(setSecurityActivity).then(()=>setActivityError(''))
-                .catch(error=>setActivityError(error instanceof Error?error.message:'Activity could not be loaded.'))}>
-                Refresh activity
-              </button>
+                .then(setSecurityActivity).catch(()=>setActivityError('Activity unavailable.'))}>Refresh activity</button>
             </section>
           </div>
         )}
