@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../core/vop_api.dart';
+import '../core/vop_i18n.dart';
 import '../theme/vop_theme.dart';
 import '../widgets/vop_ui.dart';
 import 'certificates_screen.dart';
 import 'account_settings_screen.dart';
+import 'offline_studies_screen.dart';
 import 'content_screen.dart';
 import 'guide_screen.dart';
 import 'engagement_screen.dart';
@@ -48,6 +50,13 @@ class _HomeShellState extends State<HomeShell> {
       final result=await widget.api.personalSettings();
       if(mounted&&initialRevision==VopAppearance.revision)
         VopAppearance.apply(asMap(result['settings']));
+      final locale=(asMap(result['settings'])['uiLocale']??'en').toString().trim().toLowerCase();
+      if(locale.isNotEmpty){
+        try{
+          final published=await widget.api.languagePack(locale);
+          if(mounted)VopI18n.apply(locale,published);
+        }catch(_){}
+      }
     }catch(_){}
   }
   void reload(){
@@ -81,7 +90,12 @@ class _HomeShellState extends State<HomeShell> {
 
   @override Widget build(BuildContext context){
     final wide=MediaQuery.sizeOf(context).width>=880;
-    const labels=['Discover','Lessons','Library','Prayer','Radio'];
+    final labels=[
+      VopI18n.text('navigation.discover','Discover'),
+      VopI18n.text('navigation.lessons','Lessons'),
+      VopI18n.text('navigation.library','Library'),
+      VopI18n.text('navigation.prayer','Prayer'),
+      VopI18n.text('navigation.radio','Radio')];
     final icons=[
       Icons.home_outlined,Icons.auto_stories_outlined,
       Icons.local_library_outlined,Icons.volunteer_activism_outlined,
@@ -155,6 +169,8 @@ class _HomeShellState extends State<HomeShell> {
       _destination('Discover',Icons.home_outlined,()=>selectTab(0)),
       _destination('Lessons & Assessments',Icons.book_outlined,()=>selectTab(1)),
       _destination('Library',Icons.local_library_outlined,()=>selectTab(2)),
+      _destination('Offline downloads',Icons.download_for_offline_outlined,
+        ()=>push(OfflineStudiesScreen(api:widget.api))),
       _destination('My Progress',Icons.insights_outlined,()=>push(_ProgressScreen(api:widget.api))),
       _destination('My Certificates',Icons.workspace_premium_outlined,
         ()=>push(CertificatesScreen(api:widget.api))),
