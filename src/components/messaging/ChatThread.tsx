@@ -209,7 +209,7 @@ export function ChatThread({
   };
   const remove=async(message:ChatMessage)=>{
     if(!onDelete||busy||localBusy)return;
-    if(!await appConfirm('Delete this message? The conversation will keep a “Message deleted” placeholder so its history remains understandable.',{
+    if(!await appConfirm('Delete this message? A deletion marker remains.',{
       title:'Delete message',confirmLabel:'Delete',tone:'danger',
     }))return;
     setLocalBusy(true);
@@ -293,7 +293,7 @@ export function ChatThread({
       </div>}
       {pickerOpen&&<div className="vop-chat-lesson-picker">
         <div className="vop-chat-picker-head">
-          <div><Paperclip size={17}/><span><strong>Attach VOP content</strong><small>Attach lessons, Duels, Challenges, games and other in-app destinations.</small></span></div>
+          <div><Paperclip size={17}/><span><strong>Attach VOP content</strong><small>Attach study content or an activity.</small></span></div>
           <button type="button" onClick={()=>setPickerOpen(false)} aria-label="Close attachment picker"><X size={16}/></button>
         </div>
         <div className="vop-chat-picker-tabs" role="tablist" aria-label="Attachment type">
@@ -342,7 +342,7 @@ export function ChatThread({
           <Send size={17}/><span>{localBusy?'Sending…':sendLabel}</span>
         </button>
       </div>
-      <small className="vop-chat-hint">Enter to send · Shift+Enter for a new line · paperclip attaches lessons, Duels, Challenges, games and other VOP content</small>
+      <small className="vop-chat-hint">Enter: send · Shift+Enter: newline · Attach VOP content</small>
     </div>
   </div>;
 }
