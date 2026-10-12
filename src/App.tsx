@@ -233,7 +233,7 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
         if (!profile) {
           setCurrentUser(EMPTY_USER);
           setAllUsers([]);
-          setStudyError(previous => previous || 'Your Firebase account profile is not configured. Ask an administrator to complete account setup.');
+          setStudyError(previous => previous || 'Account setup is incomplete. Contact your administrator.');
           return;
         }
         setLocalizationOrganizationScope(profile.organizationId || '');
@@ -551,7 +551,7 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
     const feature=routeFeature[currentRoute];
     if(feature&&settings.features?.[feature]===false){
       setCurrentRoute('home');
-      setStudyNotice('This module is currently disabled by the VOP platform administrator.');
+      setStudyNotice('This module is disabled by your administrator.');
     }
   }, [currentRoute,settings.features?.radio,settings.features?.announcements,settings.features?.certification]);
 
@@ -829,7 +829,7 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
     }
     if(isPortalRoute(route)&&!canAccessPortalRoute(currentUser,route)){
       const fallback=defaultPortalRoute(currentUser);
-      setStudyNotice('This account does not have access to the requested workspace.');
+      setStudyNotice('Workspace access is not assigned to this account.');
       setCurrentRoute(fallback);
       rememberLocation({route:fallback},true);
       return;
@@ -839,7 +839,7 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
     };
     const feature=routeFeature[route];
     if(feature&&settings.features?.[feature]===false){
-      setStudyNotice('This module is currently disabled by the VOP platform administrator.');
+      setStudyNotice('This module is disabled by your administrator.');
       setCurrentRoute('home');
       rememberLocation({route:'home'});
       return;
@@ -943,22 +943,16 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
         </main>
         {currentRoute !== 'admin' && <BottomNav currentRoute={currentRoute} onNavigate={navigate} currentUser={currentUser} />}
       </div>
-      {portalPrompt&&currentUser.uid&&<div role="dialog" aria-modal="true"
-        aria-label="Choose your VOP workspace"
-        style={{position:'fixed',inset:0,zIndex:1000,display:'grid',placeItems:'center',
-          padding:20,background:'rgba(0,0,0,.68)'}}>
-        <section className="vop-card" style={{width:'min(100%,410px)',padding:22,
-          background:'var(--bg-primary)',color:'var(--text-primary)',borderRadius:16}}>
-          <h2>Continue to VOP</h2>
-          <p>Choose a workspace assigned to this account.</p>
-          <div style={{display:'grid',gap:10}}>
-            {assignedPortalChoices(currentUser).map(choice=><button key={choice.route}
-              type="button" className="vop-primary" onClick={()=>{
-                if(choice.route!=='home'&&!canAccessPortalRoute(currentUser,choice.route))return;
-                setPortalPrompt(false);setCurrentRoute(choice.route);
-                rememberLocation({route:choice.route},true);
-              }}>{choice.label}</button>)}
-          </div>
+      {portalPrompt&&currentUser.uid&&<div className="vop-portal-choice-backdrop"
+        role="dialog" aria-modal="true" aria-label="Choose workspace">
+        <section className="vop-portal-choice">
+          <h2>Choose workspace</h2>
+          {assignedPortalChoices(currentUser).map(choice=><button key={choice.route}
+            type="button" className="vop-primary" onClick={()=>{
+              if(choice.route!=='home'&&!canAccessPortalRoute(currentUser,choice.route))return;
+              setPortalPrompt(false);setCurrentRoute(choice.route);
+              rememberLocation({route:choice.route},true);
+            }}>{choice.label}</button>)}
         </section>
       </div>}
       <MenuDrawer isOpen={isMenuOpen} onClose={() => setIsMenuOpen(false)} currentRoute={currentRoute} currentUser={currentUser} guides={guides} settings={settings} activeLanguage={activeLanguage} onNavigate={navigate} />
@@ -975,10 +969,10 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
         onNextLesson={() => { if (nextLesson) openStudyItem(activeGuide,nextLesson,undefined,currentRoute); }}
         onComplete={async () => {
         const accepted = await completeLesson(activeGuide.id, activeLesson.id, activeGuide.language);
-        if (accepted === 'failed') { setStudyError('Lesson completion was not accepted or could not be safely queued. Check your connection and sign-in status, then retry.'); return false; }
+        if (accepted === 'failed') { setStudyError('Lesson not saved. Check your connection and try again.'); return false; }
         setStudyError('');
         if (accepted === 'queued') {
-          setStudyNotice('Lesson completion saved on this device. Official credit will appear after server verification when you reconnect.');
+          setStudyNotice('Lesson queued offline; credit follows server verification.');
         } else if (auth?.currentUser) {
           setStudyNotice('');
           const refreshedUser = await loadFirestoreUser(auth.currentUser.uid).catch(() => null);
@@ -989,7 +983,7 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
       }} />}
       {activeLesson?.type === 'Test' && activeGuide && <QuizModal lesson={activeLesson} guide={activeGuide} previousScore={lessonScoreForDisplay(activeGuide,activeLesson,currentUser)} previouslyAttempted={lessonScoreForDisplay(activeGuide,activeLesson,currentUser)!==undefined} passThreshold={settings.quizPassThreshold} maxAttempts={settings.quizMaxAttempts || 0} retakeCooldownMinutes={settings.quizRetakeCooldownMinutes || 0} onClose={goBack} hasNextLesson={false} onContinue={goBack} onAttemptStarted={async()=>{if(auth?.currentUser){const refreshedUser=await loadFirestoreUser(auth.currentUser.uid).catch(()=>null);if(refreshedUser){setCurrentUser(refreshedUser);setAllUsers([refreshedUser]);}}}} onSubmitScore={async (answers,sessionId) => {
         const result = await submitQuizAnswers(activeGuide.id, activeLesson.id, answers, activeGuide.language,sessionId);
-        if (result === null) { setStudyError('Test results were not saved. Check your connection, sign-in status, and assessment configuration.'); return null; }
+        if (result === null) { setStudyError('Test results were not saved. Check your connection.'); return null; }
         setStudyError('');
         if (auth?.currentUser) { const refreshedUser = await loadFirestoreUser(auth.currentUser.uid); if (refreshedUser) { setCurrentUser(refreshedUser); setAllUsers([refreshedUser]); } }
         return result;
