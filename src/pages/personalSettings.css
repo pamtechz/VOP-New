@@ -335,3 +335,24 @@
   color: #1e40af;
   border: 1px solid #bfdbfe;
 }
+
+.vop-personal-settings .vop-personal-profile-summary{display:flex;align-items:center;gap:12px;min-width:0;padding:10px;background:var(--bg-elevated,#f5f8fc);border:1px solid var(--border-subtle,#dce5f0);border-radius:10px}
+.vop-personal-settings .vop-personal-profile-avatar{width:56px;height:56px;flex:0 0 56px;object-fit:cover;border-radius:50%;border:2px solid var(--border-subtle,#dce5f0);background:var(--bg-card,#fff)}
+.vop-personal-settings .vop-personal-profile-initial{display:grid;place-items:center;background:var(--vop-navy-900,#173b74);color:#fff;font-size:23px;font-weight:750}
+.vop-personal-settings .vop-personal-profile-summary>div{min-width:0;display:flex;flex-direction:column;gap:3px}
+.vop-personal-settings .vop-personal-profile-summary strong,.vop-personal-settings .vop-personal-profile-summary span{overflow-wrap:anywhere}
+.vop-personal-settings .vop-personal-profile-summary>div>span{color:var(--text-muted,#64748b);font-size:.8rem}
+.vop-personal-settings .vop-personal-profile-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.vop-personal-settings .vop-personal-profile-form label{display:flex;flex-direction:column;gap:5px;min-width:0;font-size:.82rem;font-weight:650;color:var(--text-secondary,#27496e)}
+.vop-personal-settings .vop-personal-profile-form label:nth-child(n+5){grid-column:1/-1}
+.vop-personal-settings .vop-personal-profile-form :is(input,textarea){width:100%;box-sizing:border-box;min-width:0;padding:8px 11px;border-radius:8px;border:1px solid var(--border-subtle,#c9d8ea);background:var(--bg-card,#fff);color:var(--text-primary,#153657);font:inherit}
+.vop-personal-settings .vop-personal-profile-form input[readonly]{background:var(--bg-elevated,#f4f6f9);color:var(--text-muted,#64748b);cursor:not-allowed}
+.vop-personal-settings .vop-personal-profile-actions{grid-column:1/-1;display:flex;justify-content:flex-end;flex-wrap:wrap;gap:8px}
+@media(max-width:580px){.vop-personal-settings .vop-personal-profile-form{grid-template-columns:minmax(0,1fr)}.vop-personal-settings .vop-personal-profile-form label{grid-column:1/-1}.vop-personal-settings .vop-personal-profile-actions>*{flex:1}}
+
+
+.vop-personal-settings .vop-personal-password-form{display:grid;gap:12px;margin-top:2px}
+.vop-personal-settings .vop-personal-password-field{display:grid;gap:5px;font-size:.83rem;font-weight:650}
+.vop-personal-settings .vop-personal-password-wrap{position:relative;display:block}
+.vop-personal-settings .vop-personal-password-wrap input{padding-right:42px}
+.vop-personal-settings .vop-personal-password-wrap button{position:absolute;right:6px;top:50%;transform:translateY(-50%);background:transparent;border:0;display:grid;place-items:center;min-width:34px;min-height:34px;color:var(--text-muted,#64748b);cursor:pointer}

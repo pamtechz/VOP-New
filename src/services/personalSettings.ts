@@ -50,7 +50,9 @@ export async function savePersonalSettings(settings: PersonalSettings): Promise<
   const normalized:PersonalSettings = {
     ...settings,
     studyPreferences: settings.studyPreferences
-      ? { ...settings.studyPreferences, ...(timezone ? { timezone } : {}) }
+      ? {...settings.studyPreferences,
+        ...(timezone && settings.studyPreferences.preferredStudyTime!==undefined
+          && settings.studyPreferences.timezone===undefined?{timezone}:{})}
       : settings.studyPreferences,
   };
   const token = await user.getIdToken();

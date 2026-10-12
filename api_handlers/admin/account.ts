@@ -4,6 +4,9 @@ import {
 } from '../../server/accountLifecycle.js';
 import { runDailyOperationalMaintenance } from '../../server/operations.js';
 import { getAdminDb } from '../../server/tenant.js';
+import { getAuth } from 'firebase-admin/auth';
+import { getApps } from 'firebase-admin/app';
+import { recordAccountSecurityEvent, recentAccountSecurityEvents } from '../../server/accountSecurityActivity.js';
 
 type Request={method?:string;headers?:Record<string,string|string[]|undefined>;query?:Record<string,string|string[]|undefined>;body?:unknown};
 type Response={status:(code:number)=>Response;json:(body:unknown)=>void;setHeader?:(name:string,value:string)=>void};
@@ -12,6 +15,24 @@ function value(input:unknown){return Array.isArray(input)?String(input[0]||''):S
 function header(req:Request,name:string){
   const raw=req.headers?.[name]??req.headers?.[name.toLowerCase()];
   return Array.isArray(raw)?String(raw[0]||''):String(raw||'');
+}
+
+async function requireVerifiedRecentIdentity(req:Request,uid:string,maxAgeSeconds=300){
+  const bearer=header(req,'authorization').replace(/^Bearer\s+/i,'').trim();
+  if(!bearer)throw new Error('Sign in first.');
+  const identity=await getAuth(getApps()[0]).verifyIdToken(bearer,true);
+  if(identity.uid!==uid)throw new Error('Account identity changed. Sign in again.');
+  const now=Math.floor(Date.now()/1000);
+  const authTime=Number(identity.auth_time);
+  if(!Number.isSafeInteger(authTime)||authTime<=0||now-authTime>maxAgeSeconds||authTime>now+60)
+    throw new Error('Recent sign-in required. Sign out and sign in again to continue.');
+  return identity;
+}
+async function requireVerifiedIdentity(req:Request,uid:string){
+  const bearer=header(req,'authorization').replace(/^Bearer\s+/i,'').trim();
+  if(!bearer)throw new Error('Sign in first.');
+  const identity=await getAuth(getApps()[0]).verifyIdToken(bearer,true);
+  if(identity.uid!==uid)throw new Error('Account identity changed. Sign in again.');
 }
 
 export default async function handler(req:Request,res:Response){
@@ -40,23 +61,57 @@ export default async function handler(req:Request,res:Response){
     if(req.method==='GET'&&action==='status'){
       return res.status(200).json({ok:true,...await getAccountLifecycleStatus(ctx.db,ctx.auth.uid)});
     }
+    if(req.method==='GET'&&action==='security-status'){
+      const firebaseAuth=getAuth(getApps()[0]);
+      const record=await firebaseAuth.getUser(ctx.auth.uid);
+      return res.status(200).json({ok:true,
+        emailVerified:record.emailVerified,
+        lastSignInAt:record.metadata.lastSignInTime||null,
+        createdAt:record.metadata.creationTime||null,
+        signInProviders:[...new Set(record.providerData.map(provider=>provider.providerId)
+          .concat(record.passwordHash?['password']:[]))],
+      });
+    }
+    if(req.method==='GET'&&action==='security-activity'){
+      return res.status(200).json({ok:true,items:await recentAccountSecurityEvents(ctx.db,ctx.auth.uid)});
+    }
+    if(req.method==='POST'&&action==='revoke-sessions'){
+      if(String(body.confirmation||'')!=='SIGN OUT ALL DEVICES')
+        return res.status(400).json({error:'Type SIGN OUT ALL DEVICES to confirm.'});
+      await requireVerifiedRecentIdentity(req,ctx.auth.uid);
+      await getAuth(getApps()[0]).revokeRefreshTokens(ctx.auth.uid);
+      await recordAccountSecurityEvent(ctx.db,ctx.auth.uid,'sessions_revoked');
+      return res.status(200).json({ok:true,revoked:true});
+    }
     if(req.method==='GET'&&action==='export'){
+      await requireVerifiedRecentIdentity(req,ctx.auth.uid);
       const exported=await buildAccountExport(ctx.db,ctx.auth.uid);
+      await recordAccountSecurityEvent(ctx.db,ctx.auth.uid,'account_exported');
       res.setHeader?.('Content-Disposition','attachment; filename="vop-account-export.json"');
       return res.status(200).json({ok:true,export:exported});
     }
     if(req.method==='POST'&&action==='request-deletion'){
+      await requireVerifiedRecentIdentity(req,ctx.auth.uid);
       const confirmation=String(body.confirmation||'');
       const reason=String(body.reason||'');
-      return res.status(202).json({ok:true,...await requestAccountDeletion(ctx.db,ctx.auth.uid,confirmation,reason)});
+      const result=await requestAccountDeletion(ctx.db,ctx.auth.uid,confirmation,reason);
+      await recordAccountSecurityEvent(ctx.db,ctx.auth.uid,'deletion_requested');
+      return res.status(202).json({ok:true,...result});
     }
     if(req.method==='POST'&&action==='cancel-deletion'){
-      return res.status(200).json({ok:true,...await cancelAccountDeletion(ctx.db,ctx.auth.uid)});
+      await requireVerifiedIdentity(req,ctx.auth.uid);
+      const result=await cancelAccountDeletion(ctx.db,ctx.auth.uid);
+      await recordAccountSecurityEvent(ctx.db,ctx.auth.uid,'deletion_cancelled');
+      return res.status(200).json({ok:true,...result});
     }
     return res.status(405).json({error:'Method not allowed.'});
   }catch(error){
     const message=error instanceof Error?error.message:'Account privacy operation failed.';
-    const status=/sign in/i.test(message)?401:/cannot|must transfer|active learner assignments/i.test(message)?409:/not found/i.test(message)?404:400;
+    const status=/sign out and sign in again/i.test(message)?403
+      :/recent sign-in required/i.test(message)?403
+      :/sign in|invalid.*token|revoked|id token|auth\/|identity changed/i.test(message)?401
+      :/cannot|must transfer|active learner assignments/i.test(message)?409
+      :/not found/i.test(message)?404:400;
     return res.status(status).json({error:message});
   }
 }

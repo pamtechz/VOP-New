@@ -844,6 +844,9 @@ service cloud.firestore {
     match /accountDeletionTombstones/{id} {
       allow read, write: if false;
     }
+    match /accountSecurityEvents/{eventId} {
+      allow read, write: if false;
+    }
 
     // Passkey public credentials are authentication material. They are managed
     // only by the authenticated server endpoint; browser clients never read,

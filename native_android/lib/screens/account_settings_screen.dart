@@ -1,4 +1,7 @@
+import 'dart:convert';
+import 'dart:typed_data';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:flutter/material.dart';
 import '../core/vop_api.dart';
 import '../theme/vop_theme.dart';
@@ -16,45 +19,80 @@ class AccountSettingsScreen extends StatefulWidget {
 }
 class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
   final name=TextEditingController(),phone=TextEditingController(),
-    whatsapp=TextEditingController(),address=TextEditingController();
+    whatsapp=TextEditingController(),address=TextEditingController(),
+    bio=TextEditingController(),photoUrl=TextEditingController();
   bool loading=true,saving=false;
   String? error,message;
-  Map<String,dynamic> profile={},preferences={},deletion={};
-  List<Map<String,dynamic>> languages=[];
+  Map<String,dynamic> profile={},preferences={},savedPreferences={},deletion={},security={},notificationCapabilities={};
+  bool preferencesReady=false;
+  String? settingsLoadError;
+  bool notificationStatusLoaded=false;
+  List<Map<String,dynamic>> languages=[],securityActivity=[];
+  String? securityActivityError;
   int page=0;
   @override void initState(){super.initState();_load();}
   @override void dispose(){
-    name.dispose();phone.dispose();whatsapp.dispose();address.dispose();super.dispose();
+    name.dispose();phone.dispose();whatsapp.dispose();address.dispose();
+    bio.dispose();photoUrl.dispose();super.dispose();
   }
   Future<void> _load()async{
     setState((){loading=true;error=null;});
     try{
       final results=await Future.wait([
         widget.api.accountProfile(),
-        widget.api.personalSettings(),
-        widget.api.supportedLanguages(),
+        widget.api.personalSettings().catchError((Object problem)=>
+          <String,dynamic>{'settings':<String,dynamic>{},'settingsUnavailable':true,
+            'message':'$problem'}),
+        widget.api.supportedLanguages().catchError(
+          (Object _) => <String,dynamic>{'items':<dynamic>[]}),
       ]);
       final p=_map(results[0]['profile']);
       final settings=_map(results[1]['settings']);
+      final settingsAvailable=results[1]['settingsUnavailable']!=true;
       final supported=_rows(results[2]['items']);
       if(!mounted)return;
       setState((){
-        profile=p;preferences=settings;languages=supported;
+        profile=p;preferences=settings;savedPreferences=Map<String,dynamic>.from(settings);
+        preferencesReady=settingsAvailable;
+        settingsLoadError=settingsAvailable?null:
+          'Personal preferences could not be loaded. Reload before making changes.';
+        languages=supported;
         name.text=(p['displayName']??'').toString();
         phone.text=(p['phoneNumber']??'').toString();
         whatsapp.text=(p['whatsappNumber']??'').toString();
         address.text=(p['address']??'').toString();
+        bio.text=(p['bio']??'').toString();
+        photoUrl.text=(p['photoURL']??'').toString();
         loading=false;
       });
-      VopAppearance.apply(settings);
+      if(settingsAvailable)VopAppearance.apply(settings);
       widget.api.accountLifecycle().then((r){
         if(mounted)setState(()=>deletion=r);
       }).catchError((Object ignored){});
+      widget.api.accountSecurityStatus().then((r){
+        if(mounted)setState(()=>security=r);
+      }).catchError((Object ignored){if(mounted)setState(()=>security={'error':'Security details unavailable.'});});
+      _loadSecurityActivity();
+      widget.api.notificationCapabilities().then((r){
+        if(mounted)setState((){notificationCapabilities=r;notificationStatusLoaded=true;});
+      }).catchError((Object ignored){
+        if(mounted)setState(()=>notificationStatusLoaded=true);
+      });
     }catch(e){if(mounted)setState((){error='$e';loading=false;});}
   }
   Future<void> _saveProfile()async{
     if(name.text.trim().isEmpty){
       setState(()=>error='Your display name cannot be empty.');return;
+    }
+    if(name.text.trim().length>120 || phone.text.trim().length>40 ||
+        whatsapp.text.trim().length>40 || address.text.trim().length>500 ||
+        bio.text.trim().length>1000 || photoUrl.text.trim().length>2048){
+      setState(()=>error='One or more profile fields are too long.');return;
+    }
+    final image=photoUrl.text.trim();
+    if(image.isNotEmpty && (!Uri.tryParse(image).toString().startsWith('https://') ||
+        Uri.tryParse(image)?.hasAuthority!=true)){
+      setState(()=>error='Use a public HTTPS profile picture URL.');return;
     }
     await _perform(()async{
       final result=await widget.api.saveProfile({
@@ -62,14 +100,40 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         'phoneNumber':phone.text.trim(),
         'whatsappNumber':whatsapp.text.trim(),
         'address':address.text.trim(),
+        'bio':bio.text.trim(),
+        'photoURL':image,
       });
       profile=_map(result['profile']);
     },'Profile updated for web and Android.');
   }
+  Map<String,dynamic> _settingsDelta(){
+    final changes=<String,dynamic>{};
+    for(final key in preferences.keys){
+      final current=preferences[key],previous=savedPreferences[key];
+      if(jsonEncode(current)==jsonEncode(previous))continue;
+      if(current is Map && previous is Map){
+        final nested=<String,dynamic>{};
+        for(final entry in current.entries){
+          final field=entry.key.toString();
+          if(jsonEncode(entry.value)!=jsonEncode(previous[field])){
+            nested[field]=entry.value;
+          }
+        }
+        if(nested.isNotEmpty)changes[key]=nested;
+      }else{
+        changes[key]=current;
+      }
+    }
+    return changes;
+  }
   Future<void> _saveSettings()async{
+    if(!preferencesReady)return;
+    final changes=_settingsDelta();
+    if(changes.isEmpty)return;
     await _perform(()async{
-      final result=await widget.api.savePersonalSettings(preferences);
+      final result=await widget.api.savePersonalSettings(changes);
       preferences=_map(result['settings']);
+      savedPreferences=Map<String,dynamic>.from(preferences);
       VopAppearance.apply(preferences);
     },'Personal settings saved for web and Android.');
   }
@@ -147,11 +211,18 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         ?VopEmpty(icon:Icons.wifi_off,message:error!,onRetry:_load)
         :Column(children:[
           Padding(padding:const EdgeInsets.fromLTRB(14,12,14,3),
-            child:SegmentedButton<int>(segments:const [
-              ButtonSegment(value:0,label:Text('Profile'),icon:Icon(Icons.person_outline)),
-              ButtonSegment(value:1,label:Text('Settings'),icon:Icon(Icons.tune)),
-              ButtonSegment(value:2,label:Text('Security'),icon:Icon(Icons.shield_outlined)),
-            ],selected:{page},onSelectionChanged:(v)=>setState(()=>page=v.first))),
+            child:LayoutBuilder(builder:(context,constraints){
+              final compact=constraints.maxWidth<410;
+              return SegmentedButton<int>(showSelectedIcon:false,segments:[
+                ButtonSegment(value:0,label:compact?null:const Text('Profile'),
+                  icon:const Icon(Icons.person_outline)),
+                ButtonSegment(value:1,label:compact?null:const Text('Settings'),
+                  icon:const Icon(Icons.tune)),
+                ButtonSegment(value:2,label:compact?null:const Text('Security'),
+                  icon:const Icon(Icons.shield_outlined)),
+              ],selected:{page},
+                onSelectionChanged:(v)=>setState(()=>page=v.first));
+            })),
           if(error!=null)Padding(padding:const EdgeInsets.symmetric(horizontal:18,vertical:5),
             child:Text(error!,style:TextStyle(color:Theme.of(context).colorScheme.error))),
           if(message!=null)Padding(padding:const EdgeInsets.symmetric(horizontal:18,vertical:5),
@@ -167,6 +238,8 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     const SizedBox(height:9),
     Center(child:CircleAvatar(radius:35,
       backgroundColor:Theme.of(context).colorScheme.primaryContainer,
+      foregroundImage:Uri.tryParse((profile['photoURL']??'').toString())?.scheme=='https'
+        ?NetworkImage((profile['photoURL']??'').toString()):null,
       child:const Icon(Icons.person,size:37))),
     const SizedBox(height:12),
     Center(child:Text((profile['email']??FirebaseAuth.instance.currentUser?.email??'').toString(),
@@ -178,6 +251,9 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       _field(phone,'Phone number',Icons.phone_outlined,keyboard:TextInputType.phone),
       _field(whatsapp,'WhatsApp number',Icons.chat_outlined,keyboard:TextInputType.phone),
       _field(address,'Address',Icons.place_outlined,lines:2),
+      _field(bio,'About me',Icons.edit_note_outlined,lines:3),
+      _field(photoUrl,'Profile picture URL',Icons.image_outlined,
+        keyboard:TextInputType.url),
       FilledButton.icon(onPressed:saving?null:_saveProfile,
         icon:const Icon(Icons.save_outlined),
         label:Text(saving?'Saving…':'Save profile')),
@@ -189,7 +265,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         title:const Text('Role'),
         subtitle:Text((profile['organizationRole']??profile['role']??'Learner').toString())),
       ListTile(contentPadding:EdgeInsets.zero,
-        title:const Text('Organisation ID'),
+        title:const Text('Organisation'),
         subtitle:Text((profile['organizationId']??'Personal account').toString())),
     ]),
   ];
@@ -208,6 +284,14 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
           (lang['nativeName']??lang['code']).toString()))),
     ];
     return [
+      if(settingsLoadError!=null)...[
+        Text(settingsLoadError!,style:TextStyle(
+          color:Theme.of(context).colorScheme.error)),
+        const SizedBox(height:8),
+        OutlinedButton.icon(onPressed:loading?null:_load,
+          icon:const Icon(Icons.refresh_rounded),
+          label:const Text('Retry loading settings')),
+      ],
       _heading('Appearance','Choose how VOP looks on your phone.',Icons.palette_outlined),
       _group([
         _choose('Theme','', 'theme',colors,
@@ -230,32 +314,113 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         _switch('notifications','email','Email updates'),
         _switch('notifications','announcements','Announcements'),
         _switch('notifications','certificates','Certificate updates'),
-      ]),
-      _heading('Study routine','Make learning fit your schedule.',
-        Icons.schedule_outlined),
-      _group([
-        _switch('studyPreferences','reminders','Study reminders'),
-        TextFormField(
-          initialValue:(_map(preferences['studyPreferences'])['preferredStudyTime']??'').toString(),
-          keyboardType:TextInputType.datetime,
-          decoration:const InputDecoration(
-            labelText:'Preferred study time (HH:MM)',
-            hintText:'18:30'),
-          onChanged:(text)=>_nested('studyPreferences','preferredStudyTime',text),
-        ),
-        const SizedBox(height:10),
-        TextFormField(
-          initialValue:(_map(preferences['studyPreferences'])['timezone']??'').toString(),
-          decoration:const InputDecoration(
-            labelText:'Timezone (e.g. Africa/Lusaka)'),
-          onChanged:(text)=>_nested('studyPreferences','timezone',text),
-        ),
+        if(notificationStatusLoaded)...[
+          const SizedBox(height:8),
+          Text(
+            notificationCapabilities.isEmpty
+              ?'Email delivery status could not be checked. Preferences can still be saved.'
+              :_map(notificationCapabilities['email'])['available']==true
+                ?'Email delivery is configured for this platform.'
+                :'Email delivery is currently unavailable. Your preference will take effect when the administrator configures email.',
+            style:TextStyle(fontSize:12,
+              color:Theme.of(context).colorScheme.onSurfaceVariant)),
+        ],
       ]),
       const SizedBox(height:19),
-      FilledButton.icon(onPressed:saving?null:_saveSettings,
+      FilledButton.icon(onPressed:saving||!preferencesReady||_settingsDelta().isEmpty
+        ?null:_saveSettings,
         icon:const Icon(Icons.save_outlined),
         label:Text(saving?'Saving…':'Save preferences')),
     ];
+  }
+  Future<void> _loadSecurityActivity()async{
+    try{
+      final result=await widget.api.accountSecurityActivity();
+      if(mounted)setState((){
+        securityActivity=_rows(result['items']);
+        securityActivityError=null;
+      });
+    }catch(e){
+      if(mounted)setState(()=>securityActivityError='Could not load your security activity.');
+    }
+  }
+  Future<void> _exportData()async{
+    final accepted=await showDialog<bool>(context:context,
+      builder:(ctx)=>AlertDialog(
+        title:const Text('Export your VOP account data?'),
+        content:const Text('Your export may contain private study and account records. Share only with a trusted destination. The system share sheet can leave a temporary file in the app cache.'),
+        actions:[
+          TextButton(onPressed:()=>Navigator.pop(ctx,false),
+            child:const Text('Cancel')),
+          FilledButton(onPressed:()=>Navigator.pop(ctx,true),
+            child:const Text('Prepare export')),
+        ]));
+    if(accepted!=true||!mounted)return;
+    await _perform(()async{
+      final result=await widget.api.exportOwnAccount();
+      final export=result['export'];
+      if(export is! Map)throw StateError('The server did not return a valid account export.');
+      final bytes=Uint8List.fromList(utf8.encode(const JsonEncoder.withIndent('  ').convert(export)));
+      if(bytes.length>12*1024*1024){
+        throw StateError('This export is too large to share from the device.');
+      }
+      final date=DateTime.now().toIso8601String().substring(0,10);
+      await Share.shareXFiles([
+        XFile.fromData(bytes,mimeType:'application/json'),
+      ],fileNameOverrides:['vop-account-export-$date.json'],
+        subject:'VOP account data export');
+    },'Your export was prepared. Keep any saved copy secure.');
+  }
+
+  Future<void> _revokeSessions()async{
+    final accepted=await showDialog<bool>(context:context,
+      builder:(ctx)=>AlertDialog(
+        title:const Text('Sign out all devices?'),
+        content:const Text('All refresh tokens will be revoked. Existing access tokens on other devices may remain usable until expiry. You will be signed out here too. For security, this action requires a recent sign-in.'),
+        actions:[
+          TextButton(onPressed:()=>Navigator.pop(ctx,false),
+            child:const Text('Cancel')),
+          FilledButton(onPressed:()=>Navigator.pop(ctx,true),
+            child:const Text('Sign out all')),
+        ]));
+    if(accepted!=true||!mounted)return;
+    await _perform(()async{
+      await widget.api.revokeAllSessions();
+      await FirebaseAuth.instance.signOut();
+    },'Sessions revoked. Sign in again.');
+  }
+  Future<void> _requestDeletion()async{
+    final confirmation=TextEditingController();
+    try{
+      final text=await showDialog<String>(context:context,
+        builder:(ctx)=>AlertDialog(
+          title:const Text('Request account deletion'),
+          content:Column(mainAxisSize:MainAxisSize.min,crossAxisAlignment:CrossAxisAlignment.start,
+            children:[
+              const Text('Your account enters a 30-day recovery period. Some financial, certificate and audit records follow the published retention policy.'),
+              const SizedBox(height:16),
+              const Text('Type DELETE MY ACCOUNT to confirm.'),
+              TextField(controller:confirmation,autocorrect:false,
+                enableSuggestions:false,
+                decoration:const InputDecoration(
+                  labelText:'Confirmation phrase',
+                  hintText:'DELETE MY ACCOUNT')),
+            ]),
+          actions:[
+            TextButton(onPressed:()=>Navigator.pop(ctx),
+              child:const Text('Keep account')),
+            FilledButton(onPressed:()=>Navigator.pop(ctx,confirmation.text),
+              child:const Text('Request deletion')),
+          ]));
+      if(text==null||!mounted)return;
+      if(text!='DELETE MY ACCOUNT'){
+        setState(()=>error='Type DELETE MY ACCOUNT exactly.');
+        return;
+      }
+      await _perform(()async{
+        deletion=await widget.api.requestAccountDeletion(text);
+      },'Account deletion requested. You can cancel before the scheduled date.');
+    }finally{confirmation.dispose();}
   }
   List<Widget> _security()=>[
     _heading('Account protection','Manage sign-in and personal data.',
@@ -280,12 +445,89 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         subtitle:Text('Native passkey enrollment is not configured on this Android build. '
           'Your existing password or Google sign-in remains available.')),
       const Divider(),
+      if(security.isNotEmpty)...[
+        if(security.containsKey('emailVerified'))...[
+          ListTile(contentPadding:EdgeInsets.zero,
+            leading:const Icon(Icons.verified_user_outlined),
+            title:const Text('Email verification'),
+            subtitle:Text(security['emailVerified']==true?'Verified':'Not verified')),
+          if(security['emailVerified']!=true)
+            TextButton.icon(onPressed:saving?null:()async{
+                await _perform(()async{
+                  final user=FirebaseAuth.instance.currentUser;
+                  if(user==null)throw StateError('Sign in first.');
+                  await user.sendEmailVerification();
+                },'Verification email sent. Check your inbox.');
+              },
+              icon:const Icon(Icons.mark_email_unread_outlined),
+              label:const Text('Send verification email')),
+          TextButton.icon(onPressed:saving?null:()async{
+              await _perform(()async{
+                await FirebaseAuth.instance.currentUser?.reload();
+                security=await widget.api.accountSecurityStatus();
+              },'Email verification status refreshed.');
+            },
+            icon:const Icon(Icons.refresh_outlined),
+            label:const Text('Refresh verification')),
+        ],
+        if((security['lastSignInAt']??'').toString().isNotEmpty)
+          ListTile(contentPadding:EdgeInsets.zero,
+            leading:const Icon(Icons.history),
+            title:const Text('Last sign-in'),
+            subtitle:Text((security['lastSignInAt']??'').toString())),
+        ListTile(contentPadding:EdgeInsets.zero,
+          leading:const Icon(Icons.link_outlined),
+          title:const Text('Linked sign-in providers'),
+          subtitle:Text((security['signInProviders'] is List &&
+                (security['signInProviders'] as List).isNotEmpty)
+            ?(security['signInProviders'] as List).join(', ')
+            :'Email or supported sign-in')),
+        const Divider(),
+      ],
+      const Divider(),
+      ListTile(contentPadding:EdgeInsets.zero,
+        leading:const Icon(Icons.history_outlined),
+        title:const Text('Recent security activity'),
+        subtitle:const Text('Recorded account and passkey events'),
+        trailing:IconButton(tooltip:'Refresh activity',
+          onPressed:_loadSecurityActivity,
+          icon:const Icon(Icons.refresh_outlined))),
+      if(securityActivityError!=null)
+        Text(securityActivityError!,style:TextStyle(
+          color:Theme.of(context).colorScheme.error)),
+      if(securityActivity.isEmpty)
+        const Padding(padding:EdgeInsets.only(bottom:10),
+          child:Text('No recorded security actions yet.'))
+      else
+        ...securityActivity.take(30).map((event)=>ListTile(
+          contentPadding:EdgeInsets.zero,
+          dense:true,
+          title:Text((event['title']??'Security activity').toString()),
+          subtitle:Text((event['occurredAt']??'').toString()))),
+      const Text('This history is not an inventory of devices or all Google sign-ins.',
+        style:TextStyle(fontSize:12)),
+      const Divider(),
+      ListTile(contentPadding:EdgeInsets.zero,
+        leading:const Icon(Icons.devices_other_outlined),
+        title:const Text('Sign out all devices'),
+        subtitle:const Text('Revoke refresh tokens across devices. Requires recent sign-in.'),
+        trailing:const Icon(Icons.chevron_right),
+        enabled:!saving,onTap:_revokeSessions),
+      const Divider(),
       _choose('Profile visibility','privacy','profileVisibility',[
         const DropdownMenuItem(value:'organization',child:Text('My organisation')),
         const DropdownMenuItem(value:'private',child:Text('Private')),
       ],(_map(preferences['privacy'])['profileVisibility']??'organization').toString()),
-      FilledButton.icon(onPressed:saving?null:_saveSettings,
+      FilledButton.icon(onPressed:saving||!preferencesReady||_settingsDelta().isEmpty
+          ?null:_saveSettings,
         icon:const Icon(Icons.save_outlined),label:const Text('Save privacy')),
+      const Divider(),
+      ListTile(contentPadding:EdgeInsets.zero,
+        leading:const Icon(Icons.download_outlined),
+        title:const Text('Export my data'),
+        subtitle:const Text('Create a JSON account export and choose where to save it.'),
+        trailing:const Icon(Icons.chevron_right),
+        enabled:!saving,onTap:_exportData),
     ]),
     _heading('Account lifecycle','A deletion request follows the VOP retention process.',
       Icons.manage_accounts_outlined),
@@ -301,22 +543,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
           icon:const Icon(Icons.undo),label:const Text('Cancel deletion request'))
       else
         OutlinedButton.icon(
-          onPressed:saving?null:()async{
-            final accepted=await showDialog<bool>(context:context,
-              builder:(ctx)=>AlertDialog(
-                title:const Text('Request account deletion?'),
-                content:const Text('Your account will enter the VOP deletion workflow. '
-                  'You may lose access to your learning data.'),
-                actions:[
-                  TextButton(onPressed:()=>Navigator.pop(ctx,false),
-                    child:const Text('Keep account')),
-                  FilledButton(onPressed:()=>Navigator.pop(ctx,true),
-                    child:const Text('Request deletion')),
-                ]));
-            if(accepted==true)await _perform(()async{
-              deletion=await widget.api.requestAccountDeletion();
-            },'Account deletion request submitted.');
-          },
+          onPressed:saving?null:_requestDeletion,
           icon:const Icon(Icons.delete_outline),
           label:const Text('Request account deletion')),
     ]),

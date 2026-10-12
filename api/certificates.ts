@@ -26,7 +26,7 @@ function hierarchyScopeField(role:string){
 function publicCertificate(id:string,data:Record<string,unknown>){return {...safe({...data,id})};}
 async function mine(req:Request,res:Response){
  const authorization=header(req,'authorization');if(!authorization.startsWith('Bearer '))return res.status(401).json({error:'Sign in first.'});
- const decoded=await getAuth(admin()).verifyIdToken(authorization.slice(7).trim());const db=getFirestore(admin());
+ const decoded=await getAuth(admin()).verifyIdToken(authorization.slice(7).trim(),true);const db=getFirestore(admin());
  const profile=await db.doc(`users/${decoded.uid}`).get();
  if (!profile.exists) return res.status(404).json({error:'VOP account profile was not found.'});
  const profileData=profile.data()||{};
@@ -134,7 +134,7 @@ async function issue(req:Request,res:Response){
  const firebaseAdmin=admin();
  const authorization=header(req,'authorization');
  if(!authorization.startsWith('Bearer '))return res.status(401).json({error:'Sign in first.'});
- const decoded=await getAuth(firebaseAdmin).verifyIdToken(authorization.slice(7).trim());
+ const decoded=await getAuth(firebaseAdmin).verifyIdToken(authorization.slice(7).trim(),true);
  const db=getFirestore(firebaseAdmin);
  const actor=await db.doc('users/'+decoded.uid).get();
  if(!actor.exists)return res.status(403).json({error:'VOP account profile was not found.'});
@@ -176,7 +176,7 @@ async function issue(req:Request,res:Response){
 
 async function lifecycle(req:Request,res:Response,action:'revoke'|'replace'){
  const firebaseAdmin=admin();const authorization=header(req,'authorization');if(!authorization.startsWith('Bearer '))return res.status(401).json({error:'Sign in first.'});
- const decoded=await getAuth(firebaseAdmin).verifyIdToken(authorization.slice(7).trim());const db=getFirestore(firebaseAdmin);
+ const decoded=await getAuth(firebaseAdmin).verifyIdToken(authorization.slice(7).trim(),true);const db=getFirestore(firebaseAdmin);
  const actor=await db.doc('users/'+decoded.uid).get();if(!actor.exists)return res.status(403).json({error:'VOP account profile was not found.'});
  const actorData=actor.data()||{};const {canPermissionForProfile}=await import('../server/permissions.js');
  if(!(await canPermissionForProfile(db,actorData,'certificates','manage')))return res.status(403).json({error:'You do not have permission to manage official certificates.'});

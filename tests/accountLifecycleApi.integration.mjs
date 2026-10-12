@@ -84,6 +84,70 @@ test('account privacy export and staged deletion are server authoritative',async
       assert.equal(res.payload.export.data.passkeys[0].rpId,'localhost');
       assert.equal('credentialId' in res.payload.export.data.passkeys[0],false);
       assert.equal('publicKeyDer' in res.payload.export.data.passkeys[0],false);
+      const events=(await db.collection('accountSecurityEvents').where('uid','==',learner.uid).get()).docs;
+      assert.equal(events.length,1);
+      assert.equal(events[0].data().action,'account_exported');
+      assert.equal((await db.collection('notifications').where('recipientId','==',learner.uid).get()).docs
+        .some(item=>item.data().type==='security'),true);
+    });
+
+    await t.test('account security activity is owned, bounded and excludes other users',async()=>{
+      const own=await call(learner,'GET','security-activity');
+      assert.equal(own.code,200,JSON.stringify(own.payload));
+      assert.ok(own.payload.items.some(row=>row.action==='account_exported'));
+      assert.ok(own.payload.items.every(row=>!('uid' in row)&&!('notificationId' in row)));
+      const stranger=await emulatorSignUp('security-stranger@vop-test.invalid');
+      await db.doc('users/'+stranger.uid).set({uid:stranger.uid,email:stranger.email,role:'student'});
+      const other=await call(stranger,'GET','security-activity');
+      assert.equal(other.code,200);
+      assert.deepEqual(other.payload.items,[]);
+      await db.doc('users/'+stranger.uid).delete();
+      await auth.deleteUser(stranger.uid);
+      const exportedAgain=await call(learner,'GET','export');
+      assert.equal(exportedAgain.code,200);
+      assert.ok(exportedAgain.payload.export.data.securityActivity
+        .some(item=>item.action==='account_exported'));
+    });
+
+    await t.test('security summary exposes limited identity metadata and revocation demands recent authentication',async()=>{
+      const securityUser=await emulatorSignUp('privacy-security@vop-test.invalid');
+      await db.doc('users/'+securityUser.uid).set({uid:securityUser.uid,email:securityUser.email,displayName:'Security Test',role:'student'});
+      const status=await call(securityUser,'GET','security-status');
+      assert.equal(status.code,200,JSON.stringify(status.payload));
+      assert.equal(typeof status.payload.emailVerified,'boolean');
+      assert.ok(Array.isArray(status.payload.signInProviders));
+      assert.equal('passwordHash' in status.payload,false);
+      assert.equal('refreshToken' in status.payload,false);
+      const rejected=await call(securityUser,'POST','revoke-sessions',{confirmation:'YES'});
+      assert.equal(rejected.code,400);
+      await new Promise(resolve=>setTimeout(resolve,1100));
+      const revoked=await call(securityUser,'POST','revoke-sessions',{confirmation:'SIGN OUT ALL DEVICES'});
+      assert.equal(revoked.code,200,JSON.stringify(revoked.payload));
+      assert.equal(revoked.payload.revoked,true);
+      await assert.rejects(()=>auth.verifyIdToken(securityUser.token,true));
+      await db.doc('users/'+securityUser.uid).delete();
+      await auth.deleteUser(securityUser.uid);
+    });
+
+    await t.test('revoked access tokens cannot export records or request account deletion',async()=>{
+      const actor=await emulatorSignUp('privacy-revoked@vop-test.invalid');
+      await db.doc('users/'+actor.uid).set({
+        uid:actor.uid,email:actor.email,displayName:'Revocation Test',role:'student',
+      });
+      const before=await call(actor,'GET','export');
+      assert.equal(before.code,200,JSON.stringify(before.payload));
+      await new Promise(resolve=>setTimeout(resolve,1100));
+      await auth.revokeRefreshTokens(actor.uid);
+      const exported=await call(actor,'GET','export');
+      assert.equal(exported.code,401,JSON.stringify(exported.payload));
+      assert.equal(exported.payload.export,undefined);
+      const deletion=await call(actor,'POST','request-deletion',{
+        confirmation:'DELETE MY ACCOUNT',
+      });
+      assert.equal(deletion.code,401,JSON.stringify(deletion.payload));
+      assert.equal((await db.doc('accountLifecycle/'+actor.uid).get()).exists,false);
+      await db.doc('users/'+actor.uid).delete();
+      await auth.deleteUser(actor.uid);
     });
 
     await t.test('confirmation phrase is mandatory and a valid request remains cancellable',async()=>{
@@ -127,6 +191,8 @@ test('account privacy export and staged deletion are server authoritative',async
       assert.equal((await db.doc('prayerRequests/prayer-privacy').get()).exists,false);
       assert.equal((await db.doc('passkeyCredentials/passkey-privacy').get()).exists,false);
       assert.equal((await db.doc('passkeyChallenges/passkey-pending-privacy').get()).exists,false);
+      assert.equal((await db.collection('accountSecurityEvents').where('uid','==',learner.uid).get()).size,0);
+      assert.equal((await db.collection('notifications').where('recipientId','==',learner.uid).get()).size,0);
       await assert.rejects(()=>auth.getUser(learner.uid));
       const certificate=(await db.doc('certificates/cert-privacy').get()).data();
       assert.match(String(certificate.candidateId||''),/^deleted:/);

@@ -3,6 +3,7 @@ import { getAuth, type UserRecord } from 'firebase-admin/auth';
 import { FieldValue, getFirestore, type Firestore, type DocumentSnapshot } from 'firebase-admin/firestore';
 import { authenticateTenant, enforceOrganizationMembershipQuotas } from '../../server/tenant.js';
 import { requirePermission } from '../../server/permissions.js';
+import { isSafeHttpsMediaUrl } from '../../shared/mediaSources.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -29,7 +30,7 @@ async function authenticate(request: Request) {
   if (!authorization.startsWith('Bearer ')) throw new Error('Sign in first.');
   const token = authorization.slice('Bearer '.length).trim();
   if (!token) throw new Error('Sign in first.');
-  return getAuth(getFirebaseAdmin()).verifyIdToken(token);
+  return getAuth(getFirebaseAdmin()).verifyIdToken(token,true);
 }
 
 function profileType(profile: Record<string, unknown> | undefined, authUser: UserRecord): ProfileType {
@@ -297,7 +298,7 @@ async function syncOwnProfile(decoded: { uid: string; email?: string; name?: str
     uid: decoded.uid,
     email: decoded.email ?? existing.email ?? '',
     displayName: String(existing.displayName||'').trim() || decoded.name || decoded.email?.split('@')[0] || 'VOP Student',
-    photoURL: decoded.picture ?? existing.photoURL ?? null,
+    photoURL: existing.photoURL ?? decoded.picture ?? null,
     accountType,
     role,
     organizationId,
@@ -406,25 +407,34 @@ export default async function handler(request: Request, response: Response) {
       const incoming = body.profile && typeof body.profile === 'object'
         ? body.profile as Record<string, unknown>
         : {};
-      const phoneNumber = typeof incoming.phoneNumber === 'string' ? incoming.phoneNumber.trim() : '';
-      const whatsappNumber = typeof incoming.whatsappNumber === 'string' ? incoming.whatsappNumber.trim() : '';
-      const address = typeof incoming.address === 'string' ? incoming.address.trim() : '';
-      const displayName = typeof incoming.displayName === 'string' ? incoming.displayName.trim() : '';
-      if (displayName.length > 120 || phoneNumber.length > 40 || whatsappNumber.length > 40 || address.length > 500) {
-        return response.status(400).json({ error:'Profile details exceed the allowed length.' });
+      const allowedProfileFields = ['displayName','phoneNumber','whatsappNumber','address','bio','photoURL'] as const;
+      const keys=Object.keys(incoming);
+      if(!keys.length || keys.some(key=>!allowedProfileFields.includes(key as typeof allowedProfileFields[number]))) {
+        return response.status(400).json({ error:'Select supported personal profile fields.' });
       }
-      const ref = db.doc('users/' + decoded.uid);
-      const existing = await ref.get();
-      if (!existing.exists) return response.status(404).json({ error:'VOP account profile was not found.' });
-      await ref.set({
-        ...(displayName ? { displayName } : {}),
-        phoneNumber,
-        whatsappNumber,
-        address,
-        updatedAt: FieldValue.serverTimestamp(),
-      }, { merge:true });
-      const latest = await ref.get();
-      return response.status(200).json({ ok:true, profile:latest.data() || {} });
+      const limits:Record<typeof allowedProfileFields[number],number>={
+        displayName:120,phoneNumber:40,whatsappNumber:40,address:500,bio:1000,photoURL:2048,
+      };
+      const updates:Record<string,unknown>={};
+      for(const key of keys){
+        const value=incoming[key];
+        if(typeof value!=='string' || value.trim().length>limits[key as keyof typeof limits]){
+          return response.status(400).json({ error:'Profile details contain an invalid value or exceed the allowed length.' });
+        }
+        updates[key]=value.trim();
+      }
+      if('displayName' in updates && !updates.displayName){
+        return response.status(400).json({ error:'Your display name cannot be empty.' });
+      }
+      if('photoURL' in updates && updates.photoURL &&
+          !isSafeHttpsMediaUrl(String(updates.photoURL))){
+        return response.status(400).json({ error:'Use a public HTTPS profile image URL or leave it empty.' });
+      }
+      const ref=db.doc('users/'+decoded.uid);
+      const existing=await ref.get();
+      if(!existing.exists)return response.status(404).json({ error:'VOP account profile was not found.' });
+      await ref.set({...updates,updatedAt:FieldValue.serverTimestamp()},{merge:true});
+      return response.status(200).json({ok:true,profile:{...existing.data(),...updates}});
     }
     if (action === 'personalSettings') {
       const db = getFirestore(getFirebaseAdmin());
@@ -481,15 +491,21 @@ export default async function handler(request: Request, response: Response) {
         if(Object.keys(study).some(key=>!studyKeys.includes(key)))return response.status(400).json({error:'Unsupported study preference.'});
         const reminders=study.reminders===undefined?undefined:study.reminders===true;
         if(study.reminders!==undefined&&typeof study.reminders!=='boolean')return response.status(400).json({error:'Study reminders must use a true or false value.'});
-        const preferredStudyTime=String(study.preferredStudyTime||'').trim();
-        if(preferredStudyTime&&!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(preferredStudyTime))return response.status(400).json({error:'Select a valid preferred study time.'});
-        const timezone=String(study.timezone||'').trim();
-        if(timezone.length>80||timezone&&(timezone!=='UTC'&&!/^[A-Za-z_]+(?:\/[A-Za-z0-9_+.-]+)+$/.test(timezone)))return response.status(400).json({error:'Select a valid timezone.'});
-        normalized.studyPreferences={
-          ...(reminders!==undefined?{reminders}:{}),
-          preferredStudyTime,
-          timezone,
-        };
+        const changes:Record<string,unknown>={};
+        if(reminders!==undefined)changes.reminders=reminders;
+        if(study.preferredStudyTime!==undefined){
+          if(typeof study.preferredStudyTime!=='string')return response.status(400).json({error:'Select a valid preferred study time.'});
+          const preferredStudyTime=study.preferredStudyTime.trim();
+          if(preferredStudyTime&&!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(preferredStudyTime))return response.status(400).json({error:'Select a valid preferred study time.'});
+          changes.preferredStudyTime=preferredStudyTime;
+        }
+        if(study.timezone!==undefined){
+          if(typeof study.timezone!=='string')return response.status(400).json({error:'Select a valid timezone.'});
+          const timezone=study.timezone.trim();
+          if(timezone.length>80||timezone&&(timezone!=='UTC'&&!/^[A-Za-z_]+(?:\/[A-Za-z0-9_+.-]+)+$/.test(timezone)))return response.status(400).json({error:'Select a valid timezone.'});
+          changes.timezone=timezone;
+        }
+        normalized.studyPreferences=changes;
       }
 
       const preferences: Record<string, string> = {};

@@ -35,5 +35,5 @@ test('email preference surface reports provider readiness instead of implying gu
   const page=read('src/pages/PersonalSettingsPage.tsx');
   const service=read('src/services/personalSettings.ts');
   assert.match(service,/action=capabilities/);
-  assert.match(page,/Email delivery is not currently available/);
+  assert.match(page,/Email is unavailable/);
 });

@@ -62,6 +62,13 @@ test('server verifies user presence, user verification and P-256 assertion signa
   validateClientData(clientDataJSON,{
     v:1,purpose:'authentication',challenge,origin,rpId,exp:Date.now()+60_000,
   },'webauthn.get');
+  const foreignFrame=b64url(Buffer.from(JSON.stringify({
+    type:'webauthn.get',challenge,origin,crossOrigin:true,
+  }),'utf8'));
+  assert.throws(()=>validateClientData(foreignFrame,{
+    v:1,purpose:'authentication',challenge,origin,rpId,exp:Date.now()+60_000,
+  },'webauthn.get'),/cross-origin frame/i);
+
 
   const authenticator=Buffer.alloc(37);
   createHash('sha256').update(rpId).digest().copy(authenticator,0);

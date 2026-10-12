@@ -239,7 +239,8 @@ test('admin UX consolidation, portal isolation, audit controls and engagement re
   assert.match(app,/isOrganizationPortalAccount\(currentUser\)/);
   assert.match(app,/Organization staff accounts use the organization portal/);
   assert.match(organizationAccount,/Organization account profile/);
-  assert.match(organizationAccount,/updateOwnProfile/);
+  assert.match(organizationAccount,/saveOwnProfile/);
+  assert.match(read('src/services/accountProfile.ts'),/profileAction\('updateOwnProfile'/);
   assert.match(personalSettings,/context\?: 'learner'\|'organization'/);
   assert.match(personalSettings,/organizationAccount/);
   assert.match(personalSettings,/Light \(default\)/);
@@ -800,7 +801,7 @@ test('passkey sign-in is server-verified and keeps biometric data on the device'
 
   assert.match(signIn,/<strong>Passkey<\/strong>/);
   assert.match(settings,/Enable passkey on this device/);
-  assert.match(settings,/Biometric data remains on your device/);
+  assert.match(settings,/Biometrics stay on your device/);
   assert.match(client,/fetch\('\/api\/admin\/passkeys'/);
   assert.match(client,/navigator\.credentials\.create/);
   assert.match(client,/navigator\.credentials\.get/);

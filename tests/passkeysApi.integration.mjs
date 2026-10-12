@@ -93,6 +93,11 @@ test('passkey authentication is one-time, server-verified and replay resistant',
       const finish=await call(finishBody);
       assert.equal(finish.code,200,JSON.stringify(finish.payload));
       assert.ok(finish.payload.customToken);
+      const event=await db.collection('accountSecurityEvents').where('uid','==',account.uid).get();
+      assert.equal(event.size,1);
+      assert.equal(event.docs[0].data().action,'passkey_sign_in');
+      const notice=await db.collection('notifications').where('recipientId','==',account.uid).get();
+      assert.equal(notice.size,0,'Routine passkey sign-ins must not flood security notifications.');
       const stored=(await credentialRef.get()).data();
       assert.ok(stored?.lastUsedAt,'lastUsedAt must update even when an authenticator reports signCount 0');
 
@@ -101,6 +106,26 @@ test('passkey authentication is one-time, server-verified and replay resistant',
       assert.match(String(replay.payload.error||''),/already used|expired/i);
       const challenges=await db.collection('passkeyChallenges').get();
       assert.equal(challenges.size,0,'consumed challenges must be deleted');
+    });
+
+    await t.test('two different challenges with the same stale authenticator counter cannot both sign in',async()=>{
+      await credentialRef.set({signCount:7},{merge:true});
+      const first=await call({action:'beginAuthentication'});
+      const second=await call({action:'beginAuthentication'});
+      assert.equal(first.code,200);
+      assert.equal(second.code,200);
+      const firstFinish=await call({
+        action:'finishAuthentication',challengeToken:first.payload.challengeToken,
+        ...assertionFor(first.payload.challenge,credentialId,privateKey,8),
+      });
+      assert.equal(firstFinish.code,200,JSON.stringify(firstFinish.payload));
+      const secondFinish=await call({
+        action:'finishAuthentication',challengeToken:second.payload.challengeToken,
+        ...assertionFor(second.payload.challenge,credentialId,privateKey,8),
+      });
+      assert.equal(secondFinish.code,400,JSON.stringify(secondFinish.payload));
+      assert.match(String(secondFinish.payload.error||''),/counter validation failed/i);
+      assert.equal((await credentialRef.get()).data().signCount,8);
     });
 
     await t.test('origin mismatch is rejected before a ceremony can be issued',async()=>{

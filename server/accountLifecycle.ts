@@ -19,6 +19,7 @@ export const ACCOUNT_RETENTION_POLICY = {
   support: 'Learner support requests are deleted after the grace period.',
   notifications: 'Deleted after the grace period.',
   passkeys: 'Passkey credentials and device sign-in mappings are deleted after the account-deletion grace period.',
+  securityActivity: 'Personal security activity and security notifications are deleted after the account-deletion grace period.',
   engagement: 'Personal challenge, duel and Scripture-memory state is deleted or de-identified so another participant\'s history is not corrupted.',
   portfolio: 'Personal portfolio evidence and sharing links are deleted after the grace period.',
   prayerRequests: 'Deleted after the grace period.',
@@ -126,7 +127,7 @@ export async function buildAccountExport(db:Firestore,uid:string) {
   const [
     topLevelAttempts,graduations,certificates,prayers,notifications,supportRequests,
     conversations,transactions,receipts,refunds,courseEnrollments,programEnrollments,
-    soloChallenges,soloResults,duels,duelResults,portfolio,portfolioShares,passkeys,
+    soloChallenges,soloResults,duels,duelResults,portfolio,portfolioShares,passkeys,securityActivity,
   ]=await Promise.all([
     multiOwned(db,'assessmentAttempts',uid,['candidateId','userId']),
     queryOwned(db,'graduationRequests','candidateId',uid),
@@ -147,6 +148,7 @@ export async function buildAccountExport(db:Firestore,uid:string) {
     db.doc('masterGuidePortfolios/'+uid).get(),
     queryOwned(db,'masterGuidePortfolioShares','learnerId',uid),
     queryOwned(db,'passkeyCredentials','uid',uid),
+    queryOwned(db,'accountSecurityEvents','uid',uid),
   ]);
   const supportMessages=await exportMessagesForParents(supportRequests,uid);
   const conversationMessages=await exportMessagesForParents(conversations,uid);
@@ -166,6 +168,7 @@ export async function buildAccountExport(db:Firestore,uid:string) {
       graduationRequests:collection(graduations),
       prayerRequests:collection(prayers),
       notifications:collection(notifications),
+      securityActivity:collection(securityActivity),
       passkeys:passkeys.map(document=>{
         const data=document.data()||{};
         return {
@@ -347,6 +350,7 @@ async function deletePersonalRecords(db:Firestore,uid:string,email:string) {
     ['masterGuidePortfolioShares','learnerId','=='],['courseEnrollments','uid','=='],
     ['programEnrollments','uid','=='],['eventRegistrations','uid','=='],
     ['passkeyCredentials','uid','=='],['passkeyChallenges','uid','=='],
+    ['accountSecurityEvents','uid','=='],
   ] as const;
   let pending=false;
   for(const [collection,field,operator] of operations){

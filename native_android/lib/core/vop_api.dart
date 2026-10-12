@@ -119,8 +119,18 @@ class VopApi {
       action('/api/admin/users',{'action':'personalSettings','settings':settings});
   Future<Map<String,dynamic>> accountLifecycle() =>
       _execute('/api/account','GET',null,{'action':'status'});
-  Future<Map<String,dynamic>> requestAccountDeletion() =>
-      action('/api/account',{'action':'request-deletion'});
+  Future<Map<String,dynamic>> exportOwnAccount() =>
+      _execute('/api/account','GET',null,{'action':'export'});
+  Future<Map<String,dynamic>> requestAccountDeletion(String confirmation,{String reason=''}) =>
+      action('/api/account',{'action':'request-deletion',
+        'confirmation':confirmation,'reason':reason});
+  Future<Map<String,dynamic>> accountSecurityStatus() =>
+      _execute('/api/account','GET',null,{'action':'security-status'});
+  Future<Map<String,dynamic>> accountSecurityActivity() =>
+      _execute('/api/account','GET',null,{'action':'security-activity'});
+  Future<Map<String,dynamic>> revokeAllSessions() =>
+      action('/api/account',{'action':'revoke-sessions',
+        'confirmation':'SIGN OUT ALL DEVICES'});
   Future<Map<String,dynamic>> cancelAccountDeletion() =>
       action('/api/account',{'action':'cancel-deletion'});
   Future<Map<String,dynamic>> supportedLanguages() => read('languages');
@@ -130,6 +140,8 @@ class VopApi {
   Future<Map<String, dynamic>> events() => read('events');
   Future<Map<String, dynamic>> radio() => read('radio');
   Future<Map<String, dynamic>> announcements() => read('announcements');
+  Future<Map<String,dynamic>> notificationCapabilities() =>
+      _execute('/api/admin/notifications','GET',null,{'action':'capabilities'});
   Future<Map<String,dynamic>> notifications()=>
       _execute('/api/admin/notifications','GET',null,{'action':'list'});
   Future<Map<String,dynamic>> markNotificationRead(String id)=>
