@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash,generateKeyPairSync,sign as signPayload} from 'node:crypto';
 import {
-  requestOrigin,signPasskeyChallenge,validateAuthenticatorData,validateClientData,
+  androidPasskeyConfigured,requestOrigin,signPasskeyChallenge,validateAuthenticatorData,validateClientData,
   verifyPasskeyAssertion,verifyPasskeyChallenge,
 } from '../server/passkeys.ts';
 
@@ -113,12 +113,14 @@ test('Android Credential Manager passkeys require a configured signing certifica
   try{
     process.env.PASSKEY_ANDROID_SHA256_FINGERPRINTS=certificate;
     process.env.VOP_ANDROID_PACKAGE_NAME='com.sda.vop';
+    assert.equal(androidPasskeyConfigured(),true);
     assert.doesNotThrow(()=>validateClientData(clientData({}),payload,'webauthn.get'));
     assert.throws(()=>validateClientData(clientData({androidPackageName:'com.fake.app'}),
       payload,'webauthn.get'),/origin does not match/i);
     assert.throws(()=>validateClientData(clientData({crossOrigin:true}),payload,
       'webauthn.get'),/cross-origin frame/i);
     delete process.env.PASSKEY_ANDROID_SHA256_FINGERPRINTS;
+    assert.equal(androidPasskeyConfigured(),false);
     assert.throws(()=>validateClientData(clientData({}),payload,'webauthn.get'),
       /origin does not match/i);
   }finally{
