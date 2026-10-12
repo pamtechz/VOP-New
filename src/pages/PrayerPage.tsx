@@ -187,8 +187,8 @@ export const PrayerPage: React.FC<PrayerPageProps> = ({ currentUser, onBack }) =
                 <div className="vop-prayer-card-foot">
                   <span>{request.isPrivate ? <><Lock size={13}/> Private to ministry</> : <><Users size={13}/> Shared for prayer</>}</span>
                   {tab === 'mine' && <div className="vop-prayer-actions">
-                    {request.status!=='Answered'&&<button type="button" onClick={()=>editOwn(request)}>Edit</button>}
-                    {request.status!=='Answered'&&<button type="button" onClick={()=>void markAnswered(request)}><Check size={14}/> Mark answered</button>}
+                    {request.status!=='Answered'&&<button type="button" onClick={()=>editOwn(request)} >{t('prayer.edit','Edit')}</button>}
+                    {request.status!=='Answered'&&<button type="button" onClick={()=>void markAnswered(request)}><Check size={14}/ >{t('prayer.mark_answered','Mark answered')}</button>}
                     <button type="button" className="vop-prayer-delete" onClick={()=>void remove(request.id)}><Trash2 size={14}/> Delete</button>
                   </div>}
                   {isAdmin && tab !== 'mine' && <div className="vop-prayer-actions"><button onClick={() => void updateStatus(request.id,'Praying')}>Mark praying</button><button onClick={() => void updateStatus(request.id,'Answered')}>Mark answered</button></div>}
