@@ -191,6 +191,8 @@ test('account privacy export and staged deletion are server authoritative',async
       assert.equal((await db.doc('prayerRequests/prayer-privacy').get()).exists,false);
       assert.equal((await db.doc('passkeyCredentials/passkey-privacy').get()).exists,false);
       assert.equal((await db.doc('passkeyChallenges/passkey-pending-privacy').get()).exists,false);
+      assert.equal((await db.collection('accountSecurityEvents').where('uid','==',learner.uid).get()).size,0);
+      assert.equal((await db.collection('notifications').where('recipientId','==',learner.uid).get()).size,0);
       await assert.rejects(()=>auth.getUser(learner.uid));
       const certificate=(await db.doc('certificates/cert-privacy').get()).data();
       assert.match(String(certificate.candidateId||''),/^deleted:/);
