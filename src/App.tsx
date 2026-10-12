@@ -32,7 +32,7 @@ import './components/layout/navigation-header.css';
 import { applyThemePreference, persistThemePreference, readThemePreference } from './services/themePreference';
 import { lessonScoreForDisplay } from './services/lessonProgress';
 import { saveSupportContextPrefill } from './services/supportContext';
-import { canAccessPortalRoute, defaultPortalRoute, hasAdminPortalAccess, hasMentorPortalAccess, isOrganizationPortalAccount, isPortalRoute } from './services/portalAccess';
+import { canAccessPortalRoute, assignedPortalChoices, defaultPortalRoute, hasAdminPortalAccess, hasMentorPortalAccess, isOrganizationPortalAccount, isPortalRoute } from './services/portalAccess';
 import { RouteShimmer } from './components/layout/Shimmer';
 
 const loadDiscoverGuideView=()=>import('./components/guide/DiscoverGuideView');
@@ -119,6 +119,7 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
   const [contentLoadMode,setContentLoadMode]=useState<PublicContentLoadMode>(()=>
     dataModeForRoute(initialUser?.uid?defaultPortalRoute(initialUser):'home'));
   const [contentRefresh, setContentRefresh] = useState(0);
+  const [portalPrompt,setPortalPrompt]=useState(false);
   const [contentHydrated,setContentHydrated] = useState(()=>Boolean(startupSeed));
   const lastPublicContentLoadAt=useRef(0);
   const lazyRouteLoadsRef=useRef(new Map<string,number>());
@@ -262,11 +263,16 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
           let alreadyInPortalSession=false;
           try{alreadyInPortalSession=sessionStorage.getItem(PORTAL_SESSION_STORAGE_KEY)===profile.uid;}catch{/* storage may be unavailable */}
           if(!alreadyInPortalSession&&!explicitNavigation.current){
-            const target=defaultPortalRoute(profile);
-            if(target!=='home'){
-              setCurrentRoute(target);
-              replaceLearnerLocation(profile.uid,{route:target},0);
-              restoredNavigationUid.current=profile.uid;
+            const choices=assignedPortalChoices(profile);
+            if(choices.length>1){
+              setPortalPrompt(true);
+            }else{
+              const target=defaultPortalRoute(profile);
+              if(target!=='home'){
+                setCurrentRoute(target);
+                replaceLearnerLocation(profile.uid,{route:target},0);
+                restoredNavigationUid.current=profile.uid;
+              }
             }
           }
         }
@@ -827,12 +833,6 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
       rememberLocation({route:fallback},true);
       return;
     }
-    if(isOrganizationPortalAccount(currentUser)&&route!=='admin'&&route!=='certificate-verification'){
-      setStudyNotice('Organization staff accounts use the organization portal. Learner pages are kept separate.');
-      setCurrentRoute('admin');
-      rememberLocation({route:'admin'},true);
-      return;
-    }
     const routeFeature:Partial<Record<AppRoute,keyof NonNullable<AppSettings['features']>>> = {
       radio:'radio',announcements:'announcements',events:'announcements',certificates:'certification',
     };
@@ -942,6 +942,24 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
         </main>
         {currentRoute !== 'admin' && <BottomNav currentRoute={currentRoute} onNavigate={navigate} currentUser={currentUser} />}
       </div>
+      {portalPrompt&&currentUser.uid&&<div role="dialog" aria-modal="true"
+        aria-label="Choose your VOP workspace"
+        style={{position:'fixed',inset:0,zIndex:1000,display:'grid',placeItems:'center',
+          padding:20,background:'rgba(0,0,0,.68)'}}>
+        <section className="vop-card" style={{width:'min(100%,410px)',padding:22,
+          background:'var(--bg-primary)',color:'var(--text-primary)',borderRadius:16}}>
+          <h2>Continue to VOP</h2>
+          <p>Choose a workspace assigned to this account.</p>
+          <div style={{display:'grid',gap:10}}>
+            {assignedPortalChoices(currentUser).map(choice=><button key={choice.route}
+              type="button" className="vop-primary" onClick={()=>{
+                if(choice.route!=='home'&&!canAccessPortalRoute(currentUser,choice.route))return;
+                setPortalPrompt(false);setCurrentRoute(choice.route);
+                rememberLocation({route:choice.route},true);
+              }}>{choice.label}</button>)}
+          </div>
+        </section>
+      </div>}
       <MenuDrawer isOpen={isMenuOpen} onClose={() => setIsMenuOpen(false)} currentRoute={currentRoute} currentUser={currentUser} guides={guides} settings={settings} activeLanguage={activeLanguage} onNavigate={navigate} />
       <React.Suspense fallback={<RouteLoading/>}>
       {activeLesson?.type === 'Lesson' && activeGuide && <LessonReaderModal lesson={activeLesson} guide={activeGuide} currentUser={currentUser} initialPageIndex={deepLinkPageIndex}
