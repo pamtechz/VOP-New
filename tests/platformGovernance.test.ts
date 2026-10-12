@@ -275,7 +275,7 @@ test('admin UX consolidation, portal isolation, audit controls and engagement re
   assert.match(engagement,/timestampMillis/);
   assert.match(points,/pointsLedger/);
   assert.match(engagementPage,/Scripture Memory/);
-  assert.match(engagementPage,/Reviewed verses never disappear/);
+  assert.match(engagementPage,/Completed reviews remain here/);
   assert.match(engagementPage,/memoryView==='reviewed'/);
   assert.match(engagementPage,/Practice again/);
   assert.match(engagementPage,/practice:true/);
