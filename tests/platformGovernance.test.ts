@@ -279,7 +279,7 @@ test('admin UX consolidation, portal isolation, audit controls and engagement re
   assert.match(engagementPage,/memoryView==='reviewed'/);
   assert.match(engagementPage,/Practice again/);
   assert.match(engagementPage,/practice:true/);
-  assert.match(engagementPage,/moved to Reviewed and scheduled for later/);
+  assert.match(engagementPage,/points · Reviewed/);
   assert.match(engagement,/reviewed,scheduled,all/);
   assert.match(engagement,/practice=b\.practice===true/);
   assert.match(engagement,/pointsAwarded:0,practice:true/);
