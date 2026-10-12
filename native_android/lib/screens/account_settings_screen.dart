@@ -389,6 +389,11 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
   }
 
   Future<void> _loadSecurityActivity()async{
+    if(securityActivityLoading)return;
+    if(mounted)setState((){
+      securityActivityLoading=true;
+      securityActivityError=null;
+    });
     try{
       final result=await widget.api.accountSecurityActivity();
       if(mounted)setState((){
@@ -396,8 +401,22 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         securityActivityError=null;
       });
     }catch(e){
-      if(mounted)setState(()=>securityActivityError='Could not load your security activity.');
+      if(mounted)setState((){
+        securityActivityError=e is VopApiException&&e.status==401
+          ?'Session expired. Sign in again to view security activity.'
+          :e is VopApiException&&e.status==403
+          ?'This account cannot access security history.'
+          :'Security history unavailable. Check connection and retry.';
+      });
+    }finally{
+      if(mounted)setState(()=>securityActivityLoading=false);
     }
+  }
+  String _activityTime(BuildContext context,String raw){
+    final date=DateTime.tryParse(raw)?.toLocal();
+    if(date==null)return '';
+    final material=MaterialLocalizations.of(context);
+    return '${material.formatShortDate(date)} · ${TimeOfDay.fromDateTime(date).format(context)}';
   }
   Future<bool> _confirmDeviceIdentity()async{
     final verifier=LocalAuthentication();
@@ -584,12 +603,20 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         title:const Text('Recent security activity'),
         subtitle:const Text('Recorded account and passkey events'),
         trailing:IconButton(tooltip:'Refresh activity',
-          onPressed:_loadSecurityActivity,
+          onPressed:securityActivityLoading?null:_loadSecurityActivity,
           icon:const Icon(Icons.refresh_outlined))),
-      if(securityActivityError!=null)
-        Text(securityActivityError!,style:TextStyle(
-          color:Theme.of(context).colorScheme.error)),
-      if(securityActivity.isEmpty)
+      if(securityActivityLoading)
+        const Padding(padding:EdgeInsets.symmetric(vertical:10),
+          child:LinearProgressIndicator())
+      else if(securityActivityError!=null)
+        Padding(padding:const EdgeInsets.only(bottom:10),child:Column(
+          crossAxisAlignment:CrossAxisAlignment.start,children:[
+            Text(securityActivityError!,style:TextStyle(
+              color:Theme.of(context).colorScheme.error)),
+            TextButton.icon(onPressed:_loadSecurityActivity,
+              icon:const Icon(Icons.refresh_outlined),label:const Text('Retry history')),
+          ]))
+      else if(securityActivity.isEmpty)
         const Padding(padding:EdgeInsets.only(bottom:10),
           child:Text('No recorded security actions yet.'))
       else
@@ -597,7 +624,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
           contentPadding:EdgeInsets.zero,
           dense:true,
           title:Text((event['title']??'Security activity').toString()),
-          subtitle:Text((event['occurredAt']??'').toString()))),
+          subtitle:Text(_activityTime(context,(event['occurredAt']??'').toString())))),
       const Text('This history is not an inventory of devices or all Google sign-ins.',
         style:TextStyle(fontSize:12)),
       const Divider(),
