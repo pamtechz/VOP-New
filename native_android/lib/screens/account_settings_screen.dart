@@ -5,6 +5,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:flutter/material.dart';
 import '../core/vop_api.dart';
+import '../core/vop_passkeys.dart';
 import '../theme/vop_theme.dart';
 import '../widgets/vop_ui.dart';
 
@@ -28,8 +29,8 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
   bool preferencesReady=false;
   String? settingsLoadError;
   bool notificationStatusLoaded=false;
-  List<Map<String,dynamic>> languages=[],securityActivity=[];
-  String? securityActivityError;
+  List<Map<String,dynamic>> languages=[],securityActivity=[],passkeyItems=[];
+  String? securityActivityError,passkeyError;
   int page=0;
   @override void initState(){super.initState();_load();}
   @override void dispose(){
@@ -74,6 +75,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         if(mounted)setState(()=>security=r);
       }).catchError((Object ignored){if(mounted)setState(()=>security={'error':'Security details unavailable.'});});
       _loadSecurityActivity();
+      _loadNativePasskeys();
       widget.api.notificationCapabilities().then((r){
         if(mounted)setState((){notificationCapabilities=r;notificationStatusLoaded=true;});
       }).catchError((Object ignored){
@@ -136,6 +138,11 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       preferences=_map(result['settings']);
       savedPreferences=Map<String,dynamic>.from(preferences);
       VopAppearance.apply(preferences);
+      if(changes.containsKey('theme')){
+        final uid=FirebaseAuth.instance.currentUser?.uid;
+        if(uid!=null)await VopAppearance.persistTheme(
+          uid,(preferences['theme']??'system').toString());
+      }
     },'Personal settings saved for web and Android.');
   }
   Future<void> _perform(Future<void> Function() action,String success)async{
@@ -337,6 +344,37 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         label:Text(saving?'Saving…':'Save preferences')),
     ];
   }
+  Future<void> _loadNativePasskeys()async{
+    try{
+      final items=await VopPasskeys().credentials();
+      if(mounted)setState((){passkeyItems=items;passkeyError=null;});
+    }catch(_){
+      if(mounted)setState(()=>passkeyError='Passkeys could not be loaded.');
+    }
+  }
+  Future<void> _registerNativePasskey()async{
+    await _perform(()async{
+      await VopPasskeys().register();
+      await _loadNativePasskeys();
+    },'Passkey added to your VOP account.');
+  }
+  Future<void> _removeNativePasskey(Map<String,dynamic> credential)async{
+    final accepted=await showDialog<bool>(context:context,
+      builder:(ctx)=>AlertDialog(
+        title:const Text('Remove passkey?'),
+        content:const Text('You will no longer be able to sign in using this passkey.'),
+        actions:[
+          TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('Cancel')),
+          FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('Remove')),
+        ],
+      ));
+    if(accepted!=true||!mounted)return;
+    await _perform(()async{
+      await VopPasskeys().delete((credential['id']??'').toString());
+      await _loadNativePasskeys();
+    },'Passkey removed.');
+  }
+
   Future<void> _loadSecurityActivity()async{
     try{
       final result=await widget.api.accountSecurityActivity();
@@ -466,10 +504,27 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       const Divider(),
       ListTile(contentPadding:EdgeInsets.zero,
         leading:const Icon(Icons.fingerprint),
-        title:const Text('Verify with biometrics or screen lock'),
-        subtitle:const Text('Check your device security for sensitive actions. Account login still uses Firebase.'),
+        title:const Text('Biometric or screen-lock verification'),
+        subtitle:const Text('Confirm your identity for sensitive actions.'),
         trailing:const Icon(Icons.chevron_right),
         onTap:_checkBiometrics),
+      const Divider(),
+      ListTile(contentPadding:EdgeInsets.zero,
+        leading:const Icon(Icons.key_outlined),
+        title:const Text('Passkeys'),
+        subtitle:const Text('Sign in with your device lock, fingerprint or face.'),
+        trailing:const Icon(Icons.add_circle_outline),
+        enabled:!saving,onTap:_registerNativePasskey),
+      if(passkeyError!=null)
+        Text(passkeyError!,style:TextStyle(color:Theme.of(context).colorScheme.error)),
+      ...passkeyItems.map((item)=>ListTile(
+        contentPadding:EdgeInsets.zero,dense:true,
+        title:Text((item['label']??'Passkey').toString()),
+        subtitle:Text((item['createdAt']??'').toString()),
+        trailing:IconButton(
+          tooltip:'Remove passkey',icon:const Icon(Icons.delete_outline),
+          onPressed:saving?null:()=>_removeNativePasskey(item)),
+      )),
       const Divider(),
       if(security.isNotEmpty)...[
         if(security.containsKey('emailVerified'))...[

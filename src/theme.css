@@ -1655,3 +1655,30 @@ hr,
   .vop-prayer-page .vop-prayer-actions button{min-height:42px}
   .vop-support-page .vop-support-compose{gap:8px}
 }
+
+/* Keep support conversations readable in dark mode. */
+[data-theme="dark"] :is(.vop-support-chat,.vop-support-reference-panel,
+  .vop-support-compose,.vop-support-messages article,.vop-support-selected) {
+  background:var(--theme-surface)!important;
+  border-color:var(--theme-border)!important;
+  color:var(--theme-title)!important;
+  box-shadow:none!important;
+}
+[data-theme="dark"] .vop-support-messages{
+  background:var(--theme-surface-soft)!important;
+}
+[data-theme="dark"] .vop-support-messages article.mine{
+  background:var(--theme-surface-elevated)!important;
+  border-color:var(--theme-border-strong)!important;
+}
+[data-theme="dark"] :is(.vop-support-head h1,.vop-support-messages p,
+  .vop-support-chat-head strong,.vop-support-selected strong,
+  .vop-support-panel-title){
+  color:var(--theme-title)!important;
+}
+[data-theme="dark"] :is(.vop-support-compose textarea,
+  .vop-support-reference-panel select){
+  background:var(--theme-surface-elevated)!important;
+  border-color:var(--theme-border)!important;
+  color:var(--theme-title)!important;
+}

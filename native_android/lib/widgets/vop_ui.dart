@@ -62,28 +62,20 @@ class VopHeroCard extends StatelessWidget {
       final narrow=constraints.maxWidth<360;
       return Container(
         decoration:BoxDecoration(
-          borderRadius:BorderRadius.circular(18),
-          gradient:const LinearGradient(
-            colors:[Color(0xFF002D72),Color(0xFF0D47A1)],
-            begin:Alignment.topLeft,end:Alignment.bottomRight),
-          boxShadow:[BoxShadow(color:VopColors.navy.withValues(alpha:.11),
-            blurRadius:14,offset:const Offset(0,5))]),
+          borderRadius:BorderRadius.circular(14),
+          color:VopColors.navyDeep,
+          border:Border.all(color:VopColors.navyBright)),
         child:Padding(padding:EdgeInsets.all(narrow?14:16),
           child:Column(mainAxisSize:MainAxisSize.min,
             crossAxisAlignment:CrossAxisAlignment.start,children:[
             Row(children:[
-              const Icon(Icons.auto_awesome_rounded,
-                color:VopColors.goldLight,size:14),
+              Icon(icon,color:VopColors.goldLight,size:16),
               const SizedBox(width:7),
               Expanded(child:Text(kicker,maxLines:1,
                 overflow:TextOverflow.ellipsis,style:const TextStyle(
                   fontSize:10,fontWeight:FontWeight.w800,
                   letterSpacing:1.25,color:VopColors.goldLight))),
-              Container(width:28,height:28,
-                decoration:BoxDecoration(
-                  borderRadius:BorderRadius.circular(10),
-                  color:Colors.white.withValues(alpha:.12)),
-                child:Icon(icon,size:17,color:Colors.white)),
+
             ]),
             const SizedBox(height:9),
             Text(title,style:TextStyle(color:Colors.white,

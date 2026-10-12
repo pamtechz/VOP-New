@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 import '../core/config.dart';
+import '../core/vop_passkeys.dart';
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -44,6 +45,17 @@ class _AuthScreenState extends State<AuthScreen> {
       if (mounted) setState(() => _busy = false);
     }
   }
+  Future<void> _signInWithPasskey()async{
+    setState((){_busy=true;_error=null;});
+    try{
+      await VopPasskeys().signIn();
+    }catch(e){
+      if(mounted)setState(()=>_error=e.toString().replaceFirst('Bad state: ',''));
+    }finally{
+      if(mounted)setState(()=>_busy=false);
+    }
+  }
+
   Future<void> _googleSignIn() async {
     setState(() { _busy = true; _error = null; });
     try {
@@ -80,16 +92,18 @@ class _AuthScreenState extends State<AuthScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Icon(Icons.menu_book_rounded,
-                    size: 74, color: Color(0xFF173E96)),
-                const SizedBox(height: 14),
-                Text('Voice of Prophecy',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.w800)),
-                const SizedBox(height: 5),
-                const Text('Learn, grow and share hope.',textAlign: TextAlign.center),
-                const SizedBox(height: 30),
+                Text('VOP',textAlign:TextAlign.center,
+                  style:Theme.of(context).textTheme.headlineLarge?.copyWith(
+                    fontWeight:FontWeight.w900,letterSpacing:1.6,
+                    color:Theme.of(context).colorScheme.primary)),
+                const SizedBox(height: 4),
+                Text('VOICE OF PROPHECY',textAlign:TextAlign.center,
+                  style:Theme.of(context).textTheme.labelMedium?.copyWith(
+                    letterSpacing:1.8,fontWeight:FontWeight.w700)),
+                const SizedBox(height: 20),
+                Text('Sign in to continue studying',
+                  textAlign:TextAlign.center,style:Theme.of(context).textTheme.titleLarge),
+                const SizedBox(height: 24),
                 Form(
                   key: _form,
                   child: Column(children: [
@@ -143,6 +157,12 @@ class _AuthScreenState extends State<AuthScreen> {
                   onPressed: _busy ? null : _googleSignIn,
                   icon: const Icon(Icons.login_rounded),
                   label: const Text('Continue with Google'),
+                ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed:_busy?null:_signInWithPasskey,
+                  icon:const Icon(Icons.fingerprint_outlined),
+                  label:const Text('Continue with passkey'),
                 ),
                 const SizedBox(height: 22),
                 const Text(

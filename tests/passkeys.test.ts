@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash,generateKeyPairSync,sign as signPayload} from 'node:crypto';
 import {
-  requestOrigin,signPasskeyChallenge,validateAuthenticatorData,validateClientData,
+  androidPasskeyConfigured,requestOrigin,signPasskeyChallenge,validateAuthenticatorData,validateClientData,
   verifyPasskeyAssertion,verifyPasskeyChallenge,
 } from '../server/passkeys.ts';
 
@@ -93,4 +93,40 @@ test('server verifies user presence, user verification and P-256 assertion signa
   const noUv=Buffer.from(authenticator);
   noUv[32]=0x01;
   assert.throws(()=>validateAuthenticatorData(b64url(noUv),rpId),/fingerprint, face, PIN, or device verification/i);
+});
+
+test('Android Credential Manager passkeys require a configured signing certificate origin',()=>{
+  const original=process.env.PASSKEY_ANDROID_SHA256_FINGERPRINTS;
+  const originalPackage=process.env.VOP_ANDROID_PACKAGE_NAME;
+  const certificate='AB'.repeat(32);
+  const origin='android:apk-key-hash:'+Buffer.from(certificate,'hex').toString('base64url');
+  const challenge='native-app-challenge';
+  const payload={
+    v:1 as const,purpose:'authentication' as const,
+    challenge,origin:'https://vop.example',rpId:'vop.example',
+    exp:Date.now()+60_000,
+  };
+  const clientData=(attributes:Record<string,unknown>)=>b64url(JSON.stringify({
+    type:'webauthn.get',challenge,origin,androidPackageName:'com.sda.vop',
+    ...attributes,
+  }));
+  try{
+    process.env.PASSKEY_ANDROID_SHA256_FINGERPRINTS=certificate;
+    process.env.VOP_ANDROID_PACKAGE_NAME='com.sda.vop';
+    assert.equal(androidPasskeyConfigured(),true);
+    assert.doesNotThrow(()=>validateClientData(clientData({}),payload,'webauthn.get'));
+    assert.throws(()=>validateClientData(clientData({androidPackageName:'com.fake.app'}),
+      payload,'webauthn.get'),/origin does not match/i);
+    assert.throws(()=>validateClientData(clientData({crossOrigin:true}),payload,
+      'webauthn.get'),/cross-origin frame/i);
+    delete process.env.PASSKEY_ANDROID_SHA256_FINGERPRINTS;
+    assert.equal(androidPasskeyConfigured(),false);
+    assert.throws(()=>validateClientData(clientData({}),payload,'webauthn.get'),
+      /origin does not match/i);
+  }finally{
+    if(original===undefined)delete process.env.PASSKEY_ANDROID_SHA256_FINGERPRINTS;
+    else process.env.PASSKEY_ANDROID_SHA256_FINGERPRINTS=original;
+    if(originalPackage===undefined)delete process.env.VOP_ANDROID_PACKAGE_NAME;
+    else process.env.VOP_ANDROID_PACKAGE_NAME=originalPackage;
+  }
 });

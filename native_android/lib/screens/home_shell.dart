@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../core/vop_api.dart';
 import '../theme/vop_theme.dart';
 import '../widgets/vop_ui.dart';
@@ -37,10 +38,17 @@ class _HomeShellState extends State<HomeShell> {
   int tab=0;
   String search='';
   late Future<Map<String,dynamic>> profile,catalog,progress;
-  @override void initState(){super.initState();reload();
-    widget.api.personalSettings().then((result){
-      VopAppearance.apply(asMap(result['settings']));
-    }).catchError((Object ignored){});
+  @override void initState(){super.initState();reload();_restoreAppearance();}
+  Future<void> _restoreAppearance()async{
+    final uid=FirebaseAuth.instance.currentUser?.uid;
+    if(uid==null)return;
+    await VopAppearance.restoreTheme(uid);
+    final initialRevision=VopAppearance.revision;
+    try{
+      final result=await widget.api.personalSettings();
+      if(mounted&&initialRevision==VopAppearance.revision)
+        VopAppearance.apply(asMap(result['settings']));
+    }catch(_){}
   }
   void reload(){
     profile=widget.api.bootstrap();
