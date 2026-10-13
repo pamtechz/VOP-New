@@ -58,3 +58,27 @@ test('AVD launcher selects the requested emulator, never another running emulato
   assert.match(launcher, /Requested AVD \$target did not appear/);
   assert.match(launcher, /Select-Target \$selectedRunning \$DeviceId/);
 });
+
+test('explicit Android emulator works without parsing Flutter AVD table', () => {
+  assert.match(launcher, /if \(\$EmulatorId\) \{/);
+  assert.match(launcher, /\$target = \$EmulatorId/);
+  assert.match(launcher, /Resolve-AndroidEmulatorExecutable/);
+  assert.match(launcher, /& \$emulatorExecutable -list-avds/);
+  assert.match(launcher, /shell getprop sys\.boot_completed/);
+  assert.match(launcher, /Cold Boot/);
+});
+
+test('Vercel import is opt-in and never puts web Firebase app ID in native config', () => {
+  const config = readFileSync('native_android/tool/vercel_public_config.ps1', 'utf8');
+  const example = readFileSync('native_android/Vop_Android_Config.example.env', 'utf8');
+  assert.match(launcher, /\[switch\]\$UseVercelEnv/);
+  assert.match(launcher, /VercelEnvironment = \$VercelEnvironment/);
+  assert.match(native, /Get-VercelPublicClientSettings/);
+  assert.match(native, /VITE_FIREBASE_PROJECT_ID/);
+  assert.match(native, /VOP_FIREBASE_ANDROID_API_KEY/);
+  assert.match(native, /The web VITE_FIREBASE_APP_ID is deliberately NEVER used for Android/);
+  assert.match(config, /Remove-Item -LiteralPath \$tempFile -Force/);
+  assert.match(config, /ConvertFrom-VercelClientEnvironmentLines/);
+  assert.doesNotMatch(example, /VOP_FIREBASE_PROJECT_ID=voiceofprophecy/);
+  assert.doesNotMatch(example, /VOP_API_BASE_URL=https:\/\//);
+});
