@@ -10,10 +10,11 @@ test('Windows launcher verifies missing share_plus Kotlin classes before device 
   assert.match(script, /SharePlusPendingIntent\.kt/);
   assert.match(script, /Get-MissingShareSources/);
   assert.match(script, /RepairSharePlus/);
-  assert.match(script, /Refusing to remove a share_plus source outside/);
+  assert.match(script, /Refusing to delete a share_plus package outside/);
   assert.match(script, /flutter pub get/);
   assert.match(script, /flutter clean/);
   assert.doesNotMatch(script, /pub cache clean/);
+  assert.equal(script.split('flutter @args').length - 1, 1);
 });
 
 test('native Android release requires real signing credentials and protects biometrics', () => {
