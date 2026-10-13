@@ -55,7 +55,7 @@ test('AVD launcher selects the requested emulator, never another running emulato
   assert.match(launcher, /\$_\.emulatorId -eq \$EmulatorId/);
   assert.match(launcher, /\$_\.emulatorId -eq \$target/);
   assert.match(launcher, /\$previousIds -notcontains \[string\]\$_\.id/);
-  assert.match(launcher, /Requested AVD \$target did not appear/);
+  assert.match(launcher, /AVD \$target did not boot/);
   assert.match(launcher, /Select-Target \$selectedRunning \$DeviceId/);
 });
 
