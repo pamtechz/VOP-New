@@ -13,26 +13,39 @@ if (!(Get-Command flutter -ErrorAction SilentlyContinue)) {
     throw "Flutter is not installed or is not in PATH. Install Flutter SDK and Android Studio."
 }
 $values = @{}
+$androidRegistration = $null
 $legacyConfig = Join-Path $PSScriptRoot "..\android\app\google-services.json"
 if (Test-Path -LiteralPath $legacyConfig) {
-    # Android-specific Firebase identifiers come from the package-matched
-    # PUBLIC google-services client registration, not from a web app ID.
-    $settings = Get-Content -LiteralPath $legacyConfig -Raw | ConvertFrom-Json
-    $client = @($settings.client | Where-Object {
-        $_.client_info.android_client_info.package_name -eq "com.sda.vop"
-    } | Select-Object -First 1)
-    if ($client.Count -ne 1) { throw "Expected one registered Firebase Android app for com.sda.vop." }
-    $appClient = $client[0]
-    $googleWeb = @($appClient.oauth_client | Where-Object {
-        $_.client_type -eq 3
-    } | Select-Object -First 1)
-    $values["VOP_API_BASE_URL"] = "https://vopafrica.vercel.app"
-    $values["VOP_FIREBASE_API_KEY"] = [string]$appClient.api_key[0].current_key
-    $values["VOP_FIREBASE_ANDROID_APP_ID"] = [string]$appClient.client_info.mobilesdk_app_id
-    $values["VOP_FIREBASE_SENDER_ID"] = [string]$settings.project_info.project_number
-    $values["VOP_FIREBASE_PROJECT_ID"] = [string]$settings.project_info.project_id
-    if ($googleWeb.Count -gt 0) {
-        $values["VOP_GOOGLE_WEB_CLIENT_ID"] = [string]$googleWeb[0].client_id
+    # A complete ignored local config may intentionally use another Firebase
+    # registration. An unusable legacy file must not block that override.
+    try {
+        $settings = Get-Content -LiteralPath $legacyConfig -Raw | ConvertFrom-Json
+        $client = @($settings.client | Where-Object {
+            $_.client_info.android_client_info.package_name -eq "com.sda.vop"
+        } | Select-Object -First 1)
+        if ($client.Count -eq 1) {
+            $appClient = $client[0]
+            $googleWeb = @($appClient.oauth_client | Where-Object {
+                $_.client_type -eq 3
+            } | Select-Object -First 1)
+            $values["VOP_API_BASE_URL"] = "https://vopafrica.vercel.app"
+            $values["VOP_FIREBASE_API_KEY"] = [string]$appClient.api_key[0].current_key
+            $values["VOP_FIREBASE_ANDROID_APP_ID"] = [string]$appClient.client_info.mobilesdk_app_id
+            $values["VOP_FIREBASE_SENDER_ID"] = [string]$settings.project_info.project_number
+            $values["VOP_FIREBASE_PROJECT_ID"] = [string]$settings.project_info.project_id
+            if ($googleWeb.Count -gt 0) {
+                $values["VOP_GOOGLE_WEB_CLIENT_ID"] = [string]$googleWeb[0].client_id
+            }
+            $androidRegistration = @{
+                "VOP_FIREBASE_ANDROID_APP_ID" = $values["VOP_FIREBASE_ANDROID_APP_ID"]
+                "VOP_FIREBASE_SENDER_ID" = $values["VOP_FIREBASE_SENDER_ID"]
+                "VOP_FIREBASE_ANDROID_API_KEY" = $values["VOP_FIREBASE_API_KEY"]
+            }
+        } else {
+            Write-Warning "Bundled Android Firebase metadata has no matching com.sda.vop app; use a complete local config or Vercel Android public settings."
+        }
+    } catch {
+        Write-Warning "Bundled Android Firebase metadata cannot be read; a complete local configuration is required."
     }
 }
 
@@ -60,6 +73,16 @@ if ($UseVercelEnv) {
         "VOP_GOOGLE_WEB_CLIENT_ID" = "VOP_GOOGLE_WEB_CLIENT_ID"
         "VOP_API_BASE_URL" = "VOP_API_BASE_URL"
     }
+    # A Vercel Android override must agree with the registered Android
+    # application. Web-client variables are not an Android override.
+    if ($androidRegistration) {
+        foreach ($androidKey in $androidRegistration.Keys) {
+            if ($public.ContainsKey($androidKey) -and
+                $public[$androidKey] -ne $androidRegistration[$androidKey]) {
+                throw "The Vercel $androidKey does not match the registered Android Firebase client."
+            }
+        }
+    }
     foreach ($name in $mapping.Keys) {
         if ($public.ContainsKey($name)) { $values[$mapping[$name]] = $public[$name] }
     }
@@ -86,9 +109,16 @@ if (Test-Path -LiteralPath $EnvFile) {
 if ($vercelProjectId -and $values["VOP_FIREBASE_PROJECT_ID"] -ne $vercelProjectId) {
     throw "The local Firebase project override does not match the linked Vercel project."
 }
-if (!$values.ContainsKey("VOP_FIREBASE_ANDROID_APP_ID") -or
-    $values["VOP_FIREBASE_ANDROID_APP_ID"] -notmatch '^1:[0-9]+:android:') {
+$appId = if ($values.ContainsKey("VOP_FIREBASE_ANDROID_APP_ID")) {
+    [string]$values["VOP_FIREBASE_ANDROID_APP_ID"]
+} else { "" }
+$appIdParts = [regex]::Match($appId, '^1:([0-9]+):android:[A-Za-z0-9]+')
+if (!$appIdParts.Success) {
     throw "Missing a valid Android Firebase app ID. Do not use VITE_FIREBASE_APP_ID."
+}
+if (!$values.ContainsKey("VOP_FIREBASE_SENDER_ID") -or
+    [string]$values["VOP_FIREBASE_SENDER_ID"] -ne $appIdParts.Groups[1].Value) {
+    throw "Firebase Android app ID and sender ID do not belong to the same project number."
 }
 if (!$values.ContainsKey("VOP_FIREBASE_API_KEY") -or !$values["VOP_FIREBASE_API_KEY"]) {
     throw "Android Firebase API key is missing. Add Android registration metadata or VOP_FIREBASE_ANDROID_API_KEY to Vercel."
