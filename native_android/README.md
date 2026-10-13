@@ -75,6 +75,85 @@ To override the server origin or Firebase public client, create
 backup protections and cleartext-traffic restrictions are checked into
 `android/app/src/main/AndroidManifest.xml`.
 
+## Choose where to run VOP (USB, Wi-Fi, emulator or browser)
+
+Use the native Android Flutter project directory, **not** the repository root:
+
+```powershell
+cd "C:\Users\user\Pictures\VOP New"
+git switch main
+git pull --ff-only
+cd native_android
+.\run_vop.ps1
+```
+
+The interactive launcher supports:
+
+| Mode | Command | What actually runs |
+| --- | --- | --- |
+| USB | `.\run_vop.ps1 -Mode USB` | Native Flutter APK on an authorized USB-connected Android phone |
+| Wi-Fi | `.\run_vop.ps1 -Mode WiFi` | Same Android APK on a phone connected with secure ADB wireless debugging |
+| Emulator | `.\run_vop.ps1 -Mode Emulator` | Native APK on a local Android Studio virtual device |
+| Browser | `.\run_vop.ps1 -Mode Browser -Browser Chrome` | Existing VOP web portal; **not** the Android APK |
+| Cloud | `.\run_vop.ps1 -Mode Cloud -CloudProvider Appetize` | Build native APK and open an in-browser Android emulator provider for manual upload |
+| List | `.\run_vop.ps1 -Mode List` | See Flutter/ADB devices and configured Android emulators |
+
+**USB:** Set Developer options > USB debugging; connect the phone; accept the
+computer's authorization prompt. `flutter devices` shows the **actual** ID.
+For example, the Samsung SM A145F has been reported as `R58W313YEMB`:
+
+```powershell
+.\run_vop.ps1 -Mode USB -DeviceId "R58W313YEMB"
+# Equivalent direct launch:
+.\run_android.ps1 -DeviceId "R58W313YEMB"
+```
+
+**Wi-Fi:** Android 11 or newer. The PC and phone must be connected to the
+same Wi-Fi network. On the Samsung, open Settings > Developer options >
+Wireless debugging and enable it. Choose **Pair device with pairing code**,
+then note its temporary pairing IP:port and pairing code. Also note the
+**different** IP:port on the main Wireless debugging screen.
+
+```powershell
+.\run_vop.ps1 -Mode WiFi -PairAddress "192.168.1.10:37123" -ConnectAddress "192.168.1.10:39001"
+# Pairing code is prompted by adb, not stored by the script.
+# To reconnect after initial pairing:
+.\run_vop.ps1 -Mode WiFi -ConnectAddress "192.168.1.10:39001"
+```
+
+Replace both example IPs/ports with the values on **your** phone.
+ADB also supports pairing from Android Studio > Pair Devices Using Wi-Fi.
+Only use a trusted network and turn Wireless debugging off when finished.
+
+**Emulator:** Open Android Studio > Device Manager > Create device; install an
+Android system image, preferably one with Google Play services when testing
+Google sign-in. Then run `.\run_vop.ps1 -Mode Emulator`. The launcher chooses a running
+Android emulator or offers configured AVDs to start. You may also specify
+`-EmulatorId` from `flutter emulators`.
+
+**In a browser there are two different choices:**
+
+1. `-Mode Browser` opens `https://vopafrica.vercel.app`, the **web portal**;
+   it does not claim the Android APK or device-specific biometric behavior.
+2. `-Mode Cloud` builds `build/app/outputs/flutter-apk/app-debug.apk` with
+   the existing public client configuration, then opens Appetize or
+   BrowserStack App Live. Manually upload the APK to run the **actual Android
+   application** inside a cloud Android device streamed to the browser.
+   Cloud emulators may have mocked or unsupported hardware biometric features;
+   test passkeys and fingerprint unlock on a physical Android device.
+
+```powershell
+.\run_vop.ps1 -Mode Cloud -CloudProvider Appetize
+.\run_vop.ps1 -Mode Cloud -CloudProvider BrowserStack
+.\run_vop.ps1 -Mode Browser -Browser Edge
+.\run_vop.ps1 -Mode List
+```
+
+Do not upload production secrets, private keystores or service-account
+credentials to third-party cloud testing systems. Google authentication and
+passkeys may require provider-appropriate signing fingerprints and validated
+domain association. Browser testing is not a substitute for device tests.
+
 ## Windows device build: repairing share_plus
 
 If the Android build reports `Unresolved reference 'ShareSuccessManager'` or

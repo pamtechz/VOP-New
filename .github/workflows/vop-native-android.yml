@@ -25,14 +25,17 @@ jobs:
         shell: pwsh
         run: |
           $parseErrors = $null
-          [System.Management.Automation.Language.Parser]::ParseFile(
-            (Resolve-Path 'native_android/run_android.ps1').Path,
-            [ref]$null,
-            [ref]$parseErrors
-          ) | Out-Null
-          if ($parseErrors.Count -gt 0) {
-            $parseErrors | ForEach-Object { Write-Error $_.ToString() }
-            exit 1
+          foreach ($scriptPath in @('native_android/run_android.ps1', 'native_android/run_vop.ps1')) {
+            $parseErrors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path $scriptPath).Path,
+              [ref]$null,
+              [ref]$parseErrors
+            ) | Out-Null
+            if ($parseErrors.Count -gt 0) {
+              $parseErrors | ForEach-Object { Write-Error ("{0}: {1}" -f $scriptPath, $_) }
+              exit 1
+            }
           }
   flutter-android:
     runs-on: ubuntu-latest

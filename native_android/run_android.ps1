@@ -1,7 +1,8 @@
 param(
     [string]$DeviceId = "",
     [string]$EnvFile = "Vop_Android_Config.env",
-    [switch]$RepairSharePlus
+    [switch]$RepairSharePlus,
+    [switch]$BuildApk
 )
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
@@ -126,7 +127,14 @@ foreach ($key in ($keys + @("VOP_GOOGLE_WEB_CLIENT_ID"))) {
         $defines += "--dart-define=$key=$($values[$key])"
     }
 }
-$args = @("run") + $defines
-if ($DeviceId) { $args += @("-d", $DeviceId) }
-flutter @args
-if ($LASTEXITCODE -ne 0) { throw "Flutter run failed." }
+if ($BuildApk) {
+    if ($DeviceId) { throw "Do not pass -DeviceId when building an APK." }
+    $flutterArgs = @("build", "apk", "--debug") + $defines
+} else {
+    $flutterArgs = @("run") + $defines
+    if ($DeviceId) { $flutterArgs += @("-d", $DeviceId) }
+}
+flutter @flutterArgs
+if ($LASTEXITCODE -ne 0) {
+    throw $(if ($BuildApk) { "Flutter APK build failed." } else { "Flutter run failed." })
+}
