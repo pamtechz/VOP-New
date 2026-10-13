@@ -42,3 +42,5 @@ try {
     $env:PATH = $originalPath
     Remove-Item -LiteralPath $stubDir -Recurse -Force -ErrorAction SilentlyContinue
 }
+# The child process intentionally exits 1; make the test's own status success.
+$global:LASTEXITCODE = 0
