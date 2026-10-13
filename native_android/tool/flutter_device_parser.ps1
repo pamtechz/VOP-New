@@ -37,3 +37,18 @@ function ConvertFrom-FlutterEmulatorText {
         }
     }
 }
+
+function ConvertFrom-AndroidAvdList {
+    param([string[]]$Lines)
+    foreach ($rawLine in $Lines) {
+        $avdId = ([string]$rawLine).Trim()
+        if ($avdId -notmatch '^[A-Za-z0-9_.-]+$' -or
+            $avdId -eq 'OK' -or $avdId -eq 'ERROR') { continue }
+        [pscustomobject]@{
+            id = $avdId
+            name = $avdId
+            manufacturer = "Android SDK"
+            platform = "android"
+        }
+    }
+}
