@@ -14,7 +14,9 @@ test('Windows launcher verifies missing share_plus Kotlin classes before device 
   assert.match(script, /flutter pub get/);
   assert.match(script, /flutter clean/);
   assert.doesNotMatch(script, /pub cache clean/);
-  assert.equal(script.split('flutter @args').length - 1, 1);
+  assert.equal(script.split('flutter @flutterArgs').length - 1, 1);
+  assert.match(script, /\[switch\]\$BuildApk/);
+  assert.match(script, /flutterArgs = @\("build", "apk", "--debug"\)/);
 });
 
 test('native Android release requires real signing credentials and protects biometrics', () => {
