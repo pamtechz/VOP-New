@@ -98,3 +98,14 @@ test('emulator launch reports fatal Flutter exit before waiting or loading Verce
   assert.match(launcher, /shell getprop sys\.boot_completed/);
   assert.match(launcher, /Write-Host "Android \$target is booted and ready."/);
 });
+
+test('repo-root PowerShell wrappers forward native launcher arguments', () => {
+  const rootAndroid = readFileSync('run_android.ps1', 'utf8');
+  const rootMenu = readFileSync('run_vop.ps1', 'utf8');
+  assert.match(rootAndroid, /native_android\\run_android\.ps1/);
+  assert.match(rootMenu, /native_android\\run_vop\.ps1/);
+  assert.match(rootAndroid, /& \$launcher @PSBoundParameters/);
+  assert.match(rootMenu, /& \$launcher @PSBoundParameters/);
+  assert.match(rootAndroid, /\[string\]\$DeviceId/);
+  assert.match(rootMenu, /\[string\]\$EmulatorId/);
+});
