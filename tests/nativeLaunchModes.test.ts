@@ -54,7 +54,7 @@ test('USB and Wi-Fi device selectors distinguish Android secure ADB mDNS targets
 test('AVD launcher selects the requested emulator, never another running emulator', () => {
   assert.match(launcher, /\$_\.emulatorId -eq \$EmulatorId/);
   assert.match(launcher, /\$_\.emulatorId -eq \$target/);
-  assert.match(launcher, /\$previousIds -notcontains \[string\]\$_\.id/);
+  assert.doesNotMatch(launcher, /\$previousIds -notcontains \[string\]\$_\.id/);
   assert.match(launcher, /AVD \$target did not boot/);
   assert.match(launcher, /Select-Target \$selectedRunning \$DeviceId/);
 });
