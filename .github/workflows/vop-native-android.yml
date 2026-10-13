@@ -25,7 +25,7 @@ jobs:
         shell: pwsh
         run: |
           $parseErrors = $null
-          foreach ($scriptPath in @('native_android/run_android.ps1', 'native_android/run_vop.ps1', 'native_android/tool/flutter_device_parser.ps1', 'tests/nativeDeviceDiscovery.test.ps1')) {
+          foreach ($scriptPath in @('native_android/run_android.ps1', 'native_android/run_vop.ps1', 'native_android/tool/flutter_device_parser.ps1', 'native_android/tool/vercel_public_config.ps1', 'tests/nativeDeviceDiscovery.test.ps1', 'tests/nativeVercelClientConfig.test.ps1')) {
             $parseErrors = $null
             [System.Management.Automation.Language.Parser]::ParseFile(
               (Resolve-Path $scriptPath).Path,
@@ -40,6 +40,9 @@ jobs:
       - name: Verify Flutter device and emulator parser against Windows CLI output
         shell: pwsh
         run: ./tests/nativeDeviceDiscovery.test.ps1
+      - name: Verify Vercel public-client filtering cannot expose server settings
+        shell: pwsh
+        run: ./tests/nativeVercelClientConfig.test.ps1
   flutter-android:
     runs-on: ubuntu-latest
     timeout-minutes: 30
