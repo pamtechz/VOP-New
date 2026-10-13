@@ -62,12 +62,39 @@ function Get-AndroidDevices {
     return $devices
 }
 
-function Get-AvailableEmulators {
-    $emulatorLines = @(& flutter emulators)
-    if ($LASTEXITCODE -ne 0) {
-        throw "Flutter could not list emulators. Open Android Studio > Device Manager."
+function Resolve-AndroidEmulatorExecutable {
+    $candidate = Get-Command emulator.exe -ErrorAction SilentlyContinue
+    if ($candidate) { return $candidate.Source }
+    $roots = @($env:ANDROID_SDK_ROOT, $env:ANDROID_HOME)
+    if ($env:LOCALAPPDATA) {
+        $roots += (Join-Path $env:LOCALAPPDATA "Android\Sdk")
     }
-    return @(ConvertFrom-FlutterEmulatorText -Lines $emulatorLines)
+    foreach ($root in $roots) {
+        if ([string]::IsNullOrWhiteSpace($root)) { continue }
+        $path = Join-Path $root "emulator\emulator.exe"
+        if (Test-Path -LiteralPath $path) { return $path }
+    }
+    return ""
+}
+
+function Get-AvailableEmulators {
+    $lines = @(& flutter emulators)
+    $flutterAvds = if ($LASTEXITCODE -eq 0) {
+        @(ConvertFrom-FlutterEmulatorText -Lines $lines)
+    } else { @() }
+    if ($flutterAvds.Count -gt 0) { return $flutterAvds }
+
+    # Use Android's own emulator inventory if Flutter prints an alternate
+    # table layout that cannot be parsed by the PowerShell console.
+    $emulatorExecutable = Resolve-AndroidEmulatorExecutable
+    if ($emulatorExecutable) {
+        $sdkAvds = @(& $emulatorExecutable -list-avds)
+        if ($LASTEXITCODE -eq 0) {
+            $fromSdk = @(ConvertFrom-AndroidAvdList -Lines $sdkAvds)
+            if ($fromSdk.Count -gt 0) { return $fromSdk }
+        }
+    }
+    return @()
 }
 
 function Select-Target($devices, [string]$requested, [string]$kind) {
