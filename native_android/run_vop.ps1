@@ -297,6 +297,12 @@ function Start-Emulator {
     for ($attempt = 0; $attempt -lt 60; $attempt++) {
         if ($emulatorProcess -and $emulatorProcess.HasExited) {
             $exitCode = $emulatorProcess.ExitCode
+            if ($exitCode -eq 0) {
+                # Some emulator launchers hand off the VM to a child process.
+                # An exit-zero launcher is not itself an Android boot failure.
+                $emulatorProcess = $null
+                continue
+            }
             Write-Warning "Android emulator process exited with code $exitCode."
             if (Test-Path -LiteralPath $stdErrPath) {
                 Write-Host "Recent emulator diagnostics (stderr):"
