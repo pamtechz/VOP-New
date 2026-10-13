@@ -1,6 +1,7 @@
 param(
     [string]$DeviceId = "",
-    [string]$EnvFile = "Vop_Android_Config.env"
+    [string]$EnvFile = "Vop_Android_Config.env",
+    [switch]$RepairSharePlus
 )
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
@@ -57,6 +58,68 @@ if (!(Test-Path "android/settings.gradle.kts") -and !(Test-Path "android/setting
 }
 flutter pub get
 if ($LASTEXITCODE -ne 0) { throw "flutter pub get failed." }
+
+$packageConfigPath = Join-Path $PSScriptRoot ".dart_tool\package_config.json"
+if (!(Test-Path -LiteralPath $packageConfigPath)) {
+    throw "Missing Dart package configuration after flutter pub get."
+}
+$packageConfig = Get-Content -LiteralPath $packageConfigPath -Raw | ConvertFrom-Json
+$matchesShare = @($packageConfig.packages | Where-Object { $_.name -eq "share_plus" })
+if ($matchesShare.Count -ne 1) {
+    throw "The share_plus dependency was not found in Dart package configuration."
+}
+$packageUri = [Uri]::new([string]$matchesShare[0].rootUri, [UriKind]::RelativeOrAbsolute)
+if (!$packageUri.IsAbsoluteUri -or !$packageUri.IsFile) {
+    throw "The share_plus source is not in a local package directory."
+}
+$packagePath = [IO.Path]::GetFullPath($packageUri.LocalPath).TrimEnd([char]92, [char]47)
+$shareSources = @(
+    "Share.kt",
+    "ShareSuccessManager.kt",
+    "SharePlusPendingIntent.kt",
+    "MethodCallHandler.kt",
+    "SharePlusPlugin.kt"
+)
+function Get-MissingShareSources([string]$sourcePath) {
+    $kotlinPath = Join-Path $sourcePath "android\src\main\kotlin\dev\fluttercommunity\plus\share"
+    return @($shareSources | Where-Object {
+        !(Test-Path -LiteralPath (Join-Path $kotlinPath $_))
+    })
+}
+$missingShareSources = @(Get-MissingShareSources $packagePath)
+if ($RepairSharePlus -or $missingShareSources.Count -gt 0) {
+    if ($missingShareSources.Count -gt 0) {
+        Write-Warning "Cached share_plus is missing: $($missingShareSources -join ', ')"
+    }
+    if (!$env:PUB_CACHE -and !$env:LOCALAPPDATA) {
+        throw "The Windows Pub package cache location is unknown."
+    }
+    $cacheRoot = if ($env:PUB_CACHE) {
+        [IO.Path]::GetFullPath($env:PUB_CACHE)
+    } else {
+        Join-Path $env:LOCALAPPDATA "Pub\Cache"
+    }
+    $expectedParent = [IO.Path]::GetFullPath((Join-Path $cacheRoot "hosted\pub.dev"))
+    $actualParent = [IO.Path]::GetFullPath((Split-Path -Parent $packagePath))
+    $packageName = Split-Path -Leaf $packagePath
+    $parsedVersion = New-Object System.Version
+    $isPackageVersion = $packageName.StartsWith("share_plus-") -and
+        [Version]::TryParse($packageName.Substring("share_plus-".Length), [ref]$parsedVersion)
+    if ($actualParent -ne $expectedParent -or !$isPackageVersion) {
+        throw "Refusing to delete a share_plus package outside the verified hosted Pub cache."
+    }
+    Write-Host "Repairing the scoped share_plus Pub cache and clearing native build outputs..."
+    Remove-Item -LiteralPath $packagePath -Recurse -Force
+    flutter clean
+    if ($LASTEXITCODE -ne 0) { throw "Flutter clean failed during repair." }
+    flutter pub get
+    if ($LASTEXITCODE -ne 0) { throw "Pub could not restore share_plus." }
+    $missingShareSources = @(Get-MissingShareSources $packagePath)
+    if ($missingShareSources.Count -gt 0) {
+        throw "The restored share_plus archive is still missing required Kotlin sources."
+    }
+}
+
 $defines = @()
 foreach ($key in ($keys + @("VOP_GOOGLE_WEB_CLIENT_ID"))) {
     if ($values.ContainsKey($key) -and $values[$key]) {

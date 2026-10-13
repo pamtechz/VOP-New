@@ -16,6 +16,24 @@ permissions:
   contents: read
 
 jobs:
+  windows-launcher-parse:
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify PowerShell launcher syntax
+        shell: pwsh
+        run: |
+          $parseErrors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path 'native_android/run_android.ps1').Path,
+            [ref]$null,
+            [ref]$parseErrors
+          ) | Out-Null
+          if ($parseErrors.Count -gt 0) {
+            $parseErrors | ForEach-Object { Write-Error $_.ToString() }
+            exit 1
+          }
   flutter-android:
     runs-on: ubuntu-latest
     timeout-minutes: 30
