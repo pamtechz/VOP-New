@@ -75,6 +75,43 @@ To override the server origin or Firebase public client, create
 backup protections and cleartext-traffic restrictions are checked into
 `android/app/src/main/AndroidManifest.xml`.
 
+## Windows device build: repairing share_plus
+
+If the Android build reports `Unresolved reference 'ShareSuccessManager'` or
+`'SharePlusPendingIntent'` during `:share_plus:compileDebugKotlin`, the native
+app's Dart source is not the failing compilation unit. A damaged hosted Pub
+package or stale Kotlin incremental build can produce those errors even if CI
+succeeds.
+
+From PowerShell inside `native_android`:
+
+```powershell
+flutter clean
+dart pub cache repair
+flutter pub get
+.\run_android.ps1 -DeviceId "YOUR_DEVICE_ID"
+```
+
+The native runner now checks the cached `share_plus` Kotlin sources before
+starting Gradle. If required source files are missing, it re-downloads *only*
+the verified hosted `share_plus` package and cleans generated outputs. When
+all files are present but a local incremental Kotlin build is suspected,
+request the same scoped repair explicitly:
+
+```powershell
+.\run_android.ps1 -RepairSharePlus -DeviceId "YOUR_DEVICE_ID"
+```
+
+Run `flutter devices` for the actual device ID; do not assume the marketed
+Samsung model is the adb ID. Repair never modifies the Android SDK, your
+Firebase settings, or any project source. The Flutter `android.builtInKotlin`
+compatibility flag should be changed only after verifying that **all**
+Android plugins support the target migration.
+
+The SDK XML schema warning is distinct from Kotlin compilation and typically
+indicates different Android Studio and command-line-tools release dates.
+Synchronize SDK tools through Android Studio separately if it persists.
+
 ## Android Kotlin Gradle Plugin compatibility
 
 The native application uses `share_plus: ^13.3.1` and `SharePlus.instance.share` with
