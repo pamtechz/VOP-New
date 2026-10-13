@@ -39,3 +39,18 @@ test('cloud builds the Android APK through the existing Firebase-aware script', 
   assert.match(native, /\$flutterArgs = @\("build", "apk", "--debug"\) \+ \$defines/);
   assert.match(native, /Do not pass -DeviceId when building an APK/);
 });
+
+test('USB and Wi-Fi device selectors distinguish Android secure ADB mDNS targets', () => {
+  assert.match(launcher, /function Test-WirelessDeviceId/);
+  assert.match(launcher, /adb-tls-connect/);
+  assert.match(launcher, /Test-WirelessDeviceId \(\[string\]\$_\.id\)/);
+  assert.match(launcher, /!\(Test-WirelessDeviceId \(\[string\]\$_\.id\)\)/);
+});
+
+test('AVD launcher selects the requested emulator, never another running emulator', () => {
+  assert.match(launcher, /\$_\.emulatorId -eq \$EmulatorId/);
+  assert.match(launcher, /\$_\.emulatorId -eq \$target/);
+  assert.match(launcher, /\$previousIds -notcontains \[string\]\$_\.id/);
+  assert.match(launcher, /Requested AVD \$target did not appear/);
+  assert.match(launcher, /Select-Target \$selectedRunning \$DeviceId/);
+});
