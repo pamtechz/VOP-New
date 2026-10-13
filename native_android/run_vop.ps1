@@ -294,7 +294,8 @@ function Start-Emulator {
 
     Write-Host "Waiting for Android AVD $target to finish booting..."
     $selectedRunning = @()
-    for ($attempt = 0; $attempt -lt 60; $attempt++) {
+    $bootAttempts = if ($ColdBoot -or $SoftwareGraphics) { 120 } else { 90 }
+    for ($attempt = 0; $attempt -lt $bootAttempts; $attempt++) {
         if ($emulatorProcess -and $emulatorProcess.HasExited) {
             $exitCode = $emulatorProcess.ExitCode
             if ($exitCode -eq 0) {
