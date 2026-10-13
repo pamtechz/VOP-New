@@ -162,6 +162,17 @@ Actions artifact. The CI-built debug APK uses VOP's existing public Firebase And
 Google OAuth still requires the Android debug signing fingerprints to be
 registered. A debug APK is not a signed production release.
 
+## Android release signing
+
+A `flutter build apk --debug` build remains available without a production
+keystore. Release targets will **not** silently use a debug certificate.
+Copy `android/key.properties.example` to the ignored
+`android/key.properties`, provide the local path and credentials for your
+release/upload keystore, and then run `flutter build appbundle --release`
+when ready for distribution. Do not commit credentials or the keystore.
+For Play App Signing, register the **Play app signing certificate**
+fingerprint (not just an upload or debug key) for Android passkey verification.
+
 ## Native passkeys (Android)
 
 VOP now uses Android's Credential Manager through the `passkeys` Flutter package.
