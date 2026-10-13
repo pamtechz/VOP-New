@@ -1,0 +1,6 @@
+# Copy this file to android/key.properties; never commit the real file.
+# Use a release keystore you control, or the upload key for Play App Signing.
+storeFile=C:/path/to/vop-upload-keystore.jks
+storePassword=YOUR_LOCAL_KEYSTORE_PASSWORD
+keyAlias=YOUR_KEY_ALIAS
+keyPassword=YOUR_LOCAL_KEY_PASSWORD
