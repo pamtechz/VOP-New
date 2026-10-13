@@ -72,7 +72,7 @@ $packageUri = [System.Uri]::new([string]$shareEntry[0].rootUri, [System.UriKind]
 if (!$packageUri.IsAbsoluteUri -or !$packageUri.IsFile) {
     throw "Unexpected share_plus source location. Expected an absolute file URI."
 }
-$sharePackage = [System.IO.Path]::GetFullPath($packageUri.LocalPath)
+$sharePackage = [System.IO.Path]::GetFullPath($packageUri.LocalPath).TrimEnd([char]92, [char]47)
 $expectedSource = @(
     "Share.kt",
     "ShareSuccessManager.kt",
@@ -116,7 +116,7 @@ if ($LASTEXITCODE -ne 0) { throw "Flutter run failed." }
     if ($LASTEXITCODE -ne 0) { throw "Flutter clean failed during share_plus repair." }
     flutter pub get
     if ($LASTEXITCODE -ne 0) { throw "Pub failed to restore share_plus." }
-    $sharePackage = [System.IO.Path]::GetFullPath($packageUri.LocalPath)
+    $sharePackage = [System.IO.Path]::GetFullPath($packageUri.LocalPath).TrimEnd([char]92, [char]47)
     $missingSources = @(Get-MissingShareSources $sharePackage)
     if ($missingSources.Count -gt 0) {
         throw "The restored share_plus package is still missing: $($missingSources -join ', ')"
