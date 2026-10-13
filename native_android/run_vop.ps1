@@ -251,19 +251,12 @@ function Start-Emulator {
         $target = Select-Target $androidEmulators "" "Android virtual device"
     }
 
-    $previousIds = @($running | ForEach-Object { [string]$_.id })
     Write-Host "Starting Android virtual device $target ..."
     & flutter emulators --launch $target
     if ($LASTEXITCODE -ne 0) {
-        # Flutter can fail to launch an AVD that has already started but remains
-        # offline. Allow boot recovery only when ADB actually reports an offline
-        # emulator, otherwise surface the launch failure.
-        $adb = Resolve-Adb
-        $adbLines = @(& $adb devices)
-        if (@($adbLines | Where-Object { $_ -match '^emulator-\d+\s+offline' }).Count -eq 0) {
-            throw "Could not launch Android AVD $target. See Android Studio > Device Manager."
-        }
-        Write-Warning "An Android emulator is still offline; waiting for it to finish starting."
+        # Do not trust an arbitrary offline emulator: wait only for a device
+        # whose reported AVD name is exactly the selected target.
+        Write-Warning "Flutter could not start $target; checking whether that exact AVD is already booting."
     }
     Write-Host "Waiting for $target to become ready. First boot may take several minutes..."
     $selectedRunning = @()
@@ -272,8 +265,7 @@ function Start-Emulator {
             $_.emulator -eq $true -or $_.id -match '^emulator-\d+$'
         })
         $selectedRunning = @($nowRunning | Where-Object {
-            $_.emulatorId -eq $target -or
-            (!$_.emulatorId -and $previousIds -notcontains [string]$_.id)
+            $_.emulatorId -eq $target
         })
         if ($selectedRunning.Count -gt 0) {
             $adb = Resolve-Adb
