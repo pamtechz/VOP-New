@@ -13,7 +13,11 @@ test('VOP launcher supports every documented device target', () => {
   }
   assert.match(launcher, /Select-Target/);
   assert.match(launcher, /Get-AndroidDevices/);
-  assert.match(launcher, /flutter devices --machine/);
+  assert.match(launcher, /& flutter devices/);
+  assert.match(launcher, /& flutter emulators/);
+  assert.match(launcher, /ConvertFrom-FlutterDeviceText/);
+  assert.match(launcher, /ConvertFrom-FlutterEmulatorText/);
+  assert.doesNotMatch(launcher, /flutter (devices|emulators) --machine/);
   assert.match(launcher, /Start-Native/);
 });
 
