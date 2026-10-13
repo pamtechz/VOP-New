@@ -154,6 +154,64 @@ credentials to third-party cloud testing systems. Google authentication and
 passkeys may require provider-appropriate signing fingerprints and validated
 domain association. Browser testing is not a substitute for device tests.
 
+## Reuse the Vercel project's public Firebase settings
+
+VOP can opt into pulling the *public client* configuration from your already
+linked **vop-new** Vercel project. The Vercel VITE_FIREBASE_APP_ID identifies
+the web app and must **never** be used as the Android Firebase app ID.
+
+First link this working copy of VOP-New to its existing Vercel project:
+
+    cd "C:\Users\user\Pictures\VOP New"
+    npm install -g vercel
+    vercel login
+    vercel link --project vop-new
+
+Then run from the native_android directory:
+
+    .\run_vop.ps1 -Mode Emulator -EmulatorId "Pixel10" -UseVercelEnv -VercelEnvironment production
+
+The existing VITE_FIREBASE_PROJECT_ID is checked against the package-matched
+Android google-services.json. If they disagree, the build fails rather than
+mixing Firebase projects. Android app ID, sender ID and Android-authorized API
+key still come from that existing Android registration, unless matching public
+Android-specific Vercel settings are configured as
+VOP_FIREBASE_ANDROID_APP_ID, VOP_FIREBASE_SENDER_ID and
+VOP_FIREBASE_ANDROID_API_KEY. VOP_API_BASE_URL may also be set in Vercel.
+Local ignored Vop_Android_Config.env settings remain optional and take
+precedence where nonempty; its example now contains placeholders only.
+
+Security: Vercel CLI env pull downloads the full set of Vercel environment
+variables to a random local temporary file, including server-side secrets.
+The launcher immediately filters the public allowlist and deletes the temporary
+file in a finally block. Use this option only on a trusted machine. NEVER
+pass FIREBASE_ADMIN_PRIVATE_KEY, service account credentials, payment keys,
+Vercel tokens or other server secrets through Flutter --dart-define. CI still
+builds using the already-registered public Android Firebase client.
+
+## Recover a Pixel emulator stuck offline
+
+If flutter devices says that emulator-5554 is offline, the virtual phone has
+started but Android is not ready. Wait for its home screen to appear and check:
+
+    adb devices -l
+    adb -s emulator-5554 shell getprop sys.boot_completed
+    flutter devices --device-timeout 60
+
+If it remains offline for several minutes, open Android Studio > Device
+Manager > Pixel10 > Cold Boot Now. If needed, close the emulator and restart
+the ADB server:
+
+    adb kill-server
+    adb start-server
+    flutter emulators --launch Pixel10
+
+As a last resort, Wipe Data in Device Manager can reset an AVD, but this
+**erases that virtual device's applications and data**. The launcher now waits
+for sys.boot_completed=1 and starts an explicitly selected Pixel10 even when
+Flutter's emulator table cannot be parsed. The Android SDK's emulator.exe
+-list-avds provides a fallback for the interactive device picker.
+
 ## Windows device build: repairing share_plus
 
 If the Android build reports `Unresolved reference 'ShareSuccessManager'` or
