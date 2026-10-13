@@ -92,10 +92,29 @@ function Start-Browser([string]$url) {
         default { "" }
     }
     if ($executable) {
-        if (!(Get-Command $executable -ErrorAction SilentlyContinue)) {
-            throw "$Browser is not registered on PATH. Retry with -Browser Default."
+        $command = Get-Command $executable -ErrorAction SilentlyContinue
+        $location = if ($command) { $command.Source } else { "" }
+        if (!$location) {
+            $browserFolder = if ($Browser -eq "Chrome") {
+                "Google\Chrome\Application"
+            } else {
+                "Microsoft\Edge\Application"
+            }
+            $installRoots = @(
+                $env:ProgramFiles,
+                [Environment]::GetEnvironmentVariable("ProgramFiles(x86)"),
+                $env:LOCALAPPDATA
+            )
+            foreach ($installRoot in $installRoots) {
+                if ([string]::IsNullOrWhiteSpace($installRoot)) { continue }
+                $candidate = Join-Path (Join-Path $installRoot $browserFolder) $executable
+                if (Test-Path -LiteralPath $candidate) { $location = $candidate; break }
+            }
         }
-        Start-Process -FilePath $executable -ArgumentList $url
+        if (!$location) {
+            throw "$Browser executable not found. Retry with -Browser Default."
+        }
+        Start-Process -FilePath $location -ArgumentList $url
     } else {
         Start-Process -FilePath $url
     }
