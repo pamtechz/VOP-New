@@ -35,3 +35,17 @@ if ($emulators[0].id -ne "Pixel10" -or $emulators[1].id -ne "RSSEDURMS_API_35") 
     throw "Emulator selection identifiers did not match Flutter output."
 }
 Write-Host "Flutter device and Android emulator text parser tests passed."
+
+$listedBySdk = @(
+    "Pixel10",
+    "RSSEDURMS_API_35",
+    "Warning: invalid metadata"
+)
+$sdkAvds = @(ConvertFrom-AndroidAvdList -Lines $listedBySdk)
+if ($sdkAvds.Count -ne 2) {
+    throw "Android SDK fallback inventory returned $($sdkAvds.Count) AVDs."
+}
+if ($sdkAvds[0].id -ne "Pixel10" -or $sdkAvds[1].id -ne "RSSEDURMS_API_35") {
+    throw "Android SDK AVD fallback did not preserve emulator IDs."
+}
+Write-Host "Android SDK AVD fallback parser tests passed."
