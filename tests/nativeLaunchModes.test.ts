@@ -94,6 +94,7 @@ test('emulator launch reports fatal Flutter exit before waiting or loading Verce
   assert.match(launcher, /\[switch\]\$SoftwareGraphics/);
   assert.match(launcher, /"-no-snapshot-load"/);
   assert.match(launcher, /"-gpu", "software"/);
+  assert.match(launcher, /\$bootAttempts = if \(\$ColdBoot -or \$SoftwareGraphics\) \{ 120 \} else \{ 90 \}/);
   assert.match(launcher, /Start-Process -FilePath \$emulatorExecutable/);
   assert.match(launcher, /shell getprop sys\.boot_completed/);
   assert.match(launcher, /Write-Host "Android \$target is booted and ready."/);
