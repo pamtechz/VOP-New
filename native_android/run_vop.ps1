@@ -215,7 +215,6 @@ function Show-Targets {
     }
 }
 
-Require-Flutter
 if ($Mode -eq "Menu") {
     Write-Host ""
     Write-Host "VOP: choose a run target"
@@ -238,6 +237,8 @@ if ($Mode -eq "Menu") {
         default { throw "Invalid option." }
     }
 }
+
+if ($Mode -ne "Browser") { Require-Flutter }
 
 switch ($Mode) {
     "USB" {
