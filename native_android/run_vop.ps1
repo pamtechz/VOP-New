@@ -205,21 +205,37 @@ function Start-Emulator {
             Start-Native (Select-Target $alreadyStarted $DeviceId "Android emulator")
             return
         }
+        # When an explicit AVD is supplied, launch it directly instead of
+        # depending on Flutter's AVD table (which can be incomplete on Windows).
+        $target = $EmulatorId
     } elseif ($running.Count -gt 0) {
         Start-Native (Select-Target $running $DeviceId "Android emulator")
         return
+    } else {
+        $androidEmulators = @(Get-AvailableEmulators)
+        if ($androidEmulators.Count -eq 0) {
+            throw "No Android Virtual Device detected. Check 'flutter emulators' or Android Studio > Device Manager."
+        }
+        $target = Select-Target $androidEmulators "" "Android virtual device"
     }
+
     $previousIds = @($running | ForEach-Object { [string]$_.id })
-    $androidEmulators = @(Get-AvailableEmulators)
-    if ($androidEmulators.Count -eq 0) {
-        throw "No Android Virtual Device found. In Android Studio open Device Manager > Create device."
-    }
-    $target = Select-Target $androidEmulators $EmulatorId "Android virtual device"
+    Write-Host "Starting Android virtual device $target ..."
     & flutter emulators --launch $target
-    if ($LASTEXITCODE -ne 0) { throw "Android emulator $target could not be started." }
-    Write-Host "Waiting for selected virtual device $target ..."
+    if ($LASTEXITCODE -ne 0) {
+        # Flutter can fail to launch an AVD that has already started but remains
+        # offline. Allow boot recovery only when ADB actually reports an offline
+        # emulator, otherwise surface the launch failure.
+        $adb = Resolve-Adb
+        $adbLines = @(& $adb devices)
+        if (@($adbLines | Where-Object { $_ -match '^emulator-\d+\s+offline' }).Count -eq 0) {
+            throw "Could not launch Android AVD $target. See Android Studio > Device Manager."
+        }
+        Write-Warning "An Android emulator is still offline; waiting for it to finish starting."
+    }
+    Write-Host "Waiting for $target to become ready. First boot may take several minutes..."
     $selectedRunning = @()
-    for ($attempt = 0; $attempt -lt 60; $attempt++) {
+    for ($attempt = 0; $attempt -lt 90; $attempt++) {
         $nowRunning = @(Get-AndroidDevices | Where-Object {
             $_.emulator -eq $true -or $_.id -match '^emulator-\d+$'
         })
@@ -227,11 +243,16 @@ function Start-Emulator {
             $_.emulatorId -eq $target -or
             (!$_.emulatorId -and $previousIds -notcontains [string]$_.id)
         })
-        if ($selectedRunning.Count -gt 0) { break }
+        if ($selectedRunning.Count -gt 0) {
+            $adb = Resolve-Adb
+            $ready = @(& $adb -s ([string]$selectedRunning[0].id) shell getprop sys.boot_completed 2>$null)
+            if ($LASTEXITCODE -eq 0 -and $ready -contains "1") { break }
+        }
+        $selectedRunning = @()
         Start-Sleep -Seconds 3
     }
     if ($selectedRunning.Count -eq 0) {
-        throw "Requested AVD $target did not appear; refusing to run on an unrelated emulator."
+        throw "AVD $target did not boot. If 'adb devices' reports offline after several minutes, Cold Boot it from Android Studio Device Manager, then restart ADB."
     }
     Start-Native (Select-Target $selectedRunning $DeviceId "Android emulator")
 }
