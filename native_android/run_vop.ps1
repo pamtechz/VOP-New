@@ -15,6 +15,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 Set-Location -LiteralPath $PSScriptRoot
+. (Join-Path $PSScriptRoot "tool\flutter_device_parser.ps1")
 
 function Require-Flutter {
     if (!(Get-Command flutter -ErrorAction SilentlyContinue)) {
@@ -38,14 +39,35 @@ function Resolve-Adb {
 }
 
 function Get-AndroidDevices {
-    $machineOutput = @(& flutter devices --machine)
-    if ($LASTEXITCODE -ne 0) { throw "Flutter could not list devices; run flutter doctor -v." }
-    try {
-        $parsed = ConvertFrom-Json -InputObject ($machineOutput -join [Environment]::NewLine)
-        return @($parsed | Where-Object { $_.targetPlatform -like "android-*" })
-    } catch {
-        throw "Unable to parse Flutter device list. Run flutter devices and verify the toolchain."
+    $deviceLines = @(& flutter devices)
+    if ($LASTEXITCODE -ne 0) {
+        throw "Flutter could not list devices. Run flutter doctor -v."
     }
+    $devices = @(ConvertFrom-FlutterDeviceText -Lines $deviceLines)
+    $emulators = @($devices | Where-Object { $_.emulator -eq $true })
+    if ($emulators.Count -gt 0) {
+        try {
+            $adb = Resolve-Adb
+            foreach ($device in $emulators) {
+                $rawAvd = @(& $adb -s ([string]$device.id) emu avd name 2>$null)
+                if ($LASTEXITCODE -ne 0) { continue }
+                $name = @($rawAvd | ForEach-Object { ([string]$_).Trim() } |
+                    Where-Object { $_ -and $_ -ne 'OK' } | Select-Object -First 1)
+                if ($name.Count -gt 0) { $device.emulatorId = [string]$name[0] }
+            }
+        } catch {
+            Write-Verbose "ADB could not identify one or more emulator AVD names."
+        }
+    }
+    return $devices
+}
+
+function Get-AvailableEmulators {
+    $emulatorLines = @(& flutter emulators)
+    if ($LASTEXITCODE -ne 0) {
+        throw "Flutter could not list emulators. Open Android Studio > Device Manager."
+    }
+    return @(ConvertFrom-FlutterEmulatorText -Lines $emulatorLines)
 }
 
 function Select-Target($devices, [string]$requested, [string]$kind) {
@@ -188,12 +210,7 @@ function Start-Emulator {
         return
     }
     $previousIds = @($running | ForEach-Object { [string]$_.id })
-    $machineOutput = @(& flutter emulators --machine)
-    if ($LASTEXITCODE -ne 0) { throw "Unable to list Android emulators. Open Android Studio > Device Manager." }
-    $emulators = @(ConvertFrom-Json -InputObject ($machineOutput -join [Environment]::NewLine))
-    $androidEmulators = @($emulators | Where-Object {
-        $_.platform -match "android" -or $_.id -match "android|pixel|avd" -or !$_.platform
-    })
+    $androidEmulators = @(Get-AvailableEmulators)
     if ($androidEmulators.Count -eq 0) {
         throw "No Android Virtual Device found. In Android Studio open Device Manager > Create device."
     }
