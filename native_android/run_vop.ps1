@@ -133,6 +133,10 @@ function Assert-WirelessAddress([string]$address) {
     }
 }
 
+function Test-WirelessDeviceId([string]$deviceId) {
+    return $deviceId -match '(:[0-9]+$|adb-tls-connect)'
+}
+
 function Start-Wireless {
     Write-Host "Android 11+ wireless debugging: computer and phone must share a Wi-Fi network."
     Write-Host "Phone: Settings > Developer options > Wireless debugging."
@@ -140,7 +144,7 @@ function Start-Wireless {
     $pair = $PairAddress
     $connect = $ConnectAddress
     $connected = @(Get-AndroidDevices | Where-Object {
-        $_.emulator -ne $true -and $_.id -match ':\d+$'
+        $_.emulator -ne $true -and (Test-WirelessDeviceId ([string]$_.id))
     })
     if (!$pair -and !$connect -and $connected.Count -eq 0) {
         $pair = Read-Host "Pairing IP:port (from 'Pair device with pairing code'; Enter to skip if already paired)"
@@ -162,7 +166,7 @@ function Start-Wireless {
     $targets = @()
     for ($attempt = 0; $attempt -lt 10; $attempt++) {
         $targets = @(Get-AndroidDevices | Where-Object {
-            $_.emulator -ne $true -and $_.id -match ':\d+$'
+            $_.emulator -ne $true -and (Test-WirelessDeviceId ([string]$_.id))
         })
         if ($targets.Count -gt 0) { break }
         Start-Sleep -Seconds 2
@@ -172,11 +176,91 @@ function Start-Wireless {
 }
 
 function Start-Emulator {
-    $running = @(Get-AndroidDevices | Where-Object { $_.emulator -eq $true -or $_.id -match '^emulator-\d+$' })
-    if ($running.Count -gt 0 -and !$EmulatorId) {
+    $running = @(Get-AndroidDevices | Where-Object { $_.emulator -eq $true -or $_.id -match '^emulator-\d+
+
+function Show-Targets {
+    Write-Host "--- Flutter devices ---"
+    & flutter devices
+    Write-Host "--- Android emulators ---"
+    & flutter emulators
+    Write-Host "--- Android Debug Bridge devices ---"
+    try {
+        $adb = Resolve-Adb
+        & $adb devices -l
+    } catch {
+        Write-Warning $_.Exception.Message
+    }
+}
+
+if ($Mode -eq "Menu") {
+    Write-Host ""
+    Write-Host "VOP: choose a run target"
+    Write-Host "  1  Android phone (USB)"
+    Write-Host "  2  Android phone (Wi-Fi / wireless debugging)"
+    Write-Host "  3  Android Studio emulator"
+    Write-Host "  4  VOP web portal in browser (not the native APK)"
+    Write-Host "  5  Android APK in a cloud browser emulator"
+    Write-Host "  6  List connected devices and emulators"
+    Write-Host "  0  Exit"
+    $selection = Read-Host "Option"
+    $Mode = switch ($selection) {
+        "1" { "USB" }
+        "2" { "WiFi" }
+        "3" { "Emulator" }
+        "4" { "Browser" }
+        "5" { "Cloud" }
+        "6" { "List" }
+        "0" { return }
+        default { throw "Invalid option." }
+    }
+}
+
+if ($Mode -ne "Browser") { Require-Flutter }
+
+switch ($Mode) {
+    "USB" {
+        $targets = @(Get-AndroidDevices | Where-Object {
+            $_.emulator -ne $true -and !(Test-WirelessDeviceId ([string]$_.id))
+        })
+        Start-Native (Select-Target $targets $DeviceId "USB Android")
+    }
+    "WiFi" { Start-Wireless }
+    "Emulator" { Start-Emulator }
+    "Browser" {
+        Write-Host "Opening the deployed VOP web portal, not the Android APK."
+        Write-Host "For an actual Android APK in a browser, select -Mode Cloud."
+        Start-Browser "https://vopafrica.vercel.app"
+    }
+    "Cloud" {
+        Write-Host "Building the real Android debug APK; an upload to the cloud provider is a separate action."
+        & (Join-Path $PSScriptRoot "run_android.ps1") -BuildApk -EnvFile $EnvFile -RepairSharePlus:$RepairSharePlus
+        if (!$?) { throw "VOP APK build failed." }
+        $apk = Join-Path $PSScriptRoot "build\app\outputs\flutter-apk\app-debug.apk"
+        if (!(Test-Path -LiteralPath $apk)) { throw "APK was not found at $apk" }
+        Write-Host "APK ready: $apk"
+        Write-Host "Upload it manually. Cloud emulators may not support actual phone biometric or passkey hardware."
+        $uploadUrl = if ($CloudProvider -eq "BrowserStack") {
+            "https://www.browserstack.com/app-live"
+        } else {
+            "https://appetize.io/upload"
+        }
+        Start-Browser $uploadUrl
+    }
+    "List" { Show-Targets }
+}
+ })
+    if ($EmulatorId) {
+        $alreadyStarted = @($running | Where-Object { $_.emulatorId -eq $EmulatorId })
+        if ($alreadyStarted.Count -gt 0) {
+            Start-Native (Select-Target $alreadyStarted $DeviceId "Android emulator")
+            return
+        }
+    } elseif ($running.Count -gt 0) {
         Start-Native (Select-Target $running $DeviceId "Android emulator")
         return
     }
+
+    $previousIds = @($running | ForEach-Object { [string]$_.id })
     $machineOutput = @(& flutter emulators --machine)
     if ($LASTEXITCODE -ne 0) { throw "Unable to list Android emulators. Open Android Studio > Device Manager." }
     $emulators = @(ConvertFrom-Json -InputObject ($machineOutput -join [Environment]::NewLine))
@@ -189,16 +273,95 @@ function Start-Emulator {
     $target = Select-Target $androidEmulators $EmulatorId "Android virtual device"
     & flutter emulators --launch $target
     if ($LASTEXITCODE -ne 0) { throw "Android emulator $target could not be started." }
-    Write-Host "Waiting for the virtual Android device to appear..."
-    $running = @()
+    Write-Host "Waiting for selected virtual device $target ..."
+    $selectedRunning = @()
     for ($attempt = 0; $attempt -lt 60; $attempt++) {
-        $running = @(Get-AndroidDevices | Where-Object {
-            $_.emulator -eq $true -or $_.id -match '^emulator-\d+$'
+        $nowRunning = @(Get-AndroidDevices | Where-Object {
+            $_.emulator -eq $true -or $_.id -match '^emulator-\d+
+
+function Show-Targets {
+    Write-Host "--- Flutter devices ---"
+    & flutter devices
+    Write-Host "--- Android emulators ---"
+    & flutter emulators
+    Write-Host "--- Android Debug Bridge devices ---"
+    try {
+        $adb = Resolve-Adb
+        & $adb devices -l
+    } catch {
+        Write-Warning $_.Exception.Message
+    }
+}
+
+if ($Mode -eq "Menu") {
+    Write-Host ""
+    Write-Host "VOP: choose a run target"
+    Write-Host "  1  Android phone (USB)"
+    Write-Host "  2  Android phone (Wi-Fi / wireless debugging)"
+    Write-Host "  3  Android Studio emulator"
+    Write-Host "  4  VOP web portal in browser (not the native APK)"
+    Write-Host "  5  Android APK in a cloud browser emulator"
+    Write-Host "  6  List connected devices and emulators"
+    Write-Host "  0  Exit"
+    $selection = Read-Host "Option"
+    $Mode = switch ($selection) {
+        "1" { "USB" }
+        "2" { "WiFi" }
+        "3" { "Emulator" }
+        "4" { "Browser" }
+        "5" { "Cloud" }
+        "6" { "List" }
+        "0" { return }
+        default { throw "Invalid option." }
+    }
+}
+
+if ($Mode -ne "Browser") { Require-Flutter }
+
+switch ($Mode) {
+    "USB" {
+        $targets = @(Get-AndroidDevices | Where-Object {
+            $_.emulator -ne $true -and !(Test-WirelessDeviceId ([string]$_.id))
         })
-        if ($running.Count -gt 0) { break }
+        Start-Native (Select-Target $targets $DeviceId "USB Android")
+    }
+    "WiFi" { Start-Wireless }
+    "Emulator" { Start-Emulator }
+    "Browser" {
+        Write-Host "Opening the deployed VOP web portal, not the Android APK."
+        Write-Host "For an actual Android APK in a browser, select -Mode Cloud."
+        Start-Browser "https://vopafrica.vercel.app"
+    }
+    "Cloud" {
+        Write-Host "Building the real Android debug APK; an upload to the cloud provider is a separate action."
+        & (Join-Path $PSScriptRoot "run_android.ps1") -BuildApk -EnvFile $EnvFile -RepairSharePlus:$RepairSharePlus
+        if (!$?) { throw "VOP APK build failed." }
+        $apk = Join-Path $PSScriptRoot "build\app\outputs\flutter-apk\app-debug.apk"
+        if (!(Test-Path -LiteralPath $apk)) { throw "APK was not found at $apk" }
+        Write-Host "APK ready: $apk"
+        Write-Host "Upload it manually. Cloud emulators may not support actual phone biometric or passkey hardware."
+        $uploadUrl = if ($CloudProvider -eq "BrowserStack") {
+            "https://www.browserstack.com/app-live"
+        } else {
+            "https://appetize.io/upload"
+        }
+        Start-Browser $uploadUrl
+    }
+    "List" { Show-Targets }
+}
+
+        })
+        $selectedRunning = @($nowRunning | Where-Object {
+            $_.emulatorId -eq $target -or
+            (!$_.emulatorId -and $previousIds -notcontains [string]$_.id)
+        })
+        if ($selectedRunning.Count -gt 0) { break }
         Start-Sleep -Seconds 3
     }
-    Start-Native (Select-Target $running $DeviceId "Android emulator")
+    if ($selectedRunning.Count -eq 0) {
+        throw "Requested AVD $target did not appear; refusing to run on an unrelated emulator."
+    }
+    Start-Native (Select-Target $selectedRunning $DeviceId "Android emulator")
 }
 
 function Show-Targets {
@@ -243,7 +406,7 @@ if ($Mode -ne "Browser") { Require-Flutter }
 switch ($Mode) {
     "USB" {
         $targets = @(Get-AndroidDevices | Where-Object {
-            $_.emulator -ne $true -and $_.id -notmatch ':\d+$'
+            $_.emulator -ne $true -and !(Test-WirelessDeviceId ([string]$_.id))
         })
         Start-Native (Select-Target $targets $DeviceId "USB Android")
     }
