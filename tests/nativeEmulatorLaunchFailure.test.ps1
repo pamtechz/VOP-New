@@ -1,0 +1,44 @@
+$ErrorActionPreference = "Stop"
+$root = Split-Path -Parent $PSScriptRoot
+$launcher = Join-Path $root "native_android\run_vop.ps1"
+$stubDir = Join-Path ([IO.Path]::GetTempPath()) ("vop-stub-flutter-" + [Guid]::NewGuid().ToString("N"))
+New-Item -ItemType Directory -Path $stubDir -Force | Out-Null
+
+$stub = @'
+@echo off
+if "%~1"=="devices" (
+    echo Found 0 connected devices:
+    exit /b 0
+)
+if "%~1"=="emulators" (
+    if "%~2"=="--launch" (
+        echo The Android emulator exited with code 1
+        exit /b 1
+    )
+)
+exit /b 0
+'@
+Set-Content -LiteralPath (Join-Path $stubDir "flutter.cmd") -Value $stub -Encoding ascii
+
+$originalPath = $env:PATH
+try {
+    $env:PATH = "$stubDir;$originalPath"
+    $start = Get-Date
+    $output = & (Join-Path $PSHOME "pwsh.exe") -NoProfile -NonInteractive -File $launcher -Mode Emulator -EmulatorId Pixel10 2>&1 | Out-String
+    $code = $LASTEXITCODE
+    $elapsed = ((Get-Date) - $start).TotalSeconds
+    if ($code -eq 0) { throw "Launcher incorrectly reported success after Flutter emulator returned code 1." }
+    if ($output -notmatch 'failed to start \(exit code 1\)') {
+        throw "The launcher did not surface the early exit code. Output: $output"
+    }
+    if ($output -notmatch 'not Firebase') {
+        throw "The launcher did not distinguish Android AVD startup failure from Firebase."
+    }
+    if ($elapsed -gt 25) {
+        throw "The launcher waited $elapsed seconds after fatal startup failure; expected immediate abort."
+    }
+    Write-Host "Emulator nonzero-exit handling passed in $([math]::Round($elapsed,1)) seconds."
+} finally {
+    $env:PATH = $originalPath
+    Remove-Item -LiteralPath $stubDir -Recurse -Force -ErrorAction SilentlyContinue
+}
