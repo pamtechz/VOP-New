@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../core/vop_api.dart';
+import '../core/foreground_refresh.dart';
 import 'learner_support_screen.dart';
 
 List<Map<String,dynamic>> rows(dynamic input)=>
@@ -78,14 +79,28 @@ class _MentorConversationState extends State<MentorConversation> {
   final composer=TextEditingController();
   final references=<StudySupportReference>[];
   late Future<Map<String,dynamic>> messages;
+  Map<String,dynamic>? lastMessages;
+  ForegroundRefreshController? autoRefresh;
   bool sending=false;
-  @override void initState(){super.initState();refresh();}
-  void refresh(){
-    messages=widget.api.action('/api/mentorship',{
-      'action':'messages','conversationId':widget.data['id'],
+  @override void initState(){
+    super.initState();
+    refresh();
+    autoRefresh=ForegroundRefreshController(onRefresh:(){
+      if(mounted&&ModalRoute.of(context)?.isCurrent==true){
+        setState(refresh);
+      }
     });
   }
-  @override void dispose(){composer.dispose();super.dispose();}
+  void refresh(){
+    final request=widget.api.action('/api/mentorship',{
+      'action':'messages','conversationId':widget.data['id'],
+    });
+    messages=request;
+    request.then((response){
+      if(mounted)setState(()=>lastMessages=response);
+    }).catchError((Object ignored){});
+  }
+  @override void dispose(){autoRefresh?.dispose();composer.dispose();super.dispose();}
   Future<void> attach() async {
     final reference=await pickStudySupportReference(context,widget.api);
     if(!mounted||reference==null)return;
@@ -162,11 +177,11 @@ class _MentorConversationState extends State<MentorConversation> {
     body:Column(children:[
       Expanded(child:FutureBuilder<Map<String,dynamic>>(
         future:messages,builder:(context,s){
-          if(s.connectionState!=ConnectionState.done){
+          if(s.connectionState!=ConnectionState.done&&s.data==null&&lastMessages==null){
             return const Center(child:CircularProgressIndicator());
           }
-          if(s.hasError)return Center(child:Text('${s.error}'));
-          final list=rows(s.data?['items']);
+          if(s.hasError&&lastMessages==null)return Center(child:Text('${s.error}'));
+          final list=rows(s.data?['items']??lastMessages?['items']);
           final selfId=FirebaseAuth.instance.currentUser?.uid??'';
           return ListView.builder(
             padding:const EdgeInsets.all(14),itemCount:list.length,

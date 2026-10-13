@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../core/vop_api.dart';
+import '../core/foreground_refresh.dart';
 import '../widgets/vop_ui.dart';
 
 List<Map<String, dynamic>> _supportRows(dynamic input) => input is List
@@ -525,6 +526,8 @@ class _SupportThreadScreenState extends State<SupportThreadScreen> {
   final composer = TextEditingController();
   final references = <StudySupportReference>[];
   late Future<Map<String, dynamic>> messages;
+  Map<String, dynamic>? lastMessages;
+  ForegroundRefreshController? autoRefresh;
   bool sending = false;
 
   String get requestId => (widget.request['id'] ?? '').toString();
@@ -533,15 +536,25 @@ class _SupportThreadScreenState extends State<SupportThreadScreen> {
   void initState() {
     super.initState();
     _refresh();
+    autoRefresh = ForegroundRefreshController(onRefresh: () {
+      if (mounted && ModalRoute.of(context)?.isCurrent == true) {
+        setState(_refresh);
+      }
+    });
   }
 
   void _refresh() {
-    messages = widget.api.action('/api/mentorship',
+    final request = widget.api.action('/api/mentorship',
       {'action': 'supportRequestMessages', 'requestId': requestId});
+    messages = request;
+    request.then((result) {
+      if (mounted) setState(() => lastMessages = result);
+    }).catchError((Object ignored) {});
   }
 
   @override
   void dispose() {
+    autoRefresh?.dispose();
     composer.dispose();
     super.dispose();
   }
@@ -637,15 +650,16 @@ class _SupportThreadScreenState extends State<SupportThreadScreen> {
       Expanded(child: FutureBuilder<Map<String, dynamic>>(
         future: messages,
         builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
+          if (snapshot.connectionState != ConnectionState.done &&
+              snapshot.data == null && lastMessages == null) {
             return const VopSkeleton(rows: 4);
           }
-          if (snapshot.hasError) {
+          if (snapshot.hasError && lastMessages == null) {
             return VopEmpty(icon: Icons.wifi_off_outlined,
                 message: snapshot.error.toString(),
                 onRetry: () => setState(_refresh));
           }
-          final items = _supportRows(snapshot.data?['items']);
+          final items = _supportRows(snapshot.data?['items'] ?? lastMessages?['items']);
           final selfId = FirebaseAuth.instance.currentUser?.uid ?? '';
           return RefreshIndicator(
             onRefresh: () async { setState(_refresh); await messages; },
