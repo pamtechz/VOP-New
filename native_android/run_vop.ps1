@@ -10,7 +10,10 @@ param(
     [ValidateSet("Appetize", "BrowserStack")]
     [string]$CloudProvider = "Appetize",
     [string]$EnvFile = "Vop_Android_Config.env",
-    [switch]$RepairSharePlus
+    [switch]$RepairSharePlus,
+    [switch]$UseVercelEnv,
+    [ValidateSet("production", "preview", "development")]
+    [string]$VercelEnvironment = "production"
 )
 
 $ErrorActionPreference = "Stop"
@@ -129,6 +132,8 @@ function Start-Native([string]$targetId) {
         DeviceId = $targetId
         EnvFile = $EnvFile
         RepairSharePlus = [bool]$RepairSharePlus
+        UseVercelEnv = [bool]$UseVercelEnv
+        VercelEnvironment = $VercelEnvironment
     }
     & (Join-Path $PSScriptRoot "run_android.ps1") @args
     if (!$?) { throw "VOP Flutter launch failed." }
@@ -339,7 +344,7 @@ switch ($Mode) {
     }
     "Cloud" {
         Write-Host "Building the real Android debug APK; an upload to the cloud provider is a separate action."
-        & (Join-Path $PSScriptRoot "run_android.ps1") -BuildApk -EnvFile $EnvFile -RepairSharePlus:$RepairSharePlus
+        & (Join-Path $PSScriptRoot "run_android.ps1") -BuildApk -EnvFile $EnvFile -RepairSharePlus:$RepairSharePlus -UseVercelEnv:$UseVercelEnv -VercelEnvironment $VercelEnvironment
         if (!$?) { throw "VOP APK build failed." }
         $apk = Join-Path $PSScriptRoot "build\app\outputs\flutter-apk\app-debug.apk"
         if (!(Test-Path -LiteralPath $apk)) { throw "APK was not found at $apk" }
