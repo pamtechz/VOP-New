@@ -10,7 +10,10 @@ param(
     [ValidateSet("Appetize", "BrowserStack")]
     [string]$CloudProvider = "Appetize",
     [string]$EnvFile = "Vop_Android_Config.env",
-    [switch]$RepairSharePlus
+    [switch]$RepairSharePlus,
+    [switch]$UseVercelEnv,
+    [ValidateSet("production", "preview", "development")]
+    [string]$VercelEnvironment = "production"
 )
 
 $ErrorActionPreference = "Stop"
@@ -62,12 +65,39 @@ function Get-AndroidDevices {
     return $devices
 }
 
-function Get-AvailableEmulators {
-    $emulatorLines = @(& flutter emulators)
-    if ($LASTEXITCODE -ne 0) {
-        throw "Flutter could not list emulators. Open Android Studio > Device Manager."
+function Resolve-AndroidEmulatorExecutable {
+    $candidate = Get-Command emulator.exe -ErrorAction SilentlyContinue
+    if ($candidate) { return $candidate.Source }
+    $roots = @($env:ANDROID_SDK_ROOT, $env:ANDROID_HOME)
+    if ($env:LOCALAPPDATA) {
+        $roots += (Join-Path $env:LOCALAPPDATA "Android\Sdk")
     }
-    return @(ConvertFrom-FlutterEmulatorText -Lines $emulatorLines)
+    foreach ($root in $roots) {
+        if ([string]::IsNullOrWhiteSpace($root)) { continue }
+        $path = Join-Path $root "emulator\emulator.exe"
+        if (Test-Path -LiteralPath $path) { return $path }
+    }
+    return ""
+}
+
+function Get-AvailableEmulators {
+    $lines = @(& flutter emulators)
+    $flutterAvds = if ($LASTEXITCODE -eq 0) {
+        @(ConvertFrom-FlutterEmulatorText -Lines $lines)
+    } else { @() }
+    if ($flutterAvds.Count -gt 0) { return $flutterAvds }
+
+    # Use Android's own emulator inventory if Flutter prints an alternate
+    # table layout that cannot be parsed by the PowerShell console.
+    $emulatorExecutable = Resolve-AndroidEmulatorExecutable
+    if ($emulatorExecutable) {
+        $sdkAvds = @(& $emulatorExecutable -list-avds)
+        if ($LASTEXITCODE -eq 0) {
+            $fromSdk = @(ConvertFrom-AndroidAvdList -Lines $sdkAvds)
+            if ($fromSdk.Count -gt 0) { return $fromSdk }
+        }
+    }
+    return @()
 }
 
 function Select-Target($devices, [string]$requested, [string]$kind) {
@@ -102,6 +132,8 @@ function Start-Native([string]$targetId) {
         DeviceId = $targetId
         EnvFile = $EnvFile
         RepairSharePlus = [bool]$RepairSharePlus
+        UseVercelEnv = [bool]$UseVercelEnv
+        VercelEnvironment = $VercelEnvironment
     }
     & (Join-Path $PSScriptRoot "run_android.ps1") @args
     if (!$?) { throw "VOP Flutter launch failed." }
@@ -205,33 +237,46 @@ function Start-Emulator {
             Start-Native (Select-Target $alreadyStarted $DeviceId "Android emulator")
             return
         }
+        # When an explicit AVD is supplied, launch it directly instead of
+        # depending on Flutter's AVD table (which can be incomplete on Windows).
+        $target = $EmulatorId
     } elseif ($running.Count -gt 0) {
         Start-Native (Select-Target $running $DeviceId "Android emulator")
         return
+    } else {
+        $androidEmulators = @(Get-AvailableEmulators)
+        if ($androidEmulators.Count -eq 0) {
+            throw "No Android Virtual Device detected. Check 'flutter emulators' or Android Studio > Device Manager."
+        }
+        $target = Select-Target $androidEmulators "" "Android virtual device"
     }
-    $previousIds = @($running | ForEach-Object { [string]$_.id })
-    $androidEmulators = @(Get-AvailableEmulators)
-    if ($androidEmulators.Count -eq 0) {
-        throw "No Android Virtual Device found. In Android Studio open Device Manager > Create device."
-    }
-    $target = Select-Target $androidEmulators $EmulatorId "Android virtual device"
+
+    Write-Host "Starting Android virtual device $target ..."
     & flutter emulators --launch $target
-    if ($LASTEXITCODE -ne 0) { throw "Android emulator $target could not be started." }
-    Write-Host "Waiting for selected virtual device $target ..."
+    if ($LASTEXITCODE -ne 0) {
+        # Do not trust an arbitrary offline emulator: wait only for a device
+        # whose reported AVD name is exactly the selected target.
+        Write-Warning "Flutter could not start $target; checking whether that exact AVD is already booting."
+    }
+    Write-Host "Waiting for $target to become ready. First boot may take several minutes..."
     $selectedRunning = @()
-    for ($attempt = 0; $attempt -lt 60; $attempt++) {
+    for ($attempt = 0; $attempt -lt 90; $attempt++) {
         $nowRunning = @(Get-AndroidDevices | Where-Object {
             $_.emulator -eq $true -or $_.id -match '^emulator-\d+$'
         })
         $selectedRunning = @($nowRunning | Where-Object {
-            $_.emulatorId -eq $target -or
-            (!$_.emulatorId -and $previousIds -notcontains [string]$_.id)
+            $_.emulatorId -eq $target
         })
-        if ($selectedRunning.Count -gt 0) { break }
+        if ($selectedRunning.Count -gt 0) {
+            $adb = Resolve-Adb
+            $ready = @(& $adb -s ([string]$selectedRunning[0].id) shell getprop sys.boot_completed 2>$null)
+            if ($LASTEXITCODE -eq 0 -and $ready -contains "1") { break }
+        }
+        $selectedRunning = @()
         Start-Sleep -Seconds 3
     }
     if ($selectedRunning.Count -eq 0) {
-        throw "Requested AVD $target did not appear; refusing to run on an unrelated emulator."
+        throw "AVD $target did not boot. If 'adb devices' reports offline after several minutes, Cold Boot it from Android Studio Device Manager, then restart ADB."
     }
     Start-Native (Select-Target $selectedRunning $DeviceId "Android emulator")
 }
@@ -291,7 +336,7 @@ switch ($Mode) {
     }
     "Cloud" {
         Write-Host "Building the real Android debug APK; an upload to the cloud provider is a separate action."
-        & (Join-Path $PSScriptRoot "run_android.ps1") -BuildApk -EnvFile $EnvFile -RepairSharePlus:$RepairSharePlus
+        & (Join-Path $PSScriptRoot "run_android.ps1") -BuildApk -EnvFile $EnvFile -RepairSharePlus:$RepairSharePlus -UseVercelEnv:$UseVercelEnv -VercelEnvironment $VercelEnvironment
         if (!$?) { throw "VOP APK build failed." }
         $apk = Join-Path $PSScriptRoot "build\app\outputs\flutter-apk\app-debug.apk"
         if (!(Test-Path -LiteralPath $apk)) { throw "APK was not found at $apk" }
