@@ -79,6 +79,8 @@ test('Vercel import is opt-in and never puts web Firebase app ID in native confi
   assert.match(native, /The web VITE_FIREBASE_APP_ID is deliberately NEVER used for Android/);
   assert.match(config, /Remove-Item -LiteralPath \$tempFile -Force/);
   assert.match(config, /ConvertFrom-VercelClientEnvironmentLines/);
+  assert.match(native, /The Vercel \$androidKey does not match/);
+  assert.match(native, /app ID and sender ID do not belong to the same project number/);
   assert.doesNotMatch(example, /VOP_FIREBASE_PROJECT_ID=voiceofprophecy/);
   assert.doesNotMatch(example, /VOP_API_BASE_URL=https:\/\//);
 });
