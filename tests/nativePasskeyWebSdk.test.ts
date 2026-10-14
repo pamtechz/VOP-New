@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
+import { createHash } from 'node:crypto';
 
 test('pinned web passkey bundle exposes a callable authenticator initializer', () => {
   const bundle = readFileSync('native_android/web/passkeys-bundle.js', 'utf8');
@@ -17,6 +18,16 @@ test('pinned web passkey bundle exposes a callable authenticator initializer', (
   assert.equal(typeof sdk.login, 'function');
   assert.doesNotThrow(() => sdk.init?.(),
     'web plugin registration invokes PasskeyAuthenticator.init before runApp');
+});
+
+test('vendored passkey SDK matches the exact reviewed Corbado 2.4.0 git blob',()=>{
+  const bundle=readFileSync('native_android/web/passkeys-bundle.js');
+  const gitBlob=createHash('sha1')
+    .update('blob '+bundle.length+'\0')
+    .update(bundle)
+    .digest('hex');
+  assert.equal(gitBlob,'fbec4a7969a50b52e12e452ce8032cd3a126dc31',
+    'unexpected modifications to the upstream 2.4.0 browser SDK require review and a new checksum');
 });
 
 test('web loader loads SDK synchronously BEFORE async Flutter bootstrap', () => {
