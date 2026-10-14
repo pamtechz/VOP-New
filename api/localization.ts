@@ -1,3 +1,4 @@
+import { applyFlutterPreviewCors } from '../server/flutterPreviewCors.js';
 import { saveLocaleTranslations, translationKey } from '../server/localization.js';
 import { isEnglishLocale, localeAliases } from '../shared/locales.js';
 import { FieldValue } from 'firebase-admin/firestore';
@@ -42,6 +43,7 @@ async function resolveLocale(db: FirebaseFirestore.Firestore, requested:string){
 }
 
 export default async function handler(req:Request,res:Response){
+  if (applyFlutterPreviewCors(req, res)) return;
   try{
     const db=getAdminDb();
     if(req.method==='GET'){
