@@ -1,0 +1,9 @@
+{
+  "name": "Voice of Prophecy",
+  "short_name": "VOP",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#071a33",
+  "theme_color": "#071a33",
+  "description": "Voice of Prophecy Bible study and mentoring"
+}
