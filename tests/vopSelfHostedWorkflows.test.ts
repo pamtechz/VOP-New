@@ -22,6 +22,7 @@ test('every VOP GitHub job uses the KASAINSTITUTE self-hosted runner, never GitH
     for(const runner of runners){
       assert.match(runner,/self-hosted/,path+' contains a hosted Actions job');
       assert.match(runner,/KASAINSTITUTE/,path+' has no explicit trusted runner label');
+      assert.match(runner,/Windows/,path+' must use the trusted Windows runner platform');
       assert.doesNotMatch(runner,/(?:ubuntu|windows|macos)-latest/);
     }
   }
