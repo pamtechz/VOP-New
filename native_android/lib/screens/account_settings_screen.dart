@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import '../core/vop_api.dart';
 import '../core/vop_i18n.dart';
 import 'offline_studies_screen.dart';
@@ -39,7 +40,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     super.initState();
     _load();
     _loadSecurityActivity();
-    _loadNativePasskeys();
+    if (!kIsWeb) _loadNativePasskeys();
     _loadAuxiliary();
   }
   @override void dispose(){
@@ -433,6 +434,10 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     return '${material.formatShortDate(date)} · ${TimeOfDay.fromDateTime(date).format(context)}';
   }
   Future<bool> _confirmDeviceIdentity()async{
+    if (kIsWeb) {
+      if (mounted) setState(() => error = 'Device verification for sensitive actions requires the Android app.');
+      return false;
+    }
     final verifier=LocalAuthentication();
     try{
       if(!await verifier.isDeviceSupported()){
@@ -551,14 +556,14 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
           },'Password reset email requested. Check your inbox.');
         }),
       const Divider(),
-      ListTile(contentPadding:EdgeInsets.zero,
+      if(!kIsWeb) ListTile(contentPadding:EdgeInsets.zero,
         leading:const Icon(Icons.fingerprint),
         title:const Text('Biometric or screen-lock verification'),
         subtitle:const Text('Confirm your identity for sensitive actions.'),
         trailing:const Icon(Icons.chevron_right),
         onTap:_checkBiometrics),
       const Divider(),
-      ListTile(contentPadding:EdgeInsets.zero,
+      if(!kIsWeb) ListTile(contentPadding:EdgeInsets.zero,
         leading:const Icon(Icons.key_outlined),
         title:const Text('Passkeys'),
         subtitle:const Text('Sign in with your device lock, fingerprint or face.'),
@@ -566,7 +571,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         enabled:!saving,onTap:_registerNativePasskey),
       if(passkeyError!=null)
         Text(passkeyError!,style:TextStyle(color:Theme.of(context).colorScheme.error)),
-      ...passkeyItems.map((item)=>ListTile(
+      if(!kIsWeb) ...passkeyItems.map((item)=>ListTile(
         contentPadding:EdgeInsets.zero,dense:true,
         title:Text((item['label']??'Passkey').toString()),
         subtitle:Text((item['createdAt']??'').toString()),
