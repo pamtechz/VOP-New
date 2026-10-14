@@ -1,6 +1,6 @@
-# Invoke Vercel via its Windows command shim. The vercel.ps1 wrapper can
-# convert benign version/status text on stderr into a terminating error when
-# Windows PowerShell 5.1 uses ErrorActionPreference Stop.
+# Run npm-installed Vercel's Node entrypoint directly. This avoids both
+# Windows PowerShell converting a benign native stderr banner into an error
+# and cmd.exe expanding %NAME% in valid paths or rejecting UNC working dirs.
 function Invoke-VopVercelEnvironmentPull {
     param(
         [Parameter(Mandatory=$true)]
@@ -12,26 +12,34 @@ function Invoke-VopVercelEnvironmentPull {
     )
 
     $vercel = Get-Command -Name "vercel.cmd" -CommandType Application -ErrorAction SilentlyContinue
-    if (!$vercel) {
-        throw "Vercel CLI Windows executable (vercel.cmd) was not found. Run npm install -g vercel and vercel login."
+    $node = Get-Command -Name "node.exe" -CommandType Application -ErrorAction SilentlyContinue
+    if (!$vercel -or !$node) {
+        throw "Vercel CLI and Node.js Windows executables are required. Run npm install -g vercel and vercel login."
     }
     if (!(Test-Path -LiteralPath $ProjectRoot -PathType Container)) {
         throw "The Vercel project directory does not exist."
     }
-    $cmdExe = if ($env:ComSpec) { $env:ComSpec } else { "cmd.exe" }
+    $entrypoint = Join-Path (Split-Path -Parent $vercel.Source) "node_modules\vercel\dist\vc.js"
+    if (!(Test-Path -LiteralPath $entrypoint -PathType Leaf)) {
+        throw "The Vercel CLI Node entrypoint was not found alongside vercel.cmd. Reinstall Vercel with npm install -g vercel."
+    }
     $logBase = Join-Path ([IO.Path]::GetTempPath()) ("vop-vercel-cli-" + [Guid]::NewGuid().ToString("N"))
     $stdoutPath = $logBase + ".stdout"
     $stderrPath = $logBase + ".stderr"
     try {
-        # cmd /S /C uses outer quotes around the quoted binary and destination.
-        # Environment is constrained to a ValidateSet, never unchecked input.
-        $commandLine = '""' + $vercel.Source + '" env pull "' +
-            $Destination + '" --environment=' + $Environment + ' --yes"'
-        $process = Start-Process -FilePath $cmdExe -WorkingDirectory $ProjectRoot -ArgumentList @("/D", "/S", "/C", $commandLine) -Wait -PassThru -NoNewWindow -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath
+        # Start Node itself, NOT cmd.exe/vercel.ps1, so paths with literal %
+        # markers are preserved. Use an independent local working directory
+        # and Vercel's documented --cwd to support linked UNC checkouts.
+        $arguments = @(
+            ('"' + $entrypoint + '"'),
+            "--cwd", ('"' + $ProjectRoot + '"'),
+            "env", "pull", ('"' + $Destination + '"'),
+            ("--environment=" + $Environment), "--yes"
+        )
+        $process = Start-Process -FilePath $node.Source -WorkingDirectory ([IO.Path]::GetTempPath()) -ArgumentList $arguments -Wait -PassThru -NoNewWindow -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath
         if ($null -eq $process -or $process.ExitCode -ne 0 -or
             !(Test-Path -LiteralPath $Destination -PathType Leaf)) {
-            # Do not print raw CLI output because it may contain environment
-            # metadata. Parent callers delete the full downloaded env file.
+            # Do not print raw CLI output: it can reveal environment metadata.
             $exitDescription = if ($null -eq $process) { "could not start" }
                                else { "exit code $($process.ExitCode)" }
             throw "Vercel env pull failed ($exitDescription). Verify vercel login, the linked vop-new project, and access to the $Environment environment."

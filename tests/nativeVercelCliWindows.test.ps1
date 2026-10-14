@@ -2,62 +2,75 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 . (Join-Path $root "native_android\tool\vercel_cli.ps1")
 
-# Reproduce Vercel CLI 63.1.2: write its version banner to stderr even when
-# the command succeeds. The parent uses ErrorActionPreference Stop.
+# Reproduce Vercel 63 writing its version to stderr on successful exit.
+# Verify that Vercel's Node entrypoint gets the exact unexpanded --cwd path.
 $stubDir = Join-Path ([IO.Path]::GetTempPath()) ("vop-vercel-cli-test-" + [Guid]::NewGuid().ToString("N"))
-New-Item -ItemType Directory -Path $stubDir -Force | Out-Null
-$stub = @'
+$nodeDir = Join-Path $stubDir "node_modules\vercel\dist"
+$projectRoot = Join-Path $stubDir "project with %VOP_DO_NOT_EXPAND%\VOP-New"
+New-Item -ItemType Directory -Path $nodeDir -Force | Out-Null
+New-Item -ItemType Directory -Path $projectRoot -Force | Out-Null
+$shim = @'
 @echo off
->&2 echo Vercel CLI 63.1.2 (Node.js 22.16.0)
-if not "%~1"=="env" exit /b 3
-if not "%~2"=="pull" exit /b 4
-(
-echo VITE_FIREBASE_API_KEY=public-test-key
-echo VITE_FIREBASE_APP_ID=1:12345:web:abcde
-echo VITE_FIREBASE_PROJECT_ID=test-project
-echo VITE_FIREBASE_AUTH_DOMAIN=test-project.firebaseapp.com
-) > "%~3"
-exit /b 0
+>&2 echo Invalid call to vercel.cmd shim
+exit /b 42
 '@
-Set-Content -LiteralPath (Join-Path $stubDir "vercel.cmd") -Value $stub -Encoding ascii
+Set-Content -LiteralPath (Join-Path $stubDir "vercel.cmd") -Value $shim -Encoding ascii
+$js = @'
+const fs = require('node:fs');
+const args = process.argv.slice(2);
+process.stderr.write('Vercel CLI 63.1.2 (Node.js 22.16.0)\n');
+if (args[0] !== '--cwd' || args[1] !== process.env.VOP_TEST_PROJECT_ROOT ||
+    args[2] !== 'env' || args[3] !== 'pull') {
+  process.stderr.write('Wrong current project or argv\n');
+  process.exit(9);
+}
+if (process.env.VOP_TEST_FAIL === '1') process.exit(7);
+const file = args[4];
+fs.writeFileSync(file, [
+  'VITE_FIREBASE_API_KEY=public-test-key',
+  'VITE_FIREBASE_APP_ID=1:12345:web:abcde',
+  'VITE_FIREBASE_PROJECT_ID=test-project',
+  'VITE_FIREBASE_AUTH_DOMAIN=test-project.firebaseapp.com'
+].join('\n'));
+'@
+Set-Content -LiteralPath (Join-Path $nodeDir "vc.js") -Value $js -Encoding utf8
 $originalPath = $env:PATH
-$destination = Join-Path $stubDir "environment with spaces.env"
+$priorRoot = $env:VOP_TEST_PROJECT_ROOT
+$priorFailure = $env:VOP_TEST_FAIL
+$destination = Join-Path $projectRoot "environment with %VOP_DO_NOT_EXPAND% and spaces.env"
 try {
     $env:PATH = "$stubDir;$originalPath"
-    Invoke-VopVercelEnvironmentPull -ProjectRoot $stubDir -Destination $destination -Environment production
-    if (!(Test-Path -LiteralPath $destination)) {
-        throw "Vercel env pull did not write its expected destination file."
-    }
-    $lines = @(Get-Content -LiteralPath $destination)
-    if ($lines -notcontains "VITE_FIREBASE_PROJECT_ID=test-project") {
-        throw "Public Vercel configuration was not retrieved."
-    }
-    Write-Host "Windows Vercel stderr version banner did not abort the successful env pull."
+    $env:VOP_TEST_PROJECT_ROOT = $projectRoot
+    Remove-Item Env:\VOP_TEST_FAIL -ErrorAction SilentlyContinue
 
-    # A real exit-code failure must still abort (not be masked by stderr filtering).
+    Invoke-VopVercelEnvironmentPull -ProjectRoot $projectRoot -Destination $destination -Environment production
+    if (!(Test-Path -LiteralPath $destination)) {
+        throw "Vercel env pull did not write the expected destination file."
+    }
+    if (@(Get-Content -LiteralPath $destination) -notcontains "VITE_FIREBASE_PROJECT_ID=test-project") {
+        throw "Public Firebase environment configuration was not returned."
+    }
+    Write-Host "Vercel CLI stderr banner, literal percent paths and explicit --cwd all passed."
+
     Remove-Item -LiteralPath $destination -Force
-    $failedStub = @'
-@echo off
->&2 echo Vercel CLI 63.1.2 (Node.js 22.16.0)
-exit /b 7
-'@
-    Set-Content -LiteralPath (Join-Path $stubDir "vercel.cmd") -Value $failedStub -Encoding ascii
+    $env:VOP_TEST_FAIL = "1"
     $failed = $false
     try {
-        Invoke-VopVercelEnvironmentPull -ProjectRoot $stubDir -Destination $destination -Environment production
+        Invoke-VopVercelEnvironmentPull -ProjectRoot $projectRoot -Destination $destination -Environment production
     } catch {
         $failed = $_.Exception.Message -match "exit code 7"
     }
-    if (!$failed) {
-        throw "A nonzero Vercel CLI exit code was not surfaced."
-    }
+    if (!$failed) { throw "A real Vercel process failure was not surfaced." }
     if (Test-Path -LiteralPath $destination) {
         throw "Failed env pull unexpectedly wrote a configuration file."
     }
-    Write-Host "Windows Vercel CLI error code and secret-safe diagnostics validated."
+    Write-Host "Vercel exit code 7 is still reported correctly and configuration is not fabricated."
 } finally {
     $env:PATH = $originalPath
+    if ($null -ne $priorRoot) { $env:VOP_TEST_PROJECT_ROOT = $priorRoot }
+    else { Remove-Item Env:\VOP_TEST_PROJECT_ROOT -ErrorAction SilentlyContinue }
+    if ($null -ne $priorFailure) { $env:VOP_TEST_FAIL = $priorFailure }
+    else { Remove-Item Env:\VOP_TEST_FAIL -ErrorAction SilentlyContinue }
     Remove-Item -LiteralPath $stubDir -Recurse -Force -ErrorAction SilentlyContinue
-    # Expected mock failure must not fail the test process.
     $global:LASTEXITCODE = 0
 }
