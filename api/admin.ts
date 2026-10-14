@@ -1,3 +1,4 @@
+import { applyFlutterPreviewCors } from '../server/flutterPreviewCors.js';
 /* One Vercel function; individual handlers continue to enforce authorization. */
 import h0 from '../api_handlers/admin/analytics.js';
 import h1 from '../api_handlers/admin/audit.js';
@@ -49,6 +50,7 @@ const handlers:Record<string,(req:never,res:never)=>unknown>=Object.freeze({
   'mobile': h21,
 });
 export default async function handler(req:Req,res:Res){
+  if (applyFlutterPreviewCors(req, res)) return;
   const value=req.query?.__vopRoute;
   const candidate=Array.isArray(value)?value[0]:value;
   const name=typeof candidate==='string'&&candidate?candidate:new URL(req.url||'/', 'http://localhost').pathname.replace(/^\/api\/admin\/?/,'');
