@@ -189,6 +189,40 @@ pass FIREBASE_ADMIN_PRIVATE_KEY, service account credentials, payment keys,
 Vercel tokens or other server secrets through Flutter --dart-define. CI still
 builds using the already-registered public Android Firebase client.
 
+## Android emulator IDs can change between sessions
+
+Flutter's emulator device serial (for example emulator-5554 or emulator-5556)
+is not the Android Studio AVD name. It may change between restarts.
+The VOP Android launcher now checks online Android devices immediately before
+flutter run, after Flutter has resolved dependencies. When a stale emulator
+serial was supplied, it uses the new serial **only if exactly one emulator
+is currently online**. It never guesses among two or more virtual devices.
+
+From the VOP-New repository root, after pulling the latest changes:
+
+    .\run_android.ps1 -DeviceId "emulator"
+    .\run_android.ps1 -DeviceId "emulator-5556"
+    .\run_android.ps1 -DeviceId "auto"
+
+Use the emulator alias to automatically pick the sole online emulator.
+The second form also handles emulator serial changes when unambiguous. With
+auto, the launcher prompts for the device if both a Wi-Fi phone and emulator
+are connected.
+
+Additional supported identifiers:
+
+    .\run_android.ps1 -DeviceId "wifi"
+    .\run_android.ps1 -DeviceId "usb"
+    .\run_android.ps1 -DeviceId "SM-A145F"
+
+Wi-Fi device IP ports can also rotate; an old IP:port resolves to the same
+unique online IP address when available. Ambiguous choices abort rather than
+launching VOP on another device. Both root and native_android launchers work.
+
+IMPORTANT: avoid unreviewed Flutter major package upgrades. The native app
+currently needs its existing Google sign-in, Firebase Auth, and biometric API
+versions. Migrate the app calls and tests before upgrading their major versions.
+
 ## Emulator exits immediately with code 1
 
 If Flutter prints "The Android emulator exited with code 1", the Android
