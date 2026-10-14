@@ -23,7 +23,7 @@ import h19 from '../api_handlers/admin/account.js';
 import h20 from '../api_handlers/admin/health.js';
 import h21 from '../api_handlers/admin/mobile.js';
 
-type Req={url?:string;query?:Record<string,string|string[]|undefined>};
+type Req={url?:string;query?:Record<string,string|string[]|undefined>;method?:string;headers?:Record<string,string|string[]|undefined>};
 type Res={status:(code:number)=>Res;json:(body:unknown)=>void};
 const handlers:Record<string,(req:never,res:never)=>unknown>=Object.freeze({
   'analytics': h0,
