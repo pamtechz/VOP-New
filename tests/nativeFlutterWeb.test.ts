@@ -63,3 +63,12 @@ test('browser keeps online assessments functional without claiming encrypted off
   assert.match(settings,/if\(!kIsWeb\) _group\(\[/);
   assert.match(guide,/onPressed:kIsWeb\|\|downloading\?null:download/);
 });
+
+test('plain-HTTP LAN previews never claim protected API access via localhost CORS',()=>{
+  assert.match(runner,/if \(\$ShareOnNetwork\) \{/);
+  assert.match(runner,/Phone browsers using LAN HTTP cannot access protected VOP backend APIs/);
+  assert.match(runner,/Even a CORS allowlist entry will not enable HTTP LAN access/);
+  const cors=read('server/flutterPreviewCors.ts');
+  assert.match(cors,/const localhost=uri\.protocol==='http:'/);
+  assert.match(cors,/if\(!secure&&!localhost\)return null/);
+});

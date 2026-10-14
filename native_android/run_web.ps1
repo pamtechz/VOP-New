@@ -27,8 +27,10 @@ $root = $PSScriptRoot
 # running a different origin (which might not be permitted by server CORS).
 $explicitWebPort = $PSBoundParameters.ContainsKey("WebPort")
 $WebPort = Resolve-VopWebPort -PreferredPort $WebPort -ExplicitPort:$explicitWebPort -ShareOnNetwork:$ShareOnNetwork
-if ($WebPort -notin @(7357, 7358, 7359)) {
-    Write-Warning "Port $WebPort is custom. Protected VOP API requests from http://127.0.0.1:$WebPort require this exact browser origin to be included in the server-side VOP_FLUTTER_WEB_ALLOWED_ORIGINS."
+if ($ShareOnNetwork) {
+    Write-Warning "Phone browsers using LAN HTTP cannot access protected VOP backend APIs: this deployment intentionally rejects insecure non-loopback origins. Even a CORS allowlist entry will not enable HTTP LAN access. Use a trusted HTTPS preview origin with proper Firebase authorization for authenticated phone browser testing."
+} elseif ($WebPort -notin @(7357, 7358, 7359)) {
+    Write-Warning "Port $WebPort is custom. Protected VOP API requests from http://127.0.0.1:$WebPort require this exact loopback origin to be included in the server-side VOP_FLUTTER_WEB_ALLOWED_ORIGINS."
 }
 if ($ConfigPath) {
     $ConfigPath = (Resolve-Path -LiteralPath $ConfigPath -ErrorAction Stop).Path
@@ -67,7 +69,7 @@ if ($ChromeInspector) {
     Write-Host "Starting VOP Flutter web-server at http://127.0.0.1:$WebPort"
     Write-Host "Open this URL in Chrome, Edge, Firefox or Safari once Flutter says the server is ready."
     if ($ShareOnNetwork) {
-        Write-Warning "LAN HTTP browser previews do not provide a secure origin. Firebase Google sign-in, browser passkeys and some media providers may reject them. Use only trusted Wi-Fi."
+        Write-Warning "LAN HTTP previews can display the Flutter interface, but protected VOP API requests and secure browser authentication will not work from the phone's HTTP address. Do not enter real credentials into an insecure phone preview. For full functionality, use an HTTPS preview domain authorized by Firebase."
         try {
             $addresses = @([Net.NetworkInformation.NetworkInterface]::GetAllNetworkInterfaces() |
                 Where-Object {
