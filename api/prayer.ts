@@ -1,3 +1,4 @@
+import { applyFlutterPreviewCors } from '../server/flutterPreviewCors.js';
 import { authenticateTenant, writeTenantAudit, accessibleOrganizationIds, organizationInHierarchyScope } from '../server/tenant.js';
 import { requirePermission } from '../server/permissions.js';
 import { createNotification } from '../server/notifications.js';
@@ -15,6 +16,7 @@ function id(value: unknown) {
 }
 
 export default async function handler(req: Request, res: Response) {
+  if (applyFlutterPreviewCors(req, res)) return;
   try {
     const body = req.body && typeof req.body === 'object' ? req.body as Record<string, unknown> : {};
     const ctx = await authenticateTenant(req);
