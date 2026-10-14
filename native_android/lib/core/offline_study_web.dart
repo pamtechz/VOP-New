@@ -7,11 +7,10 @@ class OfflineStudy {
   static const maxRecords = 80;
   static const lifetime = Duration(days: 14);
 
+  // Cache writes are optional performance hints, never the source of quiz
+  // truth. Keep live online quizzes working without persisting them insecurely.
   Future<void> save(String uid, String kind, String id,
-      Map<String, dynamic> value, {String title = '', DateTime? expiresAt}) async {
-    throw const OfflineStorageException(
-        'Encrypted offline downloads are currently available in the Android app only.');
-  }
+      Map<String, dynamic> value, {String title = '', DateTime? expiresAt}) async {}
 
   Future<Map<String, dynamic>?> read(String uid, String kind, String id) async => null;
 
