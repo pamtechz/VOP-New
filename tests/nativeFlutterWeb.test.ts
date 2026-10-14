@@ -51,3 +51,15 @@ test('browser uses Firebase popup sign-in and provider-approved iframe, not Andr
   assert.match(settings,/if \(!kIsWeb\) _loadNativePasskeys\(\)/);
   assert.match(settings,/if \(kIsWeb\) \{/);
 });
+
+test('browser keeps online assessments functional without claiming encrypted offline storage',()=>{
+  const browserOffline=read('native_android/lib/core/offline_study_web.dart');
+  const home=read('native_android/lib/screens/home_shell.dart');
+  const guide=read('native_android/lib/screens/guide_screen.dart');
+  assert.match(browserOffline,/Future<void> save\([\s\S]*?\) async \{\}/);
+  assert.match(browserOffline,/Offline changes cannot be queued securely/);
+  assert.match(home,/if\(!kIsWeb\) _destination\('Offline downloads'/);
+  assert.match(settings,/if\(!kIsWeb\) _heading\('Offline study'/);
+  assert.match(settings,/if\(!kIsWeb\) _group\(\[/);
+  assert.match(guide,/onPressed:kIsWeb\|\|downloading\?null:download/);
+});
