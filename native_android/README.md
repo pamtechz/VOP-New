@@ -141,6 +141,11 @@ The actions install or select Flutter stable, Node 22 and JDK 21 as appropriate.
 Runners**, verify the machine is Online and displays all three runner labels
 `self-hosted`, `Windows` and `KASAINSTITUTE`. Runner *name* alone does not
 satisfy a custom `runs-on` label; assign `KASAINSTITUTE` explicitly if absent.
+The runner must also be registered or authorized **for pamtechz/VOP-New**
+(or its owning account). An agent registered only to an unrelated GitHub
+organization or repository cannot serve VOP jobs. If other projects use the
+same host, configure an isolated runner instance and work directory for VOP
+rather than deregistering or disrupting their existing runners.
 On the trusted Windows host, check whether a runner service is running:
 
 ```powershell
