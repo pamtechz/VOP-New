@@ -15,7 +15,8 @@ permissions:
   contents: read
 jobs:
   verify:
-    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, Windows, KASAINSTITUTE]
     timeout-minutes: 20
     steps:
       # Never reuse a checkout potentially owned by a different runner account.
