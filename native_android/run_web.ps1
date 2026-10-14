@@ -21,6 +21,15 @@ if (!(Get-Command flutter -ErrorAction SilentlyContinue)) {
     throw "Flutter SDK was not found. Install Flutter stable and run flutter doctor."
 }
 $root = $PSScriptRoot
+. (Join-Path $root "tool\web_port.ps1")
+# Resolve the port before Vercel config download and flutter pub get.
+# When a caller explicitly requests a port, fail clearly rather than silently
+# running a different origin (which might not be permitted by server CORS).
+$explicitWebPort = $PSBoundParameters.ContainsKey("WebPort")
+$WebPort = Resolve-VopWebPort -PreferredPort $WebPort -ExplicitPort:$explicitWebPort -ShareOnNetwork:$ShareOnNetwork
+if ($WebPort -notin @(7357, 7358, 7359)) {
+    Write-Warning "Port $WebPort is custom. Protected VOP API requests from http://127.0.0.1:$WebPort require this exact browser origin to be included in the server-side VOP_FLUTTER_WEB_ALLOWED_ORIGINS."
+}
 if ($ConfigPath) {
     $ConfigPath = (Resolve-Path -LiteralPath $ConfigPath -ErrorAction Stop).Path
 }

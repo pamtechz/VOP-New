@@ -122,9 +122,18 @@ The same Dart/Flutter learner application can be run on Android or as Flutter
 Web. This is NOT a redirect to the existing VOP React web portal.
 
 The root-level PowerShell launcher defaults to a `web-server` on port 7357,
-which avoids the Chrome DWDS/AppInspector execution-context churn. It
-uses your **linked vop-new Vercel** project's existing public Firebase WEB
-registration (not the Android application ID).
+which avoids the Chrome DWDS/AppInspector execution-context churn.
+If port 7357 is already occupied, the launcher checks approved fallback ports
+7358 and 7359 **before** downloading Vercel settings or launching Flutter.
+It chooses the first available port, reports the exact address, and never
+terminates another process. An explicitly requested `-WebPort` fails with
+an actionable message if that port cannot be bound; explicit port selections
+are never silently changed. This eliminates the Windows socket error 10048
+caused by a listener already using the default port. A port might still become
+occupied between the probe and Flutter binding it; in that rare case, retry.
+
+The launcher uses your **linked vop-new Vercel** project's existing public
+Firebase WEB registration (not the Android application ID).
 
 Open a trusted PowerShell window in your checkout:
 
@@ -144,8 +153,16 @@ git pull --ff-only
 .\run_web.ps1 -ShareOnNetwork
 ```
 
-Open `http://127.0.0.1:7357` in your browser when Flutter indicates
-the web server is listening. To stop, press Ctrl+C in PowerShell.
+Open the exact URL printed by the launcher, usually
+`http://127.0.0.1:7357`, `http://127.0.0.1:7358`, or
+`http://127.0.0.1:7359`. Press Ctrl+C in PowerShell to stop.
+If an explicitly chosen port is unavailable, inspect it without killing other
+applications:
+
+```powershell
+Get-NetTCPConnection -LocalPort 7357 -State Listen |
+  Select-Object LocalAddress,LocalPort,OwningProcess
+```
 Your computer's Vercel CLI must be authenticated and linked to the correct
 existing project. The launcher can also take `-ConfigPath` pointing to
 a local ignored public-client env file, based on
@@ -164,8 +181,12 @@ development workstation.
 **Authorize your local browser preview** to call the deployed backend.
 Set Vercel server environment variable `VOP_FLUTTER_WEB_ALLOWED_ORIGINS` for
 the vop-new deployment to an exact comma-separated list of trusted preview
-origins. For the default local port, use the exact value
-`http://127.0.0.1:7357`. This is opt-in: without it, browser CORS
+origins. The default approved Windows preview ports use the exact values
+`http://127.0.0.1:7357,http://127.0.0.1:7358,http://127.0.0.1:7359`.
+The server still requires valid Firebase bearer tokens for protected APIs;
+it never accepts arbitrary local ports or wildcard browser origins. For a
+custom `-WebPort`, explicitly configure that exact origin in Vercel before
+expecting API access. This is opt-in: without it, browser CORS
 preflight to VOP API routes is denied, although Flutter may compile and render.
 After changing production Vercel environment variables, redeploy the API
 service so the configuration is loaded. The API uses exact-origin matching,
