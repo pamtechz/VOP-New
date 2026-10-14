@@ -12,7 +12,7 @@ permissions:
   contents: write
 jobs:
   apply:
-    runs-on: [self-hosted, KASAINSTITUTE]
+    runs-on: [self-hosted, Windows, KASAINSTITUTE]
     timeout-minutes: 25
     steps:
       # An earlier VOP workspace may be owned by a different Windows runner

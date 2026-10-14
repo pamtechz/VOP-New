@@ -5,7 +5,7 @@ permissions:
   contents: write
 jobs:
   prepare:
-    runs-on: [self-hosted, KASAINSTITUTE]
+    runs-on: [self-hosted, Windows, KASAINSTITUTE]
     steps:
       - uses: actions/checkout@v4
         with:

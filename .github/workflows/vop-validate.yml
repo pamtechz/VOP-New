@@ -11,10 +11,15 @@ on:
 
 jobs:
   validate:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Windows, KASAINSTITUTE]
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - name: Reject untrusted fork PR before checking out code
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
+        shell: pwsh
+        run: |
+          throw "Fork pull requests cannot execute code on the VOP KASAINSTITUTE self-hosted runner. Submit a trusted same-repository PR for verification."
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
@@ -29,7 +34,7 @@ jobs:
       - run: npm run verify:content
       - run: npm run test:unit
       - run: npm run test:contracts --if-present
-      - uses: actions/setup-java@v5
+      - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'

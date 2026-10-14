@@ -19,9 +19,14 @@ permissions:
 
 jobs:
   windows-launcher-parse:
-    runs-on: windows-latest
+    runs-on: [self-hosted, Windows, KASAINSTITUTE]
     timeout-minutes: 5
     steps:
+      - name: Reject untrusted fork PR before checking out code
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
+        shell: pwsh
+        run: |
+          throw "Fork pull requests cannot execute code on the VOP KASAINSTITUTE self-hosted runner. Submit a trusted same-repository PR for verification."
       - uses: actions/checkout@v4
       - name: Verify PowerShell launcher syntax
         shell: pwsh
@@ -64,14 +69,23 @@ jobs:
         shell: pwsh
         run: ./tests/nativeEmulatorLaunchFailure.test.ps1
   flutter-android:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Windows, KASAINSTITUTE]
     timeout-minutes: 30
     steps:
+      - name: Reject untrusted fork PR before checking out code
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
+        shell: pwsh
+        run: |
+          throw "Fork pull requests cannot execute code on the VOP KASAINSTITUTE self-hosted runner. Submit a trusted same-repository PR for verification."
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
       - name: Generate native Gradle scaffold
         run: |
           flutter create --platforms=android --org com.sda --project-name vop native_android
@@ -86,17 +100,21 @@ jobs:
         run: flutter test --no-pub
       - name: Prepare public VOP Firebase Android client config
         working-directory: native_android
-        run: python3 tool/prepare_public_config.py
+        run: python tool/prepare_public_config.py
       - name: Build native Android debug APK
         working-directory: native_android
-        shell: bash
+        shell: cmd
         run: |
-          set -o pipefail
-          flutter build apk --debug --no-pub --dart-define-from-file=android-public-config.json 2>&1 | tee android-build.log
-          if grep -Fq 'WARNING: Your app uses the following plugins that apply Kotlin Gradle Plugin (KGP)' android-build.log; then
-            echo 'Flutter plugin still applies legacy Kotlin Gradle Plugin. Upgrade the plugin to one supporting built-in Kotlin.' >&2
-            exit 1
-          fi
+          @echo off
+          flutter build apk --debug --no-pub --dart-define-from-file=android-public-config.json > android-build.log 2>&1
+          set BUILD_RESULT=%ERRORLEVEL%
+          type android-build.log
+          if not "%BUILD_RESULT%"=="0" exit /b %BUILD_RESULT%
+          findstr /C:"WARNING: Your app uses the following plugins that apply Kotlin Gradle Plugin (KGP)" android-build.log >nul
+          if not errorlevel 1 (
+            echo Flutter plugin still applies legacy Kotlin Gradle Plugin. Upgrade the plugin to one supporting built-in Kotlin.
+            exit /b 1
+          )
       - uses: actions/upload-artifact@v4
         with:
           name: vop-native-debug-apk
@@ -105,9 +123,14 @@ jobs:
           retention-days: 5
 
   flutter-web:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Windows, KASAINSTITUTE]
     timeout-minutes: 25
     steps:
+      - name: Reject untrusted fork PR before checking out code
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
+        shell: pwsh
+        run: |
+          throw "Fork pull requests cannot execute code on the VOP KASAINSTITUTE self-hosted runner. Submit a trusted same-repository PR for verification."
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
         with:
@@ -123,15 +146,26 @@ jobs:
         run: flutter analyze --no-pub --no-fatal-infos
       - name: Compile the same Flutter learner app for browser
         working-directory: native_android
-        shell: bash
+        shell: pwsh
         run: |
-          flutter build web --release --no-pub \
-            --dart-define=VOP_API_BASE_URL=https://vopafrica.vercel.app \
-            --dart-define=VOP_FIREBASE_API_KEY=ci-public-client-placeholder \
-            --dart-define=VOP_FIREBASE_WEB_APP_ID=1:12345:web:abc12345 \
-            --dart-define=VOP_FIREBASE_WEB_AUTH_DOMAIN=example.firebaseapp.com \
-            --dart-define=VOP_FIREBASE_SENDER_ID=12345 \
+          & flutter build web --release --no-pub `
+            --dart-define=VOP_API_BASE_URL=https://vopafrica.vercel.app `
+            --dart-define=VOP_FIREBASE_API_KEY=ci-public-client-placeholder `
+            --dart-define=VOP_FIREBASE_WEB_APP_ID=1:12345:web:abc12345 `
+            --dart-define=VOP_FIREBASE_WEB_AUTH_DOMAIN=example.firebaseapp.com `
+            --dart-define=VOP_FIREBASE_SENDER_ID=12345 `
             --dart-define=VOP_FIREBASE_PROJECT_ID=example
+          if ($LASTEXITCODE -ne 0) { throw "Flutter web compile failed with exit code $LASTEXITCODE" }
+      - name: Verify pinned PasskeyAuthenticator SDK exists in compiled web assets
+        shell: pwsh
+        run: |
+          $bundle = 'native_android/build/web/passkeys-bundle.js'
+          if (!(Test-Path -LiteralPath $bundle -PathType Leaf)) { throw "Flutter web output is missing the passkeys browser SDK." }
+          $index = Get-Content -LiteralPath 'native_android/build/web/index.html' -Raw
+          if ($index.IndexOf('passkeys-bundle.js') -lt 0 -or
+              $index.IndexOf('passkeys-bundle.js') -gt $index.IndexOf('flutter_bootstrap.js')) {
+            throw "Browser passkeys SDK must load before Flutter's generated plugin registrant."
+          }
       - uses: actions/upload-artifact@v4
         with:
           name: vop-flutter-web-preview

@@ -116,6 +116,54 @@ Flutter scaffold with `flutter create --platforms=web`.
 CI compiles a separate Flutter browser artifact as well as the Android APK.
 The default port can be customized with `-WebPort`.
 
+## Flutter Web passkeys SDK and VOP self-hosted CI
+
+Flutter's passkeys package registers its browser adapter before the app's Dart
+entry point. The browser adapter requires `window.PasskeyAuthenticator.init`,
+which was missing from the earlier web template and caused an uncaught JavaScript
+TypeError during startup. To make startup deterministic, this repository
+includes an unmodified pinned Corbado `2.4.0` `bundle.js` at
+`native_android/web/passkeys-bundle.js`, loaded synchronously **before**
+`flutter_bootstrap.js`. The upstream BSD license and provenance are retained
+in `native_android/web/PASSKEYS_BUNDLE_LICENSE.txt`. The SDK is required
+for registration even when native-only passkey buttons are not shown on web.
+
+This load-order repair does **not** imply that browser passkey authentication
+is enabled for VOP. Android Credential Manager remains guarded by the
+server-side signature, origin, user verification and certificate checks.
+
+The repository's GitHub Actions jobs use the VOP `KASAINSTITUTE` self-hosted
+Windows runner. The host must be online and provisioned with Android SDK,
+appropriate Android build tools, Python, and enough disk space for Flutter.
+The actions install or select Flutter stable, Node 22 and JDK 21 as appropriate.
+
+**Runner provisioning:** In the VOP repository's GitHub **Settings → Actions →
+Runners**, verify the machine is Online and displays all three runner labels
+`self-hosted`, `Windows` and `KASAINSTITUTE`. Runner *name* alone does not
+satisfy a custom `runs-on` label; assign `KASAINSTITUTE` explicitly if absent.
+The runner must also be registered or authorized **for pamtechz/VOP-New**
+(or its owning account). An agent registered only to an unrelated GitHub
+organization or repository cannot serve VOP jobs. If other projects use the
+same host, configure an isolated runner instance and work directory for VOP
+rather than deregistering or disrupting their existing runners.
+On the trusted Windows host, check whether a runner service is running:
+
+```powershell
+Get-Service -Name 'actions.runner*' -ErrorAction SilentlyContinue |
+  Select-Object Name, Status
+```
+
+Start only the service belonging to this configured VOP runner, using an
+elevated PowerShell terminal if needed, or run `run.cmd` in its actual runner
+installation directory when registered in interactive mode. Never disable
+the fork-source guard or silently substitute a GitHub-hosted runner just to
+clear a queue. If any required job remains queued, do not merge the PR.
+PRs from forks are excluded from running checkout code on the trusted host.
+Native web compilation explicitly checks that the packaged passkeys SDK and
+load order survive release builds. Self-hosted jobs will remain queued while
+the KASAINSTITUTE runner is offline; do not replace them with GitHub-hosted
+jobs or skip mandatory checks to make an unsafe merge.
+
 ## Run the SAME Flutter learner app in a browser
 
 The same Dart/Flutter learner application can be run on Android or as Flutter
