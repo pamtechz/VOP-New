@@ -116,6 +116,82 @@ Flutter scaffold with `flutter create --platforms=web`.
 CI compiles a separate Flutter browser artifact as well as the Android APK.
 The default port can be customized with `-WebPort`.
 
+## Run the SAME Flutter learner app in a browser
+
+The same Dart/Flutter learner application can be run on Android or as Flutter
+Web. This is NOT a redirect to the existing VOP React web portal.
+
+The root-level PowerShell launcher defaults to a `web-server` on port 7357,
+which avoids the Chrome DWDS/AppInspector execution-context churn. It
+uses your **linked vop-new Vercel** project's existing public Firebase WEB
+registration (not the Android application ID).
+
+Open a trusted PowerShell window in your checkout:
+
+```powershell
+cd "C:\Users\user\Pictures\VOP New"
+git switch main
+git pull --ff-only
+.\run_web.ps1
+
+# For a non-default port:
+.\run_web.ps1 -WebPort 7358
+
+# Chrome Inspector/DWDS (optional):
+.\run_web.ps1 -ChromeInspector
+
+# Preview from a phone on your trusted local network:
+.\run_web.ps1 -ShareOnNetwork
+```
+
+Open `http://127.0.0.1:7357` in your browser when Flutter indicates
+the web server is listening. To stop, press Ctrl+C in PowerShell.
+Your computer's Vercel CLI must be authenticated and linked to the correct
+existing project. The launcher can also take `-ConfigPath` pointing to
+a local ignored public-client env file, based on
+`native_android/Vop_Web_Config.example.env`, or
+`-ApiBaseUrl` with an approved HTTPS API origin.
+
+**Firebase web credentials:** the web build takes `VITE_FIREBASE_API_KEY`,
+`VITE_FIREBASE_APP_ID`, `VITE_FIREBASE_PROJECT_ID` and
+`VITE_FIREBASE_AUTH_DOMAIN`. Its messaging sender ID is
+derived from the registered web app ID if a separate public value is absent.
+Firebase Admin, payment and private service-account credentials are excluded.
+Vercel CLI briefly downloads the full environment to a randomly named
+temporary file which is deleted in a finally block; use only a trusted
+development workstation.
+
+**Authorize your local browser preview** to call the deployed backend.
+Set Vercel server environment variable `VOP_FLUTTER_WEB_ALLOWED_ORIGINS` for
+the vop-new deployment to an exact comma-separated list of trusted preview
+origins. For the default local port, use the exact value
+`http://127.0.0.1:7357`. This is opt-in: without it, browser CORS
+preflight to VOP API routes is denied, although Flutter may compile and render.
+After changing production Vercel environment variables, redeploy the API
+service so the configuration is loaded. The API uses exact-origin matching,
+allows only GET/POST/OPTIONS, never enables cross-origin credentials, and
+continues enforcing bearer-token authentication and tenant permissions.
+
+Add your local development hostname to Firebase Authentication's approved
+domains if the provider supports it. Google popup sign-in only works when
+the current browser hostname is Firebase-authorized. The trusted localhost
+origin and LAN HTTP preview are not equivalent to a production HTTPS origin.
+
+For `-ShareOnNetwork`, connect phone and computer to trusted Wi-Fi;
+the app will list possible private IPv4 addresses. A preview served via
+plain HTTP on LAN is not an authenticated production environment. Use a
+real HTTPS development origin before evaluating OAuth or high-security
+account features on a phone.
+
+Browser support boundaries: native device biometrics and Android Credential
+Manager passkeys are deliberately not represented as browser capabilities.
+The Android offline cache uses encrypted device-bound storage; the browser
+version currently does not store protected studies or queue quiz/progress
+mutations offline. This prevents inventing completion records or placing
+private downloads into unencrypted browser storage. Provider media embeds
+respect upstream frame policies. Browser API calls require the configured
+CORS origin and an active Firebase account.
+
 ## Windows PowerShell
 
 From `native_android`:
