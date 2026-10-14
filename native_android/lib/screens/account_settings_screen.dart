@@ -672,8 +672,8 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         trailing:const Icon(Icons.chevron_right),
         enabled:!saving,onTap:_exportData),
     ]),
-    _heading('Offline study','Manage encrypted downloads and pending changes.',Icons.download_outlined),
-    _group([
+    if(!kIsWeb) _heading('Offline study','Manage encrypted downloads and pending changes.',Icons.download_outlined),
+    if(!kIsWeb) _group([
       ListTile(contentPadding:EdgeInsets.zero,
         leading:const Icon(Icons.folder_outlined),
         title:const Text('Saved lessons and sync'),
