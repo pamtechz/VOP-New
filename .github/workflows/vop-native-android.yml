@@ -27,7 +27,7 @@ jobs:
         shell: pwsh
         run: |
           $parseErrors = $null
-          foreach ($scriptPath in @('run_android.ps1', 'run_vop.ps1', 'run_web.ps1', 'native_android/run_android.ps1', 'native_android/run_vop.ps1', 'native_android/run_web.ps1', 'native_android/tool/vercel_web_config.ps1', 'native_android/tool/flutter_device_parser.ps1', 'native_android/tool/resolve_android_target.ps1', 'native_android/tool/vercel_public_config.ps1', 'tests/nativeDeviceDiscovery.test.ps1', 'tests/nativeVercelClientConfig.test.ps1', 'tests/nativeDynamicDeviceSelection.test.ps1', 'tests/nativeWebConfig.test.ps1', 'tests/nativeEmulatorLaunchFailure.test.ps1')) {
+          foreach ($scriptPath in @('run_android.ps1', 'run_vop.ps1', 'run_web.ps1', 'native_android/run_android.ps1', 'native_android/run_vop.ps1', 'native_android/run_web.ps1', 'native_android/tool/vercel_web_config.ps1', 'native_android/tool/vercel_cli.ps1', 'native_android/tool/flutter_device_parser.ps1', 'native_android/tool/resolve_android_target.ps1', 'native_android/tool/vercel_public_config.ps1', 'tests/nativeDeviceDiscovery.test.ps1', 'tests/nativeVercelClientConfig.test.ps1', 'tests/nativeDynamicDeviceSelection.test.ps1', 'tests/nativeWebConfig.test.ps1', 'tests/nativeVercelCliWindows.test.ps1', 'tests/nativeEmulatorLaunchFailure.test.ps1')) {
             $parseErrors = $null
             [System.Management.Automation.Language.Parser]::ParseFile(
               (Resolve-Path $scriptPath).Path,
@@ -51,6 +51,9 @@ jobs:
       - name: Verify browser Firebase public-only settings and HTTPS origin validation
         shell: pwsh
         run: ./tests/nativeWebConfig.test.ps1
+      - name: Verify Windows Vercel CLI stderr banner is non-fatal while nonzero exits fail
+        shell: pwsh
+        run: ./tests/nativeVercelCliWindows.test.ps1
       - name: Abort promptly and explain Flutter emulator startup code 1
         shell: pwsh
         run: ./tests/nativeEmulatorLaunchFailure.test.ps1

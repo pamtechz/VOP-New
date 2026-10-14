@@ -1,3 +1,4 @@
+. (Join-Path $PSScriptRoot "vercel_cli.ps1")
 # Public client Firebase web settings only. No admin/financial/private secrets.
 function ConvertFrom-VopWebEnvLines {
     param([string[]]$Lines)
@@ -48,15 +49,7 @@ function Get-VopWebClientConfiguration {
         }
         $temporary = Join-Path ([IO.Path]::GetTempPath()) ("vop-web-" + [Guid]::NewGuid().ToString("N") + ".env")
         try {
-            Push-Location -LiteralPath $projectRoot
-            try {
-                & vercel env pull $temporary "--environment=$VercelEnvironment" --yes *> $null
-                if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $temporary)) {
-                    throw "Could not obtain public Vercel web configuration. Verify Vercel login and project access."
-                }
-            } finally {
-                Pop-Location
-            }
+            Invoke-VopVercelEnvironmentPull -ProjectRoot $projectRoot -Destination $temporary -Environment $VercelEnvironment
             $settings = ConvertFrom-VopWebEnvLines -Lines @(Get-Content -LiteralPath $temporary)
         } finally {
             if (Test-Path -LiteralPath $temporary) {
