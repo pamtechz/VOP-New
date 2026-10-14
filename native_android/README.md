@@ -189,6 +189,46 @@ pass FIREBASE_ADMIN_PRIVATE_KEY, service account credentials, payment keys,
 Vercel tokens or other server secrets through Flutter --dart-define. CI still
 builds using the already-registered public Android Firebase client.
 
+## Emulator exits immediately with code 1
+
+If Flutter prints "The Android emulator exited with code 1", the Android
+**virtual device process failed to start**. This occurs before VOP builds or
+reads the Vercel/Firebase client environment. The launcher must stop at once
+rather than keep polling an Android VM that does not exist.
+
+Start by ensuring Pixel10 is fully stopped in Android Studio Device Manager,
+then try a cold boot with software GPU rendering:
+
+    cd "C:\Users\user\Pictures\VOP New\native_android"
+    .\run_vop.ps1 -Mode Emulator -EmulatorId "Pixel10" -ColdBoot -SoftwareGraphics
+
+These flags change only the emulator's startup configuration; they do not
+wipe any virtual device data. The launcher captures emulator stdout/stderr
+under your Windows temporary folder and prints recent diagnostics if the
+Android SDK process fails.
+
+To see the underlying Android emulator engine error directly, use the SDK
+binary in PowerShell (this can reveal hardware acceleration, graphics driver,
+disk space or missing system-image errors):
+
+    $emulatorExe = Join-Path $env:LOCALAPPDATA "Android\Sdk\emulator\emulator.exe"
+    & $emulatorExe -avd Pixel10 -verbose -no-snapshot-load -gpu software
+
+Check the installed SDK emulator/hypervisor tooling with:
+
+    & $emulatorExe -accel-check
+    & $emulatorExe -list-avds
+    adb devices -l
+
+If Pixel10 is damaged, try the other existing AVD:
+RSSEDURMS_API_35, or use Android Studio Device Manager to repair its system
+image. Android hardware virtualization must be available for accelerated
+emulator operation. Never disable security features or wipe AVD data just to
+silence a launch error.
+
+For native Firebase values, the optional -UseVercelEnv flag will take effect
+**after** the selected AVD starts successfully, not during Android startup.
+
 ## Recover a Pixel emulator stuck offline
 
 If flutter devices says that emulator-5554 is offline, the virtual phone has

@@ -12,6 +12,8 @@ param(
     [string]$EnvFile = "Vop_Android_Config.env",
     [switch]$RepairSharePlus,
     [switch]$UseVercelEnv,
+    [switch]$ColdBoot,
+    [switch]$SoftwareGraphics,
     [ValidateSet("production", "preview", "development")]
     [string]$VercelEnvironment = "production"
 )
@@ -230,17 +232,24 @@ function Start-Wireless {
 }
 
 function Start-Emulator {
+    if ($DeviceId -and $EmulatorId) {
+        Write-Verbose "The launcher will verify that the running device ID belongs to the requested AVD."
+    }
     $running = @(Get-AndroidDevices | Where-Object { $_.emulator -eq $true -or $_.id -match '^emulator-\d+$' })
     if ($EmulatorId) {
         $alreadyStarted = @($running | Where-Object { $_.emulatorId -eq $EmulatorId })
         if ($alreadyStarted.Count -gt 0) {
+            if ($ColdBoot -or $SoftwareGraphics) {
+                throw "The $EmulatorId AVD is already running. Shut it down in Android Studio Device Manager before changing boot or graphics options."
+            }
             Start-Native (Select-Target $alreadyStarted $DeviceId "Android emulator")
             return
         }
-        # When an explicit AVD is supplied, launch it directly instead of
-        # depending on Flutter's AVD table (which can be incomplete on Windows).
         $target = $EmulatorId
     } elseif ($running.Count -gt 0) {
+        if ($ColdBoot -or $SoftwareGraphics) {
+            throw "An Android emulator is already running. Stop it first or specify -EmulatorId for a different AVD."
+        }
         Start-Native (Select-Target $running $DeviceId "Android emulator")
         return
     } else {
@@ -251,32 +260,80 @@ function Start-Emulator {
         $target = Select-Target $androidEmulators "" "Android virtual device"
     }
 
-    Write-Host "Starting Android virtual device $target ..."
-    & flutter emulators --launch $target
-    if ($LASTEXITCODE -ne 0) {
-        # Do not trust an arbitrary offline emulator: wait only for a device
-        # whose reported AVD name is exactly the selected target.
-        Write-Warning "Flutter could not start $target; checking whether that exact AVD is already booting."
+    # Do not print locally downloaded Vercel env data or access Vercel yet.
+    # Only after an actual Android device is ready will Start-Native build VOP.
+    $emulatorExecutable = Resolve-AndroidEmulatorExecutable
+    $emulatorProcess = $null
+    $stdOutPath = ""
+    $stdErrPath = ""
+    if ($ColdBoot -or $SoftwareGraphics) {
+        if (!$emulatorExecutable) {
+            throw "Android SDK emulator.exe was not found. Configure ANDROID_SDK_ROOT or install Android Emulator in Android Studio SDK Manager."
+        }
+        $flags = @("-avd", $target)
+        if ($ColdBoot) { $flags += "-no-snapshot-load" }
+        if ($SoftwareGraphics) { $flags += @("-gpu", "software") }
+        # Keep emulator logs outside the Git working tree and never put Firebase
+        # or Vercel environment values in the emulator argument list.
+        $logRoot = Join-Path ([IO.Path]::GetTempPath()) "vop-android-emulator"
+        if (!(Test-Path -LiteralPath $logRoot)) { New-Item -ItemType Directory -Path $logRoot -Force | Out-Null }
+        $logId = [Guid]::NewGuid().ToString("N")
+        $stdOutPath = Join-Path $logRoot "avd-$logId-out.log"
+        $stdErrPath = Join-Path $logRoot "avd-$logId-err.log"
+        Write-Host "Launching Android AVD $target directly (ColdBoot=$([bool]$ColdBoot), SoftwareGraphics=$([bool]$SoftwareGraphics))..."
+        $emulatorProcess = Start-Process -FilePath $emulatorExecutable -ArgumentList $flags -PassThru -RedirectStandardOutput $stdOutPath -RedirectStandardError $stdErrPath
+    } else {
+        Write-Host "Starting Android virtual device $target ..."
+        & flutter emulators --launch $target
+        $launchCode = $LASTEXITCODE
+        if ($launchCode -ne 0) {
+            $emulatorPath = if ($emulatorExecutable) { $emulatorExecutable } else { "emulator.exe" }
+            throw "Android emulator $target failed to start (exit code $launchCode). This is an AVD/Android SDK error, not Firebase. Close the AVD in Device Manager, try Cold Boot Now, then retry with: .\run_vop.ps1 -Mode Emulator -EmulatorId '$target' -ColdBoot -SoftwareGraphics. For the underlying error run: & '$emulatorPath' -avd '$target' -verbose -no-snapshot-load -gpu software"
+        }
     }
-    Write-Host "Waiting for $target to become ready. First boot may take several minutes..."
+
+    Write-Host "Waiting for Android AVD $target to finish booting..."
     $selectedRunning = @()
-    for ($attempt = 0; $attempt -lt 90; $attempt++) {
+    $bootAttempts = if ($ColdBoot -or $SoftwareGraphics) { 120 } else { 90 }
+    for ($attempt = 0; $attempt -lt $bootAttempts; $attempt++) {
+        if ($emulatorProcess -and $emulatorProcess.HasExited) {
+            $exitCode = $emulatorProcess.ExitCode
+            if ($exitCode -eq 0) {
+                # Some emulator launchers hand off the VM to a child process.
+                # An exit-zero launcher is not itself an Android boot failure.
+                $emulatorProcess = $null
+                continue
+            }
+            Write-Warning "Android emulator process exited with code $exitCode."
+            if (Test-Path -LiteralPath $stdErrPath) {
+                Write-Host "Recent emulator diagnostics (stderr):"
+                Get-Content -LiteralPath $stdErrPath -Tail 25 | ForEach-Object { Write-Host $_ }
+            }
+            if (Test-Path -LiteralPath $stdOutPath) {
+                Write-Host "Recent emulator diagnostics (stdout):"
+                Get-Content -LiteralPath $stdOutPath -Tail 15 | ForEach-Object { Write-Host $_ }
+            }
+            throw "AVD $target exited before Android boot completed. Fix the reported Android Emulator error; use Android Studio Device Manager for Cold Boot or graphics settings."
+        }
         $nowRunning = @(Get-AndroidDevices | Where-Object {
             $_.emulator -eq $true -or $_.id -match '^emulator-\d+$'
         })
-        $selectedRunning = @($nowRunning | Where-Object {
-            $_.emulatorId -eq $target
-        })
+        # Never run on an unrelated emulator that happens to come online.
+        $selectedRunning = @($nowRunning | Where-Object { $_.emulatorId -eq $target })
         if ($selectedRunning.Count -gt 0) {
             $adb = Resolve-Adb
             $ready = @(& $adb -s ([string]$selectedRunning[0].id) shell getprop sys.boot_completed 2>$null)
-            if ($LASTEXITCODE -eq 0 -and $ready -contains "1") { break }
+            if ($LASTEXITCODE -eq 0 -and @($ready | ForEach-Object { ([string]$_).Trim() }) -contains "1") {
+                Write-Host "Android $target is booted and ready."
+                break
+            }
         }
         $selectedRunning = @()
         Start-Sleep -Seconds 3
     }
     if ($selectedRunning.Count -eq 0) {
-        throw "AVD $target did not boot. If 'adb devices' reports offline after several minutes, Cold Boot it from Android Studio Device Manager, then restart ADB."
+        $extra = if ($stdErrPath) { " Emulator error log: $stdErrPath" } else { "" }
+        throw "AVD $target did not boot within the allotted time. Check Android Studio Device Manager or try -ColdBoot -SoftwareGraphics.$extra"
     }
     Start-Native (Select-Target $selectedRunning $DeviceId "Android emulator")
 }

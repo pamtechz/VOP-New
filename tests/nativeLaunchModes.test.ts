@@ -84,3 +84,29 @@ test('Vercel import is opt-in and never puts web Firebase app ID in native confi
   assert.doesNotMatch(example, /VOP_FIREBASE_PROJECT_ID=voiceofprophecy/);
   assert.doesNotMatch(example, /VOP_API_BASE_URL=https:\/\//);
 });
+
+test('emulator launch reports fatal Flutter exit before waiting or loading Vercel environment', () => {
+  assert.match(launcher, /\$launchCode = \$LASTEXITCODE/);
+  assert.match(launcher, /if \(\$launchCode -ne 0\) \{/);
+  assert.match(launcher, /failed to start \(exit code \$launchCode\)/);
+  assert.match(launcher, /not Firebase/);
+  assert.match(launcher, /\[switch\]\$ColdBoot/);
+  assert.match(launcher, /\[switch\]\$SoftwareGraphics/);
+  assert.match(launcher, /"-no-snapshot-load"/);
+  assert.match(launcher, /"-gpu", "software"/);
+  assert.match(launcher, /\$bootAttempts = if \(\$ColdBoot -or \$SoftwareGraphics\) \{ 120 \} else \{ 90 \}/);
+  assert.match(launcher, /Start-Process -FilePath \$emulatorExecutable/);
+  assert.match(launcher, /shell getprop sys\.boot_completed/);
+  assert.match(launcher, /Write-Host "Android \$target is booted and ready."/);
+});
+
+test('repo-root PowerShell wrappers forward native launcher arguments', () => {
+  const rootAndroid = readFileSync('run_android.ps1', 'utf8');
+  const rootMenu = readFileSync('run_vop.ps1', 'utf8');
+  assert.match(rootAndroid, /native_android\\run_android\.ps1/);
+  assert.match(rootMenu, /native_android\\run_vop\.ps1/);
+  assert.match(rootAndroid, /& \$launcher @PSBoundParameters/);
+  assert.match(rootMenu, /& \$launcher @PSBoundParameters/);
+  assert.match(rootAndroid, /\[string\]\$DeviceId/);
+  assert.match(rootMenu, /\[string\]\$EmulatorId/);
+});
