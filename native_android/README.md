@@ -136,6 +136,23 @@ The repository's GitHub Actions jobs use the VOP `KASAINSTITUTE` self-hosted
 Windows runner. The host must be online and provisioned with Android SDK,
 appropriate Android build tools, Python, and enough disk space for Flutter.
 The actions install or select Flutter stable, Node 22 and JDK 21 as appropriate.
+
+**Runner provisioning:** In the VOP repository's GitHub **Settings → Actions →
+Runners**, verify the machine is Online and displays all three runner labels
+`self-hosted`, `Windows` and `KASAINSTITUTE`. Runner *name* alone does not
+satisfy a custom `runs-on` label; assign `KASAINSTITUTE` explicitly if absent.
+On the trusted Windows host, check whether a runner service is running:
+
+```powershell
+Get-Service -Name 'actions.runner*' -ErrorAction SilentlyContinue |
+  Select-Object Name, Status
+```
+
+Start only the service belonging to this configured VOP runner, using an
+elevated PowerShell terminal if needed, or run `run.cmd` in its actual runner
+installation directory when registered in interactive mode. Never disable
+the fork-source guard or silently substitute a GitHub-hosted runner just to
+clear a queue. If any required job remains queued, do not merge the PR.
 PRs from forks are excluded from running checkout code on the trusted host.
 Native web compilation explicitly checks that the packaged passkeys SDK and
 load order survive release builds. Self-hosted jobs will remain queued while
