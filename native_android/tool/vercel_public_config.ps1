@@ -1,3 +1,4 @@
+. (Join-Path $PSScriptRoot "vercel_cli.ps1")
 function ConvertFrom-VercelClientEnvironmentLines {
     param([string[]]$Lines)
     $allowlist = @(
@@ -42,16 +43,7 @@ function Get-VercelPublicClientSettings {
     }
     $tempFile = Join-Path ([IO.Path]::GetTempPath()) ("vop-vercel-" + [Guid]::NewGuid().ToString("N") + ".env")
     try {
-        Push-Location -LiteralPath $projectRoot
-        try {
-            # Do not print Vercel CLI output; errors may contain configuration.
-            & vercel env pull $tempFile "--environment=$Environment" --yes *> $null
-            if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $tempFile)) {
-                throw "Could not pull Vercel environment. Check Vercel login, project link and permissions."
-            }
-        } finally {
-            Pop-Location
-        }
+        Invoke-VopVercelEnvironmentPull -ProjectRoot $projectRoot -Destination $tempFile -Environment $Environment
         $values = ConvertFrom-VercelClientEnvironmentLines -Lines @(Get-Content -LiteralPath $tempFile)
     } finally {
         if (Test-Path -LiteralPath $tempFile) {
