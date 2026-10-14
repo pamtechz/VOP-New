@@ -115,7 +115,7 @@ test('native Android launch resolves current connected ID after package setup', 
   const resolver = readFileSync('native_android/tool/resolve_android_target.ps1', 'utf8');
   assert.match(native, /Resolve-VopAndroidTarget -RequestedId \$DeviceId -DeviceLines \$deviceOutput/);
   assert.match(native, /tool\\resolve_android_target.ps1/);
-  assert.match(resolver, /emulator-\d/);
+  assert.match(resolver, /RequestedId -match/);
   assert.match(resolver, /matching\.Count -eq 1/);
   assert.match(resolver, /ambiguous: multiple online Android devices match/);
   assert.match(resolver, /no longer the active serial/);
