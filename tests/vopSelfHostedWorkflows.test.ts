@@ -6,6 +6,7 @@ const workflows = [
   '.github/workflows/apply-vop-review.yml',
   '.github/workflows/prepare-firebase-seeder.yml',
   '.github/workflows/vop-firestore-rules.yml',
+  '.github/workflows/vop-fork-pr-gate.yml',
   '.github/workflows/vop-native-android.yml',
   '.github/workflows/vop-refresh-lockfile.yml',
   '.github/workflows/vop-seed-editorial.yml',
@@ -61,4 +62,15 @@ test('native Flutter Android and Web CI invokes Windows-compatible commands',()=
   assert.doesNotMatch(source,/shell: bash/);
   assert.doesNotMatch(source,/run: python3 /);
   assert.doesNotMatch(source,/runs-on: ubuntu-latest/);
+});
+
+test('fork metadata gate is evaluated from trusted base without downloading PR content',()=>{
+  const gate=readFileSync('.github/workflows/vop-fork-pr-gate.yml','utf8');
+  assert.match(gate,/pull_request_target:/);
+  assert.match(gate,/VOP_HEAD_REPOSITORY: \$\{\{ github\.event\.pull_request\.head\.repo\.full_name \}\}/);
+  assert.match(gate,/VOP_BASE_REPOSITORY: \$\{\{ github\.repository \}\}/);
+  assert.match(gate,/if \(\$env:VOP_HEAD_REPOSITORY -ne \$env:VOP_BASE_REPOSITORY\)/);
+  assert.match(gate,/throw 'This VOP pull request originates from an untrusted fork/);
+  assert.doesNotMatch(gate,/uses:\s*actions\/checkout/);
+  assert.doesNotMatch(gate,/secrets\./);
 });
