@@ -212,8 +212,14 @@ if ($BuildApk) {
     if ($DeviceId) { throw "Do not pass -DeviceId when building an APK." }
     $flutterArgs = @("build", "apk", "--debug") + $defines
 } else {
-    $flutterArgs = @("run") + $defines
-    if ($DeviceId) { $flutterArgs += @("-d", $DeviceId) }
+    # Resolve after pub get: the AVD's emulator-55xx serial can rotate while
+    # Flutter resolves packages or the emulator finishes booting.
+    . (Join-Path $PSScriptRoot "tool\flutter_device_parser.ps1")
+    . (Join-Path $PSScriptRoot "tool\resolve_android_target.ps1")
+    $deviceOutput = @(& flutter devices)
+    if ($LASTEXITCODE -ne 0) { throw "Unable to enumerate Flutter Android devices before launch." }
+    $resolvedId = Resolve-VopAndroidTarget -RequestedId $DeviceId -DeviceLines $deviceOutput
+    $flutterArgs = @("run") + $defines + @("-d", $resolvedId)
 }
 flutter @flutterArgs
 if ($LASTEXITCODE -ne 0) {
