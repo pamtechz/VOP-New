@@ -4,11 +4,13 @@ on:
   pull_request:
     paths:
       - 'native_android/**'
+      - 'run_web.ps1'
       - '.github/workflows/vop-native-android.yml'
   push:
     branches: [main]
     paths:
       - 'native_android/**'
+      - 'run_web.ps1'
       - '.github/workflows/vop-native-android.yml'
   workflow_dispatch:
 
@@ -25,7 +27,7 @@ jobs:
         shell: pwsh
         run: |
           $parseErrors = $null
-          foreach ($scriptPath in @('run_android.ps1', 'run_vop.ps1', 'native_android/run_android.ps1', 'native_android/run_vop.ps1', 'native_android/tool/flutter_device_parser.ps1', 'native_android/tool/resolve_android_target.ps1', 'native_android/tool/vercel_public_config.ps1', 'tests/nativeDeviceDiscovery.test.ps1', 'tests/nativeVercelClientConfig.test.ps1', 'tests/nativeDynamicDeviceSelection.test.ps1', 'tests/nativeEmulatorLaunchFailure.test.ps1')) {
+          foreach ($scriptPath in @('run_android.ps1', 'run_vop.ps1', 'run_web.ps1', 'native_android/run_android.ps1', 'native_android/run_vop.ps1', 'native_android/run_web.ps1', 'native_android/tool/vercel_web_config.ps1', 'native_android/tool/flutter_device_parser.ps1', 'native_android/tool/resolve_android_target.ps1', 'native_android/tool/vercel_public_config.ps1', 'tests/nativeDeviceDiscovery.test.ps1', 'tests/nativeVercelClientConfig.test.ps1', 'tests/nativeDynamicDeviceSelection.test.ps1', 'tests/nativeWebConfig.test.ps1', 'tests/nativeEmulatorLaunchFailure.test.ps1')) {
             $parseErrors = $null
             [System.Management.Automation.Language.Parser]::ParseFile(
               (Resolve-Path $scriptPath).Path,
@@ -46,6 +48,9 @@ jobs:
       - name: Verify rotated Android emulator and Wi-Fi device selection
         shell: pwsh
         run: ./tests/nativeDynamicDeviceSelection.test.ps1
+      - name: Verify browser Firebase public-only settings and HTTPS origin validation
+        shell: pwsh
+        run: ./tests/nativeWebConfig.test.ps1
       - name: Abort promptly and explain Flutter emulator startup code 1
         shell: pwsh
         run: ./tests/nativeEmulatorLaunchFailure.test.ps1
@@ -87,5 +92,40 @@ jobs:
         with:
           name: vop-native-debug-apk
           path: native_android/build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
+          retention-days: 5
+
+  flutter-web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Generate and validate Flutter web scaffold
+        run: flutter create --platforms=web --org com.sda --project-name vop native_android
+      - name: Fetch native Flutter dependencies
+        working-directory: native_android
+        run: flutter pub get
+      - name: Analyze Flutter web source
+        working-directory: native_android
+        run: flutter analyze --no-pub --no-fatal-infos
+      - name: Compile the same Flutter learner app for browser
+        working-directory: native_android
+        shell: bash
+        run: |
+          flutter build web --release --no-pub \
+            --dart-define=VOP_API_BASE_URL=https://vopafrica.vercel.app \
+            --dart-define=VOP_FIREBASE_API_KEY=ci-public-client-placeholder \
+            --dart-define=VOP_FIREBASE_WEB_APP_ID=1:12345:web:abc12345 \
+            --dart-define=VOP_FIREBASE_WEB_AUTH_DOMAIN=example.firebaseapp.com \
+            --dart-define=VOP_FIREBASE_SENDER_ID=12345 \
+            --dart-define=VOP_FIREBASE_PROJECT_ID=example
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vop-flutter-web-preview
+          path: native_android/build/web/
           if-no-files-found: error
           retention-days: 5

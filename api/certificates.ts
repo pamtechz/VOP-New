@@ -1,3 +1,4 @@
+import { applyFlutterPreviewCors } from '../server/flutterPreviewCors.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { getApps, initializeApp, cert } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
@@ -223,6 +224,7 @@ async function lifecycle(req:Request,res:Response,action:'revoke'|'replace'){
 }
 
 export default async function handler(req:Request,res:Response){
+  if (applyFlutterPreviewCors(req, res)) return;
  try {
    const action=req.method==='GET' ? queryValue(req,'action') : String((req.body&&typeof req.body==='object'?(req.body as Record<string,unknown>).action:'')||'');
    if(req.method==='GET' && action==='mine') return await mine(req,res);

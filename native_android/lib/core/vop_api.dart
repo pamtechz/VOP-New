@@ -1,13 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
+import 'network_error_web.dart' if (dart.library.io) 'network_error_io.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 
 import 'config.dart';
-import 'offline_study.dart';
+import 'offline_study_web.dart' if (dart.library.io) 'offline_study.dart';
 
 class VopApiException implements Exception {
   const VopApiException(this.message, {this.status = 0, this.code = ''});
@@ -37,7 +37,7 @@ class VopApi {
   StreamSubscription<List<ConnectivityResult>>? _connection;
   bool _syncing=false;
   String get _uid=>_auth.currentUser?.uid??'';
-  bool _networkFailure(Object error)=>error is SocketException ||
+  bool _networkFailure(Object error)=>isVopSocketError(error) ||
     (error is VopApiException && (error.status==0||
       error.status==502||error.status==503||error.status==504));
   static const _timeout = Duration(seconds: 25);
@@ -115,8 +115,11 @@ class VopApi {
       throw const VopApiException('VOP returned an invalid response.');
     } on http.ClientException {
       throw const VopApiException('Network unavailable. Check your connection.');
-    } on SocketException {
-      throw const VopApiException('Network unavailable. Check your connection.');
+    } catch (error) {
+      if (isVopSocketError(error)) {
+        throw const VopApiException('Network unavailable. Check your connection.');
+      }
+      rethrow;
     }
   }
 

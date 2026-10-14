@@ -1,3 +1,4 @@
+import { applyFlutterPreviewCors } from '../server/flutterPreviewCors.js';
 /* One Vercel function; individual handlers continue to enforce authorization. */
 import h0 from '../api_handlers/admin/analytics.js';
 import h1 from '../api_handlers/admin/audit.js';
@@ -22,7 +23,7 @@ import h19 from '../api_handlers/admin/account.js';
 import h20 from '../api_handlers/admin/health.js';
 import h21 from '../api_handlers/admin/mobile.js';
 
-type Req={url?:string;query?:Record<string,string|string[]|undefined>};
+type Req={url?:string;query?:Record<string,string|string[]|undefined>;method?:string;headers?:Record<string,string|string[]|undefined>};
 type Res={status:(code:number)=>Res;json:(body:unknown)=>void};
 const handlers:Record<string,(req:never,res:never)=>unknown>=Object.freeze({
   'analytics': h0,
@@ -49,6 +50,7 @@ const handlers:Record<string,(req:never,res:never)=>unknown>=Object.freeze({
   'mobile': h21,
 });
 export default async function handler(req:Req,res:Res){
+  if (applyFlutterPreviewCors(req, res)) return;
   const value=req.query?.__vopRoute;
   const candidate=Array.isArray(value)?value[0]:value;
   const name=typeof candidate==='string'&&candidate?candidate:new URL(req.url||'/', 'http://localhost').pathname.replace(/^\/api\/admin\/?/,'');

@@ -1,3 +1,4 @@
+import { applyFlutterPreviewCors } from '../server/flutterPreviewCors.js';
 import { randomUUID } from 'node:crypto';
 import { getApps, initializeApp, cert } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
@@ -44,6 +45,7 @@ function preservesPlatformScope(role:unknown){
 }
 
 export default async function handler(req: Request, res: Response) {
+  if (applyFlutterPreviewCors(req, res)) return;
   try {
     const db = getFirestore(admin());
 

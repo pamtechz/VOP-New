@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../core/vop_api.dart';
 import '../core/vop_i18n.dart';
@@ -169,7 +170,7 @@ class _HomeShellState extends State<HomeShell> {
       _destination('Discover',Icons.home_outlined,()=>selectTab(0)),
       _destination('Lessons & Assessments',Icons.book_outlined,()=>selectTab(1)),
       _destination('Library',Icons.local_library_outlined,()=>selectTab(2)),
-      _destination('Offline downloads',Icons.download_for_offline_outlined,
+      if(!kIsWeb) _destination('Offline downloads',Icons.download_for_offline_outlined,
         ()=>push(OfflineStudiesScreen(api:widget.api))),
       _destination('My Progress',Icons.insights_outlined,()=>push(_ProgressScreen(api:widget.api))),
       _destination('My Certificates',Icons.workspace_premium_outlined,

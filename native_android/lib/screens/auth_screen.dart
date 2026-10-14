@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 import '../core/config.dart';
@@ -59,6 +60,11 @@ class _AuthScreenState extends State<AuthScreen> {
   Future<void> _googleSignIn() async {
     setState(() { _busy = true; _error = null; });
     try {
+      if (kIsWeb) {
+        final provider = GoogleAuthProvider()..addScope('email')..addScope('profile');
+        await FirebaseAuth.instance.signInWithPopup(provider);
+        return;
+      }
       final google = GoogleSignIn(
         scopes: ['email', 'profile'],
         serverClientId: VopConfig.googleWebClientId.isEmpty
@@ -75,7 +81,8 @@ class _AuthScreenState extends State<AuthScreen> {
         _error = error.message ?? 'Google sign-in is unavailable.');
     } catch (_) {
       if (mounted) setState(() =>
-        _error = 'Google sign-in needs Android OAuth configuration.');
+        _error = kIsWeb ? 'Google sign-in requires a Firebase-authorized browser origin.' :
+            'Google sign-in needs Android OAuth configuration.');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -158,8 +165,8 @@ class _AuthScreenState extends State<AuthScreen> {
                   icon: const Icon(Icons.login_rounded),
                   label: const Text('Continue with Google'),
                 ),
-                const SizedBox(height: 12),
-                OutlinedButton.icon(
+                if (!kIsWeb) const SizedBox(height: 12),
+                if (!kIsWeb) OutlinedButton.icon(
                   onPressed:_busy?null:_signInWithPasskey,
                   icon:const Icon(Icons.fingerprint_outlined),
                   label:const Text('Continue with passkey'),

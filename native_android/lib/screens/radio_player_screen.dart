@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import '../widgets/provider_embed_stub.dart'
+  if (dart.library.html) '../widgets/provider_embed_web.dart';
 import 'package:video_player/video_player.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -209,6 +212,11 @@ class _RadioPlayerScreenState extends State<RadioPlayerScreen>
       return;
     }
     if(source.kind==RadioMediaKind.provider){
+      if (kIsWeb) {
+        if (mounted) setState(() => loading = false);
+        _preparing = false;
+        return;
+      }
       final allowed=source.url!.host;
       embed=WebViewController()
         ..setJavaScriptMode(JavaScriptMode.unrestricted)
@@ -420,9 +428,11 @@ class _RadioPlayerScreenState extends State<RadioPlayerScreen>
             if(ready&&source.kind==RadioMediaKind.video)
               AspectRatio(aspectRatio:v!.aspectRatio>0?v.aspectRatio:16/9,
                 child:VideoPlayer(c!)),
-            if(source.kind==RadioMediaKind.provider&&embed!=null)
+            if(kIsWeb && source.kind==RadioMediaKind.provider && source.url!=null)
+              Positioned.fill(child:VopWebProviderEmbed(url:source.url!)),
+            if(!kIsWeb&&source.kind==RadioMediaKind.provider&&embed!=null)
               WebViewWidget(controller:embed!),
-            if(source.kind==RadioMediaKind.provider&&embed==null)
+            if(!kIsWeb&&source.kind==RadioMediaKind.provider&&embed==null)
               Positioned.fill(child:Stack(fit:StackFit.expand,children:[
                 if(safeRadioHttps(value(widget.item,'posterUrl')))
                   Image.network(value(widget.item,'posterUrl'),fit:BoxFit.cover,
