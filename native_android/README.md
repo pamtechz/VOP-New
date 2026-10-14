@@ -199,10 +199,12 @@ the current browser hostname is Firebase-authorized. The trusted localhost
 origin and LAN HTTP preview are not equivalent to a production HTTPS origin.
 
 For `-ShareOnNetwork`, connect phone and computer to trusted Wi-Fi;
-the app will list possible private IPv4 addresses. A preview served via
-plain HTTP on LAN is not an authenticated production environment. Use a
-real HTTPS development origin before evaluating OAuth or high-security
-account features on a phone.
+the app lists possible private IPv4 addresses. These HTTP LAN previews
+are **UI-only**: protected VOP backend APIs reject all insecure non-loopback
+origins, even when included in `VOP_FLUTTER_WEB_ALLOWED_ORIGINS`.
+Browser authentication and protected study actions must be tested from an
+approved HTTPS preview origin that is also authorized by Firebase.
+Do not enter real credentials into an HTTP phone preview.
 
 Browser support boundaries: native device biometrics and Android Credential
 Manager passkeys are deliberately not represented as browser capabilities.
