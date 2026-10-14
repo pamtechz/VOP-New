@@ -1,3 +1,4 @@
+import { applyFlutterPreviewCors } from '../server/flutterPreviewCors.js';
 import { randomUUID } from 'node:crypto';
 import { getApps, initializeApp, cert } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
@@ -457,6 +458,7 @@ function draftFor(student: Record<string, unknown>, performance: Awaited<ReturnT
 }
 
 export default async function handler(req: Request, res: Response) {
+  if (applyFlutterPreviewCors(req, res)) return;
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed.' });
   try {
     const decoded = await authenticate(req);
