@@ -110,3 +110,21 @@ test('repo-root PowerShell wrappers forward native launcher arguments', () => {
   assert.match(rootAndroid, /\[string\]\$DeviceId/);
   assert.match(rootMenu, /\[string\]\$EmulatorId/);
 });
+
+test('native Android launch resolves current connected ID after package setup', () => {
+  const resolver = readFileSync('native_android/tool/resolve_android_target.ps1', 'utf8');
+  assert.match(native, /Resolve-VopAndroidTarget -RequestedId \$DeviceId -DeviceLines \$deviceOutput/);
+  assert.match(native, /tool\\resolve_android_target.ps1/);
+  assert.match(resolver, /emulator-\d/);
+  assert.match(resolver, /matching\.Count -eq 1/);
+  assert.match(resolver, /ambiguous: multiple online Android devices match/);
+  assert.match(resolver, /no longer the active serial/);
+});
+
+test('native dependency upgrades do not break the current authentication APIs', () => {
+  const pubspec = readFileSync('native_android/pubspec.yaml', 'utf8');
+  assert.match(pubspec, /google_sign_in: \^6\.3\.0/);
+  assert.match(pubspec, /local_auth: \^2\.3\.0/);
+  assert.match(pubspec, /firebase_auth: \^5\.6\.2/);
+  assert.match(pubspec, /firebase_core: \^3\.15\.2/);
+});
