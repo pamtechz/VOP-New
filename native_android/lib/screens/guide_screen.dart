@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 
 import '../core/vop_api.dart';
 import 'learner_support_screen.dart';
@@ -57,8 +58,8 @@ class _GuideScreenState extends State<GuideScreen> {
         IconButton(onPressed:askForHelp,
           icon:const Icon(Icons.support_agent_outlined),
           tooltip:'Ask for help with this course'),
-        IconButton(onPressed:downloading?null:download,
-          tooltip:'Download lessons',
+        IconButton(onPressed:kIsWeb||downloading?null:download,
+          tooltip:kIsWeb ? 'Encrypted offline lessons require the Android app' : 'Download lessons',
           icon:downloading?const SizedBox(width:18,height:18,
             child:CircularProgressIndicator(strokeWidth:2)):
             const Icon(Icons.download_for_offline_outlined)),
