@@ -26,17 +26,28 @@ test('every VOP GitHub job uses the KASAINSTITUTE self-hosted runner, never GitH
   }
 });
 
-test('untrusted fork PRs cannot execute arbitrary checkout code on VOP self-hosted runner',()=>{
+test('fork PRs must fail on trusted runner before any checkout; they must never succeed through skipped jobs',()=>{
   for(const path of [
     '.github/workflows/vop-native-android.yml',
     '.github/workflows/vop-firestore-rules.yml',
     '.github/workflows/vop-validate.yml',
     '.github/workflows/vop-verify.yml',
   ]) {
-    const contents=readFileSync(path,'utf8');
-    const jobs = contents.match(/^[ ]{4}runs-on:/gm) || [];
-    const protections = contents.match(/^[ ]{4}if: github\.event_name != 'pull_request' \|\| github\.event\.pull_request\.head\.repo\.full_name == github\.repository/gm)||[];
-    assert.equal(protections.length,jobs.length,path+' must guard every self-hosted PR job');
+    const source=readFileSync(path,'utf8');
+    const jobs=(source.match(/^    runs-on: \[self-hosted, Windows, KASAINSTITUTE\]$/gm)||[]).length;
+    const guard=(source.match(/^      - name: Reject untrusted fork PR before checking out code$/gm)||[]).length;
+    const failure=(source.match(/throw "Fork pull requests cannot execute code on the VOP KASAINSTITUTE self-hosted runner/g)||[]).length;
+    assert.equal(guard,jobs,path+' does not reject every untrusted fork job');
+    assert.equal(failure,jobs,path+' missing the non-skippable failure');
+    assert.doesNotMatch(source,/^    if: github\.event_name != 'pull_request' \|\| github\.event\.pull_request\.head\.repo\.full_name == github\.repository$/m,
+      path+' must not mark fork jobs as skipped/success');
+    const sections=source.split(/^      - name: Reject untrusted fork PR before checking out code$/m).slice(1);
+    for(const section of sections){
+      const nextCheckout=section.indexOf('uses: actions/checkout@');
+      const nextForkFailure=section.indexOf('throw "Fork pull requests cannot execute code');
+      assert.ok(nextCheckout<0|| (nextForkFailure>=0 && nextForkFailure<nextCheckout),
+        path+' checks out code before rejecting untrusted fork');
+    }
   }
 });
 
