@@ -1,6 +1,6 @@
 # Voice of Prophecy — Bible Correspondence School
 
-React/TypeScript/Vite interface packaged for Android with Capacitor. The application uses Firebase Authentication/Firestore for account and content data, Vercel server APIs for privileged operations, server-side assessment grading, tenant-scoped administration, graduation approval and official certificate issuance.
+React/TypeScript/Vite web platform with integrated Flutter native Android application (`native_android/`). The application uses Firebase Authentication/Firestore for account and content data, Vercel server APIs for privileged operations, server-side assessment grading, tenant-scoped administration, graduation approval and official certificate issuance.
 
 > **Security model:** Browser storage is treated only as non-authoritative UI/cache state and is namespaced to the authenticated account. Operational progress, assessment results, graduation decisions, tenant membership and official credentials are server-authoritative. No system can be guaranteed literally unhackable; the release target is defense-in-depth with least privilege, tenant isolation, immutable credential records and deny-by-default Firestore rules.
 
@@ -13,10 +13,10 @@ npm ci
 npm run dev
 npm run build
 npm run lint
-node --experimental-strip-types --test tests/progress.test.ts tests/multitest.test.ts tests/certificatePreview.test.ts tests/averageScore.test.ts tests/quiz.test.ts tests/lesson.test.ts
+npm run test:unit
 ```
 
-For Android packaging, use the Capacitor/Android configuration under `android/` after a successful web build. These workflows do not publish an APK or a production deployment.
+For native Android and Flutter web versions, use `.\run_vop.ps1` or `.\run_web.ps1`.
 
 
 ## Local development API

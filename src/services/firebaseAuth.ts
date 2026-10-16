@@ -1,12 +1,9 @@
-import { Capacitor } from '@capacitor/core';
-import { FirebaseAuthentication } from '@capacitor-firebase/authentication';
 import {
   EmailAuthProvider,
   GoogleAuthProvider,
   reauthenticateWithCredential,
   reauthenticateWithPopup,
   sendPasswordResetEmail,
-  signInWithCredential,
   signInWithEmailAndPassword,
   signInWithPopup,
   signInWithCustomToken,
@@ -53,7 +50,7 @@ export const changeUserPassword = async (
       throw new Error('Current password is incorrect.');
     }
     if (code === 'auth/requires-recent-login') {
-      if (skipCurrentPassword && !Capacitor.isNativePlatform()) {
+      if (skipCurrentPassword) {
         try {
           const provider = new GoogleAuthProvider();
           provider.setCustomParameters({ prompt: 'select_account' });
@@ -98,7 +95,7 @@ export const emailSignUp = async (email: string, password: string, inviteToken =
 export const resetPassword = (email: string) =>
   sendPasswordResetEmail(requireAuth(), email.trim());
 
-/** Android uses native account selection; web uses Firebase's popup flow.
+/** Web uses Firebase's popup flow.
  *
  * Do not force Cross-Origin-Opener-Policy on the user-facing app. Firebase's
  * popup resolver polls and closes its OAuth window; explicit COOP headers can
@@ -109,15 +106,9 @@ export const resetPassword = (email: string) =>
 export async function googleSignIn() {
   const firebaseAuth = requireAuth();
   await authPersistenceReady;
-  if (!Capacitor.isNativePlatform()) {
-    const provider = new GoogleAuthProvider();
-    provider.setCustomParameters({ prompt: 'select_account' });
-    return signInWithPopup(firebaseAuth, provider);
-  }
-  const result = await FirebaseAuthentication.signInWithGoogle();
-  const idToken = result.credential?.idToken;
-  if (!idToken) throw new Error('Google sign-in returned no ID token. Check Android Firebase registration, SHA fingerprints and provider configuration.');
-  return signInWithCredential(firebaseAuth, GoogleAuthProvider.credential(idToken));
+  const provider = new GoogleAuthProvider();
+  provider.setCustomParameters({ prompt: 'select_account' });
+  return signInWithPopup(firebaseAuth, provider);
 }
 
 export const firebaseSignOut = () => signOut(requireAuth());

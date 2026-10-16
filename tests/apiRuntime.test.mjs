@@ -96,7 +96,7 @@ test('loading fallback translations preserves the selected locale and resolves e
 });
 
 
-test('package lock matches supported runtime, Vite, gRPC and Capacitor dependencies', () => {
+test('package lock matches supported runtime, Vite, and gRPC dependencies', () => {
   const root=join(dirname(fileURLToPath(import.meta.url)),'..');
   const pkg=JSON.parse(readFileSync(join(root,'package.json'),'utf8'));
   const lock=JSON.parse(readFileSync(join(root,'package-lock.json'),'utf8'));
@@ -106,8 +106,6 @@ test('package lock matches supported runtime, Vite, gRPC and Capacitor dependenc
   assert.equal(readFileSync(join(root,'.nvmrc'),'utf8').trim(),'22.16.0');
   assert.equal(readFileSync(join(root,'.node-version'),'utf8').trim(),'22.16.0');
   assert.equal(readFileSync(join(root,'.npmrc'),'utf8').trim(),'engine-strict=true');
-  assert.equal(pkg.dependencies['@capacitor/app'],'8.1.1');
-  assert.equal(lock.packages[''].dependencies['@capacitor/app'],'8.1.1');
   assert.equal(pkg.devDependencies.vite,'8.3.0');
   assert.equal(lock.packages[''].devDependencies.vite,'8.3.0');
   assert.equal(lock.packages[''].engines.node,'>=22.12 <23');

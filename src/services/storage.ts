@@ -78,12 +78,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
 // // ---------------- Platform Security Check ---------------- //
 
 export const isNativePlatform = (): boolean => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const win = window as any;
-  return Boolean(
-    win.Capacitor?.isNativePlatform?.() ||
-    (win.Capacitor?.getPlatform && win.Capacitor.getPlatform() !== 'web')
-  );
+  return false;
 };
 
 export const isSuperAdminAllowedOnPlatform = (): boolean => {
