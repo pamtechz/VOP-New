@@ -241,7 +241,7 @@ class _ReferenceSectionsState extends State<_ReferenceSections> {
             final chapterId = (page['chapterId'] ?? '').toString().trim();
             final name = (page['title'] ?? '').toString().trim();
             final label = name.isEmpty
-                ? 'Page ' + (page['pageNumber'] ?? '').toString() : name;
+                ? 'Page ${(page['pageNumber'] ?? '')}' : name;
             return ListTile(
               leading: const Icon(Icons.segment_outlined),
               title: Text(label),
@@ -254,8 +254,7 @@ class _ReferenceSectionsState extends State<_ReferenceSections> {
                   : (widget.lesson['id'] ?? '').toString(),
                 label: label,
                 route: 'lesson',
-                description: 'Guide: ' + (widget.guide['id'] ?? '').toString() +
-                  ', lesson: ' + (widget.lesson['id'] ?? '').toString(),
+                description: 'Guide: ${widget.guide['id'] ?? ''}, lesson: ${widget.lesson['id'] ?? ''}',
               )),
             );
           }),
@@ -579,12 +578,18 @@ class _SupportThreadScreenState extends State<SupportThreadScreen> {
         'references': references.map((item) => item.toJson()).toList(),
       });
       composer.clear();
-      if (mounted) setState(() { references.clear(); _refresh(); });
+      if (mounted) {
+        setState(() { references.clear(); _refresh(); });
+      }
     } catch (problem) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(problem.toString())));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(problem.toString())));
+      }
     } finally {
-      if (mounted) setState(() => sending = false);
+      if (mounted) {
+        setState(() => sending = false);
+      }
     }
   }
 
@@ -632,10 +637,14 @@ class _SupportThreadScreenState extends State<SupportThreadScreen> {
         if (!delete) 'references': item['references'] is List
           ? item['references'] : <Object>[],
       });
-      if (mounted) setState(_refresh);
+      if (mounted) {
+        setState(_refresh);
+      }
     } catch (problem) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(problem.toString())));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(problem.toString())));
+      }
     }
   }
 

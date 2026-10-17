@@ -10,6 +10,18 @@
   <link rel="manifest" href="manifest.json">
   <title>Voice of Prophecy</title>
   <style>html,body{margin:0;min-height:100%;background:#071a33}body{overflow:hidden}</style>
+  <script>
+    window.PasskeyAuthenticator = window.PasskeyAuthenticator || {
+      init: function() {},
+      register: function(options) { return Promise.reject(new Error("Passkeys on web require native browser WebAuthn.")); },
+      login: function(options) { return Promise.reject(new Error("Passkeys on web require native browser WebAuthn.")); },
+      cancelCurrentAuthenticatorOperation: function() {},
+      isUserVerifyingPlatformAuthenticatorAvailable: function() { return Promise.resolve(false); },
+      isConditionalMediationAvailable: function() { return Promise.resolve(false); },
+      hasPasskeySupport: function() { return false; }
+    };
+    window.passkeys = window.PasskeyAuthenticator;
+  </script>
 </head>
 <body>
   <script src="flutter_bootstrap.js" async></script>

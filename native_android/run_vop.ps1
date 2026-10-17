@@ -112,7 +112,15 @@ function Select-Target($devices, [string]$requested, [string]$kind) {
         }
         return [string]$choice[0].id
     }
-    if ($matching.Count -eq 0) { throw "No $kind target found. Run .\run_vop.ps1 -Mode List." }
+    if ($matching.Count -eq 0) {
+    $availableEmulators = @(Get-AvailableEmulators)
+    if ($availableEmulators.Count -gt 0) {
+      Write-Host "No running Android device detected. Launching emulator '$($availableEmulators[0].name)'..."
+      Start-Emulator
+      return ""
+    }
+    throw "No $kind target found. Connect an Android phone via USB/Wi-Fi or start an Android Studio emulator."
+  }
     if ($matching.Count -eq 1) {
         Write-Host "Using $($matching[0].name) [$($matching[0].id)]"
         return [string]$matching[0].id
@@ -379,11 +387,18 @@ if ($Mode -ne "Browser") { Require-Flutter }
 
 switch ($Mode) {
     "USB" {
-        $targets = @(Get-AndroidDevices | Where-Object {
-            $_.emulator -ne $true -and !(Test-WirelessDeviceId ([string]$_.id))
-        })
-        Start-Native (Select-Target $targets $DeviceId "USB Android")
+    $devices = @(Get-AndroidDevices)
+    $targets = @($devices | Where-Object {
+      $_.id -ne "windows" -and $_.id -ne "chrome" -and $_.id -ne "edge" -and !(Test-WirelessDeviceId ([string]$_.id))
+    })
+    if ($targets.Count -eq 0) {
+      $targets = @($devices | Where-Object {
+        $_.id -ne "windows" -and $_.id -ne "chrome" -and $_.id -ne "edge"
+      })
     }
+    $targetId = Select-Target $targets $DeviceId "Android"
+    if ($targetId) { Start-Native $targetId }
+  }
     "WiFi" { Start-Wireless }
     "Emulator" { Start-Emulator }
     "Browser" {

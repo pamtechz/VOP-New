@@ -18,7 +18,7 @@ class _VopWebProviderEmbedState extends State<VopWebProviderEmbed> {
   @override
   void initState() {
     super.initState();
-    _viewType = 'vop-provider-embed-' + (_nextView++).toString();
+    _viewType = 'vop-provider-embed-${_nextView++}';
     final url = widget.url;
     if (url.scheme != 'https' || url.host.isEmpty || url.userInfo.isNotEmpty) {
       throw StateError('Only approved HTTPS provider embeds are allowed.');

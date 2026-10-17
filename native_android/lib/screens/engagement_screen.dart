@@ -48,7 +48,9 @@ class _EngagementScreenState extends State<EngagementScreen> {
             ],
             selected:{tab},onSelectionChanged:(values)=>setState((){
               tab=values.first;
-              if(tab==1&&!challengesLoaded)reload();
+              if (tab == 1 && !challengesLoaded) {
+                reload();
+              }
             }));
         })),
       Expanded(child:tab==0?_decks():_challenges()),
@@ -56,9 +58,13 @@ class _EngagementScreenState extends State<EngagementScreen> {
   );
   Widget _decks()=>FutureBuilder<Map<String,dynamic>>(future:decks,
     builder:(context,s){
-      if(s.connectionState!=ConnectionState.done)return const VopSkeleton();
-      if(s.hasError)return VopEmpty(icon:Icons.wifi_off,message:'${s.error}',
-        onRetry:()=>setState(reload));
+      if (s.connectionState != ConnectionState.done) {
+        return const VopSkeleton();
+      }
+      if (s.hasError) {
+        return VopEmpty(icon:Icons.wifi_off,message:'${s.error}',
+          onRetry:()=>setState(reload));
+      }
       final items=engagementRows(s.data?['decks']);
       return RefreshIndicator(onRefresh:()async{setState(reload);await decks;},
         child:ListView(padding:const EdgeInsets.all(17),children:[
@@ -88,9 +94,13 @@ class _EngagementScreenState extends State<EngagementScreen> {
     });
   Widget _challenges()=>FutureBuilder<Map<String,dynamic>>(future:arena,
     builder:(context,s){
-      if(s.connectionState!=ConnectionState.done)return const VopSkeleton();
-      if(s.hasError)return VopEmpty(icon:Icons.wifi_off,message:'${s.error}',
-        onRetry:()=>setState(reload));
+      if (s.connectionState != ConnectionState.done) {
+        return const VopSkeleton();
+      }
+      if (s.hasError) {
+        return VopEmpty(icon:Icons.wifi_off,message:'${s.error}',
+          onRetry:()=>setState(reload));
+      }
       final data=s.data??{},stats=data['arena'] is Map
         ?Map<String,dynamic>.from(data['arena'] as Map):<String,dynamic>{};
       final active=engagementRows(data['soloChallenges']);
@@ -116,7 +126,7 @@ class _EngagementScreenState extends State<EngagementScreen> {
               message:'No active solo challenge.')),
           ...active.map((item)=>Card(margin:const EdgeInsets.only(bottom:10),
             child:ListTile(
-              title:Text('Solo challenge'),
+              title:const Text('Solo challenge'),
               subtitle:Text('${item['answeredCount']??0} of ${item['questionCount']??0} answered'),
               trailing:const Icon(Icons.chevron_right),
               onTap:()=>_openChallenge((item['id']??'').toString())))),
@@ -138,33 +148,37 @@ class _EngagementScreenState extends State<EngagementScreen> {
     try{
       final session=await widget.api.action('/api/engagement',
         {'action':'duelSoloCreate'});
-      if(!mounted)return;
+      if (!mounted) return;
       await Navigator.push(context,MaterialPageRoute<void>(
         builder:(_)=>_SoloChallenge(api:widget.api,session:session)));
-      if(mounted)setState(reload);
+      if (mounted) setState(reload);
     }catch(e){
-      if(mounted)ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content:Text('$e')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content:Text('$e')));
+      }
     }
   }
   Future<void> _openChallenge(String id)async{
     try{
       final session=await widget.api.action('/api/engagement',
         {'action':'duelSoloJoin','challengeId':id});
-      if(!mounted)return;
+      if (!mounted) return;
       await Navigator.push(context,MaterialPageRoute<void>(
         builder:(_)=>_SoloChallenge(api:widget.api,session:session)));
-      if(mounted)setState(reload);
+      if (mounted) setState(reload);
     }catch(e){
-      if(mounted)ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content:Text('$e')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content:Text('$e')));
+      }
     }
   }
   Future<void> _leaderboard()async{
     try{
       final data=await widget.api.action('/api/engagement',
         {'action':'duelLeaderboard'});
-      if(!mounted)return;
+      if (!mounted) return;
       final items=engagementRows(data['leaderboard']);
       Navigator.push(context,MaterialPageRoute<void>(builder:(_)=>Scaffold(
         appBar:AppBar(title:const Text('Leaderboard')),
@@ -179,8 +193,10 @@ class _EngagementScreenState extends State<EngagementScreen> {
               trailing:Text('${items[index]['points']??0} pts')))),
       )));
     }catch(e){
-      if(mounted)ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content:Text('$e')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content:Text('$e')));
+      }
     }
   }
 }
@@ -199,17 +215,23 @@ class _MemoryDeckState extends State<_MemoryDeck> {
     try{
       await widget.api.action('/api/engagement',
         {'action':'memoryReview','deckId':widget.id,'verseId':verseId,'rating':rating});
-      if(mounted)setState(reload);
+      if (mounted) setState(reload);
     }catch(e){
-      if(mounted)ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content:Text('$e')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content:Text('$e')));
+      }
     }
   }
   @override Widget build(BuildContext context)=>Scaffold(
     appBar:AppBar(title:Text(widget.title)),
     body:FutureBuilder<Map<String,dynamic>>(future:due,builder:(context,s){
-      if(s.connectionState!=ConnectionState.done)return const VopSkeleton();
-      if(s.hasError)return VopEmpty(icon:Icons.wifi_off,message:'${s.error}');
+      if (s.connectionState != ConnectionState.done) {
+        return const VopSkeleton();
+      }
+      if (s.hasError) {
+        return VopEmpty(icon:Icons.wifi_off,message:'${s.error}');
+      }
       final verses=engagementRows(s.data?['due']);
       final summary=s.data?['summary'] is Map
         ?Map<String,dynamic>.from(s.data!['summary'] as Map):<String,dynamic>{};
@@ -279,7 +301,9 @@ class _SoloChallengeState extends State<_SoloChallenge>{
       if(!mounted)return;
       setState((){
         answered.add(questionId);
-        if(position<questions.length-1)position++;
+        if (position < questions.length - 1) {
+          position++;
+        }
       });
     }catch(e){if(mounted)setState(()=>error='$e');}
     finally{if(mounted)setState(()=>busy=false);}
@@ -291,28 +315,34 @@ class _SoloChallengeState extends State<_SoloChallenge>{
       final result=await widget.api.action('/api/engagement',{
         'action':'duelSoloFinish','challengeId':id,
       });
-      if(mounted)setState((){completed=true;results=result;});
+      if (mounted) {
+        setState((){completed=true;results=result;});
+      }
     }catch(e){if(mounted)setState(()=>error='$e');}
     finally{if(mounted)setState(()=>busy=false);}
   }
   @override Widget build(BuildContext context){
-    if(completed)return Scaffold(
-      appBar:AppBar(title:const Text('Challenge result')),
-      body:Center(child:Padding(padding:const EdgeInsets.all(25),
-        child:Column(mainAxisSize:MainAxisSize.min,children:[
-          const Icon(Icons.emoji_events,color:VopColors.gold,size:62),
-          const SizedBox(height:18),
-          Text('Challenge complete!',style:Theme.of(context).textTheme.headlineSmall),
-          const SizedBox(height:12),
-          Text('Score: ${results?['score']??0} / ${results?['questionCount']??questions.length}'),
-          Text('Points awarded: ${results?['pointsAwarded']??0}'),
-          const SizedBox(height:23),
-          FilledButton(onPressed:()=>Navigator.pop(context),
-            child:const Text('Return to arena')),
-        ]))));
-    if(questions.isEmpty)return const Scaffold(
-      body:VopEmpty(icon:Icons.warning_amber,
-        message:'No valid questions were returned for this challenge.'));
+    if (completed) {
+      return Scaffold(
+        appBar:AppBar(title:const Text('Challenge result')),
+        body:Center(child:Padding(padding:const EdgeInsets.all(25),
+          child:Column(mainAxisSize:MainAxisSize.min,children:[
+            const Icon(Icons.emoji_events,color:VopColors.gold,size:62),
+            const SizedBox(height:18),
+            Text('Challenge complete!',style:Theme.of(context).textTheme.headlineSmall),
+            const SizedBox(height:12),
+            Text('Score: ${results?['score']??0} / ${results?['questionCount']??questions.length}'),
+            Text('Points awarded: ${results?['pointsAwarded']??0}'),
+            const SizedBox(height:23),
+            FilledButton(onPressed:()=>Navigator.pop(context),
+              child:const Text('Return to arena')),
+          ]))));
+    }
+    if (questions.isEmpty) {
+      return const Scaffold(
+        body:VopEmpty(icon:Icons.warning_amber,
+          message:'No valid questions were returned for this challenge.'));
+    }
     final safePosition=position.clamp(0,questions.length-1).toInt();
     final q=questions[safePosition];
     final questionId=(q['id']??'').toString();

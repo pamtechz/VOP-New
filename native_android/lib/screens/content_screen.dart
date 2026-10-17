@@ -52,9 +52,13 @@ class _VopContentScreenState extends State<VopContentScreen> {
   @override Widget build(BuildContext context){
     final body=FutureBuilder<Map<String,dynamic>>(
       future:content,builder:(context,s){
-        if(s.connectionState!=ConnectionState.done)return const VopSkeleton();
-        if(s.hasError)return VopEmpty(icon:Icons.wifi_off,
-          message:'${s.error}',onRetry:()=>setState(reload));
+        if (s.connectionState != ConnectionState.done) {
+          return const VopSkeleton();
+        }
+        if (s.hasError) {
+          return VopEmpty(icon:Icons.wifi_off,
+            message:'${s.error}',onRetry:()=>setState(reload));
+        }
         final items=rows(s.data?['items']);
         final filtered=items.where((item)=>item.values
           .whereType<String>().join(' ').toLowerCase()
@@ -70,7 +74,7 @@ class _VopContentScreenState extends State<VopContentScreen> {
             TextField(
               onChanged:(text)=>setState(()=>filter=text),
               decoration:InputDecoration(
-                hintText:'Search '+widget.kind.title.toLowerCase(),
+                hintText:'Search ${widget.kind.title.toLowerCase()}',
                 prefixIcon:const Icon(Icons.search_rounded))),
             const SizedBox(height:14),
             VopSectionTitle(widget.kind.title,

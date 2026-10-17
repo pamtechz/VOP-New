@@ -18,45 +18,57 @@ abstract final class VopColors {
   static const darkSurface = Color(0xFF142A46);
   static const darkBorder = Color(0xFF294263);
 }
+
 /// Appearance is account-backed. This notifier updates the native shell without
 /// restarting the application or affecting saved curriculum data.
 abstract final class VopAppearance {
   static final mode = ValueNotifier<ThemeMode>(ThemeMode.system);
-  static int revision=0;
-  static Future<void> restoreTheme(String uid)async{
-    final storage=await SharedPreferences.getInstance();
-    final saved=storage.getString('vop:theme:'+uid);
-    if(saved=='dark')mode.value=ThemeMode.dark;
-    else if(saved=='light')mode.value=ThemeMode.light;
-    else mode.value=ThemeMode.system;
+  static int revision = 0;
+
+  static Future<void> restoreTheme(String uid) async {
+    final storage = await SharedPreferences.getInstance();
+    final saved = storage.getString('vop:theme:$uid');
+    if (saved == 'dark') {
+      mode.value = ThemeMode.dark;
+    } else if (saved == 'light') {
+      mode.value = ThemeMode.light;
+    } else {
+      mode.value = ThemeMode.system;
+    }
   }
-  static Future<void> persistTheme(String uid,String theme)async{
-    if(!['light','dark','system'].contains(theme))return;
+
+  static Future<void> persistTheme(String uid, String theme) async {
+    if (!['light', 'dark', 'system'].contains(theme)) return;
     revision++;
-    final storage=await SharedPreferences.getInstance();
-    await storage.setString('vop:theme:'+uid,theme);
+    final storage = await SharedPreferences.getInstance();
+    await storage.setString('vop:theme:$uid', theme);
   }
+
   static final largerText = ValueNotifier<bool>(false);
   static final reducedMotion = ValueNotifier<bool>(false);
   static final highContrast = ValueNotifier<bool>(false);
-  static void apply(Map<String,dynamic> settings){
-    mode.value=switch(settings['theme']){
-      'light'=>ThemeMode.light,'dark'=>ThemeMode.dark,_=>ThemeMode.system,
+
+  static void apply(Map<String, dynamic> settings) {
+    mode.value = switch (settings['theme']) {
+      'light' => ThemeMode.light,
+      'dark' => ThemeMode.dark,
+      _ => ThemeMode.system,
     };
-    final access=settings['accessibility'];
-    if(access is Map){
-      largerText.value=access['largeText']==true;
-      reducedMotion.value=access['reducedMotion']==true;
-      highContrast.value=access['highContrast']==true;
+    final access = settings['accessibility'];
+    if (access is Map) {
+      largerText.value = access['largeText'] == true;
+      reducedMotion.value = access['reducedMotion'] == true;
+      highContrast.value = access['highContrast'] == true;
     }
   }
 }
+
 abstract final class VopTheme {
-  static ThemeData build(Brightness brightness, {bool highContrast=false}) {
+  static ThemeData build(Brightness brightness, {bool highContrast = false}) {
     final dark = brightness == Brightness.dark;
     final surface = highContrast
-      ? (dark ? const Color(0xFF050B15) : Colors.white)
-      : (dark ? VopColors.darkSurface : VopColors.card);
+        ? (dark ? const Color(0xFF050B15) : Colors.white)
+        : (dark ? VopColors.darkSurface : VopColors.card);
     final colors = ColorScheme.fromSeed(
       seedColor: VopColors.navy,
       brightness: brightness,
@@ -66,74 +78,88 @@ abstract final class VopTheme {
       onSurface: highContrast ? (dark ? Colors.white : Colors.black) : null,
     );
     final base = ThemeData(
-      useMaterial3: true, colorScheme: colors,
+      useMaterial3: true,
+      colorScheme: colors,
       brightness: brightness,
       scaffoldBackgroundColor: highContrast
-        ? (dark ? Colors.black : Colors.white)
-        : (dark ? VopColors.darkCanvas : VopColors.canvas),
+          ? (dark ? Colors.black : Colors.white)
+          : (dark ? VopColors.darkCanvas : VopColors.canvas),
       splashFactory: InkRipple.splashFactory,
     );
     return base.copyWith(
       textTheme: base.textTheme.copyWith(
         headlineMedium: base.textTheme.headlineMedium?.copyWith(
-          fontSize: 27, fontWeight: FontWeight.w800, letterSpacing: -0.7),
+            fontSize: 27, fontWeight: FontWeight.w800, letterSpacing: -0.7),
         headlineSmall: base.textTheme.headlineSmall?.copyWith(
-          fontSize: 23, fontWeight: FontWeight.w800, letterSpacing: -0.45),
+            fontSize: 23, fontWeight: FontWeight.w800, letterSpacing: -0.45),
         titleLarge: base.textTheme.titleLarge?.copyWith(
-          fontSize: 19, fontWeight: FontWeight.w800, letterSpacing: -0.35),
+            fontSize: 19, fontWeight: FontWeight.w800, letterSpacing: -0.35),
         titleMedium: base.textTheme.titleMedium?.copyWith(
-          fontSize: 15, fontWeight: FontWeight.w700),
+            fontSize: 15, fontWeight: FontWeight.w700),
         bodyMedium: base.textTheme.bodyMedium?.copyWith(height: 1.52),
       ),
       appBarTheme: AppBarTheme(
-        elevation: 0, scrolledUnderElevation: 0,
-        backgroundColor: surface, foregroundColor: colors.onSurface,
-        titleTextStyle: TextStyle(fontWeight: FontWeight.w800,
-          fontSize: 17, color: colors.onSurface, letterSpacing: -0.25),
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        backgroundColor: surface,
+        foregroundColor: colors.onSurface,
+        titleTextStyle: TextStyle(
+            fontWeight: FontWeight.w800,
+            fontSize: 17,
+            color: colors.onSurface,
+            letterSpacing: -0.25),
       ),
       cardTheme: CardThemeData(
-        color: surface, elevation: 0,
+        color: surface,
+        elevation: 0,
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(19),
-          side: BorderSide(
-            color: highContrast ? (dark ? Colors.white70 : Colors.black54)
-              : (dark ? VopColors.darkBorder : VopColors.border))),
+            borderRadius: BorderRadius.circular(19),
+            side: BorderSide(
+                color: highContrast
+                    ? (dark ? Colors.white70 : Colors.black54)
+                    : (dark ? VopColors.darkBorder : VopColors.border))),
       ),
       inputDecorationTheme: InputDecorationTheme(
-        filled: true, fillColor: surface,
+        filled: true,
+        fillColor: surface,
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(13),
-          borderSide: BorderSide(color: dark
-            ? VopColors.darkBorder : VopColors.border)),
+            borderRadius: BorderRadius.circular(13),
+            borderSide: BorderSide(
+                color: dark ? VopColors.darkBorder : VopColors.border)),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(13),
-          borderSide: BorderSide(color: dark
-            ? VopColors.darkBorder : VopColors.border)),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14,vertical: 13),
+            borderRadius: BorderRadius.circular(13),
+            borderSide: BorderSide(
+                color: dark ? VopColors.darkBorder : VopColors.border)),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
       ),
-      filledButtonTheme: FilledButtonThemeData(style: FilledButton.styleFrom(
-        minimumSize: const Size(0,46),
+      filledButtonTheme: FilledButtonThemeData(
+          style: FilledButton.styleFrom(
+        minimumSize: const Size(0, 46),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         textStyle: const TextStyle(fontWeight: FontWeight.w700),
       )),
-      outlinedButtonTheme: OutlinedButtonThemeData(style: OutlinedButton.styleFrom(
-        minimumSize: const Size(0,43),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+          style: OutlinedButton.styleFrom(
+        minimumSize: const Size(0, 43),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       )),
       navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: surface, elevation: 0, height: 62,
-        iconTheme: WidgetStateProperty.all(const IconThemeData(size:21)),
+        backgroundColor: surface,
+        elevation: 0,
+        height: 62,
+        iconTheme: WidgetStateProperty.all(const IconThemeData(size: 21)),
         indicatorColor: dark ? const Color(0xFF1C406B) : const Color(0xFFE8F0FB),
-        labelTextStyle: WidgetStateProperty.all(const TextStyle(
-          fontSize: 10,fontWeight: FontWeight.w700)),
+        labelTextStyle: WidgetStateProperty.all(
+            const TextStyle(fontSize: 10, fontWeight: FontWeight.w700)),
       ),
       dividerTheme: DividerThemeData(
-        color: highContrast ? (dark ? Colors.white70 : Colors.black54)
-          : (dark ? VopColors.darkBorder : VopColors.border)),
+          color: highContrast
+              ? (dark ? Colors.white70 : Colors.black54)
+              : (dark ? VopColors.darkBorder : VopColors.border)),
       chipTheme: base.chipTheme.copyWith(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
-        side: BorderSide.none),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
+          side: BorderSide.none),
     );
   }
 }

@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:typed_data';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:local_auth/local_auth.dart';
@@ -163,10 +162,12 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
           }catch(_){}
         }
       }
-      if(changes.containsKey('theme')){
-        final uid=FirebaseAuth.instance.currentUser?.uid;
-        if(uid!=null)await VopAppearance.persistTheme(
-          uid,(preferences['theme']??'system').toString());
+      if (changes.containsKey('theme')) {
+        final uid = FirebaseAuth.instance.currentUser?.uid;
+        if (uid != null) {
+          await VopAppearance.persistTheme(
+            uid, (preferences['theme'] ?? 'system').toString());
+        }
       }
     },'Personal settings saved for web and Android.');
   }
@@ -231,11 +232,16 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         decoration:InputDecoration(labelText:label),
         items:options,onChanged:saving?null:(v){
           if(v!=null){
-            if(section.isEmpty)_patch(key,v);
-            else _nested(section,key,v);
-            if(key=='theme'&&preferencesReady){
+            if (section.isEmpty) {
+              _patch(key,v);
+            } else {
+              _nested(section,key,v);
+            }
+            if (key=='theme'&&preferencesReady) {
               final uid=FirebaseAuth.instance.currentUser?.uid;
-              if(uid!=null)VopAppearance.persistTheme(uid,v);
+              if (uid!=null) {
+                VopAppearance.persistTheme(uid,v);
+              }
               _saveSettings();
             }
           }
@@ -319,8 +325,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       const DropdownMenuItem(value:'',child:Text('System default')),
       ...languages.map((lang)=>DropdownMenuItem<String>(
         value:lang['code'].toString(),child:Text(
-          (lang['name']??lang['code']).toString()+' · '+
-          (lang['nativeName']??lang['code']).toString()))),
+          '${lang['name']??lang['code']} · ${lang['nativeName']??lang['code']}'))),
     ];
     return [
       if(settingsLoadError!=null)...[
@@ -405,26 +410,32 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
 
   Future<void> _loadSecurityActivity()async{
     if(securityActivityLoading)return;
-    if(mounted)setState((){
-      securityActivityLoading=true;
-      securityActivityError=null;
-    });
-    try{
-      final result=await widget.api.accountSecurityActivity();
-      if(mounted)setState((){
-        securityActivity=_rows(result['items']);
+    if (mounted) {
+      setState((){
+        securityActivityLoading=true;
         securityActivityError=null;
       });
+    }
+    try{
+      final result=await widget.api.accountSecurityActivity();
+      if (mounted) {
+        setState((){
+          securityActivity=_rows(result['items']);
+          securityActivityError=null;
+        });
+      }
     }catch(e){
-      if(mounted)setState((){
-        securityActivityError=e is VopApiException&&e.status==401
-          ?'Session expired. Sign in again to view security activity.'
-          :e is VopApiException&&e.status==403
-          ?'This account cannot access security history.'
-          :'Security history unavailable. Check connection and retry.';
-      });
+      if (mounted) {
+        setState((){
+          securityActivityError=e is VopApiException&&e.status==401
+            ?'Session expired. Sign in again to view security activity.'
+            :e is VopApiException&&e.status==403
+            ?'This account cannot access security history.'
+            :'Security history unavailable. Check connection and retry.';
+        });
+      }
     }finally{
-      if(mounted)setState(()=>securityActivityLoading=false);
+      if (mounted) setState(()=>securityActivityLoading=false);
     }
   }
   String _activityTime(BuildContext context,String raw){
@@ -691,10 +702,12 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                 TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('Cancel')),
                 FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('Clear')),
               ]));
-          if(confirmed==true){
+          if (confirmed == true) {
             await widget.api.clearOfflineStudies();
-            if(mounted)ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content:Text('Offline data cleared.')));
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content:Text('Offline data cleared.')));
+            }
           }
         },
         icon:const Icon(Icons.delete_outline),label:const Text('Clear downloads')),
@@ -702,7 +715,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     _heading('Account lifecycle','A deletion request follows the VOP retention process.',
       Icons.manage_accounts_outlined),
     _group([
-      Text('Status: '+(deletion['status']??'Active').toString()),
+      Text('Status: ${deletion['status']??'Active'}'),
       const SizedBox(height:10),
       if(['requested','processing','blocked'].contains(deletion['status']))
         OutlinedButton.icon(

@@ -33,13 +33,15 @@ class _AuthScreenState extends State<AuthScreen> {
         email: _email.text.trim(),password: _password.text,
       );
     } on FirebaseAuthException catch (error) {
-      if (mounted) setState(() => _error = switch (error.code) {
-        'invalid-email' => 'Enter a valid email address.',
-        'invalid-credential' || 'wrong-password' || 'user-not-found' =>
-          'The email or password is incorrect.',
-        'too-many-requests' => 'Too many attempts. Please try again later.',
-        _ => error.message ?? 'Sign-in could not be completed.',
-      });
+      if (mounted) {
+        setState(() => _error = switch (error.code) {
+          'invalid-email' => 'Enter a valid email address.',
+          'invalid-credential' || 'wrong-password' || 'user-not-found' =>
+            'The email or password is incorrect.',
+          'too-many-requests' => 'Too many attempts. Please try again later.',
+          _ => error.message ?? 'Sign-in could not be completed.',
+        });
+      }
     } catch (_) {
       if (mounted) setState(() => _error = 'Could not connect to VOP.');
     } finally {
@@ -51,9 +53,13 @@ class _AuthScreenState extends State<AuthScreen> {
     try{
       await VopPasskeys().signIn();
     }catch(e){
-      if(mounted)setState(()=>_error=e.toString().replaceFirst('Bad state: ',''));
+      if (mounted) {
+        setState(()=>_error=e.toString().replaceFirst('Bad state: ',''));
+      }
     }finally{
-      if(mounted)setState(()=>_busy=false);
+      if (mounted) {
+        setState(()=>_busy=false);
+      }
     }
   }
 
@@ -77,14 +83,20 @@ class _AuthScreenState extends State<AuthScreen> {
         accessToken: tokens.accessToken, idToken: tokens.idToken);
       await FirebaseAuth.instance.signInWithCredential(credential);
     } on FirebaseAuthException catch (error) {
-      if (mounted) setState(() =>
-        _error = error.message ?? 'Google sign-in is unavailable.');
+      if (mounted) {
+        setState(() =>
+          _error = error.message ?? 'Google sign-in is unavailable.');
+      }
     } catch (_) {
-      if (mounted) setState(() =>
-        _error = kIsWeb ? 'Google sign-in requires a Firebase-authorized browser origin.' :
-            'Google sign-in needs Android OAuth configuration.');
+      if (mounted) {
+        setState(() =>
+          _error = kIsWeb ? 'Google sign-in requires a Firebase-authorized browser origin.' :
+              'Google sign-in needs Android OAuth configuration.');
+      }
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) {
+        setState(() => _busy = false);
+      }
     }
   }
 

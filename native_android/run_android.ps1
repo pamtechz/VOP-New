@@ -14,7 +14,10 @@ if (!(Get-Command flutter -ErrorAction SilentlyContinue)) {
 }
 $values = @{}
 $androidRegistration = $null
-$legacyConfig = Join-Path $PSScriptRoot "..\android\app\google-services.json"
+$legacyConfig = Join-Path $PSScriptRoot "android\app\google-services.json"
+if (!(Test-Path -LiteralPath $legacyConfig)) {
+    $legacyConfig = Join-Path $PSScriptRoot "..\android\app\google-services.json"
+}
 if (Test-Path -LiteralPath $legacyConfig) {
     # A complete ignored local config may intentionally use another Firebase
     # registration. An unusable legacy file must not block that override.

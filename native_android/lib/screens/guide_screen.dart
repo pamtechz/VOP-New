@@ -16,16 +16,22 @@ class _GuideScreenState extends State<GuideScreen> {
   late Future<Map<String,dynamic>> guide;
   bool downloading=false;
   Future<void> download()async{
-    if(downloading)return;
+    if (downloading) return;
     setState(()=>downloading=true);
     try{
       final count=await widget.api.downloadGuide(widget.guideId);
-      if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content:Text(count.toString()+' lessons saved for offline study.')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content:Text('$count lessons saved for offline study.')));
+      }
     }catch(error){
-      if(mounted)ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content:Text('Download failed: '+error.toString())));
-    }finally{if(mounted)setState(()=>downloading=false);}
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content:Text('Download failed: $error')));
+      }
+    }finally{
+      if (mounted) setState(()=>downloading=false);
+    }
   }
   Future<void> askForHelp() async {
     try {
@@ -46,8 +52,10 @@ class _GuideScreenState extends State<GuideScreen> {
         ),
       ));
     } catch (error) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.toString())));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.toString())));
+      }
     }
   }
   @override void initState(){super.initState();reload();}
@@ -72,8 +80,10 @@ class _GuideScreenState extends State<GuideScreen> {
         if(s.connectionState!=ConnectionState.done){
           return const Center(child:CircularProgressIndicator());
         }
-        if(s.hasError)return Center(child:Padding(padding:const EdgeInsets.all(20),
-          child:Text('${s.error}',textAlign:TextAlign.center)));
+        if (s.hasError) {
+          return Center(child:Padding(padding:const EdgeInsets.all(20),
+            child:Text('${s.error}',textAlign:TextAlign.center)));
+        }
         final data=s.data??{};
         final details=data['guide'] as Map? ?? {};
         final lessons=(data['lessons'] as List? ?? [])
@@ -127,7 +137,7 @@ class _GuideScreenState extends State<GuideScreen> {
                       :LessonScreen(api:widget.api,guideId:widget.guideId,
                         lessonId:'${lesson['id']}',language:language,
                         title:'${lesson['title']}')));
-                    if(mounted)setState(reload);
+                    if (mounted) setState(reload);
                   },
                 ));
             }),

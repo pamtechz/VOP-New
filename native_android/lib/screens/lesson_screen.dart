@@ -70,7 +70,7 @@ class _LessonScreenState extends State<LessonScreen> {
             api: widget.api,
             initialReference: StudySupportReference(
               type: 'lesson', id: widget.lessonId, label: widget.title,
-              route: 'lesson', description: 'Guide: ' + widget.guideId,
+              route: 'lesson', description: 'Guide: ${widget.guideId}',
             ),
             openComposerOnStart: true,
           ),
@@ -80,20 +80,24 @@ class _LessonScreenState extends State<LessonScreen> {
     body:FutureBuilder<Map<String,dynamic>>(
       future:lesson,
       builder:(context,s){
-        if(s.connectionState!=ConnectionState.done){
+        if (s.connectionState != ConnectionState.done) {
           return const Center(child:CircularProgressIndicator());
         }
-        if(s.hasError)return Center(child:Padding(
-          padding:const EdgeInsets.all(22),
-          child:Text('${s.error}',textAlign:TextAlign.center)));
+        if (s.hasError) {
+          return Center(child:Padding(
+            padding:const EdgeInsets.all(22),
+            child:Text('${s.error}',textAlign:TextAlign.center)));
+        }
         final data=s.data?['lesson'];
         final offline=s.data?['offline']==true;
         final pages=data is Map && data['pages'] is List
           ?(data['pages'] as List).whereType<Map>()
               .map((v)=>Map<String,dynamic>.from(v)).toList()
           :<Map<String,dynamic>>[];
-        if(pages.isEmpty)return const Center(child:Text(
-          'This lesson has no published reading pages.'));
+        if (pages.isEmpty) {
+          return const Center(child:Text(
+            'This lesson has no published reading pages.'));
+        }
         final index=page.clamp(0,pages.length-1).toInt();
         final last=index==pages.length-1;
         return Column(children:[

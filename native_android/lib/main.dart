@@ -11,17 +11,24 @@ import 'screens/home_shell.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  String? initError;
   if (VopConfig.error == null) {
-    await Firebase.initializeApp(options: VopConfig.firebaseOptions);
+    try {
+      await Firebase.initializeApp(options: VopConfig.firebaseOptions);
+    } catch (e) {
+      initError = 'Firebase initialization error: $e';
+    }
   }
-  runApp(const VopAndroidApp());
+  runApp(VopAndroidApp(initError: initError));
 }
 
 class VopAndroidApp extends StatelessWidget {
-  const VopAndroidApp({super.key});
+  const VopAndroidApp({this.initError, super.key});
+  final String? initError;
 
   @override
   Widget build(BuildContext context) {
+    final activeError = VopConfig.error ?? initError;
     return ValueListenableBuilder<ThemeMode>(
       valueListenable:VopAppearance.mode,
       builder:(context,mode,child)=>ValueListenableBuilder<bool>(
@@ -48,13 +55,13 @@ class VopAndroidApp extends StatelessWidget {
       ),
       theme: VopTheme.build(Brightness.light,highContrast:contrast),
       darkTheme: VopTheme.build(Brightness.dark,highContrast:contrast),
-      home: VopConfig.error != null
+      home: activeError != null
           ? Scaffold(
               appBar: AppBar(title: const Text('Configuration required')),
               body: Center(
                 child: Padding(
                   padding: const EdgeInsets.all(28),
-                  child: Text(VopConfig.error!, textAlign: TextAlign.center),
+                  child: Text(activeError, textAlign: TextAlign.center),
                 ),
               ),
             )

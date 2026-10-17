@@ -19,9 +19,13 @@ class _PrayerScreenState extends State<PrayerScreen> {
     :[];
   @override Widget build(BuildContext context){
     final body=FutureBuilder<Map<String,dynamic>>(future:requests,builder:(context,s){
-      if(s.connectionState!=ConnectionState.done)return const VopSkeleton();
-      if(s.hasError)return VopEmpty(icon:Icons.wifi_off,
-        message:'${s.error}',onRetry:()=>setState(reload));
+      if (s.connectionState != ConnectionState.done) {
+        return const VopSkeleton();
+      }
+      if (s.hasError) {
+        return VopEmpty(icon:Icons.wifi_off,
+          message:'${s.error}',onRetry:()=>setState(reload));
+      }
       final list=rows(s.data?['items']);
       return RefreshIndicator(onRefresh:()async{setState(reload);await requests;},
         child:ListView(padding:const EdgeInsets.all(17),children:[
@@ -86,13 +90,17 @@ class _PrayerScreenState extends State<PrayerScreen> {
   }
   Future<void> _markAnswered(Map<String,dynamic> item)async{
     final id=(item['id']??'').toString();
-    if(id.isEmpty)return;
+    if (id.isEmpty) return;
     try{
       await widget.api.markPrayerAnswered(id);
-      if(mounted)setState(reload);
+      if (mounted) {
+        setState(reload);
+      }
     }catch(e){
-      if(mounted)ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content:Text('$e')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content:Text('$e')));
+      }
     }
   }
   Future<void> _compose([Map<String,dynamic>? existing])async{

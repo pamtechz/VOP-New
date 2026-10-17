@@ -21,9 +21,13 @@ class _CertificatesScreenState extends State<CertificatesScreen>{
         onPressed:()=>setState(reload),icon:const Icon(Icons.refresh))]),
     body:FutureBuilder<Map<String,dynamic>>(
       future:certificate,builder:(context,s){
-        if(s.connectionState!=ConnectionState.done)return const VopSkeleton(rows:2);
-        if(s.hasError)return VopEmpty(icon:Icons.wifi_off,
-          message:'${s.error}',onRetry:()=>setState(reload));
+        if (s.connectionState != ConnectionState.done) {
+          return const VopSkeleton(rows:2);
+        }
+        if (s.hasError) {
+          return VopEmpty(icon:Icons.wifi_off,
+            message:'${s.error}',onRetry:()=>setState(reload));
+        }
         final items=rows(s.data?['certificates']);
         final review=s.data?['review'] is Map
           ?Map<String,dynamic>.from(s.data!['review'] as Map):<String,dynamic>{};
@@ -35,23 +39,25 @@ class _CertificatesScreenState extends State<CertificatesScreen>{
           const SizedBox(height:20),
           VopSectionTitle('Earned certificates',
             subtitle:'${items.length} issued'),
-          if(items.isEmpty)Card(child:Padding(
-            padding:const EdgeInsets.all(20),
-            child:Column(children:[
-              Icon(Icons.workspace_premium_outlined,size:44,
-                color:Theme.of(context).colorScheme.primary),
-              const SizedBox(height:12),
-              Text(review['status']=='approved'
-                ?'Approval complete — publication pending'
-                :review.isNotEmpty
-                  ?'Your certificate is awaiting organisational review.'
-                  :'No certificate has been issued yet.',
-                textAlign:TextAlign.center,
-                style:const TextStyle(fontWeight:FontWeight.w700)),
-              const SizedBox(height:8),
-              const Text('Complete the required studies and assessments to become eligible.',
-                textAlign:TextAlign.center),
-            ]))),
+          if (items.isEmpty) ...[
+            Card(child:Padding(
+              padding:const EdgeInsets.all(20),
+              child:Column(children:[
+                Icon(Icons.workspace_premium_outlined,size:44,
+                  color:Theme.of(context).colorScheme.primary),
+                const SizedBox(height:12),
+                Text(review['status']=='approved'
+                  ?'Approval complete — publication pending'
+                  :review.isNotEmpty
+                    ?'Your certificate is awaiting organisational review.'
+                    :'No certificate has been issued yet.',
+                  textAlign:TextAlign.center,
+                  style:const TextStyle(fontWeight:FontWeight.w700)),
+                const SizedBox(height:8),
+                const Text('Complete the required studies and assessments to become eligible.',
+                  textAlign:TextAlign.center),
+              ]))),
+          ],
           ...items.map((item)=>Card(margin:const EdgeInsets.only(bottom:13),
             child:Padding(padding:const EdgeInsets.all(18),
               child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[

@@ -18,21 +18,23 @@ class _OfflineStudiesScreenState extends State<OfflineStudiesScreen>{
     pending=widget.api.pendingOfflineChanges();
   }
   Future<void> _sync()async{
-    if(syncing)return;
+    if (syncing) return;
     setState(()=>syncing=true);
     try{
       final result=await widget.api.syncPending();
-      if(mounted)setState((){
-        notice=(result['synced']??0).toString()+' changes synced';
-        _refresh();
-      });
+      if (mounted) {
+        setState((){
+          notice='${result['synced']??0} changes synced';
+          _refresh();
+        });
+      }
     }catch(e){if(mounted)setState(()=>notice=e.toString());}
     finally{if(mounted)setState(()=>syncing=false);}
   }
   Future<void> _delete(Map<String,dynamic> item)async{
     await widget.api.removeOfflineStudy(
       (item['kind']??'').toString(),(item['id']??'').toString());
-    if(mounted)setState(_refresh);
+    if (mounted) setState(_refresh);
   }
   @override Widget build(BuildContext context)=>Scaffold(
     appBar:AppBar(title:const Text('Offline study')),
@@ -54,7 +56,7 @@ class _OfflineStudiesScreenState extends State<OfflineStudiesScreen>{
                 if(!s.hasData)return const LinearProgressIndicator();
                 return ListTile(contentPadding:EdgeInsets.zero,
                   leading:const Icon(Icons.sync_outlined),
-                  title:Text((s.data?.length??0).toString()+' pending changes'),
+                  title:Text('${s.data?.length??0} pending changes'),
                   subtitle:const Text('Sync answers and progress with VOP.'));
               }),
             FilledButton.icon(onPressed:syncing?null:_sync,
@@ -65,14 +67,19 @@ class _OfflineStudiesScreenState extends State<OfflineStudiesScreen>{
         VopSectionTitle('Saved for offline',subtitle:'Stored securely on this device'),
         FutureBuilder<List<Map<String,dynamic>>>(
           future:content,builder:(context,s){
-            if(s.connectionState!=ConnectionState.done)
+            if (s.connectionState != ConnectionState.done) {
               return const SizedBox(height:85,child:LinearProgressIndicator());
-            if(s.hasError)return VopEmpty(icon:Icons.error_outline,
-              message:s.error.toString());
+            }
+            if (s.hasError) {
+              return VopEmpty(icon:Icons.error_outline,
+                message:s.error.toString());
+            }
             final items=s.data??[];
-            if(items.isEmpty)return const SizedBox(height:150,
-              child:VopEmpty(icon:Icons.download_outlined,
-                message:'Open a course and download its lessons to study offline.'));
+            if (items.isEmpty) {
+              return const SizedBox(height:150,
+                child:VopEmpty(icon:Icons.download_outlined,
+                  message:'Open a course and download its lessons to study offline.'));
+            }
             return Column(children:items.map((item)=>Card(
               margin:const EdgeInsets.only(bottom:8),
               child:ListTile(

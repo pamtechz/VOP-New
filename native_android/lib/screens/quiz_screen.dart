@@ -99,8 +99,10 @@ class _QuizScreenState extends State<QuizScreen> {
         _restore(data);
         final questions=(data['questions'] as List? ?? [])
           .whereType<Map>().toList();
-        if(questions.isEmpty)return const Center(
-          child:Text('No published questions are available.'));
+        if (questions.isEmpty) {
+          return const Center(
+            child:Text('No published questions are available.'));
+        }
         final policy=data['assessmentPolicy'] is Map
           ?data['assessmentPolicy'] as Map:{};
         final current=currentIndex.clamp(0,questions.length-1).toInt();
@@ -112,10 +114,9 @@ class _QuizScreenState extends State<QuizScreen> {
         final completed=answers.length;
         return ListView(padding:const EdgeInsets.all(16),children:[
           Row(children:[
-            Expanded(child:Text('Question '+(current+1).toString()+' of '+
-              questions.length.toString(),
+            Expanded(child:Text('Question ${current + 1} of ${questions.length}',
               style:const TextStyle(fontWeight:FontWeight.w800))),
-            Text(completed.toString()+'/'+questions.length.toString()+' answered',
+            Text('$completed/${questions.length} answered',
               style:TextStyle(fontSize:11.5,color:scheme.onSurfaceVariant)),
           ]),
           const SizedBox(height:9),
@@ -210,8 +211,11 @@ class _QuizScreenState extends State<QuizScreen> {
               const Spacer(),
               FilledButton.icon(
                 onPressed:()=>setState((){
-                  if(current<questions.length-1)currentIndex++;
-                  else reviewing=true;
+                  if (current < questions.length - 1) {
+                    currentIndex++;
+                  } else {
+                    reviewing = true;
+                  }
                 }),
                 icon:Icon(current==questions.length-1
                   ?Icons.fact_check_outlined:Icons.chevron_right),

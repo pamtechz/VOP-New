@@ -40,8 +40,9 @@ class VopPasskeys {
       final value=jsonDecode(response.body);
       if(value is! Map)throw StateError('Invalid VOP passkey response.');
       final body=Map<String,dynamic>.from(value);
-      if(response.statusCode<200||response.statusCode>=300||body['ok']==false)
-        throw StateError((body['error']??'Passkey request failed.').toString());
+      if (response.statusCode < 200 || response.statusCode >= 300 || body['ok'] == false) {
+        throw StateError((body['error'] ?? 'Passkey request failed.').toString());
+      }
       return body;
     }on TimeoutException{
       throw StateError('The VOP passkey service timed out. Check your connection.');

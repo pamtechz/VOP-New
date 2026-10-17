@@ -222,7 +222,7 @@ class VopApi {
   Future<Map<String,dynamic>> guide(String id)=>_cachedRead('guide',id,
     ()=>read('guide',{'guideId':id}));
   Future<Map<String,dynamic>> lesson(String guideId,String lessonId)=>
-    _cachedRead('lesson',guideId+'_'+lessonId,
+    _cachedRead('lesson','${guideId}_$lessonId',
       ()=>read('lesson',{'guideId':guideId,'lessonId':lessonId}));
   Future<int> downloadGuide(String guideId)async{
     final result=await read('guide',{'guideId':guideId});
@@ -236,7 +236,7 @@ class VopApi {
       final id=(row['id']??'').toString();
       if(id.isEmpty)continue;
       final content=await read('lesson',{'guideId':guideId,'lessonId':id});
-      await _offline.save(_uid,'lesson',guideId+'_'+id,content,
+      await _offline.save(_uid,'lesson','${guideId}_$id',content,
         title:(row['title']??id).toString());
       downloaded++;
     }
@@ -254,7 +254,7 @@ class VopApi {
       {DateTime? expiresAt})async{
     if(_uid.isEmpty)return;
     await _offline.save(_uid,'draft',
-      language+'_'+guideId+'_'+lessonId,{
+      '${language}_${guideId}_$lessonId',{
         'sessionId':sessionId,'answers':answers,
       },expiresAt:expiresAt,title:'Assessment answers');
   }
@@ -262,7 +262,7 @@ class VopApi {
       String lessonId,String sessionId)async{
     if(_uid.isEmpty)return {};
     final payload=await _offline.read(_uid,'draft',
-      language+'_'+guideId+'_'+lessonId);
+      '${language}_${guideId}_$lessonId');
     if(payload?['sessionId']!=sessionId)return {};
     return payload?['answers'] is Map
       ?Map<String,Object?>.from(payload!['answers'] as Map):{};
@@ -303,7 +303,7 @@ class VopApi {
   Future<Map<String,dynamic>> startQuiz(
       String guideId,String lessonId,String language,
       {bool confirmRetake=false})async{
-    final key=language+'_'+guideId+'_'+lessonId;
+    final key='${language}_${guideId}_$lessonId';
     try{
       final result=await action('/api/study/progress',{
         'action':'startQuiz','guideId':guideId,'lessonId':lessonId,
@@ -328,7 +328,7 @@ class VopApi {
       String guideId,String lessonId,String language,
       String sessionId,Map<String,Object?> answers)async{
     final cache=await _offline.read(_uid,'quiz',
-      language+'_'+guideId+'_'+lessonId);
+      '${language}_${guideId}_$lessonId');
     final deadline=DateTime.tryParse((cache?['expiresAt']??'').toString());
     final body=<String,dynamic>{
       'action':'submitQuiz','guideId':guideId,'lessonId':lessonId,
@@ -336,8 +336,8 @@ class VopApi {
     };
     final result=await _offlineMutation('submitQuiz',body,expiresAt:deadline);
     if(result['queued']!=true&&_uid.isNotEmpty){
-      await _offline.delete(_uid,'quiz',language+'_'+guideId+'_'+lessonId);
-      await _offline.delete(_uid,'draft',language+'_'+guideId+'_'+lessonId);
+      await _offline.delete(_uid,'quiz','${language}_${guideId}_$lessonId');
+      await _offline.delete(_uid,'draft','${language}_${guideId}_$lessonId');
     }
     return result;
   }

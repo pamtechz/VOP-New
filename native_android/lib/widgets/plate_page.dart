@@ -11,7 +11,7 @@ List<JsonObject> plateRows(dynamic value) =>
 Color? plateColor(dynamic value) {
   final text=value is String?value:'';
   if(!RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(text))return null;
-  return Color(int.parse('FF'+text.substring(1),radix:16));
+  return Color(int.parse('FF${text.substring(1)}',radix:16));
 }
 String plainNode(JsonObject node) {
   if(node['text'] is String)return node['text'] as String;
@@ -73,27 +73,35 @@ class PlatePageView extends StatelessWidget {
         'center'=>TextAlign.center,'right'=>TextAlign.right,
         'justify'=>TextAlign.justify,_=>TextAlign.left,
       });
-    if(type=='callout'||type=='blockquote')return Container(
-      padding:const EdgeInsets.all(14),
-      decoration:BoxDecoration(
-        color:plateColor(data['backgroundColor'])
-          ??Theme.of(context).colorScheme.primaryContainer.withOpacity(0.40),
-        border:Border(left:BorderSide(color:plateColor(data['borderColor'])
-          ??Theme.of(context).colorScheme.primary,width:4)),
-        borderRadius:BorderRadius.circular(5)),
-      child:text);
-    if(type=='ul'||type=='ol')return Column(
-      crossAxisAlignment:CrossAxisAlignment.start,
-      children:plateRows(data['children']).asMap().entries.map((entry)=>
-        Padding(padding:const EdgeInsets.symmetric(vertical:3),
-          child:Row(crossAxisAlignment:CrossAxisAlignment.start,children:[
-            Text(type=='ul'?'•  ':'${entry.key+1}.  '),
-            Expanded(child:_block(context,entry.value)),
-          ]))).toList());
-    if(type=='li'||type=='lic')return text;
-    if(type=='a')return TextButton(
-      onPressed:()=>_open('${data['url']??''}'),
-      child:text);
+    if (type == 'callout' || type == 'blockquote') {
+      return Container(
+        padding:const EdgeInsets.all(14),
+        decoration:BoxDecoration(
+          color:plateColor(data['backgroundColor'])
+            ??Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.40),
+          border:Border(left:BorderSide(color:plateColor(data['borderColor'])
+            ??Theme.of(context).colorScheme.primary,width:4)),
+          borderRadius:BorderRadius.circular(5)),
+        child:text);
+    }
+    if (type == 'ul' || type == 'ol') {
+      return Column(
+        crossAxisAlignment:CrossAxisAlignment.start,
+        children:plateRows(data['children']).asMap().entries.map((entry)=>
+          Padding(padding:const EdgeInsets.symmetric(vertical:3),
+            child:Row(crossAxisAlignment:CrossAxisAlignment.start,children:[
+              Text(type=='ul'?'•  ':'${entry.key+1}.  '),
+              Expanded(child:_block(context,entry.value)),
+            ]))).toList());
+    }
+    if (type == 'li' || type == 'lic') {
+      return text;
+    }
+    if (type == 'a') {
+      return TextButton(
+        onPressed:()=>_open('${data['url']??''}'),
+        child:text);
+    }
     return text;
   }
   List<InlineSpan> _spans(List<JsonObject> nodes,TextStyle base)=>

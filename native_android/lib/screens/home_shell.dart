@@ -49,8 +49,9 @@ class _HomeShellState extends State<HomeShell> {
     final initialRevision=VopAppearance.revision;
     try{
       final result=await widget.api.personalSettings();
-      if(mounted&&initialRevision==VopAppearance.revision)
+      if (mounted && initialRevision == VopAppearance.revision) {
         VopAppearance.apply(asMap(result['settings']));
+      }
       final locale=(asMap(result['settings'])['uiLocale']??'en').toString().trim().toLowerCase();
       if(locale.isNotEmpty){
         try{
@@ -73,9 +74,13 @@ class _HomeShellState extends State<HomeShell> {
   Widget asyncView(Future<Map<String,dynamic>> future,
       Widget Function(Map<String,dynamic>) render)=>FutureBuilder<Map<String,dynamic>>(
     future:future,builder:(context,result){
-      if(result.connectionState!=ConnectionState.done)return const VopSkeleton();
-      if(result.hasError)return VopEmpty(icon:Icons.wifi_off,
-        message:'${result.error}',onRetry:()=>setState(reload));
+      if (result.connectionState != ConnectionState.done) {
+        return const VopSkeleton();
+      }
+      if (result.hasError) {
+        return VopEmpty(icon:Icons.wifi_off,
+          message:'${result.error}',onRetry:()=>setState(reload));
+      }
       return render(result.data??{});
     });
 
@@ -217,9 +222,13 @@ class _HomeShellState extends State<HomeShell> {
 
   Widget home()=>FutureBuilder<Map<String,dynamic>>(future:profile,
     builder:(context,s){
-      if(s.connectionState!=ConnectionState.done)return const VopSkeleton(rows:3);
-      if(s.hasError)return VopEmpty(icon:Icons.wifi_off,
-        message:'${s.error}',onRetry:()=>setState(reload));
+      if (s.connectionState != ConnectionState.done) {
+        return const VopSkeleton(rows:3);
+      }
+      if (s.hasError) {
+        return VopEmpty(icon:Icons.wifi_off,
+          message:'${s.error}',onRetry:()=>setState(reload));
+      }
       final user=asMap(s.data?['account']);
       return FutureBuilder<Map<String,dynamic>>(future:catalog,
         builder:(context,course){
@@ -322,9 +331,7 @@ class _HomeShellState extends State<HomeShell> {
     final guides=asRows(data['guides']);
     final programs=asRows(data['programs']);
     final visible=guides.where((guide){
-      final text=(guide['title']??'').toString()+' '+
-        (guide['description']??'').toString()+' '+
-        (guide['language']??'').toString();
+      final text='${guide['title']??''} ${guide['description']??''} ${guide['language']??''}';
       return text.toLowerCase().contains(search.toLowerCase());
     }).toList();
     return RefreshIndicator(onRefresh:()async{setState(reload);await catalog;},
@@ -404,12 +411,14 @@ class _ProgrammeScreen extends StatelessWidget {
           children:[FutureBuilder<Map<String,dynamic>>(
             future:api.guide((guide['id']??'').toString()),
             builder:(context,s){
-              if(s.connectionState!=ConnectionState.done){
+              if (s.connectionState != ConnectionState.done) {
                 return const Padding(padding:EdgeInsets.all(16),
                   child:LinearProgressIndicator());
               }
-              if(s.hasError)return Padding(padding:const EdgeInsets.all(14),
-                child:Text('${s.error}'));
+              if (s.hasError) {
+                return Padding(padding:const EdgeInsets.all(14),
+                  child:Text('${s.error}'));
+              }
               final lessons=asRows(s.data?['lessons']);
               return Column(children:[
                 if(lessons.isEmpty)const Padding(

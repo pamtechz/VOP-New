@@ -15,10 +15,14 @@ class _VopNotificationsState extends State<VopNotifications>{
   List<Map<String,dynamic>> rows(dynamic v)=>v is List
     ?v.whereType<Map>().map((e)=>Map<String,dynamic>.from(e)).toList():[];
   Future<void> update(Future<Map<String,dynamic>> Function() op)async{
-    try{await op();if(mounted)setState(reload);}
-    catch(error){
-      if(mounted)ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content:Text('$error')));
+    try{
+      await op();
+      if (mounted) setState(reload);
+    } catch(error){
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content:Text('$error')));
+      }
     }
   }
   @override Widget build(BuildContext context)=>Scaffold(
@@ -27,9 +31,13 @@ class _VopNotificationsState extends State<VopNotifications>{
         onPressed:()=>update(widget.api.markAllNotificationsRead),
         icon:const Icon(Icons.done_all))]),
     body:FutureBuilder<Map<String,dynamic>>(future:inbox,builder:(context,s){
-      if(s.connectionState!=ConnectionState.done)return const VopSkeleton();
-      if(s.hasError)return VopEmpty(icon:Icons.wifi_off,
-        message:'${s.error}',onRetry:()=>setState(reload));
+      if (s.connectionState != ConnectionState.done) {
+        return const VopSkeleton();
+      }
+      if (s.hasError) {
+        return VopEmpty(icon:Icons.wifi_off,
+          message:'${s.error}',onRetry:()=>setState(reload));
+      }
       final notifications=rows(s.data?['items']);
       return RefreshIndicator(onRefresh:()async{setState(reload);await inbox;},
         child:ListView(padding:const EdgeInsets.all(16),children:[
@@ -69,10 +77,14 @@ class _VopNotificationsState extends State<VopNotifications>{
                   PopupMenuButton<String>(
                     icon:const Icon(Icons.more_vert,size:20),
                     onSelected:(selection){
-                      if(selection=='delete')update(()=>widget.api.deleteNotification(
-                        (item['id']??'').toString()));
-                      if(selection=='read')update(()=>widget.api.markNotificationRead(
-                        (item['id']??'').toString()));
+                      if (selection == 'delete') {
+                        update(()=>widget.api.deleteNotification(
+                          (item['id']??'').toString()));
+                      }
+                      if (selection == 'read') {
+                        update(()=>widget.api.markNotificationRead(
+                          (item['id']??'').toString()));
+                      }
                     },
                     itemBuilder:(_)=>const [
                       PopupMenuItem(value:'read',child:Text('Mark as read')),

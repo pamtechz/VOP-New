@@ -21,23 +21,27 @@ class _MentorScreenState extends State<MentorScreen> {
   }
   Widget _mentorList(BuildContext context)=>FutureBuilder<Map<String,dynamic>>(
     future:future,builder:(context,s){
-      if(s.connectionState!=ConnectionState.done){
+      if (s.connectionState != ConnectionState.done) {
         return const Center(child:CircularProgressIndicator());
       }
-      if(s.hasError)return Center(child:Padding(padding:const EdgeInsets.all(22),
-        child:Text('${s.error}',textAlign:TextAlign.center)));
+      if (s.hasError) {
+        return Center(child:Padding(padding:const EdgeInsets.all(22),
+          child:Text('${s.error}',textAlign:TextAlign.center)));
+      }
       final list=rows(s.data?['items']);
-      if(list.isEmpty)return const Center(child:Padding(
-        padding:EdgeInsets.all(24),
-        child:Column(mainAxisSize:MainAxisSize.min,children:[
-          Icon(Icons.forum_outlined,size:45),
-          SizedBox(height:14),
-          Text('No mentor conversation is assigned yet.',
-            textAlign:TextAlign.center),
-          SizedBox(height:8),
-          Text('An organisation administrator can assign a mentor to your account.',
-            textAlign:TextAlign.center),
-        ])));
+      if (list.isEmpty) {
+        return const Center(child:Padding(
+          padding:EdgeInsets.all(24),
+          child:Column(mainAxisSize:MainAxisSize.min,children:[
+            Icon(Icons.forum_outlined,size:45),
+            SizedBox(height:14),
+            Text('No mentor conversation is assigned yet.',
+              textAlign:TextAlign.center),
+            SizedBox(height:8),
+            Text('An organisation administrator can assign a mentor to your account.',
+              textAlign:TextAlign.center),
+          ])));
+      }
       return RefreshIndicator(onRefresh:()async{setState(reload);await future;},
         child:ListView.builder(itemCount:list.length,itemBuilder:(context,index){
           final item=list[index];
@@ -143,10 +147,14 @@ class _MentorConversationState extends State<MentorConversation> {
         if(!delete)'message':text,
         if(!delete)'references':item['references'] is List?item['references']:<Object>[],
       });
-      if(mounted)setState(refresh);
+      if (mounted) {
+        setState(refresh);
+      }
     }catch(problem){
-      if(mounted)ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content:Text(problem.toString())));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content:Text(problem.toString())));
+      }
     }
   }
   Future<void> send()async{
@@ -162,12 +170,18 @@ class _MentorConversationState extends State<MentorConversation> {
         'references':references.map((reference)=>reference.toJson()).toList(),
       });
       composer.clear();
-      if(mounted)setState((){references.clear();refresh();});
+      if (mounted) {
+        setState((){references.clear();refresh();});
+      }
     }catch(error){
-      if(mounted)ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content:Text('$error')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content:Text('$error')));
+      }
     }finally{
-      if(mounted)setState(()=>sending=false);
+      if (mounted) {
+        setState(()=>sending=false);
+      }
     }
   }
   @override Widget build(BuildContext context)=>Scaffold(

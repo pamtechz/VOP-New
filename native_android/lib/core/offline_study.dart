@@ -13,14 +13,16 @@ class OfflineStudy {
 
   String _userKey(String uid)=>base64UrlEncode(utf8.encode(uid));
   String _key(String uid,String kind,String id)=>
-    'vop.offline.'+_userKey(uid)+'.'+kind+'.'+base64UrlEncode(utf8.encode(id));
-  String _indexKey(String uid)=>'vop.offline.index.'+_userKey(uid);
-  String _queueKey(String uid)=>'vop.offline.queue.'+_userKey(uid);
+    'vop.offline.${_userKey(uid)}.$kind.${base64UrlEncode(utf8.encode(id))}';
+  String _indexKey(String uid)=>'vop.offline.index.${_userKey(uid)}';
+  String _queueKey(String uid)=>'vop.offline.queue.${_userKey(uid)}';
 
   String _encode(Object payload){
     final bytes=zlib.encode(utf8.encode(jsonEncode(payload)));
-    if(bytes.length>maxCompressedBytes)throw const OfflineStorageException(
-      'This study is too large for the encrypted offline cache.');
+    if (bytes.length > maxCompressedBytes) {
+      throw const OfflineStorageException(
+        'This study is too large for the encrypted offline cache.');
+    }
     return base64Encode(bytes);
   }
   Map<String,dynamic>? _decode(String? encoded){
@@ -39,8 +41,9 @@ class OfflineStudy {
   }
   Future<void> save(String uid,String kind,String id,Map<String,dynamic> value,
       {String title='',DateTime? expiresAt})async{
-    if(uid.isEmpty||!_id.hasMatch(kind)||!_id.hasMatch(id))throw
-      const OfflineStorageException('This item cannot be downloaded.');
+    if (uid.isEmpty || !_id.hasMatch(kind) || !_id.hasMatch(id)) {
+      throw const OfflineStorageException('This item cannot be downloaded.');
+    }
     final now=DateTime.now().toUtc();
     final expiry=expiresAt?.toUtc()??now.add(lifetime);
     final key=_key(uid,kind,id);
@@ -101,17 +104,18 @@ class OfflineStudy {
     }
     final items=await pending(uid);
     final id=type=='submitQuiz'
-      ?'quiz:'+body['sessionId'].toString()
-      :type+':'+body['language'].toString()+':'+body['guideId'].toString()+
-        ':'+body['lessonId'].toString();
+      ?'quiz:${body['sessionId']}'
+      :'$type:${body['language']}:${body['guideId']}:${body['lessonId']}';
     final change=<String,dynamic>{
       'id':id,'type':type,'body':body,
       'createdAt':DateTime.now().toUtc().toIso8601String(),
       if(expiresAt!=null)'expiresAt':expiresAt.toUtc().toIso8601String(),
     };
     final updated=[...items.where((entry)=>entry['id']!=id),change];
-    if(updated.length>50)throw const OfflineStorageException(
-      'Sync pending changes before saving more offline.');
+    if (updated.length > 50) {
+      throw const OfflineStorageException(
+        'Sync pending changes before saving more offline.');
+    }
     await _storage.write(key:_queueKey(uid),value:_encode({'items':updated}));
   }
   Future<void> resolvePending(String uid,String id)async{
