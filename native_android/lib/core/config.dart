@@ -15,11 +15,13 @@ class VopConfig {
 
   static String? get error {
     final origin = Uri.tryParse(apiUrl);
-    if (origin == null || origin.scheme != 'https' ||
+    final isLocalhost = origin != null &&
+        (origin.host == 'localhost' || origin.host == '127.0.0.1');
+    if (origin == null || (origin.scheme != 'https' && !isLocalhost) ||
         origin.host.isEmpty || origin.userInfo.isNotEmpty ||
         (origin.path.isNotEmpty && origin.path != '/') ||
         origin.query.isNotEmpty || origin.fragment.isNotEmpty) {
-      return 'Configure VOP_API_BASE_URL as a trusted HTTPS origin.';
+      return 'Configure VOP_API_BASE_URL as a trusted HTTPS or localhost origin.';
     }
     if ([apiKey, kIsWeb ? webAppId : appId, messagingSenderId, projectId]
         .any((value) => value.trim().isEmpty)) {

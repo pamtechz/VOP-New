@@ -27,7 +27,7 @@ class VopApi {
         _offline=offline??OfflineStudy(){
     _connection=Connectivity().onConnectivityChanged.listen((states){
       if(states.any((state)=>state!=ConnectivityResult.none)){
-        unawaited(syncPending());
+        unawaited(syncPending().catchError((_) => <String, dynamic>{}));
       }
     });
   }
@@ -63,7 +63,8 @@ class VopApi {
       path: path,
       queryParameters: query?.isEmpty == true ? null : query,
     );
-    if (uri.scheme != 'https' || uri.host != origin.host) {
+    final isLocalhost = origin.host == 'localhost' || origin.host == '127.0.0.1';
+    if ((uri.scheme != 'https' && !isLocalhost) || uri.host != origin.host) {
       throw const VopApiException('Untrusted API destination.');
     }
     return uri;
@@ -132,7 +133,7 @@ class VopApi {
 
   Future<Map<String,dynamic>> bootstrap()async{
     final response=await _cachedRead('bootstrap','bootstrap',()=>read('bootstrap'));
-    if(response['offline']!=true)unawaited(syncPending());
+    if(response['offline']!=true)unawaited(syncPending().catchError((_) => <String, dynamic>{}));
     return response;
   }
   Future<Map<String,dynamic>> accountProfile() =>
@@ -271,7 +272,7 @@ class VopApi {
       Map<String,dynamic> body,{DateTime? expiresAt})async{
     try{
       final result=await this.action('/api/study/progress',body);
-      unawaited(syncPending());
+      unawaited(syncPending().catchError((_) => <String, dynamic>{}));
       return result;
     }catch(error){
       if(!_networkFailure(error)||_uid.isEmpty)rethrow;
