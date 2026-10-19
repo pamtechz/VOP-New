@@ -36,6 +36,34 @@ export async function completeLesson(
   } catch { return queue(); }
 }
 
+export async function resetLessonProgress(
+  guideId: string,
+  lessonId: string,
+  language: string = getActiveLanguage(),
+): Promise<'synced' | 'failed'> {
+  const firebaseUser = auth?.currentUser;
+  if (!firebaseUser) return 'failed';
+  try {
+    const token = await firebaseUser.getIdToken();
+    const response = await fetch('/api/study/progress', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({
+        action: 'resetLessonProgress',
+        language,
+        guideId,
+        lessonId,
+      }),
+    });
+    if (response.ok) {
+      return 'synced';
+    }
+    return 'failed';
+  } catch {
+    return 'failed';
+  }
+}
+
 export async function saveLessonResume(
   guideId:string, lessonId:string, pageIndex:number, language:string=getActiveLanguage(),
 ):Promise<'synced'|'queued'|'failed'> {

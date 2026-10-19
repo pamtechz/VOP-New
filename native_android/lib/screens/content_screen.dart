@@ -44,7 +44,7 @@ class _VopContentScreenState extends State<VopContentScreen> {
     VopContentKind.events=>widget.api.events(),
     VopContentKind.radio=>widget.api.radio(),
     VopContentKind.announcements=>widget.api.announcements(),
-  };}
+  }..ignore();}
   String value(Map<String,dynamic> row,String key)=>(row[key]??'').toString().trim();
   List<Map<String,dynamic>> rows(dynamic input)=>input is List
     ?input.whereType<Map>().map((row)=>Map<String,dynamic>.from(row)).toList()
@@ -63,7 +63,7 @@ class _VopContentScreenState extends State<VopContentScreen> {
         final filtered=items.where((item)=>item.values
           .whereType<String>().join(' ').toLowerCase()
           .contains(filter.toLowerCase())).toList();
-        return RefreshIndicator(onRefresh:()async{setState(reload);await content;},
+        return RefreshIndicator(onRefresh:()async{setState(reload);await content.catchError((_) => <String, dynamic>{});},
           child:ListView(padding:const EdgeInsets.all(18),children:[
             VopHeroCard(title:widget.kind.title,
               description:widget.kind.subtitle,

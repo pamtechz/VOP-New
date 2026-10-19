@@ -66,4 +66,46 @@ void main() {
     expect(find.text('BEM'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('VopSkeleton renders safely inside nested scrollables without viewport errors',
+      (tester) async {
+    await tester.pumpWidget(MaterialApp(
+      theme: VopTheme.build(Brightness.light),
+      home: Scaffold(
+        body: ListView(
+          children: const [
+            Text('Header'),
+            VopSkeleton(rows: 2),
+            Text('Footer'),
+          ],
+        ),
+      ),
+    ));
+    expect(find.byType(VopSkeleton), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.pump(const Duration(milliseconds: 550));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('VopSkeleton does not overflow inside bounded screen heights',
+      (tester) async {
+    await tester.pumpWidget(MaterialApp(
+      theme: VopTheme.build(Brightness.light),
+      home: const Scaffold(
+        body: Center(
+          child: SizedBox(
+            height: 480,
+            width: 414,
+            child: VopSkeleton(rows: 4),
+          ),
+        ),
+      ),
+    ));
+    expect(find.byType(VopSkeleton), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.pump(const Duration(milliseconds: 550));
+    expect(tester.takeException(), isNull);
+  });
 }

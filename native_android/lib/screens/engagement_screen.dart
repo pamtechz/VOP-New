@@ -16,14 +16,14 @@ class _EngagementScreenState extends State<EngagementScreen> {
   late Future<Map<String,dynamic>> decks,arena;
   bool challengesLoaded=false;
   @override void initState(){super.initState();
-    decks=widget.api.action('/api/engagement',{'action':'memoryDecks'});
+    decks=widget.api.action('/api/engagement',{'action':'memoryDecks'})..ignore();
     arena=Future.value(<String,dynamic>{});
   }
   void reload(){
     if(tab==0){
-      decks=widget.api.action('/api/engagement',{'action':'memoryDecks'});
+      decks=widget.api.action('/api/engagement',{'action':'memoryDecks'})..ignore();
     }else{
-      arena=widget.api.action('/api/engagement',{'action':'duelOverview'});
+      arena=widget.api.action('/api/engagement',{'action':'duelOverview'})..ignore();
       challengesLoaded=true;
     }
   }
@@ -48,9 +48,7 @@ class _EngagementScreenState extends State<EngagementScreen> {
             ],
             selected:{tab},onSelectionChanged:(values)=>setState((){
               tab=values.first;
-              if (tab == 1 && !challengesLoaded) {
-                reload();
-              }
+              if(tab==1&&!challengesLoaded)reload();
             }));
         })),
       Expanded(child:tab==0?_decks():_challenges()),
@@ -66,7 +64,7 @@ class _EngagementScreenState extends State<EngagementScreen> {
           onRetry:()=>setState(reload));
       }
       final items=engagementRows(s.data?['decks']);
-      return RefreshIndicator(onRefresh:()async{setState(reload);await decks;},
+      return RefreshIndicator(onRefresh:()async{setState(reload);await decks.catchError((_) => <String, dynamic>{});},
         child:ListView(padding:const EdgeInsets.all(17),children:[
           const VopHeroCard(kicker:'SCRIPTURE MEMORY',
             title:'Hide His word in your heart.',
@@ -104,7 +102,7 @@ class _EngagementScreenState extends State<EngagementScreen> {
       final data=s.data??{},stats=data['arena'] is Map
         ?Map<String,dynamic>.from(data['arena'] as Map):<String,dynamic>{};
       final active=engagementRows(data['soloChallenges']);
-      return RefreshIndicator(onRefresh:()async{setState(reload);await arena;},
+      return RefreshIndicator(onRefresh:()async{setState(reload);await arena.catchError((_) => <String, dynamic>{});},
         child:ListView(padding:const EdgeInsets.all(17),children:[
           VopHeroCard(kicker:'BIBLE CHALLENGE ARENA',
             title:'Sharpen your faith.',

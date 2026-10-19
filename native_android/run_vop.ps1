@@ -113,14 +113,20 @@ function Select-Target($devices, [string]$requested, [string]$kind) {
         return [string]$choice[0].id
     }
     if ($matching.Count -eq 0) {
-    $availableEmulators = @(Get-AvailableEmulators)
-    if ($availableEmulators.Count -gt 0) {
-      Write-Host "No running Android device detected. Launching emulator '$($availableEmulators[0].name)'..."
-      Start-Emulator
-      return ""
+        $runningEmulators = @(Get-AndroidDevices | Where-Object { $_.emulator -eq $true -or $_.id -match '^emulator-\d+$' })
+        if ($runningEmulators.Count -gt 0) {
+            Write-Host "Connecting to running Android emulator $($runningEmulators[0].name) [$($runningEmulators[0].id)]..."
+            Start-Native ([string]$runningEmulators[0].id)
+            return ""
+        }
+        $availableEmulators = @(Get-AvailableEmulators)
+        if ($availableEmulators.Count -gt 0) {
+            Write-Host "No running Android device detected. Launching emulator '$($availableEmulators[0].name)'..."
+            Start-Emulator
+            return ""
+        }
+        throw "No $kind target found. Connect an Android phone via USB/Wi-Fi or start an Android Studio emulator."
     }
-    throw "No $kind target found. Connect an Android phone via USB/Wi-Fi or start an Android Studio emulator."
-  }
     if ($matching.Count -eq 1) {
         Write-Host "Using $($matching[0].name) [$($matching[0].id)]"
         return [string]$matching[0].id
@@ -387,18 +393,25 @@ if ($Mode -ne "Browser") { Require-Flutter }
 
 switch ($Mode) {
     "USB" {
-    $devices = @(Get-AndroidDevices)
-    $targets = @($devices | Where-Object {
-      $_.id -ne "windows" -and $_.id -ne "chrome" -and $_.id -ne "edge" -and !(Test-WirelessDeviceId ([string]$_.id))
-    })
-    if ($targets.Count -eq 0) {
-      $targets = @($devices | Where-Object {
-        $_.id -ne "windows" -and $_.id -ne "chrome" -and $_.id -ne "edge"
-      })
+        $devices = @(Get-AndroidDevices)
+        $physical = @($devices | Where-Object {
+            $_.emulator -ne $true -and $_.id -ne "windows" -and $_.id -ne "chrome" -and $_.id -ne "edge" -and !(Test-WirelessDeviceId ([string]$_.id))
+        })
+        if ($physical.Count -gt 0) {
+            $targets = $physical
+        } else {
+            $targets = @($devices | Where-Object {
+                $_.id -ne "windows" -and $_.id -ne "chrome" -and $_.id -ne "edge" -and !(Test-WirelessDeviceId ([string]$_.id))
+            })
+            if ($targets.Count -eq 0) {
+                $targets = @($devices | Where-Object {
+                    $_.id -ne "windows" -and $_.id -ne "chrome" -and $_.id -ne "edge"
+                })
+            }
+        }
+        $targetId = Select-Target $targets $DeviceId "Android"
+        if ($targetId) { Start-Native $targetId }
     }
-    $targetId = Select-Target $targets $DeviceId "Android"
-    if ($targetId) { Start-Native $targetId }
-  }
     "WiFi" { Start-Wireless }
     "Emulator" { Start-Emulator }
     "Browser" {

@@ -163,26 +163,44 @@ class VopEmpty extends StatelessWidget {
 }
 /// Native shimmer skeleton: content never forces an entire app refresh.
 class VopSkeleton extends StatefulWidget {
-  const VopSkeleton({this.rows=4,super.key});
+  const VopSkeleton({this.rows=4,this.padding,super.key});
   final int rows;
+  final EdgeInsetsGeometry? padding;
   @override State<VopSkeleton> createState()=>_VopSkeletonState();
 }
 class _VopSkeletonState extends State<VopSkeleton> with SingleTickerProviderStateMixin {
   late final AnimationController animation=AnimationController(
     vsync:this,duration:const Duration(milliseconds:1100))..repeat(reverse:true);
   @override void dispose(){animation.dispose();super.dispose();}
-  @override Widget build(BuildContext context)=>AnimatedBuilder(
-    animation:animation,
-    builder:(context,child)=>ListView(padding:const EdgeInsets.all(18),children:[
-      ...List.generate(widget.rows,(index)=>Container(
-        height:index==0?175:94,
-        margin:const EdgeInsets.only(bottom:13),
-        decoration:BoxDecoration(
-          borderRadius:BorderRadius.circular(18),
-          color:Theme.of(context).colorScheme.onSurface.withValues(
-            alpha:.04+animation.value*.035)),
-      )),
-    ]),
+  @override Widget build(BuildContext context)=>LayoutBuilder(
+    builder:(context,constraints){
+      final tree=AnimatedBuilder(
+        animation:animation,
+        builder:(context,child)=>Padding(
+          padding:widget.padding ?? const EdgeInsets.all(18),
+          child:Column(
+            mainAxisSize:MainAxisSize.min,
+            crossAxisAlignment:CrossAxisAlignment.stretch,
+            children:List.generate(widget.rows,(index)=>Container(
+              height:index==0?175:94,
+              margin:const EdgeInsets.only(bottom:13),
+              decoration:BoxDecoration(
+                borderRadius:BorderRadius.circular(18),
+                color:Theme.of(context).colorScheme.onSurface.withValues(
+                  alpha:.04+animation.value*.035)),
+            )),
+          ),
+        ),
+      );
+      if(constraints.hasBoundedHeight){
+        return SingleChildScrollView(
+          primary:false,
+          physics:const NeverScrollableScrollPhysics(),
+          child:tree,
+        );
+      }
+      return tree;
+    },
   );
 }
 class VopCourseCard extends StatelessWidget {

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Check, CircleHelp, Copy, Edit3, LoaderCircle, Plus, RefreshCw, Save, Share2, Trash2 } from 'lucide-react';
 import { auth } from '../lib/firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 import { getTranslation, getUiLocale } from '../services/i18n';
 import { appConfirm } from '../components/layout/AppDialog';
 import { ShimmerList } from '../components/layout/Shimmer';
@@ -97,7 +98,21 @@ export default function QuizLibrary({ organizationId = '',initialGuideId,initial
       setError(reason instanceof Error ? reason.message : 'Could not load quiz library and guide options.');
     } finally { setLoading(false); }
   };
-  useEffect(() => { setEditorOpen(false); setSelected(null); void load(); }, [organizationId]);
+  useEffect(() => {
+    setEditorOpen(false);
+    setSelected(null);
+    let active = true;
+    const unsub = auth ? onAuthStateChanged(auth, user => {
+      if (user && active) {
+        void load();
+      }
+    }) : () => {};
+    void load();
+    return () => {
+      active = false;
+      unsub();
+    };
+  }, [organizationId]);
   useEffect(() => {
     if (!initialGuideId) return;
     setSelected(null);setSourceId('');setEditorOpen(true);
@@ -121,22 +136,69 @@ export default function QuizLibrary({ organizationId = '',initialGuideId,initial
   }, [guideId,organizationId]);
 
   // Shared guides may be read, but quizzes must be attached to a guide that
-  // the currently selected tenant can administer.
-  const editableGuides = useMemo(() => guides.filter(guide =>
-    guide.archived !== true
-    && String(guide.organizationId || '') === organizationId
-  ), [guides, organizationId]);
-  const currentGuide = editableGuides.find(guide => guide.id === guideId);
-  const lessonOptions = (currentGuide?.lessons || []).filter(lesson => lesson.type !== 'Test');
+  // the currently selected tenant or administrator can author.
+  const editableGuides = useMemo(() => guides.filter(guide => {
+    if (guide.archived === true) return false;
+    if (guide.canEdit === false) return false;
+    if (!organizationId) return true;
+    const guideOrg = String(guide.organizationId || (guide as any).ownerOrganizationId || '');
+    return !guideOrg || guideOrg === organizationId || guide.canEdit === true;
+  }), [guides, organizationId]);
+  const currentGuide = useMemo(
+    () => editableGuides.find(guide => guide.id === guideId) || guides.find(guide => guide.id === guideId),
+    [editableGuides, guides, guideId]
+  );
+  const lessonOptions = useMemo(() => {
+    const rawList = (currentGuide?.lessons && currentGuide.lessons.length > 0)
+      ? currentGuide.lessons
+      : lessonDetails.map((item: any) => ({
+          id: String(item.id),
+          title: String(item.title || ''),
+          lessonNumber: String(item.lessonNumber || ''),
+          type: String(item.type || 'Lesson'),
+          published: item.published !== false,
+        }));
+    return rawList.filter(lesson => lesson.type !== 'Test');
+  }, [currentGuide, lessonDetails]);
   const selectedLesson = lessonDetails.find(item=>item.id===lessonId);
-  const anchorOptions = (selectedLesson?.chapters || []).flatMap(chapter => [
-    {type:'chapter' as const,id:chapter.id,label:'Chapter: '+chapter.title},
-    ...(chapter.sections || []).flatMap(section=>[
-      {type:'section' as const,id:section.id,label:'Section: '+section.title},
-      ...(section.blocks || []).map((block,index)=>({type:'block' as const,id:block.id,
-        label:'Block '+(index+1)+': '+(block.text?.slice(0,45)||block.type)})),
-    ]),
-  ]).filter(item=>item.type===attachmentType);
+  const anchorOptions = useMemo(() => {
+    if (!selectedLesson) return [];
+    if (selectedLesson.chapters && selectedLesson.chapters.length > 0) {
+      return selectedLesson.chapters.flatMap(chapter => [
+        {type:'chapter' as const,id:chapter.id,label:'Chapter: '+chapter.title},
+        ...(chapter.sections || []).flatMap(section=>[
+          {type:'section' as const,id:section.id,label:'Section: '+section.title},
+          ...(section.blocks || []).map((block,index)=>({type:'block' as const,id:block.id,
+            label:'Block '+(index+1)+': '+(block.text?.slice(0,45)||block.type)})),
+        ]),
+      ]).filter(item=>item.type===attachmentType);
+    }
+    const rawPages = (selectedLesson as any).contentPages as any[] | undefined;
+    if (Array.isArray(rawPages) && rawPages.length > 0) {
+      const seen = new Set<string>();
+      const result: Array<{ type: 'chapter' | 'section' | 'block'; id: string; label: string }> = [];
+      for (const page of rawPages) {
+        if (page.sectionId && !seen.has(page.sectionId)) {
+          seen.add(page.sectionId);
+          result.push({
+            type: 'section',
+            id: page.sectionId,
+            label: 'Section: ' + (page.sectionTitle || page.title || page.sectionId),
+          });
+        }
+        if (page.chapterId && !seen.has(page.chapterId)) {
+          seen.add(page.chapterId);
+          result.push({
+            type: 'chapter',
+            id: page.chapterId,
+            label: 'Chapter: ' + (page.chapterTitle || page.chapterId),
+          });
+        }
+      }
+      return result.filter(item => item.type === attachmentType);
+    }
+    return [];
+  }, [selectedLesson, attachmentType]);
   const guideName = (id: string) => guides.find(guide => guide.id === id)?.title || id;
   const lessonName = (guide: string, id: string) => guides.find(item => item.id === guide)?.lessons?.find(item => item.id === id)?.title || id;
   const open = (quiz: Quiz | null, copy = false) => {
@@ -282,10 +344,11 @@ export default function QuizLibrary({ organizationId = '',initialGuideId,initial
         </div>}
         {attachmentType !== 'program' && attachmentType !== 'all' && <div className="vop-field"><label>Study Guide (Module) *</label>
           <select value={guideId} onChange={e => { setGuideId(e.target.value); setLessonId(''); setAnchorId(''); setLanguage(editableGuides.find(item => item.id === e.target.value)?.language || ''); }}>
-            <option value="">Select a guide / module</option>
+            <option value="">{loading ? 'Loading guides…' : 'Select a guide / module'}</option>
             {editableGuides.map(guide => <option key={guide.id} value={guide.id}>{guide.title} · {guide.language.toUpperCase()}{guide.published ? '' : ' (Draft)'}</option>)}
           </select>
-          {!editableGuides.length && <small>No editable guides in the selected organization. Create a guide first.</small>}
+          {loading && <small>Loading study guides…</small>}
+          {!loading && !editableGuides.length && <small>No editable guides in the selected organization. Create a guide first.</small>}
         </div>}
         {!['guide', 'program', 'all'].includes(attachmentType) && <div className="vop-field"><label>Lesson *</label>
           <select value={lessonId} onChange={e => {setLessonId(e.target.value);setAnchorId('');}} disabled={!currentGuide}>

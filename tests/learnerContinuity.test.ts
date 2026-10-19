@@ -101,6 +101,9 @@ test('learner hierarchy counts lessons separately and keeps quizzes in their own
   assert.doesNotMatch(reader,/modules completed/);
   assert.match(lessonReader,/item\.attachedLessonId===lesson\.id/);
   assert.match(lessonReader,/assessmentLinks\('section',currentSection\.id\)/);
+  assert.match(lessonReader,/handleSubmitInlineQuiz/);
+  assert.match(lessonReader,/submit_quiz_above/);
+  assert.match(lessonReader,/complete_quiz_first/);
   assert.match(catalogue,/availableProgramGuideIds/);
   assert.match(catalogue,/guide\.lessons\.some\(lesson=>lesson\.type==='Lesson'\)/);
   assert.match(catalogue,/moduleCount===1\?'module':'modules'/);

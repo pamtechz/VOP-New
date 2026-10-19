@@ -237,11 +237,9 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
             } else {
               _nested(section,key,v);
             }
-            if (key=='theme'&&preferencesReady) {
+            if(key=='theme'&&preferencesReady){
               final uid=FirebaseAuth.instance.currentUser?.uid;
-              if (uid!=null) {
-                VopAppearance.persistTheme(uid,v);
-              }
+              if(uid!=null)VopAppearance.persistTheme(uid,v);
               _saveSettings();
             }
           }
@@ -285,6 +283,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       backgroundColor:Theme.of(context).colorScheme.primaryContainer,
       foregroundImage:Uri.tryParse((profile['photoURL']??'').toString())?.scheme=='https'
         ?NetworkImage((profile['photoURL']??'').toString()):null,
+      onForegroundImageError: (_, __) {},
       child:const Icon(Icons.person,size:37))),
     const SizedBox(height:12),
     Center(child:Text((profile['email']??FirebaseAuth.instance.currentUser?.email??'').toString(),

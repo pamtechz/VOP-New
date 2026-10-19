@@ -21,6 +21,15 @@
       hasPasskeySupport: function() { return false; }
     };
     window.passkeys = window.PasskeyAuthenticator;
+    window.addEventListener('unhandledrejection', function(event) {
+      var reason = event && (event.reason || event.detail);
+      var text = reason ? (reason.message || String(reason)) : '';
+      if (text.indexOf('Retry when online') !== -1 ||
+          text.indexOf('Network unavailable') !== -1 ||
+          text.indexOf('VopApiException') !== -1) {
+        event.preventDefault();
+      }
+    });
   </script>
 </head>
 <body>

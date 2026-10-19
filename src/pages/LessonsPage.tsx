@@ -58,6 +58,8 @@ export const LessonsPage: React.FC<Props> = ({
   ).filter(({guide,lesson})=>{
     if(language!=='all'&&guide.language!==language)return false;
     if(kind!=='all'&&lesson.type!==kind)return false;
+    const isAttachedQuiz = lesson.type==='Test' && (Boolean(lesson.attachedLessonId) || ['lesson','chapter','section','block'].includes(String(lesson.attachmentType||'')));
+    if(kind==='all'&&isAttachedQuiz)return false;
     if(scope==='organization'){
       const isOrg=Boolean(currentUser.organizationId && (
         lesson.ownerOrganizationId===currentUser.organizationId ||

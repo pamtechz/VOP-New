@@ -1,14 +1,15 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import type { DiscoverGuide, Lesson, User } from '../../types';
 import {
   ArrowLeft, Award, BookOpen, Bookmark, CheckCircle2, ChevronRight, Clock,
-  FileQuestion, Lock, Play, Trophy,
+  FileQuestion, Lock, Play, RotateCcw, Trophy,
 } from 'lucide-react';
 import { getStoredGuides, getStoredSettings } from '../../services/storage';
 import { getTranslation, getUiLocale } from '../../services/i18n';
 import { calculateCurriculumProgress } from '../../services/progress';
-import { isLessonUnlocked, lessonIsComplete, lessonScoreForDisplay } from '../../services/lessonProgress';
+import { getAttachedAssessmentsForLesson, isLessonUnlocked, lessonAttachedTestsAreComplete, lessonIsComplete, lessonScoreForDisplay } from '../../services/lessonProgress';
 import { resolveLessonResumeBookmark } from '../../services/lessonBookmark';
+import { resetLessonProgress } from '../../services/localStudy';
 import './guide-sections.css';
 
 interface DiscoverGuideViewProps {
@@ -17,6 +18,7 @@ interface DiscoverGuideViewProps {
   onBack: () => void;
   onSelectLesson: (lesson: Lesson, initialPageIndex?: number) => void;
   onOpenCertificate: () => void;
+  onProgressReset?: () => void | Promise<void>;
 }
 
 const ordered=(items:Lesson[])=>[...items].sort((a,b)=>{
@@ -35,8 +37,29 @@ function readMinutes(pages:NonNullable<Lesson['contentPages']>,fallback=1){
 }
 
 export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
-  guide,currentUser,onBack,onSelectLesson,onOpenCertificate,
+  guide,currentUser,onBack,onSelectLesson,onOpenCertificate,onProgressReset,
 }) => {
+  const [resetTargetLesson, setResetTargetLesson] = useState<Lesson | null>(null);
+  const [resetting, setResetting] = useState(false);
+
+  const handleResetProgress = async () => {
+    if (!resetTargetLesson) return;
+    setResetting(true);
+    try {
+      await resetLessonProgress(guide.id, resetTargetLesson.id, guide.language);
+      if (onProgressReset) {
+        await onProgressReset();
+      } else {
+        window.location.reload();
+      }
+      setResetTargetLesson(null);
+    } catch {
+      //
+    } finally {
+      setResetting(false);
+    }
+  };
+
   const settings=getStoredSettings();
   const t=(key:string,fallback:string,vars?:Record<string,string|number>)=>
     getTranslation(key,getUiLocale(),settings.customTranslations,fallback,'DiscoverGuideView',vars);
@@ -69,10 +92,19 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
     return typeof score==='number'&&Number.isFinite(score)&&Number.isFinite(passMark)&&passMark>=1&&passMark<=100&&score>=passMark;
   });
 
-  const attachedAssessments=(lesson:Lesson,type:'lesson'|'chapter'|'section'|'block',anchorId='')=>
-    assessments.filter(item=>item.attachedLessonId===lesson.id
-      && String(item.attachmentType||'lesson')===type
-      && (type==='lesson'||item.anchorId===anchorId));
+  const attachedAssessments = (lesson: Lesson, type: 'lesson' | 'chapter' | 'section' | 'block', anchorId = '') => {
+    const lessonTests = getAttachedAssessmentsForLesson(guide, lesson);
+    if (type === 'lesson') {
+      return lessonTests.filter(item => {
+        const att = String(item.attachmentType || 'lesson');
+        return att === 'lesson' || !att || (!item.anchorId && att !== 'section' && att !== 'chapter' && att !== 'block');
+      });
+    }
+    return lessonTests.filter(item => {
+      const att = String(item.attachmentType || '');
+      return att === type && item.anchorId === anchorId;
+    });
+  };
 
   const inlineAssessment=(assessment:Lesson,label:string)=>{
     const score=lessonScoreForDisplay(guide,assessment,currentUser);
@@ -81,8 +113,20 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
       ?Number(assessment.assessmentPassThreshold):threshold;
     const passed=hasScore&&Number.isFinite(passMark)&&score!>=passMark;
     const actionLabel=hasScore?t('guide.retake_quiz','Retake quiz'):label;
+    const parentLesson = assessment.attachedLessonId
+      ? studyLessons.find(item => item.id === assessment.attachedLessonId)
+      : studyLessons.find(item => item.id === (assessment as any).lessonId || (item as any).quizLessonId === assessment.id || (item as any).attachedQuizId === assessment.id);
+    const targetPageIndex = parentLesson ? (() => {
+      const pPages = parentLesson.contentPages || [];
+      if (assessment.attachmentType === 'section' && assessment.anchorId) {
+        for (let i = pPages.length - 1; i >= 0; i--) {
+          if (pPages[i].sectionId === assessment.anchorId) return i;
+        }
+      }
+      return Math.max(0, pPages.length - 1);
+    })() : 0;
     return <button type="button" key={assessment.id} className={'vop-section-test '+(passed?'passed':hasScore?'attempted':'')}
-      onClick={()=>onSelectLesson(assessment)} aria-label={actionLabel+': '+assessment.title}>
+      onClick={()=>parentLesson ? onSelectLesson(parentLesson, targetPageIndex) : onSelectLesson(assessment)} aria-label={actionLabel+': '+assessment.title}>
       <FileQuestion size={14}/><span>{actionLabel}</span>
       {hasScore&&<em>{passed?t('guide.passed','Passed'):t('guide.score','Score')} {Math.round(score!)}%</em>}
     </button>;
@@ -116,6 +160,18 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
       </span>
             <ChevronRight size={17}/>
     </button>;
+  };
+
+  const getLockedMessage = (index: number) => {
+    if (index <= 0) return '';
+    const prev = studyLessons[index - 1];
+    if (!prev) return t('guide.complete_prev_unlock', 'Complete previous lesson to unlock');
+    const prevRead = lessonIsComplete(guide, prev, currentUser, threshold);
+    const prevTestsDone = lessonAttachedTestsAreComplete(guide, prev, currentUser, threshold);
+    if (prevRead && !prevTestsDone) {
+      return t('guide.pass_prev_quiz_to_unlock', 'Pass previous lesson review quiz to unlock');
+    }
+    return t('guide.complete_prev_unlock', 'Complete previous lesson and review quizzes to unlock');
   };
 
   return <div className="vop-guide-page min-h-screen bg-[#f4f6fa] pb-28 md:pb-12">
@@ -190,7 +246,7 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
                 count:studyLessons.length,lessons:studyLessons.length===1?t('guide.lesson_singular','lesson'):t('guide.lesson_plural','lessons'),
               })}</span>
           </div>
-
+
           {studyLessons.flatMap((lesson,lessonIndex)=>{
             const completed=lessonIsComplete(guide,lesson,currentUser,threshold);
             const unlocked=isLessonUnlocked(guide,lessonIndex,currentUser,threshold,studyLessons);
@@ -221,7 +277,7 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
                     disabled={!unlocked}
                     onClick={()=>unlocked&&onSelectLesson(lesson,actualIndex)}
                     aria-disabled={!unlocked}>
-                    <span className="vop-section-study-marker">{completed?<CheckCircle2 size={24}/>:!unlocked?<Lock size={20}/>:sectionNumber}</span>
+                    <span className="vop-section-study-marker">{completed?<CheckCircle2 size={24}/>:!unlocked?<Lock size={22}/>:sectionNumber}</span>
                     <span className="vop-section-study-copy">
                       <small>{t('guide.section','Section')} {sectionNumber}{!unlocked?' · '+t('guide.locked','Locked'):''}</small>
                       <strong>{section.title}</strong>
@@ -236,7 +292,7 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
                           <Bookmark size={11} fill="currentColor"/> Current reading bookmark (Page {lessonBookmark.pageNumber})
                         </span>
                       )}
-                      <em>{!unlocked?t('guide.complete_prev_unlock','Complete previous lesson to unlock'):(chapter.title+(lesson.title?' · '+lesson.title:''))}</em>
+                      <em>{!unlocked ? getLockedMessage(lessonIndex) : (chapter.title+(lesson.title?' · '+lesson.title:''))}</em>
                     </span>
                     <ChevronRight size={19}/>
                   </button>
@@ -251,6 +307,33 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
                       {chapterTests.map(item=>inlineAssessment(item,t('guide.chapter_test','Chapter test')))}
                       {lessonTests.map(item=>inlineAssessment(item,t('guide.lesson_test','Lesson test')))}
                     </div>}
+                    {completed&&chapterIndex===chapters.length-1&&sectionIndex===chapter.sections.length-1&&(
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setResetTargetLesson(lesson);
+                        }}
+                        style={{
+                          marginLeft: 'auto',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.35rem',
+                          padding: '0.35rem 0.75rem',
+                          borderRadius: '0.5rem',
+                          border: '1px solid #cbd5e1',
+                          background: '#fff',
+                          color: '#64748b',
+                          fontSize: '0.75rem',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                        }}
+                        title={t('guide.reset_lesson_progress', 'Reset progress')}
+                      >
+                        <RotateCcw size={12} />
+                        <span>{t('guide.reset_progress', 'Reset progress')}</span>
+                      </button>
+                    )}
                   </div>
                 </article>;
               }));
@@ -285,9 +368,9 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
                 aria-disabled={!unlocked}>
                 <span className="vop-section-study-marker">{completed?<CheckCircle2 size={24}/>:!unlocked?<Lock size={22}/>:lessonIndex+1}</span>
                 <span className="vop-section-study-copy">
-                  <small>{t('guide.lesson','Lesson')} {lesson.lessonNumber}{!unlocked?' · '+t('guide.locked','Locked'):''}</small>
+                  <small>{t('guide.lesson','Lesson')} {lesson.lessonNumber}{lessonTests.length > 0 ? ' · ' + t('guide.includes_quiz', 'Includes review quiz') : ''}{!unlocked?' · '+t('guide.locked','Locked'):''}</small>
                   <strong>{lesson.title}</strong>
-                  <em>{!unlocked?t('guide.complete_prev_unlock','Complete previous lesson to unlock'):(lesson.description||'')}</em>
+                  <em>{!unlocked ? getLockedMessage(lessonIndex) : (lesson.description||'')}</em>
                 </span>
                 <ChevronRight size={19}/>
               </button>
@@ -300,6 +383,34 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
                 {unlocked&&<div className="vop-section-study-tests">
                   {lessonTests.map(item=>inlineAssessment(item,t('guide.take_test','Take test')))}
                 </div>}
+                {completed&&(
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setResetTargetLesson(lesson);
+                    }}
+                    style={{
+                      marginLeft: 'auto',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.35rem',
+                      padding: '0.35rem 0.75rem',
+                      borderRadius: '0.5rem',
+                      border: '1px solid #cbd5e1',
+                      background: '#fff',
+                      color: '#64748b',
+                      fontSize: '0.75rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      transition: 'all 0.15s',
+                    }}
+                    title={t('guide.reset_lesson_progress', 'Reset progress')}
+                  >
+                    <RotateCcw size={12} />
+                    <span>{t('guide.reset_progress', 'Reset progress')}</span>
+                  </button>
+                )}
               </div>
             </article>];
           })}
@@ -326,6 +437,67 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
           <Award size={16}/>{t('certificates.view_your','View certificate')}
         </button>}
       </div>}
+
+      {resetTargetLesson && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 1100,
+          backgroundColor: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(4px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem',
+        }}>
+          <div style={{
+            background: '#fff',
+            maxWidth: '26rem', width: '100%',
+            borderRadius: '1.25rem', padding: '1.5rem',
+            boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)',
+            border: '1px solid #e2e8f0',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
+              <div style={{
+                width: '2.5rem', height: '2.5rem', borderRadius: '50%',
+                backgroundColor: '#fee2e2', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: '#dc2626',
+              }}>
+                <RotateCcw size={20} />
+              </div>
+              <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: '#0f172a' }}>
+                {t('guide.reset_progress_title', 'Reset Lesson Progress?')}
+              </h3>
+            </div>
+            <p style={{ fontSize: '0.88rem', color: '#64748b', lineHeight: 1.55, margin: '0 0 1.25rem' }}>
+              {t('guide.reset_progress_desc', 'This will reset your completion and review quiz scores for "{title}". Subsequent lessons will be re-locked until you complete this lesson again.', { title: resetTargetLesson.title })}
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+              <button
+                type="button"
+                disabled={resetting}
+                onClick={() => setResetTargetLesson(null)}
+                style={{
+                  padding: '0.55rem 1rem', borderRadius: '0.75rem',
+                  border: '1px solid #cbd5e1',
+                  background: 'transparent', color: '#334155',
+                  fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer',
+                }}
+              >
+                {t('common.cancel', 'Cancel')}
+              </button>
+              <button
+                type="button"
+                disabled={resetting}
+                onClick={handleResetProgress}
+                style={{
+                  padding: '0.55rem 1.15rem', borderRadius: '0.75rem',
+                  border: 'none', background: '#dc2626', color: '#fff',
+                  fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer',
+                  display: 'inline-flex', alignItems: 'center', gap: '0.4rem',
+                }}
+              >
+                <RotateCcw className={resetting ? 'animate-spin' : ''} size={15} />
+                <span>{resetting ? t('common.resetting', 'Resetting...') : t('guide.confirm_reset', 'Reset Progress')}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   </div>;
 };

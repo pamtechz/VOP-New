@@ -254,7 +254,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
       whatsappNumber: '',
       contactEmail: '',
       quizPassThreshold: 75,
-      quizMaxAttempts: 3,
+      quizMaxAttempts: 0,
       quizRetakeCooldownMinutes: 0,
       engagementPoints: { soloChallenge: 10, duelChallenge: 15, memoryReview: 1, practiceQuiz: 5, chapterQuiz: 10, finalExam: 25 },
       defaultLanguage: activeLanguage || 'en',

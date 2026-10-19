@@ -683,6 +683,18 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
   const goBack=useCallback(()=>{
     setIsMenuOpen(false);
     setStudyError('');
+    if(activeLesson){
+      setActiveLesson(null);
+      if(activeGuide){
+        rememberLocation({
+          route:currentRoute,
+          ...(currentRoute==='lessons'&&activeProgramId?{programId:activeProgramId}:{}),
+          guideId:activeGuide.id,
+          guideLanguage:activeGuide.language,
+        },true);
+      }
+      return;
+    }
     if(currentUser.uid&&learnerHistoryHasPrevious(currentUser.uid)){
       window.history.back();
       return;
@@ -690,7 +702,23 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
     const home:LearnerLocation={route:'home'};
     applyLearnerLocation(home);
     if(currentUser.uid)replaceLearnerLocation(currentUser.uid,home,0);
-  },[currentUser.uid,applyLearnerLocation]);
+  },[activeLesson,activeGuide,currentRoute,activeProgramId,rememberLocation,currentUser.uid,applyLearnerLocation]);
+
+  const exitStudyItem=useCallback(()=>{
+    setIsMenuOpen(false);
+    setStudyError('');
+    setActiveLesson(null);
+    if(activeGuide){
+      rememberLocation({
+        route:currentRoute,
+        ...(currentRoute==='lessons'&&activeProgramId?{programId:activeProgramId}:{}),
+        guideId:activeGuide.id,
+        guideLanguage:activeGuide.language,
+      },true);
+    } else {
+      goBack();
+    }
+  },[activeGuide,currentRoute,activeProgramId,rememberLocation,goBack]);
 
   const openGuide=useCallback((guide:DiscoverGuide)=>{
     void loadDiscoverGuideView();
@@ -703,7 +731,7 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
     rememberLocation({route:'home',guideId:guide.id,guideLanguage:guide.language});
   },[rememberLocation]);
 
-  const openStudyItem=useCallback((guide:DiscoverGuide,lesson:Lesson,pageIndex?:number,route?:AppRoute)=>{
+  const openStudyItem=useCallback((guide:DiscoverGuide,lesson:Lesson,pageIndex?:number,route?:AppRoute,replaceHistory=false)=>{
     const isStudyLesson=lesson.type==='Lesson';
     if(isStudyLesson)void loadLessonReaderModal(); else void loadQuizModal();
     const pageCount=isStudyLesson?Math.max(1,lesson.contentPages?.length||1):1;
@@ -726,7 +754,7 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
       guideId:guide.id,guideLanguage:guide.language,
       lessonId:lesson.id,
       ...(isStudyLesson?{pageIndex:desired}:{}),
-    });
+    },replaceHistory);
   },[activeProgramId,currentRoute,currentUser.progress.lessonResume,rememberLocation]);
 
   const rememberStudyPage=useCallback((pageIndex:number)=>{
@@ -937,7 +965,15 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
           {showCourse && activeGuide && <DiscoverGuideView guide={activeGuide} currentUser={currentUser}
             onBack={goBack} onSelectLesson={(lesson,initialPageIndex) =>
               openStudyItem(activeGuide,lesson,initialPageIndex,'home')}
-            onOpenCertificate={() => navigate('certificates')} />}
+            onOpenCertificate={() => navigate('certificates')}
+            onProgressReset={async () => {
+              if (!auth?.currentUser) return;
+              const refreshed = await loadFirestoreUser(auth.currentUser.uid);
+              if (refreshed) {
+                setCurrentUser(refreshed);
+                setAllUsers([refreshed]);
+              }
+            }} />}
           {showDashboardShell && <HomeDashboard currentUser={currentUser} guides={guides} announcements={announcements} settings={settings} activeLanguage={activeLanguage} onSelectGuide={openGuide} onSelectLesson={(guide, lesson, pageIndex) => openStudyItem(guide, lesson, pageIndex, 'home')} onOpenCertificate={() => navigate('certificates')} onOpenBooks={() => navigate('resources')} onOpenPrayer={() => navigate('prayer')} onOpenRadio={() => navigate('radio')} onOpenSupport={() => navigate('support')} onNavigate={navigate} />}
           </React.Suspense>
         </main>
@@ -964,10 +1000,10 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
           saveSupportContextPrefill(context);
           navigate('support');
         }:undefined}
-        onClose={goBack} hasPreviousLesson={Boolean(previousLesson)} hasNextLesson={Boolean(nextLesson)}
-        onPreviousLesson={() => { if (previousLesson) openStudyItem(activeGuide,previousLesson,undefined,currentRoute); }}
-        onNextLesson={() => { if (nextLesson) openStudyItem(activeGuide,nextLesson,undefined,currentRoute); }}
-        onComplete={async () => {
+        onClose={exitStudyItem} hasPreviousLesson={Boolean(previousLesson)} hasNextLesson={Boolean(nextLesson)}
+        onPreviousLesson={() => { if (previousLesson) openStudyItem(activeGuide,previousLesson,undefined,currentRoute,true); }}
+        onNextLesson={() => { if (nextLesson) openStudyItem(activeGuide,nextLesson,undefined,currentRoute,true); }}
+        onComplete={async (closeAfter = true) => {
         const accepted = await completeLesson(activeGuide.id, activeLesson.id, activeGuide.language);
         if (accepted === 'failed') { setStudyError('Lesson not saved. Check your connection and try again.'); return false; }
         setStudyError('');
@@ -978,10 +1014,10 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
           const refreshedUser = await loadFirestoreUser(auth.currentUser.uid).catch(() => null);
           if (refreshedUser) { setCurrentUser(refreshedUser); setAllUsers([refreshedUser]); }
         }
-        if (!nextLesson) goBack();
+        if (closeAfter && !nextLesson) exitStudyItem();
         return true;
       }} />}
-      {activeLesson?.type === 'Test' && activeGuide && <QuizModal lesson={activeLesson} guide={activeGuide} previousScore={lessonScoreForDisplay(activeGuide,activeLesson,currentUser)} previouslyAttempted={lessonScoreForDisplay(activeGuide,activeLesson,currentUser)!==undefined} passThreshold={settings.quizPassThreshold} maxAttempts={settings.quizMaxAttempts || 0} retakeCooldownMinutes={settings.quizRetakeCooldownMinutes || 0} onClose={goBack} hasNextLesson={false} onContinue={goBack} onAttemptStarted={async()=>{if(auth?.currentUser){const refreshedUser=await loadFirestoreUser(auth.currentUser.uid).catch(()=>null);if(refreshedUser){setCurrentUser(refreshedUser);setAllUsers([refreshedUser]);}}}} onSubmitScore={async (answers,sessionId) => {
+      {activeLesson?.type === 'Test' && activeGuide && <QuizModal lesson={activeLesson} guide={activeGuide} previousScore={lessonScoreForDisplay(activeGuide,activeLesson,currentUser)} previouslyAttempted={lessonScoreForDisplay(activeGuide,activeLesson,currentUser)!==undefined} passThreshold={settings.quizPassThreshold} maxAttempts={settings.quizMaxAttempts || 0} retakeCooldownMinutes={settings.quizRetakeCooldownMinutes || 0} onClose={exitStudyItem} hasNextLesson={false} onContinue={exitStudyItem} onAttemptStarted={async()=>{if(auth?.currentUser){const refreshedUser=await loadFirestoreUser(auth.currentUser.uid).catch(()=>null);if(refreshedUser){setCurrentUser(refreshedUser);setAllUsers([refreshedUser]);}}}} onSubmitScore={async (answers,sessionId) => {
         const result = await submitQuizAnswers(activeGuide.id, activeLesson.id, answers, activeGuide.language,sessionId);
         if (result === null) { setStudyError('Test results were not saved. Check your connection.'); return null; }
         setStudyError('');

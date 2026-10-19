@@ -2,7 +2,7 @@
   display:grid;gap:12px;min-width:0;
   color:#304760;font-size:15px;line-height:1.75;overflow-wrap:anywhere;
 }
-.vop-study-plate :is(p,h2,h3,h4,ul,ol,blockquote,pre,figure){margin:0}
+.vop-study-plate :is(p,.vop-study-plate-p,h2,h3,h4,ul,ol,blockquote,pre,figure){margin:0}
 .vop-study-plate .vop-study-plate-heading{font-size:20px;color:#163e74;line-height:1.3}
 .vop-study-plate .vop-study-plate-subheading{font-size:17px;color:#163e74;line-height:1.4}
 .vop-study-plate :is(ul,ol){display:block;padding-left:25px}

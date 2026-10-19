@@ -13,7 +13,7 @@ class _PrayerScreenState extends State<PrayerScreen> {
   late Future<Map<String,dynamic>> requests;
   bool mine=true;
   @override void initState(){super.initState();reload();}
-  void reload(){requests=widget.api.prayers(mine:mine);}
+  void reload(){requests=widget.api.prayers(mine:mine)..ignore();}
   List<Map<String,dynamic>> rows(dynamic input)=>input is List
     ?input.whereType<Map>().map((e)=>Map<String,dynamic>.from(e)).toList()
     :[];
@@ -27,7 +27,7 @@ class _PrayerScreenState extends State<PrayerScreen> {
           message:'${s.error}',onRetry:()=>setState(reload));
       }
       final list=rows(s.data?['items']);
-      return RefreshIndicator(onRefresh:()async{setState(reload);await requests;},
+      return RefreshIndicator(onRefresh:()async{setState(reload);await requests.catchError((_) => <String, dynamic>{});},
         child:ListView(padding:const EdgeInsets.all(17),children:[
           VopHeroCard(
             kicker:'PRAYER MINISTRY',

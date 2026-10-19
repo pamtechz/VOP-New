@@ -77,19 +77,19 @@ class VopApi {
     if (user == null) {
       throw const VopApiException('Sign in to continue.', status: 401);
     }
-    final token = await user.getIdToken(retried);
-    if (token == null || token.isEmpty) {
-      throw const VopApiException('Your sign-in session has expired.', status: 401);
-    }
-    final request = http.Request(method, _url(path, query))
-      ..followRedirects = false
-      ..headers.addAll({
-        'Authorization': 'Bearer $token',
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-      });
-    if (body != null) request.body = jsonEncode(body);
     try {
+      final token = await user.getIdToken(retried);
+      if (token == null || token.isEmpty) {
+        throw const VopApiException('Your sign-in session has expired.', status: 401);
+      }
+      final request = http.Request(method, _url(path, query))
+        ..followRedirects = false
+        ..headers.addAll({
+          'Authorization': 'Bearer $token',
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        });
+      if (body != null) request.body = jsonEncode(body);
       final streamed = await _client.send(request).timeout(_timeout);
       // Never forward Firebase bearer tokens to a redirected host.
       if (streamed.statusCode >= 300 && streamed.statusCode < 400) {
@@ -116,6 +116,11 @@ class VopApi {
       throw const VopApiException('VOP returned an invalid response.');
     } on http.ClientException {
       throw const VopApiException('Network unavailable. Check your connection.');
+    } on FirebaseException catch (e) {
+      if (e.code == 'network-request-failed' || isVopSocketError(e)) {
+        throw const VopApiException('Network unavailable. Check your connection.');
+      }
+      throw VopApiException(e.message ?? 'Authentication error.', code: e.code);
     } catch (error) {
       if (isVopSocketError(error)) {
         throw const VopApiException('Network unavailable. Check your connection.');
@@ -301,6 +306,20 @@ class VopApi {
       'action':'completeLesson','guideId':guideId,
       'lessonId':lessonId,'language':language,
     });
+  Future<Map<String,dynamic>> resetLessonProgress(
+      String guideId,String lessonId,String language) async {
+    final cleanLang = language.trim().toLowerCase();
+    final effectiveLang = cleanLang.isNotEmpty && cleanLang != 'null' ? cleanLang : 'en';
+    final key = '${effectiveLang}_${guideId}_$lessonId';
+    if (_uid.isNotEmpty) {
+      await _offline.delete(_uid, 'quiz', key);
+      await _offline.delete(_uid, 'draft', key);
+    }
+    return action('/api/study/progress',{
+      'action':'resetLessonProgress','guideId':guideId,
+      'lessonId':lessonId,'language':effectiveLang,
+    });
+  }
   Future<Map<String,dynamic>> startQuiz(
       String guideId,String lessonId,String language,
       {bool confirmRetake=false})async{
@@ -319,10 +338,11 @@ class VopApi {
       }
       return result;
     }catch(error){
-      if(!_networkFailure(error)||confirmRetake||_uid.isEmpty)rethrow;
-      final cached=await _offline.read(_uid,'quiz',key);
-      if(cached==null)rethrow;
-      return {...cached,'offline':true};
+      if(_networkFailure(error)&&_uid.isNotEmpty){
+        final cached=await _offline.read(_uid,'quiz',key);
+        if(cached!=null)return {...cached,'offline':true};
+      }
+      rethrow;
     }
   }
   Future<Map<String,dynamic>> submitQuiz(

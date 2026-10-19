@@ -2,6 +2,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
+import 'dart:ui';
+
 import 'core/config.dart';
 import 'core/vop_api.dart';
 import 'core/vop_i18n.dart';
@@ -11,6 +13,12 @@ import 'screens/home_shell.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  PlatformDispatcher.instance.onError = (error, stack) {
+    if (error is VopApiException) {
+      return true;
+    }
+    return false;
+  };
   String? initError;
   if (VopConfig.error == null) {
     try {
@@ -22,13 +30,29 @@ Future<void> main() async {
   runApp(VopAndroidApp(initError: initError));
 }
 
-class VopAndroidApp extends StatelessWidget {
+class VopAndroidApp extends StatefulWidget {
   const VopAndroidApp({this.initError, super.key});
   final String? initError;
 
   @override
+  State<VopAndroidApp> createState() => _VopAndroidAppState();
+}
+
+class _VopAndroidAppState extends State<VopAndroidApp> {
+  Stream<User?>? _authStream;
+
+  @override
+  void initState() {
+    super.initState();
+    final activeError = VopConfig.error ?? widget.initError;
+    if (activeError == null) {
+      _authStream = FirebaseAuth.instance.authStateChanges();
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final activeError = VopConfig.error ?? initError;
+    final activeError = VopConfig.error ?? widget.initError;
     return ValueListenableBuilder<ThemeMode>(
       valueListenable:VopAppearance.mode,
       builder:(context,mode,child)=>ValueListenableBuilder<bool>(
@@ -66,17 +90,50 @@ class VopAndroidApp extends StatelessWidget {
               ),
             )
           : StreamBuilder<User?>(
-              stream: FirebaseAuth.instance.authStateChanges(),
+              initialData: FirebaseAuth.instance.currentUser,
+              stream: _authStream,
               builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
+                if (snapshot.connectionState == ConnectionState.waiting &&
+                    !snapshot.hasData) {
                   return const Scaffold(
                     body: Center(child: CircularProgressIndicator()),
                   );
                 }
                 if (!snapshot.hasData) return const AuthScreen();
-                return HomeShell(key: ValueKey(snapshot.data!.uid), api: VopApi());
+                return _AuthenticatedHome(uid: snapshot.data!.uid);
               },
             ),
     ))));
+  }
+}
+
+class _AuthenticatedHome extends StatefulWidget {
+  const _AuthenticatedHome({required this.uid});
+  final String uid;
+
+  @override
+  State<_AuthenticatedHome> createState() => _AuthenticatedHomeState();
+}
+
+class _AuthenticatedHomeState extends State<_AuthenticatedHome> {
+  late VopApi _api;
+
+  @override
+  void initState() {
+    super.initState();
+    _api = VopApi();
+  }
+
+  @override
+  void didUpdateWidget(_AuthenticatedHome oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.uid != widget.uid) {
+      _api = VopApi();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return HomeShell(key: ValueKey(widget.uid), api: _api);
   }
 }

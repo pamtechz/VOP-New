@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -41,13 +42,13 @@ class _HomeShellState extends State<HomeShell> {
   int tab=0;
   String search='';
   late Future<Map<String,dynamic>> profile,catalog,progress;
-  @override void initState(){super.initState();reload();_restoreAppearance();}
+  @override void initState(){super.initState();reload();unawaited(_restoreAppearance().catchError((_) {}));}
   Future<void> _restoreAppearance()async{
-    final uid=FirebaseAuth.instance.currentUser?.uid;
-    if(uid==null)return;
-    await VopAppearance.restoreTheme(uid);
-    final initialRevision=VopAppearance.revision;
     try{
+      final uid=FirebaseAuth.instance.currentUser?.uid;
+      if(uid==null)return;
+      await VopAppearance.restoreTheme(uid);
+      final initialRevision=VopAppearance.revision;
       final result=await widget.api.personalSettings();
       if (mounted && initialRevision == VopAppearance.revision) {
         VopAppearance.apply(asMap(result['settings']));
@@ -62,9 +63,9 @@ class _HomeShellState extends State<HomeShell> {
     }catch(_){}
   }
   void reload(){
-    profile=widget.api.bootstrap();
-    catalog=widget.api.catalogue();
-    progress=widget.api.progress();
+    profile=widget.api.bootstrap()..ignore();
+    catalog=widget.api.catalogue()..ignore();
+    progress=widget.api.progress()..ignore();
   }
   @override void dispose(){widget.api.dispose();super.dispose();}
   void selectTab(int next)=>setState(()=>tab=next);
@@ -238,7 +239,7 @@ class _HomeShellState extends State<HomeShell> {
               final completed=(activity.data?['completedLessons'] as List?)?.length??0;
               final greeting=welcomeGreeting(user['displayName']);
               return RefreshIndicator(onRefresh:()async{
-                setState(reload);await profile;},
+                setState(reload);await profile.catchError((_) => <String, dynamic>{});},
         child:ListView(key:const PageStorageKey<String>('vop-discover-scroll'),
           padding:const EdgeInsets.all(15),children:[
           Row(children:[
@@ -296,15 +297,15 @@ class _HomeShellState extends State<HomeShell> {
           VopSectionTitle('Featured study guides',
             subtitle:'Continue exploring the Word',
             action:'View all',onAction:()=>selectTab(1)),
-          if(guides.isEmpty)
-            const SizedBox(height:130,child:VopEmpty(
-              icon:Icons.menu_book_outlined,
-              message:'No published guides are available yet.')),
           if(course.connectionState!=ConnectionState.done)
-            const VopSkeleton(rows:2)
+            const VopSkeleton(rows:2,padding:EdgeInsets.symmetric(vertical:8))
           else if(course.hasError)
             VopEmpty(icon:Icons.wifi_off,message:'Could not load study guides.',
               onRetry:()=>setState(reload))
+          else if(guides.isEmpty)
+            const SizedBox(height:130,child:VopEmpty(
+              icon:Icons.menu_book_outlined,
+              message:'No published guides are available yet.'))
           else
             ...guides.take(4).map(guideCard),
           const SizedBox(height:28),
@@ -334,7 +335,7 @@ class _HomeShellState extends State<HomeShell> {
       final text='${guide['title']??''} ${guide['description']??''} ${guide['language']??''}';
       return text.toLowerCase().contains(search.toLowerCase());
     }).toList();
-    return RefreshIndicator(onRefresh:()async{setState(reload);await catalog;},
+    return RefreshIndicator(onRefresh:()async{setState(reload);await catalog.catchError((_) => <String, dynamic>{});},
       child:ListView(key:const PageStorageKey<String>('vop-lessons-scroll'),
         padding:const EdgeInsets.all(15),children:[
         const VopHeroCard(
@@ -409,7 +410,7 @@ class _ProgrammeScreen extends StatelessWidget {
             style:const TextStyle(fontWeight:FontWeight.w800)),
           subtitle:Text((guide['language']??'').toString().toUpperCase()),
           children:[FutureBuilder<Map<String,dynamic>>(
-            future:api.guide((guide['id']??'').toString()),
+            future:api.guide((guide['id']??'').toString())..ignore(),
             builder:(context,s){
               if (s.connectionState != ConnectionState.done) {
                 return const Padding(padding:EdgeInsets.all(16),
@@ -419,7 +420,7 @@ class _ProgrammeScreen extends StatelessWidget {
                 return Padding(padding:const EdgeInsets.all(14),
                   child:Text('${s.error}'));
               }
-              final lessons=asRows(s.data?['lessons']);
+              final lessons=asRows(s.data?['lessons']).where((l)=>l['type']!='Test').toList();
               return Column(children:[
                 if(lessons.isEmpty)const Padding(
                   padding:EdgeInsets.all(14),
@@ -429,7 +430,7 @@ class _ProgrammeScreen extends StatelessWidget {
                   leading:CircleAvatar(radius:16,
                     child:Text('${entry.key+1}',style:const TextStyle(fontSize:12))),
                   title:Text((entry.value['title']??'Lesson').toString()),
-                  subtitle:Text(entry.value['type']=='Test'?'Assessment':'Lesson'),
+                  subtitle:Text('Lesson ${entry.key+1}'),
                   trailing:const Icon(Icons.chevron_right_rounded),
                   onTap:()=>Navigator.push(context,MaterialPageRoute<void>(
                     builder:(_)=>GuideScreen(api:api,
@@ -455,7 +456,7 @@ class _ProgressScreen extends StatelessWidget{
   @override Widget build(BuildContext context)=>Scaffold(
     appBar:AppBar(title:const Text('Learning progress')),
     body:FutureBuilder<Map<String,dynamic>>(
-      future:api.progress(),builder:(context,s){
+      future:api.progress()..ignore(),builder:(context,s){
         if(s.connectionState!=ConnectionState.done)return const VopSkeleton();
         if(s.hasError)return VopEmpty(icon:Icons.wifi_off,message:'${s.error}');
         final progress=s.data??{};

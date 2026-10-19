@@ -239,9 +239,13 @@ class _RadioPlayerScreenState extends State<RadioPlayerScreen>
             }
             if(uri.scheme!='https')return NavigationDecision.prevent;
             final host=uri.host.toLowerCase();
-            return host==allowed||
-                (source.provider=='YouTube'&&host=='com.sda.vop')
-              ?NavigationDecision.navigate:NavigationDecision.prevent;
+            final isAllowed = host==allowed ||
+              (source.provider=='YouTube' &&
+                (host=='com.sda.vop' || _host(host,'youtube.com') || _host(host,'youtube-nocookie.com') || _host(host,'googlevideo.com'))) ||
+              (source.provider=='AudioVerse' && _host(host,'audioverse.org')) ||
+              (source.provider=='Vimeo' && _host(host,'vimeo.com')) ||
+              (source.provider=='SoundCloud' && (_host(host,'soundcloud.com') || _host(host,'sndcdn.com')));
+            return isAllowed ? NavigationDecision.navigate : NavigationDecision.prevent;
           },
         ));
       try {
@@ -330,7 +334,8 @@ class _RadioPlayerScreenState extends State<RadioPlayerScreen>
     if(!safeRadioHttps(raw))return;
     _openingInApp=true;
     try{
-      final opened=await launchUrl(Uri.parse(raw),mode:LaunchMode.inAppBrowserView);
+      final opened=await launchUrl(Uri.parse(raw),
+        mode:kIsWeb?LaunchMode.platformDefault:LaunchMode.inAppBrowserView);
       if(!opened&&mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content:Text('Unable to open media.')));
@@ -428,11 +433,12 @@ class _RadioPlayerScreenState extends State<RadioPlayerScreen>
             if(ready&&source.kind==RadioMediaKind.video)
               AspectRatio(aspectRatio:v!.aspectRatio>0?v.aspectRatio:16/9,
                 child:VideoPlayer(c!)),
-            if(kIsWeb && source.kind==RadioMediaKind.provider && source.url!=null)
+            if(kIsWeb && source.kind==RadioMediaKind.provider && source.url!=null && source.provider!='AudioVerse')
               Positioned.fill(child:VopWebProviderEmbed(url:source.url!)),
             if(!kIsWeb&&source.kind==RadioMediaKind.provider&&embed!=null)
               WebViewWidget(controller:embed!),
-            if(!kIsWeb&&source.kind==RadioMediaKind.provider&&embed==null)
+            if((!kIsWeb&&source.kind==RadioMediaKind.provider&&embed==null) ||
+               (kIsWeb&&source.kind==RadioMediaKind.provider&&source.provider=='AudioVerse'))
               Positioned.fill(child:Stack(fit:StackFit.expand,children:[
                 if(safeRadioHttps(value(widget.item,'posterUrl')))
                   Image.network(value(widget.item,'posterUrl'),fit:BoxFit.cover,
@@ -441,7 +447,7 @@ class _RadioPlayerScreenState extends State<RadioPlayerScreen>
                 Center(child:FilledButton.icon(
                   onPressed:source.provider=='AudioVerse'?_openInApp:_prepare,
                   icon:const Icon(Icons.play_arrow_rounded),
-                  label:const Text('Play'),
+                  label:Text(source.provider=='AudioVerse'?'Play on AudioVerse':'Play'),
                 )),
               ])),
             if(source.kind==RadioMediaKind.audio)
@@ -472,10 +478,12 @@ class _RadioPlayerScreenState extends State<RadioPlayerScreen>
             TextButton.icon(onPressed:_openInApp,
               icon:const Icon(Icons.play_circle_outline,size:17),
               label:const Text('Listen in app')),
-            const SizedBox(width:8),
-            TextButton.icon(onPressed:_prepare,
-              icon:const Icon(Icons.picture_in_picture_alt_outlined,size:17),
-              label:const Text('Embedded player')),
+            if(!kIsWeb)...[
+              const SizedBox(width:8),
+              TextButton.icon(onPressed:_prepare,
+                icon:const Icon(Icons.picture_in_picture_alt_outlined,size:17),
+                label:const Text('Embedded player')),
+            ],
           ]),
         if(c!=null&&ready)...[
           const SizedBox(height:14),

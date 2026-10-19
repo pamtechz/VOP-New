@@ -45,6 +45,10 @@ const plainLesson=(id:string,row:Raw)=>({
   lessonNumber:string(row.lessonNumber||id),type:row.type==='Test'?'Test':'Lesson',
   estimatedMinutes:Number.isFinite(Number(row.estimatedMinutes))?Number(row.estimatedMinutes):15,
   assessmentKind:string(row.assessmentKind),sourceQuizId:string(row.sourceQuizId),
+  attachedLessonId:string(row.attachedLessonId),attachmentType:string(row.attachmentType),
+  anchorId:string(row.anchorId),lessonId:string(row.lessonId),
+  quizLessonId:string(row.quizLessonId||row.quizId),attachedQuizId:string(row.attachedQuizId||row.quizId),
+  assessmentPassThreshold:row.assessmentPassThreshold,
   // Questions and correct answers MUST only be returned by the existing
   // session-based study/progress startQuiz action, never in catalogue records.
 });
@@ -62,6 +66,11 @@ const simplePage=(page:Raw,index:number)=>{
     chapterId:string(page.chapterId),chapterTitle:string(page.chapterTitle),
     sectionId:string(page.sectionId),content:string(page.content),
     imageUrl:publicImage(page.imageUrl),blocks,document,
+    attachedQuizId:string(page.attachedQuizId||page.quizId),
+    scriptureQuote:page.scriptureQuote&&typeof page.scriptureQuote==='object'
+      ?{text:string((page.scriptureQuote as Raw).text),reference:string((page.scriptureQuote as Raw).reference)}
+      :null,
+    keyTakeaway:string(page.keyTakeaway),
   };
 };
 const lessonPages=(row:Raw)=>{
@@ -240,15 +249,60 @@ export default async function mobile(req:Request,res:Response){
     const completedAssessments=new Set(
       Array.isArray(progress.completedAssessments)?progress.completedAssessments.map(String):[]);
     const studyLanguage=string(guide.language)||'en';
-    const isComplete=(entry:(typeof lessons)[number])=>{
+    const isLessonRead=(entry:(typeof lessons)[number])=>{
       const key=`${studyLanguage}:${guideId}:${entry.id}`;
-      return entry.type==='Test' ? completedAssessments.has(key)
-        :completedLessons.has(key);
+      return completedLessons.has(key) || completedLessons.has(entry.id);
     };
-    const annotated=lessons.map((entry,index)=>({
-      ...entry,completed:isComplete(entry),
-      locked:index>0&&!lessons.slice(0,index).every(isComplete),
-    }));
+    const isAssessmentPassed=(entry:(typeof lessons)[number])=>{
+      const key=`${studyLanguage}:${guideId}:${entry.id}`;
+      if (completedAssessments.has(key) || completedAssessments.has(entry.id)) return true;
+      const scores = progress.guideScores && typeof progress.guideScores === 'object'
+        ? progress.guideScores as Raw : {};
+      const orgKey = `${string(guide.organizationId || 'platform')}:${studyLanguage}:${guideId}:${entry.id}`;
+      const score = Number(scores[orgKey] ?? scores[key] ?? scores[`${guideId}:${entry.id}`]);
+      const passMark = Number.isFinite(Number(entry.assessmentPassThreshold)) ? Number(entry.assessmentPassThreshold) : 70;
+      return Number.isFinite(score) && score >= passMark;
+    };
+    const studyLessons = lessons.filter(l => l.type !== 'Test');
+    const isStudyLessonComplete = (studyLesson: (typeof lessons)[number]) => {
+      if (!isLessonRead(studyLesson)) return false;
+      const attached = lessons.filter(item =>
+        item.type === 'Test' && item.attachmentType !== 'guide' && item.assessmentKind !== 'final_exam' && (
+          string(item.attachedLessonId) === studyLesson.id ||
+          item.id === `quiz_${studyLesson.id}` ||
+          item.id === `quiz-${studyLesson.id}` ||
+          item.id === string(studyLesson.quizLessonId) ||
+          item.id === string(studyLesson.attachedQuizId) ||
+          (!item.attachedLessonId && string(item.lessonId) === studyLesson.id)
+        )
+      );
+      return attached.every(isAssessmentPassed);
+    };
+    const annotated = lessons.map((entry, index) => {
+      if (entry.type === 'Test') {
+        const passed = isAssessmentPassed(entry);
+        const isFinal = entry.attachmentType === 'guide' || entry.assessmentKind === 'final_exam';
+        const parentStudy = entry.attachedLessonId ? studyLessons.find(s => s.id === entry.attachedLessonId) : null;
+        let locked = false;
+        if (isFinal) {
+          locked = !studyLessons.every(isStudyLessonComplete);
+        } else if (parentStudy) {
+          const pIdx = studyLessons.findIndex(s => s.id === parentStudy.id);
+          locked = pIdx > 0 && !studyLessons.slice(0, pIdx).every(isStudyLessonComplete);
+        }
+        return { ...entry, completed: passed, locked };
+      }
+      const studyIndex = studyLessons.findIndex(s => s.id === entry.id);
+      const readDone = isLessonRead(entry);
+      const fullyComplete = isStudyLessonComplete(entry);
+      const locked = index>0 && studyIndex>0 && !studyLessons.slice(0, studyIndex).every(isStudyLessonComplete);
+      return {
+        ...entry,
+        completed: readDone,
+        fullyComplete,
+        locked:index>0 && studyIndex>0 && !studyLessons.slice(0, studyIndex).every(isStudyLessonComplete),
+      };
+    });
     if(resource==='guide'){
       return res.status(200).json({ok:true,guide:plainGuide(guideId,guide),lessons:annotated});
     }
@@ -264,8 +318,18 @@ export default async function mobile(req:Request,res:Response){
     if(!snap.exists)return res.status(404).json({ok:false,code:'NOT_FOUND',
       error:'Published lesson not found or not available.'});
     const lesson=snap.data()||{};
+    const attachedTest=snapLessons.docs.find(doc=>{
+      const d=doc.data()||{};
+      return d.type==='Test' && d.attachmentType!=='guide' && d.assessmentKind!=='final_exam' && (
+        string(d.attachedLessonId)===lessonId||
+        doc.id===`quiz_${lessonId}`||
+        doc.id===`quiz-${lessonId}`||
+        doc.id===string(lesson.quizLessonId||lesson.attachedQuizId)||
+        (!d.attachedLessonId&&(string(d.lessonId)===lessonId))
+      );
+    });
     return res.status(200).json({ok:true,guide:plainGuide(guideId,guide),
-      lesson:{...plainLesson(lessonId,lesson),pages:lessonPages(lesson)}});
+      lesson:{...plainLesson(lessonId,lesson),pages:lessonPages(lesson),quizLessonId:attachedTest?attachedTest.id:null}});
   }catch(error){
     const code=errorStatus(error);
     // Avoid echoing internal Firestore paths or stack traces to mobile clients.

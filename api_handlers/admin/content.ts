@@ -183,8 +183,12 @@ export default async function handler(req: Request, res: Response) {
       const selectedGuideId = safeId(body.guideId || body.id);
       const guide = await ctx.db.doc(`guides/${selectedGuideId}`).get();
       if (!guide.exists) throw new Error('Guide not found.');
-      const ownerOrganizationId = String(guide.data()?.organizationId || '').trim();
+      const ownerOrganizationId = String(guide.data()?.organizationId || guide.data()?.ownerOrganizationId || '').trim();
+      const platformGuide = String(guide.data()?.scope || '') === 'platform' || !ownerOrganizationId;
+      const isShared = guide.data()?.sharingScope === 'shared' && guide.data()?.published === true;
       const permitted = ctx.isSuperAdmin
+        || platformGuide
+        || isShared
         || (ctx.tenantType === 'hierarchy'
           ? Boolean(ownerOrganizationId && await organizationInHierarchyScope(ctx, ownerOrganizationId))
           : ownerOrganizationId === ctx.organizationId);

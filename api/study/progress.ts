@@ -264,11 +264,12 @@ export default async function handler(
     const body = req.body && typeof req.body === 'object' ? req.body as Record<string, unknown> : {};
     const action = String(body.action ?? '').trim();
     requestedAction=action;
-    const language = String(body.language ?? '').trim();
+    const rawLang = String(body.language ?? '').trim().toLowerCase();
+    const language = rawLang && rawLang !== 'null' && rawLang !== 'undefined' ? rawLang : 'en';
     const guideId = String(body.guideId ?? '').trim();
     const lessonId = String(body.lessonId ?? '').trim();
 
-    if (!validStudyLanguage(language) || !validStudyId(guideId) || !validStudyId(lessonId) || !['completeLesson', 'submitQuiz', 'saveLessonResume', 'startQuiz'].includes(action)) {
+    if (!validStudyLanguage(language) || !validStudyId(guideId) || !validStudyId(lessonId) || !['completeLesson', 'submitQuiz', 'saveLessonResume', 'startQuiz', 'resetLessonProgress', 'reset_lesson'].includes(action)) {
       return res.status(400).json({ error: 'A valid study progress request is required.' });
     }
 
@@ -781,6 +782,105 @@ export default async function handler(
         completionKey:`${language}:${guideId}:${lessonId}`,
         certificateReview,
       });
+    }
+
+    if (action === 'resetLessonProgress' || action === 'reset_lesson') {
+      const completionKey = `${language}:${guideId}:${lessonId}`;
+      const legacyKey = `${guideId}:${lessonId}`;
+
+      const courseLessons = await guideRef.collection('lessons').limit(120).get();
+      const currentLessonDoc = courseLessons.docs.find(doc => doc.id === lessonId);
+      const lessonData = currentLessonDoc?.data() || {};
+      const sectionIds = new Set<string>();
+      const chapterIds = new Set<string>();
+      if (Array.isArray(lessonData.chapters)) {
+        for (const ch of lessonData.chapters) {
+          if (ch?.id) chapterIds.add(String(ch.id));
+          if (Array.isArray(ch?.sections)) {
+            for (const sec of ch.sections) {
+              if (sec?.id) sectionIds.add(String(sec.id));
+            }
+          }
+        }
+      }
+      const linkedQuizId = String(lessonData.quizLessonId || lessonData.attachedQuizId || '');
+
+      const attachedTestIds = courseLessons.docs
+        .filter(doc => {
+          const d = doc.data() || {};
+          if (d.type !== 'Test') return false;
+          if (d.attachmentType === 'guide' || d.assessmentKind === 'final_exam') return false;
+          return (
+            String(d.attachedLessonId || '') === lessonId ||
+            doc.id === `quiz_${lessonId}` ||
+            (linkedQuizId && doc.id === linkedQuizId) ||
+            (!d.attachedLessonId && String(d.lessonId || '') === lessonId) ||
+            (d.anchorId && (sectionIds.has(String(d.anchorId)) || chapterIds.has(String(d.anchorId))))
+          );
+        })
+        .map(doc => doc.id);
+
+      const attachedKeys = attachedTestIds.flatMap(id => [
+        `${language}:${guideId}:${id}`,
+        `${guideId}:${id}`,
+        id,
+      ]);
+
+      await db.runTransaction(async transaction => {
+        const snapshot = await transaction.get(userRef);
+        if (!snapshot.exists) throw new Error('VOP account profile was not found.');
+
+        const data = snapshot.data() ?? {};
+        const progress = data.progress && typeof data.progress === 'object'
+          ? data.progress as Record<string, unknown>
+          : {};
+
+        const existingCompleted = Array.isArray(progress.completedLessons)
+          ? progress.completedLessons.map(String)
+          : [];
+        const completedLessons = existingCompleted.filter(k =>
+          k !== completionKey && k !== legacyKey && k !== lessonId
+        );
+
+        const existingAssessments = Array.isArray(progress.completedAssessments)
+          ? progress.completedAssessments.map(String)
+          : [];
+        const completedAssessments = existingAssessments.filter(k =>
+          !attachedKeys.includes(k)
+        );
+
+        const existingResume = progress.lessonResume && typeof progress.lessonResume === 'object'
+          ? progress.lessonResume as Record<string, unknown>
+          : {};
+        const lessonResume = Object.fromEntries(
+          Object.entries(existingResume).filter(([k]) =>
+            k !== completionKey && k !== legacyKey && k !== lessonId
+          )
+        );
+
+        const existingScores = progress.guideScores && typeof progress.guideScores === 'object'
+          ? progress.guideScores as Record<string, unknown>
+          : {};
+        const guideScores = Object.fromEntries(
+          Object.entries(existingScores).filter(([k]) =>
+            !attachedKeys.some(ak => k.endsWith(`:${ak}`) || k === ak)
+          )
+        );
+
+        transaction.set(userRef, {
+          progress: {
+            ...progress,
+            completedLessons,
+            completedAssessments,
+            lessonResume,
+            guideScores,
+            updatedAt: FieldValue.serverTimestamp(),
+          },
+          updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
+      });
+
+      return res.status(200).json({ ok: true, reset: true, lessonId, guideId, language });
     }
 
     if (String(lessonData.type ?? '') !== 'Test') {

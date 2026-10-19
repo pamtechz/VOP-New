@@ -146,7 +146,13 @@ function renderNode(node: StudyPlateNode | StudyPlateLeaf, key: string, onScript
     case 'video': return node.url ? <div key={key} className="vop-study-plate-media"><MediaPlayer src={node.url} title="Study video" kind="video" /></div> : null;
     case 'audio': return node.url ? <div key={key} className="vop-study-plate-media"><MediaPlayer src={node.url} title="Study audio" kind="audio" /></div> : null;
     case 'code_block': return <pre key={key}><code>{node.children.map(item => 'text' in item ? item.text : '').join('')}</code></pre>;
-    default: return <p key={key} style={hasStyle ? nodeStyle : undefined}>{children}</p>;
+    default: {
+      const hasBlockChildren = node.children.some(item => !('text' in item) && item.type !== 'a' && item.type !== 'lic');
+      if (hasBlockChildren) {
+        return <div key={key} className="vop-study-plate-p" style={hasStyle ? nodeStyle : undefined}>{children}</div>;
+      }
+      return <p key={key} style={hasStyle ? nodeStyle : undefined}>{children}</p>;
+    }
   }
 }
 
