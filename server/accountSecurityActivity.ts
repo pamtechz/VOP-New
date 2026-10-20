@@ -65,7 +65,7 @@ export async function recentAccountSecurityEvents(db:Firestore,uid:string,limit=
       title:String(data.title||''),
       occurredAt:String(data.occurredAt||''),
     };
-  }).filter(row=>Object.hasOwn(EVENT_LABELS,row.action));
+  }).filter(row=>Boolean(EVENT_LABELS[row.action as keyof typeof EVENT_LABELS]));
   entries.sort((a,b)=>b.occurredAt.localeCompare(a.occurredAt));
   return entries.slice(0,size);
 }
