@@ -44,6 +44,24 @@ test('public institution admission creates only learner memberships and preserve
       assert.ok(result.body.items.some(item=>item.id===organizationId&&item.city==='Lusaka'));
       assert.ok(!result.body.items.some(item=>item.id===otherOrganizationId));
     });
+    await t.test('directory search scans beyond its first Firestore page',async()=>{
+      const batch=db.batch();
+      for(let i=0;i<110;i++){
+        batch.set(db.doc('organizations/aaa-directory-'+String(i).padStart(3,'0')),{
+          name:'Unrelated Directory '+i,status:'active',allowSelfEnrollment:true,
+        });
+      }
+      batch.set(db.doc('organizations/zzzz-directory-late'),{
+        name:'Late Search Ministry',status:'active',allowSelfEnrollment:true,city:'Kitwe',
+      });
+      await batch.commit();
+      const result=await call(learner,{action:'publicDirectory',search:'Late Search Ministry',limit:1});
+      assert.equal(result.code,200,JSON.stringify(result.body));
+      assert.equal(result.body.items.length,1);
+      assert.equal(result.body.items[0].id,'zzzz-directory-late');
+      assert.equal(result.body.items[0].city,'Kitwe');
+      assert.equal(result.body.hasMore,false);
+    });
     await t.test('first-time join succeeds without existing membership and never grants staff access',async()=>{
       const result=await call(learner,{action:'joinInstitution',organizationId,role:'super_admin',organizationRole:'owner'});
       assert.equal(result.code,200,JSON.stringify(result.body));
