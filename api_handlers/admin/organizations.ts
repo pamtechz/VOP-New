@@ -182,36 +182,61 @@ export default async function handler(req: Request, res: Response) {
     if (permissionAction) await requirePermission(ctx, 'organizations', permissionAction);
 
     if (action === 'publicDirectory') {
-      const pageSize = Math.max(1, Math.min(100, Math.trunc(Number(body.limit) || 100)));
+      const pageSize = Math.max(1, Math.min(100, Math.trunc(Number(body.limit) || 40)));
       const search = String(body.search || '').trim().toLowerCase().slice(0, 120);
       const cursor = String(body.cursor || '').trim();
       if (cursor) id(cursor);
-      let query = bootstrapDb.collection('organizations').where('status', '==', 'active').orderBy(FieldPath.documentId());
-      if (cursor) query = query.startAfter(cursor);
-      const snap = await query.limit(pageSize + 1).get();
-      const page = snap.docs.slice(0, pageSize);
-      const items = page.filter(doc => doc.data().allowSelfEnrollment !== false).map(doc => {
-        const d = doc.data() || {};
-        return {
-          id: doc.id,
-          name: String(d.name || doc.id),
-          slug: String(d.slug || doc.id),
-          organizationType: String(d.organizationType || 'church'),
-          customOrganizationType: String(d.customOrganizationType || ''),
-          isPublicMinistry: Boolean(d.isPublicMinistry),
-          billingCountry: String(d.billingCountry || d.billingProfile?.countryName || ''),
-          city: String(d.city || d.address?.city || ''),
-          churchId: String(d.churchId || d.hierarchy?.churchId || ''),
-          status: 'active',
-        };
-      }).filter(item => !search || [item.name,item.slug,item.billingCountry,item.city,item.organizationType].some(value => value.toLowerCase().includes(search)));
+
+      // Search the complete directory, not only the first page of IDs.
+      // Bound the number of scanned records per request for predictable cost;
+      // continue from nextCursor to search the remaining records.
+      const baseQuery = bootstrapDb.collection('organizations')
+        .where('status', '==', 'active').orderBy(FieldPath.documentId());
+      const scanLimit = search ? 500 : pageSize;
+      const batchLimit = search ? 100 : pageSize;
+      const items: Array<Record<string, unknown>> = [];
+      let position = cursor;
+      let examined = 0;
+      let hasMore = false;
+      while (items.length < pageSize && examined < scanLimit) {
+        const batchSize = Math.min(batchLimit, scanLimit - examined);
+        const query = position ? baseQuery.startAfter(position) : baseQuery;
+        const snapshot = await query.limit(batchSize + 1).get();
+        if (snapshot.empty) { hasMore = false; break; }
+        const page = snapshot.docs.slice(0, batchSize);
+        for (const doc of page) {
+          position = doc.id;
+          examined += 1;
+          const d = doc.data() || {};
+          if (d.allowSelfEnrollment === false) continue;
+          const item = {
+            id: doc.id,
+            name: String(d.name || doc.id),
+            slug: String(d.slug || doc.id),
+            organizationType: String(d.organizationType || 'church'),
+            customOrganizationType: String(d.customOrganizationType || ''),
+            isPublicMinistry: Boolean(d.isPublicMinistry),
+            billingCountry: String(d.billingCountry || d.billingProfile?.countryName || ''),
+            city: String(d.city || d.address?.city || ''),
+            churchId: String(d.churchId || d.hierarchy?.churchId || ''),
+            status: 'active',
+          };
+          if (search && ![item.name, item.slug, item.billingCountry, item.city, item.organizationType]
+            .some(value => value.toLowerCase().includes(search))) continue;
+          items.push(item);
+          if (items.length >= pageSize) break;
+        }
+        hasMore = position !== page.at(-1)?.id || snapshot.size > batchSize;
+        if (!hasMore || items.length >= pageSize) break;
+      }
       items.sort((a, b) => {
         if (a.isPublicMinistry && !b.isPublicMinistry) return -1;
         if (!a.isPublicMinistry && b.isPublicMinistry) return 1;
-        return a.name.localeCompare(b.name);
+        return String(a.name).localeCompare(String(b.name));
       });
-      return res.status(200).json({ ok: true, items, hasMore: snap.size > pageSize,
-        nextCursor: snap.size > pageSize ? page.at(-1)?.id || '' : '' });
+      return res.status(200).json({
+        ok: true, items, hasMore, nextCursor: hasMore ? position : '',
+      });
     }
 
     if (action === 'joinInstitution') {
