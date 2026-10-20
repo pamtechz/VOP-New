@@ -15,14 +15,6 @@ import 'engagement_screen.dart';
 import 'notifications_screen.dart';
 import 'mentor_screen.dart';
 import 'prayer_screen.dart';
-import 'admin_dashboard_screen.dart';
-import 'candidates_screen.dart';
-import 'organizations_screen.dart';
-import 'graduations_screen.dart';
-import 'user_management_screen.dart';
-import 'curriculum_studio_screen.dart';
-import 'plans_management_screen.dart';
-import 'mentor_workspace_screen.dart';
 import 'institution_finder_sheet.dart';
 
 Map<String,dynamic> asMap(dynamic value)=>value is Map
@@ -76,7 +68,7 @@ class _HomeShellState extends State<HomeShell> {
     catalog=widget.api.catalogue()..ignore();
     progress=widget.api.progress()..ignore();
   }
-  @override void dispose(){widget.api.dispose();super.dispose();}
+  @override void dispose(){super.dispose();}
   void selectTab(int next)=>setState(()=>tab=next);
   void push(Widget page)=>Navigator.push(context,
     MaterialPageRoute<void>(builder:(_)=>page));
@@ -144,10 +136,6 @@ class _HomeShellState extends State<HomeShell> {
           :Text(labels[tab],style:const TextStyle(fontWeight:FontWeight.w800)),
         actions:[
           IconButton(
-            tooltip:'Admin Portal',
-            icon:const Icon(Icons.admin_panel_settings_outlined,color:VopColors.gold),
-            onPressed:()=>push(AdminDashboardScreen(api:widget.api))),
-          IconButton(
             tooltip:'Notifications',
             onPressed:()=>push(VopNotifications(api:widget.api)),
             icon:const Icon(Icons.notifications_none_rounded)),
@@ -200,25 +188,7 @@ class _HomeShellState extends State<HomeShell> {
             color:Color(0xFFD4E7FF),fontSize:12)),
         ]),
       ),
-      _label('ADMINISTRATION & LEADERSHIP'),
-      _destination('Admin Command Center',Icons.admin_panel_settings_outlined,
-        ()=>push(AdminDashboardScreen(api:widget.api))),
-      _destination('Candidate Roster & Enrollment',Icons.badge_outlined,
-        ()=>push(CandidatesScreen(api:widget.api))),
-      _destination('Organizations & Hierarchy',Icons.account_tree_outlined,
-        ()=>push(OrganizationsScreen(api:widget.api))),
-      _destination('Graduation Approvals',Icons.workspace_premium_outlined,
-        ()=>push(GraduationsScreen(api:widget.api))),
-      _destination('User & Role Directory',Icons.manage_accounts_outlined,
-        ()=>push(UserManagementScreen(api:widget.api))),
-      _destination('Curriculum & Content Studio',Icons.menu_book_outlined,
-        ()=>push(CurriculumStudioScreen(api:widget.api))),
-      _destination('Subscriptions & Plans',Icons.payments_outlined,
-        ()=>push(PlansManagementScreen(api:widget.api))),
-      const Divider(),
-      _label('PASTORAL CARE & MENTORING'),
-      _destination('Mentor Workspace',Icons.psychology_outlined,
-        ()=>push(MentorWorkspaceScreen(api:widget.api))),
+      _label('MENTORING & SUPPORT'),
       _destination('Mentoring Conversations',Icons.forum_outlined,
         ()=>push(Scaffold(appBar:AppBar(title:const Text('Mentoring')),
           body:MentorScreen(api:widget.api)))),
@@ -253,7 +223,7 @@ class _HomeShellState extends State<HomeShell> {
       _destination('Personal Settings',Icons.tune_outlined,
         ()=>push(AccountSettingsScreen(api:widget.api))),
       _destination('About VOP',Icons.info_outline,
-        ()=>push(const _AboutScreen())),
+        ()=>push(_AboutScreen(api:widget.api))),
       const SizedBox(height:25),
     ]));
   }
@@ -372,7 +342,7 @@ class _HomeShellState extends State<HomeShell> {
                     TextButton(
                       onPressed: () => _openInstitutionFinder(currentOrgId: orgId),
                       style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
-                      child: const Text('Find / Transfer', style: TextStyle(fontSize: 11.5)),
+                      child: const Text('Find institutions', style: TextStyle(fontSize: 11.5)),
                     ),
                   ],
                 ),
@@ -380,12 +350,12 @@ class _HomeShellState extends State<HomeShell> {
             ),
             const SizedBox(height: 12),
           ],
-          VopHeroCard(
-            title:'Discover truth.\nGrow in faith.',
-            description:'Continue your Bible study journey and explore lessons prepared for you.',
-            kicker:'YOUR FAITH. YOUR JOURNEY.',
-            icon:Icons.menu_book_rounded,
-            cta:'Explore Lessons',onTap:()=>selectTab(1)),
+          _ConfiguredHomeSlides(info:asMap(s.data?['appInfo']),onDestination:(target){
+            switch(target){case 'lessons':selectTab(1);break;case 'library':case 'resources':selectTab(2);break;case 'prayer':selectTab(3);break;case 'radio':selectTab(4);break;
+              case 'events':push(VopContentScreen(api:widget.api,kind:VopContentKind.events));break;
+              case 'announcements':push(VopContentScreen(api:widget.api,kind:VopContentKind.announcements));break;
+              default:selectTab(1);}
+          }),
           const SizedBox(height:13),
           Row(children:[
             Expanded(child:_metric(icon:Icons.menu_book_outlined,
@@ -416,45 +386,6 @@ class _HomeShellState extends State<HomeShell> {
                 icon:Icons.radio_outlined,tint:const Color(0xFF8854D0),
                 onTap:()=>selectTab(4)),
             ]),
-          Builder(builder:(context){
-            final role = (user['role'] ?? '').toString().toLowerCase();
-            final isAdmin = const ['super_admin','union_admin','conference_admin','district_admin','church_admin'].contains(role);
-            final isMentor = role == 'mentor';
-            if (!isAdmin && !isMentor) return const SizedBox.shrink();
-            return Padding(
-              padding: const EdgeInsets.only(top: 14),
-              child: VopCard(
-                child: ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  leading: Container(
-                    width: 44, height: 44,
-                    decoration: BoxDecoration(
-                      color: VopColors.gold.withAlpha(35),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Icon(
-                      isAdmin ? Icons.admin_panel_settings : Icons.psychology,
-                      color: VopColors.gold, size: 24,
-                    ),
-                  ),
-                  title: Text(
-                    isAdmin ? 'Admin & Institutional Portal' : 'Mentor Workspace',
-                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
-                  ),
-                  subtitle: Text(
-                    isAdmin
-                        ? 'Manage candidates, organizations, graduations and curriculum'
-                        : 'Review candidate progress and send pastoral messages',
-                    style: const TextStyle(fontSize: 12),
-                  ),
-                  trailing: const Icon(Icons.arrow_forward_ios, size: 14),
-                  onTap: () => push(isAdmin
-                      ? AdminDashboardScreen(api: widget.api)
-                      : MentorWorkspaceScreen(api: widget.api)),
-                ),
-              ),
-            );
-          }),
           const SizedBox(height:17),
           VopSectionTitle('Featured study guides',
             subtitle:'Continue exploring the Word',
@@ -643,21 +574,39 @@ class _ProgressScreen extends StatelessWidget{
       }),
   );
 }
-class _AboutScreen extends StatelessWidget{
-  const _AboutScreen();
-  @override Widget build(BuildContext context)=>Scaffold(
-    appBar:AppBar(title:const Text('About VOP')),
-    body:ListView(padding:const EdgeInsets.all(22),children:[
-      const Center(child:VopBrand()),
-      const SizedBox(height:27),
-      Text('The Voice of Prophecy',style:Theme.of(context).textTheme.headlineSmall),
-      const SizedBox(height:10),
-      const Text('A Christ-centred Bible learning and mentoring platform. '
-        'Study materials, personal progress and mentoring work together '
-        'across the VOP Android and web experiences.'),
-      const SizedBox(height:15),
-      const Text('Your curriculum and organisation data are retrieved '
-        'from the same authenticated VOP service as the web portal.'),
-    ]),
-  );
+class _AboutScreen extends StatefulWidget{
+  const _AboutScreen({required this.api});
+  final VopApi api;
+  @override State<_AboutScreen> createState()=>_AboutState();
+}
+class _AboutState extends State<_AboutScreen>{
+  late Future<Map<String,dynamic>> future;
+  @override void initState(){super.initState();future=widget.api.workspace();}
+  @override Widget build(BuildContext context)=>Scaffold(appBar:AppBar(title:const Text('About')),
+    body:FutureBuilder<Map<String,dynamic>>(future:future,builder:(context,s){
+      if(s.connectionState!=ConnectionState.done)return const VopSkeleton();
+      if(s.hasError)return VopEmpty(icon:Icons.error_outline,message:'${s.error}',onRetry:()=>setState(()=>future=widget.api.workspace()));
+      final info=asMap(s.data?['appInfo']);final about=asMap(asMap(info['detailPages'])['about']);
+      final content=(about['content']??about['body']??info['welcomeMessage']??'').toString().replaceAll(RegExp(r'<[^>]+>'),'');
+      return ListView(padding:const EdgeInsets.all(24),children:[Text('${about['title']??info['appName']??''}',style:Theme.of(context).textTheme.headlineSmall),
+        const SizedBox(height:16),Text(content),for(final key in ['organizationName','contactEmail','contactPhone','website'])if('${info[key]??''}'.isNotEmpty)ListTile(title:Text('${info[key]}'))]);
+    }));
+}
+
+class _ConfiguredHomeSlides extends StatelessWidget{
+  const _ConfiguredHomeSlides({required this.info,required this.onDestination});
+  final Map<String,dynamic> info;
+  final ValueChanged<String> onDestination;
+  @override Widget build(BuildContext context){
+    final now=DateTime.now();
+    final slides=asRows(info['heroSlides']).where((slide){
+      final start=DateTime.tryParse('${slide['startDate']??''}'),end=DateTime.tryParse('${slide['endDate']??''}');
+      return slide['enabled']==true&&(start==null||!now.isBefore(start))&&(end==null||!now.isAfter(end));
+    }).toList()..sort((a,b)=>((a['order'] as num?)??0).compareTo((b['order'] as num?)??0));
+    if(slides.isEmpty)return VopHeroCard(title:(info['appTagline']??'Explore lessons').toString(),description:(info['welcomeMessage']??'').toString(),icon:Icons.menu_book_rounded,cta:'View lessons',onTap:()=>onDestination('lessons'));
+    return SizedBox(height:230,child:PageView(children:slides.map((slide)=>SingleChildScrollView(child:Column(children:[
+      if('${slide['imageUrl']??''}'.startsWith('https://'))Image.network('${slide['imageUrl']}',height:110,width:double.infinity,fit:BoxFit.cover,errorBuilder:(_,__,___)=>const SizedBox.shrink()),
+      VopHeroCard(title:'${slide['title']??''}',description:'${slide['description']??''}',kicker:'${slide['kicker']??''}',icon:Icons.menu_book_rounded,cta:'${slide['primaryActionLabel']??'View'}',onTap:()=>onDestination('${slide['primaryActionTarget']??'lessons'}')),
+    ]))).toList()));
+  }
 }

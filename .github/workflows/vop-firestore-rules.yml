@@ -4,6 +4,8 @@ on:
     branches:
       - main
       - 'prod/**'
+      - 'feat/**'
+      - 'fix/**'
     paths:
       - firestore.rules
       - firebase.json
@@ -11,7 +13,7 @@ on:
       - package-lock.json
       - tests/firestoreRules.test.mjs
       - .github/workflows/vop-firestore-rules.yml
-  pull_request:
+  pull_request_target:
     branches:
       - main
     paths:
@@ -26,11 +28,17 @@ permissions:
   contents: read
 jobs:
   rules:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Windows, KASAINSTITUTE]
     timeout-minutes: 30
     steps:
+      - name: Reject untrusted fork PR before checking out code
+        if: github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository
+        shell: pwsh
+        run: |
+          throw "Fork pull requests cannot execute code on the VOP KASAINSTITUTE self-hosted runner. Submit a trusted same-repository PR for verification."
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
           path: vop-rules-${{ github.run_id }}-${{ github.run_attempt }}
       - uses: actions/setup-node@v4
@@ -47,8 +55,11 @@ jobs:
         run: npm ci
       - name: Run isolated owner and default-deny proof
         working-directory: vop-rules-${{ github.run_id }}-${{ github.run_attempt }}
+        shell: pwsh
         run: |
-          set -euo pipefail
-          java -version
-          npx --no-install firebase emulators:exec --project demo-vop-security-rules --only firestore "node --test tests/firestoreRules.test.mjs"
-          git diff --exit-code -- package.json package-lock.json firestore.rules firebase.json
+          & java -version
+          if ($LASTEXITCODE -ne 0) { throw "Java 21 is not available." }
+          & npx --no-install firebase emulators:exec --project demo-vop-security-rules --only firestore "node --test tests/firestoreRules.test.mjs"
+          if ($LASTEXITCODE -ne 0) { throw "Firestore rules verification failed." }
+          & git diff --exit-code -- package.json package-lock.json firestore.rules firebase.json
+          if ($LASTEXITCODE -ne 0) { throw "Firestore rules verification modified locked source files." }

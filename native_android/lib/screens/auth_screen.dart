@@ -5,6 +5,8 @@ import 'package:google_sign_in/google_sign_in.dart';
 
 import '../core/config.dart';
 import '../core/vop_passkeys.dart';
+import '../core/vop_api.dart';
+import '../core/pending_invitation.dart';
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -13,24 +15,36 @@ class AuthScreen extends StatefulWidget {
 }
 
 class _AuthScreenState extends State<AuthScreen> {
+  final _api = VopApi();
   final _email = TextEditingController();
   final _password = TextEditingController();
   final _name = TextEditingController();
   final _confirmPassword = TextEditingController();
   final _phone = TextEditingController();
+  final _invite = TextEditingController();
   final _form = GlobalKey<FormState>();
   bool _isSignUp = false;
   bool _busy = false;
   bool _hidePassword = true;
   String? _error;
+  Map<String,dynamic>? _registration;
+  String? _policyError;
+
+  @override void initState(){super.initState();_loadPolicy();}
+  Future<void> _loadPolicy()async{
+    try{final result=await _api.registrationPolicy();if(mounted)setState((){_registration=Map<String,dynamic>.from(result['registration'] as Map? ?? {});_policyError=null;});}
+    catch(e){if(mounted)setState(()=>_policyError='Account availability could not be loaded: $e');}
+  }
 
   @override
   void dispose() {
+    _api.dispose();
     _email.dispose();
     _password.dispose();
     _name.dispose();
     _confirmPassword.dispose();
     _phone.dispose();
+    _invite.dispose();
     super.dispose();
   }
 
@@ -61,6 +75,8 @@ class _AuthScreenState extends State<AuthScreen> {
 
   Future<void> _signUp() async {
     if (!_form.currentState!.validate()) return;
+    if(_registration==null){setState(()=>_error='Load the registration policy before creating an account.');return;}
+    if(_registration!['allowRegistrations']!=true&&_invite.text.trim().isEmpty){setState(()=>_error='Public registration is closed. Enter your organization invitation token.');return;}
     final pwd = _password.text;
     final confirm = _confirmPassword.text;
     if (pwd != confirm) {
@@ -69,14 +85,25 @@ class _AuthScreenState extends State<AuthScreen> {
     }
     setState(() { _busy = true; _error = null; });
     try {
-      final cred = await FirebaseAuth.instance.createUserWithEmailAndPassword(
+      final result = await _api.registerUser(
         email: _email.text.trim(),
         password: pwd,
+        displayName: _name.text.trim(),
+        phoneNumber: _phone.text.trim(),
+        inviteToken: _invite.text.trim(),
       );
-      final fullName = _name.text.trim();
-      if (fullName.isNotEmpty && cred.user != null) {
-        await cred.user!.updateDisplayName(fullName).catchError((_) {});
+      if (result['approvalRequired'] == true) {
+        if (mounted) setState(() {
+          _isSignUp = false;
+          _error = (result['message'] ?? 'Your account is awaiting administrator approval.').toString();
+        });
+        return;
       }
+      final token = (result['customToken'] ?? '').toString();
+      if (token.isEmpty) throw const VopApiException('Your sign-in could not be completed. Please retry.');
+      PendingInvitation.token=_invite.text.trim();
+      PendingInvitation.email=_email.text.trim().toLowerCase();
+      await FirebaseAuth.instance.signInWithCustomToken(token);
     } on FirebaseAuthException catch (error) {
       if (mounted) {
         setState(() => _error = switch (error.code) {
@@ -258,7 +285,7 @@ class _AuthScreenState extends State<AuthScreen> {
                 const SizedBox(height: 18),
                 Text(
                   _isSignUp
-                      ? 'Create your free learner account'
+                      ? 'Create your learner account'
                       : 'Sign in to continue studying',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
@@ -271,6 +298,16 @@ class _AuthScreenState extends State<AuthScreen> {
                   style: TextStyle(fontSize: 12.5, color: Theme.of(context).colorScheme.onSurface.withAlpha(160)),
                 ),
                 const SizedBox(height: 20),
+                if(_isSignUp)...[
+                  if(_registration==null&&_policyError==null)const LinearProgressIndicator(),
+                  if(_policyError!=null)ListTile(title:Text(_policyError!),trailing:TextButton(onPressed:_loadPolicy,child:const Text('Retry'))),
+                  if(_registration!=null)Text(_registration!['allowRegistrations']==true
+                    ?(_registration!['requireApproval']==true?'New accounts require administrator approval.':'Create an account, then search for an institution or public ministry to join.')
+                    :'Public registration is closed. You can register using a valid organization invitation.'),
+                  const SizedBox(height:12),
+                  TextFormField(controller:_invite,decoration:const InputDecoration(labelText:'Invitation token (if invited)')),
+                  const SizedBox(height:12),
+                ],
                 Form(
                   key: _form,
                   child: Column(children: [
@@ -386,7 +423,7 @@ class _AuthScreenState extends State<AuthScreen> {
                 ],
                 const SizedBox(height: 18),
                 FilledButton(
-                  onPressed: _busy ? null : (_isSignUp ? _signUp : _signIn),
+                  onPressed: _busy||(_isSignUp&&_registration==null) ? null : (_isSignUp ? _signUp : _signIn),
                   child: Padding(
                     padding: const EdgeInsets.all(13),
                     child: _busy
@@ -424,8 +461,7 @@ class _AuthScreenState extends State<AuthScreen> {
                 ),
                 const SizedBox(height: 12),
                 const Text(
-                  'Voice of Prophecy is open to all seekers of truth. You can join your '
-                  'local church congregation or study freely via our public access ministry.',
+                  'After signing in, search the institution directory for a church, institution, or public ministry accepting learners.',
                   textAlign: TextAlign.center,
                   style: TextStyle(fontSize: 11.5, color: Colors.grey),
                 ),

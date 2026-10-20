@@ -3,10 +3,12 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
 import 'dart:ui';
+import 'dart:async';
 
 import 'core/config.dart';
 import 'core/portal_access.dart';
 import 'core/vop_api.dart';
+import 'core/pending_invitation.dart';
 import 'core/vop_i18n.dart';
 import 'theme/vop_theme.dart';
 import 'screens/admin_dashboard_screen.dart';
@@ -133,14 +135,17 @@ class _AuthenticatedHomeState extends State<_AuthenticatedHome> {
     super.initState();
     _api = VopApi();
     _resolveAccount();
+    unawaited(_restoreAppearance());
   }
 
   @override
   void didUpdateWidget(_AuthenticatedHome oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.uid != widget.uid) {
+      _api.dispose();
       _api = VopApi();
       _resolveAccount();
+      unawaited(_restoreAppearance());
     }
   }
 
@@ -148,8 +153,31 @@ class _AuthenticatedHomeState extends State<_AuthenticatedHome> {
     _accountFuture = _fetchAuthoritativeAccount();
   }
 
+  Future<void> _restoreAppearance() async {
+    final uid=widget.uid;
+    final api=_api;
+    try{
+      await VopAppearance.restoreTheme(uid);
+      if(!mounted||widget.uid!=uid)return;
+      final revision=VopAppearance.revision;
+      final result=await api.personalSettings();
+      final settings=result['settings'] is Map?Map<String,dynamic>.from(result['settings'] as Map):<String,dynamic>{};
+      if(!mounted||widget.uid!=uid)return;
+      if(revision==VopAppearance.revision)VopAppearance.apply(settings);
+      final locale=(settings['uiLocale']??'').toString();
+      if(locale.isNotEmpty){final pack=await api.languagePack(locale);if(mounted&&widget.uid==uid)VopI18n.apply(locale,pack);}
+    }catch(_){/* Preserve the saved appearance when remote preferences are unavailable. */}
+  }
+
   Future<VopUserAccount> _fetchAuthoritativeAccount() async {
-    try {
+      if(PendingInvitation.token.isNotEmpty){
+        final user=FirebaseAuth.instance.currentUser;
+        if(user?.uid==widget.uid&&user?.email?.toLowerCase()==PendingInvitation.email){
+          await _api.action('/api/admin/organizations',{'action':'acceptInvite','token':PendingInvitation.token});
+          await user?.getIdToken(true);
+        }
+        PendingInvitation.clear();
+      }
       final res = await _api.accountProfile();
       final profile = res['profile'] is Map
           ? Map<String, dynamic>.from(res['profile'] as Map)
@@ -157,23 +185,13 @@ class _AuthenticatedHomeState extends State<_AuthenticatedHome> {
       if (profile.isNotEmpty) {
         return VopUserAccount.fromMap(profile, fallbackUid: widget.uid);
       }
-    } catch (_) {
-      // Attempt fallback to bootstrap BFF
-    }
+    throw const VopApiException('Your account could not be loaded. Please retry.');
+  }
 
-    try {
-      final boot = await _api.bootstrap();
-      final account = boot['account'] is Map
-          ? Map<String, dynamic>.from(boot['account'] as Map)
-          : <String, dynamic>{};
-      if (account.isNotEmpty) {
-        return VopUserAccount.fromMap(account, fallbackUid: widget.uid);
-      }
-    } catch (_) {
-      // Offline fallback
-    }
-
-    return VopUserAccount(uid: widget.uid);
+  @override
+  void dispose() {
+    _api.dispose();
+    super.dispose();
   }
 
   @override
@@ -205,7 +223,19 @@ class _AuthenticatedHomeState extends State<_AuthenticatedHome> {
           );
         }
 
-        final account = snapshot.data ?? VopUserAccount(uid: widget.uid);
+        if (snapshot.hasError || !snapshot.hasData) {
+          return Scaffold(
+            appBar: AppBar(title: const Text('Account unavailable')),
+            body: Center(child: Padding(padding: const EdgeInsets.all(24),
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                Text('${snapshot.error ?? "Your account could not be loaded."}', textAlign: TextAlign.center),
+                const SizedBox(height: 16),
+                FilledButton(onPressed: () => setState(_resolveAccount), child: const Text('Retry')),
+                TextButton(onPressed: () => FirebaseAuth.instance.signOut(), child: const Text('Sign out')),
+              ]))),
+          );
+        }
+        final account = snapshot.data!;
 
         // Strict authoritative portal routing matching portalAccess.ts:
         // Admin accounts must only load the admin portal;

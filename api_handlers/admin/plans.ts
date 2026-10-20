@@ -270,18 +270,16 @@ export default async function handler(req: Request, res: Response) {
         const settings = await loadPlatformBillingSettings(ctx.db);
         return res.status(200).json({
           ok: true,
-          plan: 'platform_master',
+          plan: null,
+          subscriptionRequired: false,
+          scope: 'platform',
           subscriptionsEnabled: settings.subscriptionsEnabled,
           freeTier: false,
-          paidPlanActive: true,
-          featureEntitlements: { all: true, curriculum: true, candidates: true, certification: true, analytics: true },
+          paidPlanActive: false,
+          featureEntitlements: {},
           exhaustedQuotaKeys: [],
-          subscription: {
-            planName: 'Voice of Prophecy Platform Administration Suite',
-            status: 'active',
-            interval: 'continuous',
-          },
-          quotas: { maxLearners: 'Unlimited', maxMentors: 'Unlimited', maxCertificates: 'Unlimited' },
+          subscription: null,
+          quotas: {},
           usage: {},
         });
       }

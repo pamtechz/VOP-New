@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "895527572069",
+    "project_id": "voiceofprophecy",
+    "storage_bucket": "voiceofprophecy.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:895527572069:android:9ecea5b39689d30d75ec8c",
+        "android_client_info": {
+          "package_name": "com.sda.vop"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "895527572069-lsllhghoapidcb58kkb8q2l12l9h26kq.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.sda.vop",
+            "certificate_hash": "31dac2c5a210d66b94efcaf857b44a2eb86450e0"
+          }
+        },
+        {
+          "client_id": "895527572069-jm92vri3jq212pk31aaelf7otfr6ei1u.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCW4o_q47JSPFxX8NOcw89LlYHZKhIOAio"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "895527572069-jm92vri3jq212pk31aaelf7otfr6ei1u.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

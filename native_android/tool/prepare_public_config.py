@@ -9,7 +9,9 @@ import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-source = ROOT / "android/app/google-services.json"
+source = ROOT / "native_android/config/google-services.json"
+if not source.is_file():
+    source = ROOT / "android/app/google-services.json"
 target = ROOT / "native_android/android-public-config.json"
 if not source.is_file():
     raise SystemExit("Existing VOP Android Firebase registration was not found.")

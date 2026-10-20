@@ -1,5 +1,6 @@
 import { authenticateTenant, accessibleOrganizationIds } from '../../server/tenant.js';
 import { requirePermission } from '../../server/permissions.js';
+import {isLearnerProfile} from '../../shared/learnerProfiles.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -40,6 +41,16 @@ export default async function handler(req: Request, res: Response) {
 
     const counts = await Promise.all(ORG_SCOPED_COLLECTIONS.map(async collection => [collection, await countByOrganization(ctx, collection, organizationIds)] as const));
     const result: Record<string, number> = Object.fromEntries(counts);
+    // Enrollment lives in users, including self-registered learners. The old
+    // candidates collection is not the enrollment source of truth.
+    const learnerSnapshots=ctx.isSuperAdmin&&!requestedOrganizationId
+      ?[await ctx.db.collection('users').get()]
+      :await Promise.all(organizationIds.map(id=>ctx.db.collection('users').where('organizationId','==',id).get()));
+    const learners=new Set<string>();
+    for(const snapshot of learnerSnapshots)for(const user of snapshot.docs){
+      if(isLearnerProfile(user.data()))learners.add(user.id);
+    }
+    result.candidates=learners.size;
 
     const activeOrganizations = ctx.isSuperAdmin && !requestedOrganizationId
       ? (await ctx.db.collection('organizations').where('status', '==', 'active').get()).size

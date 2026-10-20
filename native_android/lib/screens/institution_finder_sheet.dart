@@ -218,7 +218,7 @@ class _InstitutionFinderSheetState extends State<InstitutionFinderSheet> {
                     return name.contains(_search) ||
                         slug.contains(_search) ||
                         country.contains(_search) ||
-                        type.contains(_search);
+                        type.contains(_search) || (o['city'] ?? '').toString().toLowerCase().contains(_search);
                   }).toList();
                 }
 
@@ -425,7 +425,7 @@ class _InstitutionFinderSheetState extends State<InstitutionFinderSheet> {
     final id = (church['id'] ?? '').toString();
     final name = (church['name'] ?? 'Church').toString();
     final type = (church['organizationType'] ?? 'church').toString();
-    final country = (church['billingCountry'] ?? 'Zambia').toString();
+    final country = (church['billingCountry'] ?? '').toString();
     final isCurrent = widget.currentOrganizationId == id;
     final isBusy = _joiningId == id;
 
