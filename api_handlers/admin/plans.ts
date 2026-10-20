@@ -150,7 +150,16 @@ export default async function handler(req: Request, res: Response) {
     }
 
     if (action === 'listAvailablePlans') {
-      const target=targetFromRequest(ctx,body);
+      let target: { type: BillingTenantType; id: string } | null = null;
+      try {
+        target = targetFromRequest(ctx, body);
+      } catch (err) {
+        if (ctx.isSuperAdmin) {
+          const snapshot = await ctx.db.collection('system/plans/catalog').orderBy('sortOrder', 'asc').get();
+          return res.status(200).json({ ok: true, items: snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) });
+        }
+        throw err;
+      }
       if(!selfServiceManager(ctx,target)&&!ctx.isSuperAdmin){
         throw new Error('Only an institutional tenant administrator can view subscription packages for this tenant.');
       }
@@ -258,7 +267,23 @@ export default async function handler(req: Request, res: Response) {
             exhaustedQuotaKeys: [],
           });
         }
-        throw err;
+        const settings = await loadPlatformBillingSettings(ctx.db);
+        return res.status(200).json({
+          ok: true,
+          plan: 'platform_master',
+          subscriptionsEnabled: settings.subscriptionsEnabled,
+          freeTier: false,
+          paidPlanActive: true,
+          featureEntitlements: { all: true, curriculum: true, candidates: true, certification: true, analytics: true },
+          exhaustedQuotaKeys: [],
+          subscription: {
+            planName: 'Voice of Prophecy Platform Administration Suite',
+            status: 'active',
+            interval: 'continuous',
+          },
+          quotas: { maxLearners: 'Unlimited', maxMentors: 'Unlimited', maxCertificates: 'Unlimited' },
+          usage: {},
+        });
       }
       if(!selfServiceManager(ctx,target)&&!ctx.isSuperAdmin){
         throw new Error('You cannot access another institutional tenant subscription.');

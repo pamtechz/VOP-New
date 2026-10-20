@@ -456,11 +456,62 @@ class VopApi {
       }, query: {'__vopRoute': 'content'});
 
   // --- Subscriptions & Plans APIs ---
-  Future<Map<String, dynamic>> adminPlans({String? organizationId, String? billingTenantType}) =>
+  Future<Map<String, dynamic>> adminSubscription({String? organizationId, String? billingTenantType}) =>
       action('/api/admin', {
-        'action': 'listAvailablePlans',
+        'action': 'getSubscription',
         if (organizationId != null && organizationId.isNotEmpty)
           'organizationId': organizationId,
+        if (billingTenantType != null) 'billingTenantType': billingTenantType,
+      }, query: {'__vopRoute': 'plans'});
+
+  Future<Map<String, dynamic>> adminPlans({String? organizationId, String? billingTenantType}) =>
+      action('/api/admin', {
+        'action': (organizationId != null && organizationId.isNotEmpty) ? 'listAvailablePlans' : 'listPlans',
+        if (organizationId != null && organizationId.isNotEmpty)
+          'organizationId': organizationId,
+        if (billingTenantType != null) 'billingTenantType': billingTenantType,
+      }, query: {'__vopRoute': 'plans'});
+
+  Future<Map<String, dynamic>> adminCreatePlan(Map<String, dynamic> data) =>
+      action('/api/admin', {
+        'action': 'createPlan',
+        ...data,
+      }, query: {'__vopRoute': 'plans'});
+
+  Future<Map<String, dynamic>> adminUpdatePlan(String planId, Map<String, dynamic> data) =>
+      action('/api/admin', {
+        'action': 'updatePlan',
+        'planId': planId,
+        ...data,
+      }, query: {'__vopRoute': 'plans'});
+
+  Future<Map<String, dynamic>> adminDeletePlan(String planId) =>
+      action('/api/admin', {
+        'action': 'deletePlan',
+        'planId': planId,
+      }, query: {'__vopRoute': 'plans'});
+
+  Future<Map<String, dynamic>> adminAssignPlan({
+    required String planId,
+    required String organizationId,
+    String? billingTenantType,
+  }) =>
+      action('/api/admin', {
+        'action': 'assignPlan',
+        'planId': planId,
+        'organizationId': organizationId,
+        if (billingTenantType != null) 'billingTenantType': billingTenantType,
+      }, query: {'__vopRoute': 'plans'});
+
+  Future<Map<String, dynamic>> adminActivateFreePlan({
+    required String planId,
+    required String organizationId,
+    String? billingTenantType,
+  }) =>
+      action('/api/admin', {
+        'action': 'activateFreePlan',
+        'planId': planId,
+        'organizationId': organizationId,
         if (billingTenantType != null) 'billingTenantType': billingTenantType,
       }, query: {'__vopRoute': 'plans'});
 

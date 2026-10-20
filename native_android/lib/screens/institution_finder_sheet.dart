@@ -284,10 +284,12 @@ class _InstitutionFinderSheetState extends State<InstitutionFinderSheet> {
                               style: const TextStyle(fontWeight: FontWeight.w600),
                             ),
                             const SizedBox(height: 4),
-                            const Text(
-                              'You can join the VOP Public Ministry above to study immediately.',
+                            Text(
+                              publicMinistries.isNotEmpty
+                                  ? 'You can join the VOP Public Ministry above to study immediately.'
+                                  : 'Please check back soon or search using another keyword.',
                               textAlign: TextAlign.center,
-                              style: TextStyle(fontSize: 12, color: Colors.grey),
+                              style: const TextStyle(fontSize: 12, color: Colors.grey),
                             ),
                           ],
                         ),

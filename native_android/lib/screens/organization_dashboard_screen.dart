@@ -34,6 +34,7 @@ class _OrganizationDashboardScreenState
   late Future<Map<String, dynamic>> _catalogFuture;
   late Future<Map<String, dynamic>> _healthFuture;
   late Future<Map<String, dynamic>> _plansFuture;
+  late Future<Map<String, dynamic>> _orgFuture;
 
   @override
   void initState() {
@@ -55,13 +56,12 @@ class _OrganizationDashboardScreenState
       _healthFuture = widget.api
           .adminHealth(detail: false)
           .catchError((_) => <String, dynamic>{'status': 'offline'});
+      _orgFuture = widget.api
+          .adminOrganizations(organizationId: widget.account.organizationId)
+          .catchError((_) => <String, dynamic>{'items': []});
       _plansFuture = widget.api
-          .adminPlans(organizationId: widget.account.organizationId)
-          .catchError(
-            (_) => <String, dynamic>{
-              'current': {'name': 'Institutional'},
-            },
-          );
+          .adminSubscription(organizationId: widget.account.organizationId)
+          .catchError((_) => <String, dynamic>{});
     });
   }
 
@@ -394,6 +394,7 @@ class _OrganizationDashboardScreenState
             _candidatesFuture,
             _graduationsFuture,
             _catalogFuture,
+            _orgFuture,
             _plansFuture,
           ]),
           builder: (context, snapshot) {
@@ -403,6 +404,10 @@ class _OrganizationDashboardScreenState
                 snapshot.data?[1] as Map<String, dynamic>? ?? {};
             final catalogData =
                 snapshot.data?[2] as Map<String, dynamic>? ?? {};
+            final orgData =
+                snapshot.data?[3] as Map<String, dynamic>? ?? {};
+            final plansData =
+                snapshot.data?[4] as Map<String, dynamic>? ?? {};
 
             final candidateCount =
                 (candidatesData['items'] as List?)?.length ??
@@ -413,6 +418,18 @@ class _OrganizationDashboardScreenState
                 (graduationsData['requests'] as List?)?.length ??
                 0;
             final guideCount = (catalogData['guides'] as List?)?.length ?? 0;
+
+            final orgItems = (orgData['items'] as List?)?.whereType<Map>().toList() ?? [];
+            final orgDoc = orgItems.isNotEmpty ? orgItems.first : <String, dynamic>{};
+            final orgStatusRaw = (orgDoc['status'] ?? 'active').toString().toLowerCase();
+            final orgStatusDisplay = orgStatusRaw.isNotEmpty
+                ? '${orgStatusRaw[0].toUpperCase()}${orgStatusRaw.substring(1)}'
+                : 'Active';
+            final isOrgActive = orgStatusRaw == 'active';
+            final subscription = plansData['subscription'] is Map
+                ? plansData['subscription'] as Map<String, dynamic>
+                : <String, dynamic>{};
+            final isSubActive = subscription['status'] == 'active' || plansData['paidPlanActive'] == true || plansData['freeTier'] == true;
 
             final kpis = [
               _OrgKpi(
@@ -435,9 +452,9 @@ class _OrganizationDashboardScreenState
               ),
               _OrgKpi(
                 'Org Status',
-                'Verified Active',
-                Icons.verified_outlined,
-                Colors.green,
+                orgStatusDisplay,
+                (isOrgActive && isSubActive) ? Icons.verified_outlined : Icons.warning_amber_outlined,
+                (isOrgActive && isSubActive) ? Colors.green : Colors.amber,
               ),
             ];
 
