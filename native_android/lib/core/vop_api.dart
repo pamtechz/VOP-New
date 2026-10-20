@@ -43,7 +43,7 @@ class VopApi {
   static const _timeout = Duration(seconds: 25);
 
   Uri _url(String path, [Map<String, String>? query]) {
-    if (!const {
+    const allowedPrefixes = [
       '/api/mobile',
       '/api/study/progress',
       '/api/mentorship',
@@ -51,11 +51,16 @@ class VopApi {
       '/api/share',
       '/api/prayer',
       '/api/certificates',
-      '/api/admin/notifications',
-      '/api/admin/users',
+      '/api/admin',
       '/api/account',
       '/api/localization',
-    }.contains(path)) {
+      '/api/payments',
+      '/api/quizzes',
+      '/api/media',
+      '/api/health',
+    ];
+    final isAllowed = allowedPrefixes.any((prefix) => path == prefix || path.startsWith('$prefix/') || path.startsWith('$prefix?'));
+    if (!isAllowed) {
       throw const VopApiException('Unsupported VOP API endpoint.');
     }
     final origin = Uri.parse(VopConfig.apiUrl);
@@ -133,8 +138,9 @@ class VopApi {
       [Map<String, String> params = const {}]) =>
       _execute('/api/mobile', 'GET', null, {'resource': resource, ...params});
 
-  Future<Map<String, dynamic>> action(String path, Map<String, Object?> body) =>
-      _execute(path, 'POST', body, null);
+  Future<Map<String, dynamic>> action(String path, Map<String, Object?> body,
+          {Map<String, String>? query}) =>
+      _execute(path, 'POST', body, query);
 
   Future<Map<String,dynamic>> bootstrap()async{
     final response=await _cachedRead('bootstrap','bootstrap',()=>read('bootstrap'));
@@ -248,6 +254,237 @@ class VopApi {
     }
     return downloaded;
   }
+
+  // --- Admin & Executive APIs ---
+  Future<Map<String, dynamic>> adminAnalytics({String? organizationId}) =>
+      action('/api/admin', {
+        'action': 'analytics',
+        if (organizationId != null && organizationId.isNotEmpty)
+          'organizationId': organizationId,
+      }, query: {'__vopRoute': 'analytics'});
+
+  Future<Map<String, dynamic>> adminCandidates({String? organizationId, String? search}) =>
+      action('/api/admin', {
+        'action': 'list',
+        if (organizationId != null && organizationId.isNotEmpty)
+          'organizationId': organizationId,
+        if (search != null && search.isNotEmpty) 'search': search,
+      }, query: {'__vopRoute': 'candidates'});
+
+  Future<Map<String, dynamic>> enrollCandidate({
+    required String displayName,
+    required String email,
+    required String guideId,
+    String? organizationId,
+    String? phoneNumber,
+    String? password,
+  }) =>
+      action('/api/admin', {
+        'action': 'enroll',
+        'displayName': displayName,
+        'email': email,
+        'guideId': guideId,
+        if (organizationId != null && organizationId.isNotEmpty)
+          'organizationId': organizationId,
+        if (phoneNumber != null && phoneNumber.isNotEmpty)
+          'phoneNumber': phoneNumber,
+        if (password != null && password.isNotEmpty)
+          'password': password,
+      }, query: {'__vopRoute': 'candidates'});
+
+  Future<Map<String, dynamic>> updateCandidate({
+    required String candidateId,
+    String? displayName,
+    String? email,
+    String? phoneNumber,
+    String? organizationId,
+    bool? disabled,
+  }) =>
+      action('/api/admin', {
+        'action': 'update',
+        'candidateId': candidateId,
+        if (displayName != null) 'displayName': displayName,
+        if (email != null) 'email': email,
+        if (phoneNumber != null) 'phoneNumber': phoneNumber,
+        if (organizationId != null) 'organizationId': organizationId,
+        if (disabled != null) 'disabled': disabled,
+      }, query: {'__vopRoute': 'candidates'});
+
+  Future<Map<String, dynamic>> updateCandidateBaptism({
+    required String candidateId,
+    required String baptismStatus,
+    String? organizationId,
+    String? baptismDate,
+  }) =>
+      action('/api/admin', {
+        'action': 'updateBaptism',
+        'candidateId': candidateId,
+        'baptismStatus': baptismStatus,
+        if (organizationId != null) 'organizationId': organizationId,
+        if (baptismDate != null) 'baptismDate': baptismDate,
+      }, query: {'__vopRoute': 'candidates'});
+
+  Future<Map<String, dynamic>> deleteCandidate(String candidateId, {String? organizationId}) =>
+      action('/api/admin', {
+        'action': 'deleteCandidate',
+        'candidateId': candidateId,
+        if (organizationId != null) 'organizationId': organizationId,
+      }, query: {'__vopRoute': 'candidates'});
+
+  // --- Organization & Hierarchy APIs ---
+  Future<Map<String, dynamic>> adminOrganizations({String? status, String? organizationId}) =>
+      action('/api/admin', {
+        'action': 'list',
+        if (status != null && status.isNotEmpty) 'status': status,
+        if (organizationId != null && organizationId.isNotEmpty)
+          'organizationId': organizationId,
+      }, query: {'__vopRoute': 'organizations'});
+
+  Future<Map<String, dynamic>> createOrganization({
+    required String name,
+    required String organizationType,
+    String? id,
+    String? customOrganizationType,
+    String? billingCountry,
+  }) =>
+      action('/api/admin', {
+        'action': 'create',
+        'name': name,
+        'organizationType': organizationType,
+        if (id != null && id.isNotEmpty) 'id': id,
+        if (customOrganizationType != null)
+          'customOrganizationType': customOrganizationType,
+        if (billingCountry != null) 'billingCountry': billingCountry,
+      }, query: {'__vopRoute': 'organizations'});
+
+  Future<Map<String, dynamic>> updateOrganization(String organizationId, Map<String, dynamic> updates) =>
+      action('/api/admin', {
+        'action': 'update',
+        'organizationId': organizationId,
+        ...updates,
+      }, query: {'__vopRoute': 'organizations'});
+
+  // --- User Administration APIs ---
+  Future<Map<String, dynamic>> adminUsers({String? search, String? role, int limit = 50}) =>
+      action('/api/admin', {
+        'action': 'list',
+        if (search != null && search.isNotEmpty) 'search': search,
+        if (role != null && role.isNotEmpty) 'role': role,
+        'limit': limit,
+      }, query: {'__vopRoute': 'users'});
+
+  Future<Map<String, dynamic>> updateUserRole({
+    required String targetUid,
+    required String role,
+    String? adminNodeType,
+    String? adminNodeId,
+    String? organizationId,
+    String? organizationRole,
+    Map<String, dynamic>? privileges,
+  }) =>
+      action('/api/admin', {
+        'action': 'assignRole',
+        'targetUid': targetUid,
+        'role': role,
+        if (adminNodeType != null) 'adminNodeType': adminNodeType,
+        if (adminNodeId != null) 'adminNodeId': adminNodeId,
+        if (organizationId != null) 'organizationId': organizationId,
+        if (organizationRole != null) 'organizationRole': organizationRole,
+        if (privileges != null) 'privileges': privileges,
+      }, query: {'__vopRoute': 'users'});
+
+  // --- Graduations & Approvals APIs ---
+  Future<Map<String, dynamic>> adminGraduations({String? organizationId, String? status}) =>
+      action('/api/admin', {
+        'action': 'list',
+        if (organizationId != null && organizationId.isNotEmpty)
+          'organizationId': organizationId,
+        if (status != null && status.isNotEmpty) 'status': status,
+      }, query: {'__vopRoute': 'graduations'});
+
+  Future<Map<String, dynamic>> reviewGraduation({
+    required String requestId,
+    required String decision,
+    String? notes,
+    String? organizationId,
+  }) =>
+      action('/api/admin', {
+        'action': 'review',
+        'requestId': requestId,
+        'decision': decision,
+        if (notes != null) 'notes': notes,
+        if (organizationId != null) 'organizationId': organizationId,
+      }, query: {'__vopRoute': 'graduations'});
+
+  // --- Curriculum & Content Studio APIs ---
+  Future<Map<String, dynamic>> adminContent(String collection, {
+    String action = 'list',
+    Map<String, dynamic>? payload,
+  }) =>
+      this.action('/api/admin', {
+        'action': action,
+        'collection': collection,
+        ...?payload,
+      }, query: {'__vopRoute': 'content'});
+
+  // --- Subscriptions & Plans APIs ---
+  Future<Map<String, dynamic>> adminPlans({String? organizationId, String? billingTenantType}) =>
+      action('/api/admin', {
+        'action': 'listAvailablePlans',
+        if (organizationId != null && organizationId.isNotEmpty)
+          'organizationId': organizationId,
+        if (billingTenantType != null) 'billingTenantType': billingTenantType,
+      }, query: {'__vopRoute': 'plans'});
+
+  // --- Operational Health ---
+  Future<Map<String, dynamic>> adminHealth({bool detail = false}) =>
+      _execute('/api/admin', 'GET', null, {'__vopRoute': 'health', if (detail) 'detail': '1'});
+
+  // --- Mentorship Workspace APIs ---
+  Future<Map<String, dynamic>> mentorWorkspace({String? mentorUid}) =>
+      action('/api/mentorship', {
+        'action': 'workspace',
+        if (mentorUid != null && mentorUid.isNotEmpty) 'mentorUid': mentorUid,
+      });
+
+  Future<Map<String, dynamic>> mentorCandidates({String? mentorUid}) =>
+      action('/api/mentorship', {
+        'action': 'candidates',
+        if (mentorUid != null && mentorUid.isNotEmpty) 'mentorUid': mentorUid,
+      });
+
+  Future<Map<String, dynamic>> mentorAssignCandidate({
+    required String studentId,
+    required String mentorId,
+    String? organizationId,
+  }) =>
+      action('/api/mentorship', {
+        'action': 'assignMentor',
+        'studentId': studentId,
+        'mentorId': mentorId,
+        if (organizationId != null) 'organizationId': organizationId,
+      });
+
+  Future<Map<String, dynamic>> mentorConversations() =>
+      action('/api/mentorship', {'action': 'conversations'});
+
+  Future<Map<String, dynamic>> mentorMessages(String conversationId) =>
+      action('/api/mentorship', {
+        'action': 'messages',
+        'conversationId': conversationId,
+      });
+
+  Future<Map<String, dynamic>> mentorSendMessage(
+    String conversationId,
+    String content, {
+    List<dynamic>? attachments,
+  }) =>
+      action('/api/mentorship', {
+        'action': 'sendMessage',
+        'conversationId': conversationId,
+        'content': content,
+        if (attachments != null) 'attachments': attachments,
+      });
   Future<List<Map<String,dynamic>>> downloadedStudies()=>
     _offline.list(_uid);
   Future<List<Map<String,dynamic>>> pendingOfflineChanges()=>

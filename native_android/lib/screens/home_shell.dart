@@ -15,6 +15,14 @@ import 'engagement_screen.dart';
 import 'notifications_screen.dart';
 import 'mentor_screen.dart';
 import 'prayer_screen.dart';
+import 'admin_dashboard_screen.dart';
+import 'candidates_screen.dart';
+import 'organizations_screen.dart';
+import 'graduations_screen.dart';
+import 'user_management_screen.dart';
+import 'curriculum_studio_screen.dart';
+import 'plans_management_screen.dart';
+import 'mentor_workspace_screen.dart';
 
 Map<String,dynamic> asMap(dynamic value)=>value is Map
   ?Map<String,dynamic>.from(value):<String,dynamic>{};
@@ -120,6 +128,10 @@ class _HomeShellState extends State<HomeShell> {
           :Text(labels[tab],style:const TextStyle(fontWeight:FontWeight.w800)),
         actions:[
           IconButton(
+            tooltip:'Admin Portal',
+            icon:const Icon(Icons.admin_panel_settings_outlined,color:VopColors.gold),
+            onPressed:()=>push(AdminDashboardScreen(api:widget.api))),
+          IconButton(
             tooltip:'Notifications',
             onPressed:()=>push(VopNotifications(api:widget.api)),
             icon:const Icon(Icons.notifications_none_rounded)),
@@ -172,6 +184,29 @@ class _HomeShellState extends State<HomeShell> {
             color:Color(0xFFD4E7FF),fontSize:12)),
         ]),
       ),
+      _label('ADMINISTRATION & LEADERSHIP'),
+      _destination('Admin Command Center',Icons.admin_panel_settings_outlined,
+        ()=>push(AdminDashboardScreen(api:widget.api))),
+      _destination('Candidate Roster & Enrollment',Icons.badge_outlined,
+        ()=>push(CandidatesScreen(api:widget.api))),
+      _destination('Organizations & Hierarchy',Icons.account_tree_outlined,
+        ()=>push(OrganizationsScreen(api:widget.api))),
+      _destination('Graduation Approvals',Icons.workspace_premium_outlined,
+        ()=>push(GraduationsScreen(api:widget.api))),
+      _destination('User & Role Directory',Icons.manage_accounts_outlined,
+        ()=>push(UserManagementScreen(api:widget.api))),
+      _destination('Curriculum & Content Studio',Icons.menu_book_outlined,
+        ()=>push(CurriculumStudioScreen(api:widget.api))),
+      _destination('Subscriptions & Plans',Icons.payments_outlined,
+        ()=>push(PlansManagementScreen(api:widget.api))),
+      const Divider(),
+      _label('PASTORAL CARE & MENTORING'),
+      _destination('Mentor Workspace',Icons.psychology_outlined,
+        ()=>push(MentorWorkspaceScreen(api:widget.api))),
+      _destination('Mentoring Conversations',Icons.forum_outlined,
+        ()=>push(Scaffold(appBar:AppBar(title:const Text('Mentoring')),
+          body:MentorScreen(api:widget.api)))),
+      const Divider(),
       _label('LEARNING'),
       _destination('Discover',Icons.home_outlined,()=>selectTab(0)),
       _destination('Lessons & Assessments',Icons.book_outlined,()=>selectTab(1)),
@@ -191,9 +226,6 @@ class _HomeShellState extends State<HomeShell> {
         ()=>push(VopContentScreen(api:widget.api,kind:VopContentKind.announcements))),
       _destination('Events',Icons.event_outlined,
         ()=>push(VopContentScreen(api:widget.api,kind:VopContentKind.events))),
-      _destination('Mentor & Conversations',Icons.forum_outlined,
-        ()=>push(Scaffold(appBar:AppBar(title:const Text('Mentoring')),
-          body:MentorScreen(api:widget.api)))),
       const Divider(),
       _label('ACCOUNT'),
       _destination('Notifications',Icons.notifications_outlined,
@@ -293,6 +325,45 @@ class _HomeShellState extends State<HomeShell> {
                 icon:Icons.radio_outlined,tint:const Color(0xFF8854D0),
                 onTap:()=>selectTab(4)),
             ]),
+          Builder(builder:(context){
+            final role = (user['role'] ?? '').toString().toLowerCase();
+            final isAdmin = const ['super_admin','union_admin','conference_admin','district_admin','church_admin'].contains(role);
+            final isMentor = role == 'mentor';
+            if (!isAdmin && !isMentor) return const SizedBox.shrink();
+            return Padding(
+              padding: const EdgeInsets.only(top: 14),
+              child: VopCard(
+                child: ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  leading: Container(
+                    width: 44, height: 44,
+                    decoration: BoxDecoration(
+                      color: VopColors.gold.withAlpha(35),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      isAdmin ? Icons.admin_panel_settings : Icons.psychology,
+                      color: VopColors.gold, size: 24,
+                    ),
+                  ),
+                  title: Text(
+                    isAdmin ? 'Admin & Institutional Portal' : 'Mentor Workspace',
+                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+                  ),
+                  subtitle: Text(
+                    isAdmin
+                        ? 'Manage candidates, organizations, graduations and curriculum'
+                        : 'Review candidate progress and send pastoral messages',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  trailing: const Icon(Icons.arrow_forward_ios, size: 14),
+                  onTap: () => push(isAdmin
+                      ? AdminDashboardScreen(api: widget.api)
+                      : MentorWorkspaceScreen(api: widget.api)),
+                ),
+              ),
+            );
+          }),
           const SizedBox(height:17),
           VopSectionTitle('Featured study guides',
             subtitle:'Continue exploring the Word',

@@ -8,6 +8,7 @@ param(
     [string]$VercelEnvironment = "production",
     [switch]$NoPrompt,
     [switch]$ChromeInspector,
+    [switch]$NoInjectedClient,
     [switch]$ShareOnNetwork,
     [ValidateRange(1, 65535)]
     [int]$WebPort = 7357
@@ -59,7 +60,11 @@ foreach ($key in @(
 }
 if ($ChromeInspector) {
     Write-Host "Starting VOP Flutter web with Chrome Inspector/DWDS enabled."
-    $flutterArgs = @("run", "-d", "chrome", "--web-port", "$WebPort") + $defines
+    $chromeArgs = @("run", "-d", "chrome", "--web-port", "$WebPort")
+    if ($NoInjectedClient) {
+        $chromeArgs += "--no-injected-client"
+    }
+    $flutterArgs = $chromeArgs + $defines
 } else {
     $bindAddress = if ($ShareOnNetwork) { "0.0.0.0" } else { "127.0.0.1" }
     $flutterArgs = @(

@@ -29,19 +29,26 @@ read endpoint alone is *not* feature parity.
 | Mentoring | Assigned mentor conversation and send/read messages | Multi-reference attachments, live presence and admin moderation |
 | Profile | Native signed-in identity, role and organisation summary | Profile editing, security/passkeys, language preferences |
 | Sign-in | Firebase email/password, Google OAuth flow | Device OAuth SHA fingerprints, enrollment and recovery |
+| **Admin Command Center** | Native executive analytics, KPIs, operational health, and module routing (Super Admin & Hierarchy Admins) | Real-time aggregate count verification across scopes |
+| **Organisation Portal** | Dedicated institutional workspace (`OrganizationDashboardScreen`) strictly loaded for organization accounts (`owner`, `admin`, `teacher`, `staff`), scoped to `organizationId` | Multi-tenant isolation and seat quota enforcement |
+| **Strict Portal Router** | Authoritative login router in `main.dart` following `portalAccess.ts`: admin accounts load Admin Portal only; organization accounts load Organisation Portal only; mentors load Mentor Workspace only; learners load Learner Workspace only | Zero cross-portal bleed on initial launch |
+| **Candidate Roster** | Complete candidate roster, search, lifecycle milestones (baptism schedule, marked baptized), and direct enrollment | Batch CSV import and transfer workflows |
+| **Organizations & Hierarchy** | Unions, conferences, districts, churches, and campus ministries directory, node creation, and filters | Regional delegation and hierarchy boundary enforcement |
+| **Graduation Approvals** | Multi-stage approval queue, exam score validation, approver notes, approve & certificate issuance, reject | Bulk certificate batch signing |
+| **User & Role Directory** | Platform and institutional user directory, role assignments (`super_admin` down to `student`), privilege toggles | MFA/session revocation triggers |
+| **Curriculum Studio** | Catalog inspector for guides, discover numbers, sharing scopes, certificate eligibility, and lesson breakdowns | In-app visual Plate block authoring |
+| **Subscriptions & Plans** | Institutional tier viewer (Church, Conference, Union Unlimited), quota limits, and transparent billing quotes | Native in-app mobile money checkout |
+| **Mentor Workspace** | Dedicated pastoral center with assigned candidates, progress tracking, and 1-on-1 chat launch | Automated inactivity alerts and mentor assignment rebalancing |
+| **Web Bootstrap & DOM Guards** | Defensive guards for Flutter Web DWDS DOM element removal (`removeChild`) and clean runner modes | Automated browser regression suites |
 
-## Remaining features before the Android app can claim full web parity
+## Next Phase Roadmap
 
-- Native organisation, Union, Conference, District, Church and Super Admin dashboards.
-- All administrator CRUD modules, curriculum studio and native Plate editing.
-- Candidate lifecycle, mentor allocation, automation, support ticket management.
-- Full localisation with organisation-assigned translation permissions.
-- Billing/subscriptions, receipts, configured payment gateways and server-verified FX.
-- Full engagement catalog including every duel/challenge mode and portfolio.
-- Broadcast background playback, media download/stream rights, offline study queue.
-- Push/notification channels, reminders, deep links and secure attachments.
-- Passkeys/biometrics, account lifecycle/onboarding, accessibility, production signing,
-  Play Integrity, performance and automated end-to-end Android device tests.
+- Native visual Plate editor for on-device curriculum authoring.
+- Full localisation console with organisation-assigned translation permissions.
+- In-app mobile money and direct gateway payments checkout within Flutter.
+- Broadcast background playback service with lockscreen audio controls and offline study audio queue.
+- Push notification channel registration and Firebase Cloud Messaging background handlers.
+- Production signing, Play Integrity verification, and physical Android device release tests.
 
 **Security rule:** Do not duplicate server-only assessments, certificate issuance,
 organisation permissions, payment processing or engagement point calculation

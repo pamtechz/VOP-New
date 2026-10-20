@@ -21,13 +21,36 @@
       hasPasskeySupport: function() { return false; }
     };
     window.passkeys = window.PasskeyAuthenticator;
+    // Defensive guard for DWDS and Flutter Web hot-reload DOM cleanup
+    (function() {
+      try {
+        var origRemoveChild = Node.prototype.removeChild;
+        Node.prototype.removeChild = function(child) {
+          if (!child) return null;
+          if (child.parentNode !== this) {
+            if (child.parentNode) {
+              return child.parentNode.removeChild(child);
+            }
+            return child;
+          }
+          return origRemoveChild.call(this, child);
+        };
+      } catch (e) {}
+    })();
+    window.addEventListener('error', function(event) {
+      var msg = event && (event.message || (event.error && event.error.message)) || '';
+      if (msg.indexOf("removeChild") !== -1 || msg.indexOf("Cannot read properties of null") !== -1) {
+        if (event.preventDefault) event.preventDefault();
+      }
+    });
     window.addEventListener('unhandledrejection', function(event) {
       var reason = event && (event.reason || event.detail);
       var text = reason ? (reason.message || String(reason)) : '';
       if (text.indexOf('Retry when online') !== -1 ||
           text.indexOf('Network unavailable') !== -1 ||
+          text.indexOf('removeChild') !== -1 ||
           text.indexOf('VopApiException') !== -1) {
-        event.preventDefault();
+        if (event.preventDefault) event.preventDefault();
       }
     });
   </script>

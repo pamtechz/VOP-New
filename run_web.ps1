@@ -7,6 +7,7 @@ param(
 [string]$VercelEnvironment = "production",
 [switch]$NoPrompt,
 [switch]$ChromeInspector,
+[switch]$NoInjectedClient,
 [switch]$ShareOnNetwork,
 [ValidateRange(1,65535)]
 [int]$WebPort = 7357

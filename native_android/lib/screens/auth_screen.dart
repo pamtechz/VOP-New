@@ -63,6 +63,75 @@ class _AuthScreenState extends State<AuthScreen> {
     }
   }
 
+  Future<void> _forgotPassword() async {
+    final emailCtrl = TextEditingController(text: _email.text.trim());
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Reset password'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Enter your registered email address to receive a secure password-reset link.',
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: emailCtrl,
+              keyboardType: TextInputType.emailAddress,
+              autofocus: true,
+              decoration: const InputDecoration(
+                prefixIcon: Icon(Icons.email_outlined),
+                labelText: 'Email address',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Send Reset Link'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    final address = emailCtrl.text.trim();
+    if (address.isEmpty || !address.contains('@')) {
+      if (mounted) {
+        setState(() => _error = 'Enter a valid email address for password reset.');
+      }
+      return;
+    }
+    setState(() { _busy = true; _error = null; });
+    try {
+      await FirebaseAuth.instance.sendPasswordResetEmail(email: address);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Password reset email sent to $address. Check your inbox.'),
+            backgroundColor: Colors.green.shade800,
+          ),
+        );
+      }
+    } on FirebaseAuthException catch (e) {
+      if (mounted) {
+        setState(() => _error = e.message ?? 'Password reset could not be completed.');
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _error = 'Could not request password reset.');
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _googleSignIn() async {
     setState(() { _busy = true; _error = null; });
     try {
@@ -154,6 +223,17 @@ class _AuthScreenState extends State<AuthScreen> {
                       validator: (text) =>
                         text == null || text.isEmpty ? 'Enter your password.' : null,
                       onFieldSubmitted: (_) { if (!_busy) _signIn(); },
+                    ),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton(
+                        onPressed: _busy ? null : _forgotPassword,
+                        style: TextButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                        ),
+                        child: const Text('Forgot password?', style: TextStyle(fontSize: 12.5)),
+                      ),
                     ),
                   ]),
                 ),

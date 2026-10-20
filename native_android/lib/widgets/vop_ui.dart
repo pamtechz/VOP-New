@@ -23,6 +23,31 @@ class VopBrand extends StatelessWidget {
   ]);
 }
 
+class VopCard extends StatelessWidget {
+  const VopCard({required this.child, this.padding, this.onTap, super.key});
+  final Widget child;
+  final EdgeInsetsGeometry? padding;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget content = child;
+    if (padding != null) {
+      content = Padding(padding: padding!, child: content);
+    }
+    if (onTap != null) {
+      return Card(
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(onTap: onTap, child: content),
+      );
+    }
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: content,
+    );
+  }
+}
+
 class VopSectionTitle extends StatelessWidget {
   const VopSectionTitle(this.title,{this.subtitle,this.action,this.onAction,super.key});
   final String title;
