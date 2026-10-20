@@ -19,9 +19,17 @@ permissions:
 
 jobs:
   windows-launcher-parse:
-    runs-on: [self-hosted, Windows, KASAINSTITUTE]
+    runs-on: [self-hosted, Windows]
     timeout-minutes: 5
     steps:
+      - name: Verify KASAINSTITUTE runner identity
+        shell: pwsh
+        env:
+          VOP_ACTUAL_RUNNER: ${{ runner.name }}
+        run: |
+          if ($env:VOP_ACTUAL_RUNNER -ne 'KASAINSTITUTE') {
+            throw "Only the KASAINSTITUTE Windows self-hosted runner may execute VOP jobs (got '$env:VOP_ACTUAL_RUNNER')."
+          }
       - name: Reject untrusted fork PR before checking out code
         if: github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository
         shell: pwsh
@@ -72,9 +80,17 @@ jobs:
         shell: pwsh
         run: ./tests/nativeEmulatorLaunchFailure.test.ps1
   flutter-android:
-    runs-on: [self-hosted, Windows, KASAINSTITUTE]
+    runs-on: [self-hosted, Windows]
     timeout-minutes: 30
     steps:
+      - name: Verify KASAINSTITUTE runner identity
+        shell: pwsh
+        env:
+          VOP_ACTUAL_RUNNER: ${{ runner.name }}
+        run: |
+          if ($env:VOP_ACTUAL_RUNNER -ne 'KASAINSTITUTE') {
+            throw "Only the KASAINSTITUTE Windows self-hosted runner may execute VOP jobs (got '$env:VOP_ACTUAL_RUNNER')."
+          }
       - name: Reject untrusted fork PR before checking out code
         if: github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository
         shell: pwsh
@@ -129,9 +145,17 @@ jobs:
           retention-days: 5
 
   flutter-web:
-    runs-on: [self-hosted, Windows, KASAINSTITUTE]
+    runs-on: [self-hosted, Windows]
     timeout-minutes: 25
     steps:
+      - name: Verify KASAINSTITUTE runner identity
+        shell: pwsh
+        env:
+          VOP_ACTUAL_RUNNER: ${{ runner.name }}
+        run: |
+          if ($env:VOP_ACTUAL_RUNNER -ne 'KASAINSTITUTE') {
+            throw "Only the KASAINSTITUTE Windows self-hosted runner may execute VOP jobs (got '$env:VOP_ACTUAL_RUNNER')."
+          }
       - name: Reject untrusted fork PR before checking out code
         if: github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository
         shell: pwsh

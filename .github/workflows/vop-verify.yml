@@ -17,9 +17,17 @@ permissions:
   contents: read
 jobs:
   verify:
-    runs-on: [self-hosted, Windows, KASAINSTITUTE]
+    runs-on: [self-hosted, Windows]
     timeout-minutes: 20
     steps:
+      - name: Verify KASAINSTITUTE runner identity
+        shell: pwsh
+        env:
+          VOP_ACTUAL_RUNNER: ${{ runner.name }}
+        run: |
+          if ($env:VOP_ACTUAL_RUNNER -ne 'KASAINSTITUTE') {
+            throw "Only the KASAINSTITUTE Windows self-hosted runner may execute VOP jobs (got '$env:VOP_ACTUAL_RUNNER')."
+          }
       - name: Reject untrusted fork PR before checking out code
         if: github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository
         shell: pwsh

@@ -9,9 +9,17 @@ jobs:
   trusted-source:
     # This workflow is evaluated from the trusted base branch. NEVER checkout
     # pull request source here, run PR scripts, or expose deployment secrets.
-    runs-on: [self-hosted, Windows, KASAINSTITUTE]
+    runs-on: [self-hosted, Windows]
     timeout-minutes: 5
     steps:
+      - name: Verify KASAINSTITUTE runner identity
+        shell: pwsh
+        env:
+          VOP_ACTUAL_RUNNER: ${{ runner.name }}
+        run: |
+          if ($env:VOP_ACTUAL_RUNNER -ne 'KASAINSTITUTE') {
+            throw "Only the KASAINSTITUTE Windows self-hosted runner may execute VOP jobs (got '$env:VOP_ACTUAL_RUNNER')."
+          }
       - name: Reject fork pull requests without checking out code
         shell: pwsh
         env:

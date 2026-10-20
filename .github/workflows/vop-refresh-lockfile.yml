@@ -16,9 +16,17 @@ concurrency:
 jobs:
   lockfile:
     if: "!contains(github.event.head_commit.message, '[skip lockfile]')"
-    runs-on: [self-hosted, Windows, KASAINSTITUTE]
+    runs-on: [self-hosted, Windows]
     timeout-minutes: 10
     steps:
+      - name: Verify KASAINSTITUTE runner identity
+        shell: pwsh
+        env:
+          VOP_ACTUAL_RUNNER: ${{ runner.name }}
+        run: |
+          if ($env:VOP_ACTUAL_RUNNER -ne 'KASAINSTITUTE') {
+            throw "Only the KASAINSTITUTE Windows self-hosted runner may execute VOP jobs (got '$env:VOP_ACTUAL_RUNNER')."
+          }
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0

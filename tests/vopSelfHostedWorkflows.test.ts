@@ -19,9 +19,17 @@ test('every VOP GitHub job uses the KASAINSTITUTE self-hosted runner, never GitH
     const contents = readFileSync(path,'utf8');
     const runners = [...contents.matchAll(/^[ \t]+runs-on:\s*(.+)$/gm)].map(x=>x[1].trim());
     assert.ok(runners.length>0, path+' must declare a runner');
+    const guards=[...contents.matchAll(/^      - name: Verify KASAINSTITUTE runner identity$/gm)].length;
+    assert.equal(guards,runners.length,path+' must check identity in every job');
+    assert.match(contents,/VOP_ACTUAL_RUNNER: \$\{\{ runner\.name \}\}/,path+' must read registered runner name');
+    for(const job of contents.split(/^    runs-on: \[self-hosted, Windows\]$/m).slice(1)){
+      assert.equal(job.match(/^      - (?:name|uses): .+$/m)?.[0],
+        '      - name: Verify KASAINSTITUTE runner identity',
+        path+' must check identity before downloading untrusted code');
+    }
     for(const runner of runners){
       assert.match(runner,/self-hosted/,path+' contains a hosted Actions job');
-      assert.match(runner,/KASAINSTITUTE/,path+' has no explicit trusted runner label');
+      assert.doesNotMatch(runner,/KASAINSTITUTE/,path+' must not confuse the runner name with a custom label');
       assert.match(runner,/Windows/,path+' must use the trusted Windows runner platform');
       assert.doesNotMatch(runner,/(?:ubuntu|windows|macos)-latest/);
     }
@@ -36,7 +44,7 @@ test('fork PRs must fail on trusted runner before any checkout; they must never 
     '.github/workflows/vop-verify.yml',
   ]) {
     const source=readFileSync(path,'utf8');
-    const jobs=(source.match(/^    runs-on: \[self-hosted, Windows, KASAINSTITUTE\]$/gm)||[]).length;
+    const jobs=(source.match(/^    runs-on: \[self-hosted, Windows\]$/gm)||[]).length;
     const guard=(source.match(/^      - name: Reject untrusted fork PR before checking out code$/gm)||[]).length;
     const failure=(source.match(/throw "Fork pull requests cannot execute code on the VOP KASAINSTITUTE self-hosted runner/g)||[]).length;
     assert.match(source,/pull_request_target:/);
