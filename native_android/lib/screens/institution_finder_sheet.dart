@@ -282,32 +282,22 @@ class _InstitutionFinderSheetState extends State<InstitutionFinderSheet> {
                     ? _nextCursor
                     : (snapshot.data?['nextCursor'] ?? '').toString();
 
-                final publicMinistries = allOrgs
-                    .where((o) => o['isPublicMinistry'] == true)
-                    .toList();
-
-                var churches = allOrgs
-                    .where((o) => o['isPublicMinistry'] != true)
-                    .toList();
-
-                if (_search.isNotEmpty) {
-                  churches = churches.where((o) {
-                    final name = (o['name'] ?? '').toString().toLowerCase();
-                    final slug = (o['slug'] ?? '').toString().toLowerCase();
-                    final country = (o['billingCountry'] ?? '').toString().toLowerCase();
-                    final type = (o['organizationType'] ?? '').toString().toLowerCase();
-                    return name.contains(_search) ||
-                        slug.contains(_search) ||
-                        country.contains(_search) ||
-                        type.contains(_search) || (o['city'] ?? '').toString().toLowerCase().contains(_search);
-                  }).toList();
-                }
+                final visibleOrganizations = allOrgs.where((o) {
+                  if (_search.isEmpty) return true;
+                  return [
+                    o['name'], o['slug'], o['billingCountry'],
+                    o['organizationType'], o['city'],
+                  ].any((value) => (value ?? '').toString().toLowerCase().contains(_search));
+                }).toList();
+                final publicMinistries = visibleOrganizations
+                    .where((o) => o['isPublicMinistry'] == true).toList();
+                final churches = visibleOrganizations
+                    .where((o) => o['isPublicMinistry'] != true).toList();
 
                 return ListView(
                   padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
                   children: [
-                    // Super Admin Public Ministry Section
-                    if (_search.isEmpty && publicMinistries.isNotEmpty) ...[
+                    if (publicMinistries.isNotEmpty) ...[
                       const Row(
                         children: [
                           Icon(Icons.public, color: VopColors.gold, size: 18),
