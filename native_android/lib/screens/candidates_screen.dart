@@ -126,6 +126,8 @@ class _CandidatesScreenState extends State<CandidatesScreen> {
               children: [
                 _filterChip('all', 'All Candidates'),
                 const SizedBox(width: 8),
+                _filterChip('unassigned', 'Public / Unassigned'),
+                const SizedBox(width: 8),
                 _filterChip('active', 'Active Learners'),
                 const SizedBox(width: 8),
                 _filterChip('graduating', 'Graduating'),
@@ -171,6 +173,11 @@ class _CandidatesScreenState extends State<CandidatesScreen> {
                 if (_filter != 'all') {
                   candidates = candidates.where((c) {
                     final info = c['information'] is Map ? c['information'] as Map<String, dynamic> : <String, dynamic>{};
+                    if (_filter == 'unassigned') {
+                      final orgId = (c['organizationId'] ?? '').toString().trim();
+                      final isPublic = c['isPublicMinistry'] == true || (c['organizationName'] ?? '').toString().toLowerCase().contains('public');
+                      return orgId.isEmpty || isPublic;
+                    }
                     if (_filter == 'graduating') return info['graduating'] == true;
                     if (_filter == 'baptism_scheduled') return info['baptismCandidate'] == true && info['baptized'] != true;
                     if (_filter == 'baptized') return info['baptized'] == true;
@@ -525,13 +532,54 @@ class _CandidateDetailSheetState extends State<_CandidateDetailSheet> {
     }
   }
 
+  Future<void> _showAssignChurchDialog() async {
+    final candidateId = (widget.candidate['uid'] ?? widget.candidate['id'] ?? '').toString();
+    final candidateName = (widget.candidate['displayName'] ?? widget.candidate['name'] ?? 'Candidate').toString();
+
+    final selected = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (ctx) => _AssignChurchDialog(api: widget.api),
+    );
+
+    if (selected == null) return;
+    final orgId = (selected['id'] ?? '').toString();
+    final orgName = (selected['name'] ?? orgId).toString();
+
+    setState(() => _loading = true);
+    try {
+      await widget.api.updateCandidate(
+        candidateId: candidateId,
+        organizationId: orgId,
+        churchName: orgName,
+        churchId: orgId,
+      );
+      if (mounted) {
+        Navigator.of(context).pop();
+        widget.onUpdated();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('$candidateName successfully assigned to $orgName!'),
+            backgroundColor: Colors.teal.shade800,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _loading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not assign candidate: $e')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = widget.candidate;
     final name = (c['displayName'] ?? c['name'] ?? 'Candidate').toString();
     final email = (c['email'] ?? '').toString();
     final phone = (c['phoneNumber'] ?? 'None').toString();
-    final org = (c['organizationName'] ?? 'Platform wide').toString();
+    final org = (c['organizationName'] ?? c['churchName'] ?? 'Public / Unassigned').toString();
     final info = c['information'] is Map ? c['information'] as Map<String, dynamic> : <String, dynamic>{};
     final isBaptized = info['baptized'] == true;
     final isScheduled = info['baptismCandidate'] == true && !isBaptized;
@@ -566,10 +614,21 @@ class _CandidateDetailSheetState extends State<_CandidateDetailSheet> {
             ],
           ),
           const SizedBox(height: 18),
-          _detailRow('Organization', org),
+          _detailRow('Current Church / Org', org),
           _detailRow('Phone Number', phone),
           _detailRow('Baptism Status', isBaptized ? 'Baptized' : isScheduled ? 'Scheduled' : 'Not marked'),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
+          const Text('CONGREGATIONAL ASSIGNMENT', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: VopColors.gold)),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              icon: const Icon(Icons.church_outlined, size: 16),
+              label: const Text('Assign to Local Church / Transfer'),
+              onPressed: _loading ? null : _showAssignChurchDialog,
+            ),
+          ),
+          const SizedBox(height: 16),
           const Text('DISCIPLESHIP MILESTONES', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: VopColors.gold)),
           const SizedBox(height: 10),
           Row(
@@ -616,6 +675,125 @@ class _CandidateDetailSheetState extends State<_CandidateDetailSheet> {
           Text(label, style: const TextStyle(fontSize: 13, color: Colors.grey)),
           Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
         ],
+      ),
+    );
+  }
+}
+
+class _AssignChurchDialog extends StatefulWidget {
+  const _AssignChurchDialog({required this.api});
+  final VopApi api;
+
+  @override
+  State<_AssignChurchDialog> createState() => _AssignChurchDialogState();
+}
+
+class _AssignChurchDialogState extends State<_AssignChurchDialog> {
+  late Future<Map<String, dynamic>> _orgsFuture;
+  String _search = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _orgsFuture = widget.api.publicOrganizations();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 480, maxHeight: 560),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Row(
+                children: [
+                  Icon(Icons.church_outlined, color: VopColors.gold, size: 24),
+                  SizedBox(width: 8),
+                  Text('Assign to Local Church', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                ],
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                'Connect this candidate to a local Seventh-day Adventist church congregation so local pastors and mentors can disciple them.',
+                style: TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                decoration: InputDecoration(
+                  hintText: 'Search church name or location...',
+                  prefixIcon: const Icon(Icons.search, size: 20),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                onChanged: (val) => setState(() => _search = val.trim().toLowerCase()),
+              ),
+              const SizedBox(height: 12),
+              Expanded(
+                child: FutureBuilder<Map<String, dynamic>>(
+                  future: _orgsFuture,
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    if (snapshot.hasError) {
+                      return Center(child: Text('Error: ${snapshot.error}'));
+                    }
+                    final raw = snapshot.data?['items'] as List? ?? [];
+                    var orgs = raw
+                        .whereType<Map>()
+                        .map((e) => Map<String, dynamic>.from(e))
+                        .toList();
+
+                    if (_search.isNotEmpty) {
+                      orgs = orgs.where((o) {
+                        final name = (o['name'] ?? '').toString().toLowerCase();
+                        final country = (o['billingCountry'] ?? '').toString().toLowerCase();
+                        return name.contains(_search) || country.contains(_search);
+                      }).toList();
+                    }
+
+                    if (orgs.isEmpty) {
+                      return const Center(child: Text('No churches match search.'));
+                    }
+
+                    return ListView.separated(
+                      itemCount: orgs.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (context, i) {
+                        final o = orgs[i];
+                        final name = (o['name'] ?? 'Church').toString();
+                        final type = (o['organizationType'] ?? 'church').toString();
+                        final country = (o['billingCountry'] ?? 'Zambia').toString();
+                        final isPublic = o['isPublicMinistry'] == true;
+
+                        return ListTile(
+                          dense: true,
+                          leading: Icon(isPublic ? Icons.public : Icons.church, color: VopColors.gold, size: 20),
+                          title: Text(name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5)),
+                          subtitle: Text('${isPublic ? 'Public Ministry' : type.toUpperCase()} • $country', style: const TextStyle(fontSize: 11)),
+                          trailing: const Icon(Icons.arrow_forward_ios, size: 14),
+                          onTap: () => Navigator.pop(context, o),
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

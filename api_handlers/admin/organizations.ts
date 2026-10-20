@@ -165,9 +165,105 @@ export default async function handler(req: Request, res: Response) {
 
     const authorization = req.headers?.authorization ?? req.headers?.Authorization;
     if (!authorization) throw new Error('Sign in first.');
-    const ctx = await authenticateTenant(req, action === 'delete' ? undefined : requestedOrg, ['acceptInvite','declineInvite','listInvites','dismissInvite','clearInviteHistory'].includes(action));
-    const permissionAction = action === 'list' ? 'view' : action === 'create' ? 'create' : ['update','assignOwner','transferOwnership'].includes(action) ? 'update' : action === 'delete' ? 'delete' : '';
+    const ctx = await authenticateTenant(req, action === 'delete' ? undefined : requestedOrg, ['acceptInvite','declineInvite','listInvites','dismissInvite','clearInviteHistory','publicDirectory','joinInstitution','setPublicMinistry'].includes(action));
+    const permissionAction = action === 'list' ? 'view' : action === 'create' ? 'create' : ['update','assignOwner','transferOwnership','setPublicMinistry'].includes(action) ? 'update' : action === 'delete' ? 'delete' : '';
     if (permissionAction) await requirePermission(ctx, 'organizations', permissionAction);
+
+    if (action === 'publicDirectory') {
+      const snap = await bootstrapDb.collection('organizations').where('status', '==', 'active').limit(300).get();
+      const items = snap.docs.map(doc => {
+        const d = doc.data() || {};
+        return {
+          id: doc.id,
+          name: String(d.name || doc.id),
+          slug: String(d.slug || doc.id),
+          organizationType: String(d.organizationType || 'church'),
+          customOrganizationType: String(d.customOrganizationType || ''),
+          isPublicMinistry: Boolean(d.isPublicMinistry),
+          billingCountry: String(d.billingCountry || 'Zambia'),
+          status: 'active',
+        };
+      });
+      items.sort((a, b) => {
+        if (a.isPublicMinistry && !b.isPublicMinistry) return -1;
+        if (!a.isPublicMinistry && b.isPublicMinistry) return 1;
+        return a.name.localeCompare(b.name);
+      });
+      return res.status(200).json({ ok: true, items });
+    }
+
+    if (action === 'joinInstitution') {
+      const targetOrgId = String(body.organizationId || '').trim();
+      if (!targetOrgId) throw new Error('An institution must be selected.');
+      const orgRef = bootstrapDb.doc('organizations/' + targetOrgId);
+      const orgSnap = await orgRef.get();
+      if (!orgSnap.exists || orgSnap.data()?.status !== 'active') {
+        throw new Error('The selected institution is not active or available.');
+      }
+      const orgData = orgSnap.data() || {};
+      const orgName = String(orgData.name || targetOrgId);
+      const now = new Date().toISOString();
+      const userRef = bootstrapDb.doc('users/' + ctx.auth.uid);
+      const userSnap = await userRef.get();
+      const userData = userSnap.data() || {};
+      const previousOrgId = String(userData.organizationId || '').trim();
+
+      await bootstrapDb.runTransaction(async tx => {
+        if (previousOrgId && previousOrgId !== targetOrgId) {
+          tx.set(bootstrapDb.doc('organizations/' + previousOrgId + '/members/' + ctx.auth.uid), {
+            active: false,
+            updatedAt: now,
+          }, { merge: true });
+        }
+        tx.set(bootstrapDb.doc('organizations/' + targetOrgId + '/members/' + ctx.auth.uid), {
+          uid: ctx.auth.uid,
+          organizationId: targetOrgId,
+          role: 'learner',
+          active: true,
+          source: 'learner_self_join',
+          joinedAt: now,
+          updatedAt: now,
+        }, { merge: true });
+        tx.set(userRef, {
+          organizationId: targetOrgId,
+          organizationRole: 'learner',
+          accountType: 'organization',
+          organizationName: orgName,
+          updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
+      });
+
+      const authService = getAuth();
+      await authService.setCustomUserClaims(ctx.auth.uid, {
+        role: String(userData.role || 'student'),
+        organizationId: targetOrgId,
+        organizationRole: 'learner',
+        accountType: 'organization',
+      }).catch(() => {});
+
+      return res.status(200).json({
+        ok: true,
+        organizationId: targetOrgId,
+        organizationName: orgName,
+        isPublicMinistry: Boolean(orgData.isPublicMinistry),
+      });
+    }
+
+    if (action === 'setPublicMinistry') {
+      if (!ctx.isSuperAdmin) throw new Error('Only the VOP Super Admin can configure public access ministries.');
+      const targetOrgId = String(body.organizationId || '').trim();
+      const isPublic = body.isPublicMinistry === true;
+      if (!targetOrgId) throw new Error('Organization ID is required.');
+      const orgRef = bootstrapDb.doc('organizations/' + targetOrgId);
+      const orgSnap = await orgRef.get();
+      if (!orgSnap.exists) throw new Error('The organization does not exist.');
+      await orgRef.set({
+        isPublicMinistry: isPublic,
+        updatedAt: new Date().toISOString(),
+      }, { merge: true });
+      return res.status(200).json({ ok: true, organizationId: targetOrgId, isPublicMinistry: isPublic });
+    }
+
 const VALID_ORGANIZATION_TYPES = [
   'union',
   'conference',
@@ -205,6 +301,7 @@ function sanitizeOrgType(rawType: unknown, rawCustom: unknown): { organizationTy
       await ref.set({
         id:organizationId,name,slug:slug(name),status:'active',ownerUid:'',
         organizationType,customOrganizationType,
+        isPublicMinistry: Boolean(body.isPublicMinistry),
         billingCountry,countryCode:billingProfile.countryCode,billingProfile,
         plan:'unsubscribed',quotas:{},featureEntitlements:{},billingAccessSuspended:false,
         createdAt:now,updatedAt:now,
@@ -216,6 +313,7 @@ function sanitizeOrgType(rawType: unknown, rawCustom: unknown): { organizationTy
         item:{
           id:organizationId,name,status:'active',billingCountry,countryCode:billingProfile.countryCode,billingProfile,
           organizationType,customOrganizationType,
+          isPublicMinistry: Boolean(body.isPublicMinistry),
           plan:String(created.data()?.plan||'unsubscribed'),
           defaultSubscriptionPlanId:defaultSubscription?.planId||null,
         },
@@ -490,7 +588,7 @@ function sanitizeOrgType(rawType: unknown, rawCustom: unknown): { organizationTy
           const data = organization.data() || {};
           const members = await organization.ref.collection('members').where('active','==',true).get();
           const people=organizationPeopleCounts(members.docs as unknown as Array<{data:()=>Record<string,unknown>}>);
-          return { id:organization.id, name:String(data.name || organization.id), slug:String(data.slug || organization.id), status:String(data.status || 'active'), ownerUid:String(data.ownerUid || ''), organizationType:String(data.organizationType || 'church'), customOrganizationType:String(data.customOrganizationType || ''), plan:String(data.plan || 'unsubscribed'), quotas:data.quotas || {}, billingCountry:String(data.billingCountry||data.billingProfile?.countryName||(String(data.countryCode||'ZM')==='ZM'?'Zambia':'International')), countryCode:String(data.countryCode||data.billingProfile?.countryCode||'ZM'), billingProfile:data.billingProfile||organizationBillingProfile(data), createdAt:String(data.createdAt || ''), updatedAt:String(data.updatedAt || ''), ...people };
+          return { id:organization.id, name:String(data.name || organization.id), slug:String(data.slug || organization.id), status:String(data.status || 'active'), ownerUid:String(data.ownerUid || ''), organizationType:String(data.organizationType || 'church'), customOrganizationType:String(data.customOrganizationType || ''), isPublicMinistry:Boolean(data.isPublicMinistry), plan:String(data.plan || 'unsubscribed'), quotas:data.quotas || {}, billingCountry:String(data.billingCountry||data.billingProfile?.countryName||(String(data.countryCode||'ZM')==='ZM'?'Zambia':'International')), countryCode:String(data.countryCode||data.billingProfile?.countryCode||'ZM'), billingProfile:data.billingProfile||organizationBillingProfile(data), createdAt:String(data.createdAt || ''), updatedAt:String(data.updatedAt || ''), ...people };
         }));
         return res.status(200).json({ok:true,items:items.filter(item => item.status === 'active')});
       }
@@ -502,7 +600,7 @@ function sanitizeOrgType(rawType: unknown, rawCustom: unknown): { organizationTy
         const people=organizationPeopleCounts(members.docs as unknown as Array<{data:()=>Record<string,unknown>}>);
         return res.status(200).json({ ok:true, items:[{
           id: organization.id, name:String(data.name || organization.id), slug:String(data.slug || organization.id),
-          status:String(data.status || 'active'), ownerUid:String(data.ownerUid || ''), organizationType:String(data.organizationType || 'church'), customOrganizationType:String(data.customOrganizationType || ''), plan:String(data.plan || 'unsubscribed'),
+          status:String(data.status || 'active'), ownerUid:String(data.ownerUid || ''), organizationType:String(data.organizationType || 'church'), customOrganizationType:String(data.customOrganizationType || ''), isPublicMinistry:Boolean(data.isPublicMinistry), plan:String(data.plan || 'unsubscribed'),
           quotas:data.quotas || {}, billingCountry:String(data.billingCountry||data.billingProfile?.countryName||(String(data.countryCode||'ZM')==='ZM'?'Zambia':'International')), countryCode:String(data.countryCode||data.billingProfile?.countryCode||'ZM'), billingProfile:data.billingProfile||organizationBillingProfile(data), createdAt:String(data.createdAt || ''), updatedAt:String(data.updatedAt || ''), ...people
         }]});
       }
@@ -519,6 +617,7 @@ function sanitizeOrgType(rawType: unknown, rawCustom: unknown): { organizationTy
           ownerUid: String(data.ownerUid || ''),
           organizationType: String(data.organizationType || 'church'),
           customOrganizationType: String(data.customOrganizationType || ''),
+          isPublicMinistry: Boolean(data.isPublicMinistry),
           plan: String(data.plan || 'unsubscribed'),
           quotas: data.quotas || {},
           billingCountry:String(data.billingCountry||data.billingProfile?.countryName||(String(data.countryCode||'ZM')==='ZM'?'Zambia':'International')),

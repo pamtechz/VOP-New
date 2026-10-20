@@ -91,7 +91,7 @@ export default async function handler(req:Request,res:Response){
     const settings=await db.doc('system/settings').get();
     const options=settings.data()?.systemOptions||{};
     const invited=await invitationAllowsRegistration(db,token,email);
-    if(options.allowRegistrations!==true&&!invited){
+    if(options.allowRegistrations===false&&!invited){
       return res.status(403).json({error:'New account registration is currently closed. Use a valid organization invitation or contact VOP administration.'});
     }
 

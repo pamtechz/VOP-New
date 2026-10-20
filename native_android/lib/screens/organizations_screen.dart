@@ -197,6 +197,10 @@ class _OrganizationsScreenState extends State<OrganizationsScreen> with SingleTi
                         title: Row(
                           children: [
                             Expanded(child: Text(name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15))),
+                            if (o['isPublicMinistry'] == true) ...[
+                              _badge('PUBLIC ACCESS', Colors.teal),
+                              const SizedBox(width: 4),
+                            ],
                             _badge(type.toUpperCase().replaceAll('_', ' '), _typeColor(type)),
                           ],
                         ),
@@ -270,10 +274,54 @@ class _OrganizationsScreenState extends State<OrganizationsScreen> with SingleTi
             ),
             const SizedBox(height: 18),
             _infoRow('Type', (o['organizationType'] ?? 'church').toString().toUpperCase().replaceAll('_', ' ')),
+            _infoRow('Public Ministry', o['isPublicMinistry'] == true ? 'YES (Open Access Word of God)' : 'No (Church / Institutional)'),
             _infoRow('Billing Country', (o['billingCountry'] ?? 'Zambia').toString()),
             _infoRow('Current Plan', (o['plan'] ?? 'unsubscribed').toString().toUpperCase()),
             _infoRow('Status', (o['status'] ?? 'active').toString().toUpperCase()),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.tonalIcon(
+                icon: Icon(o['isPublicMinistry'] == true ? Icons.public_off : Icons.public, size: 18),
+                label: Text(
+                  o['isPublicMinistry'] == true
+                      ? 'Revoke Public Ministry Designation'
+                      : 'Designate as Super Admin Public Ministry',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  final isCurrentlyPublic = o['isPublicMinistry'] == true;
+                  final orgId = (o['id'] ?? '').toString();
+                  try {
+                    await widget.api.setPublicMinistry(
+                      organizationId: orgId,
+                      isPublicMinistry: !isCurrentlyPublic,
+                    );
+                    _reload();
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            !isCurrentlyPublic
+                                ? 'Organization designated as Super Admin Public Access Ministry!'
+                                : 'Public Ministry designation revoked.',
+                          ),
+                          backgroundColor: Colors.teal.shade800,
+                        ),
+                      );
+                    }
+                  } catch (e) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Error updating public ministry: $e')),
+                      );
+                    }
+                  }
+                },
+              ),
+            ),
+            const SizedBox(height: 8),
             SizedBox(
               width: double.infinity,
               child: OutlinedButton(
@@ -364,6 +412,7 @@ class _CreateOrganizationSheetState extends State<_CreateOrganizationSheet> {
   final _idCtrl = TextEditingController();
   String _selectedType = 'church';
   String _country = 'Zambia';
+  bool _isPublicMinistry = false;
   bool _loading = false;
   String? _error;
 
@@ -397,6 +446,7 @@ class _CreateOrganizationSheetState extends State<_CreateOrganizationSheet> {
         organizationType: _selectedType,
         id: _idCtrl.text.trim().isEmpty ? null : _idCtrl.text.trim(),
         billingCountry: _country,
+        isPublicMinistry: _isPublicMinistry,
       );
       if (mounted) {
         Navigator.pop(context);
@@ -478,6 +528,18 @@ class _CreateOrganizationSheetState extends State<_CreateOrganizationSheet> {
                 DropdownMenuItem(value: 'United Kingdom', child: Text('United Kingdom')),
               ],
               onChanged: (val) => setState(() => _country = val ?? 'Zambia'),
+            ),
+            const SizedBox(height: 12),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Super Admin Public Ministry', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+              subtitle: const Text(
+                'Open access for seekers without church affiliation. Can later be assigned to a nearby church.',
+                style: TextStyle(fontSize: 12),
+              ),
+              value: _isPublicMinistry,
+              activeThumbColor: VopColors.gold,
+              onChanged: (val) => setState(() => _isPublicMinistry = val),
             ),
             const SizedBox(height: 18),
             SizedBox(

@@ -298,15 +298,19 @@ class VopApi {
     String? email,
     String? phoneNumber,
     String? organizationId,
+    String? churchName,
+    String? churchId,
     bool? disabled,
   }) =>
       action('/api/admin', {
-        'action': 'update',
+        'action': 'updateCandidate',
         'candidateId': candidateId,
         if (displayName != null) 'displayName': displayName,
         if (email != null) 'email': email,
         if (phoneNumber != null) 'phoneNumber': phoneNumber,
         if (organizationId != null) 'organizationId': organizationId,
+        if (churchName != null) 'churchName': churchName,
+        if (churchId != null) 'churchId': churchId,
         if (disabled != null) 'disabled': disabled,
       }, query: {'__vopRoute': 'candidates'});
 
@@ -340,12 +344,35 @@ class VopApi {
           'organizationId': organizationId,
       }, query: {'__vopRoute': 'organizations'});
 
+  Future<Map<String, dynamic>> publicOrganizations({String? search}) =>
+      action('/api/admin', {
+        'action': 'publicDirectory',
+        if (search != null && search.isNotEmpty) 'search': search,
+      }, query: {'__vopRoute': 'organizations'});
+
+  Future<Map<String, dynamic>> joinInstitution(String organizationId) =>
+      action('/api/admin', {
+        'action': 'joinInstitution',
+        'organizationId': organizationId,
+      }, query: {'__vopRoute': 'organizations'});
+
+  Future<Map<String, dynamic>> setPublicMinistry({
+    required String organizationId,
+    required bool isPublicMinistry,
+  }) =>
+      action('/api/admin', {
+        'action': 'setPublicMinistry',
+        'organizationId': organizationId,
+        'isPublicMinistry': isPublicMinistry,
+      }, query: {'__vopRoute': 'organizations'});
+
   Future<Map<String, dynamic>> createOrganization({
     required String name,
     required String organizationType,
     String? id,
     String? customOrganizationType,
     String? billingCountry,
+    bool? isPublicMinistry,
   }) =>
       action('/api/admin', {
         'action': 'create',
@@ -355,6 +382,7 @@ class VopApi {
         if (customOrganizationType != null)
           'customOrganizationType': customOrganizationType,
         if (billingCountry != null) 'billingCountry': billingCountry,
+        if (isPublicMinistry != null) 'isPublicMinistry': isPublicMinistry,
       }, query: {'__vopRoute': 'organizations'});
 
   Future<Map<String, dynamic>> updateOrganization(String organizationId, Map<String, dynamic> updates) =>

@@ -27,6 +27,65 @@ export default async function handler(request: Request, response: Response) {
 
   try {
     const body = request.body && typeof request.body === 'object' ? request.body as Record<string, unknown> : {};
+    const action = String(body.action || 'list');
+
+    if (action === 'list') {
+      const requestedOrg = typeof body.organizationId === 'string' ? body.organizationId.trim() : '';
+      const ctx = await authenticateTenant(request, requestedOrg || undefined);
+      await requirePermission(ctx, 'users', 'view');
+      const search = typeof body.search === 'string' ? body.search.trim().toLowerCase() : '';
+
+      let usersQuery: FirebaseFirestore.Query = ctx.db.collection('users');
+      if (ctx.isSuperAdmin && !requestedOrg) {
+        usersQuery = usersQuery.limit(300);
+      } else if (requestedOrg || ctx.organizationId) {
+        const orgId = requestedOrg || ctx.organizationId;
+        usersQuery = usersQuery.where('organizationId', '==', orgId).limit(300);
+      } else if (ctx.tenantType === 'hierarchy') {
+        const role = String(ctx.profile.role || '');
+        const field = role === 'union_admin' ? 'unionId' : role === 'conference_admin' ? 'conferenceId' : role === 'district_admin' ? 'districtId' : 'churchId';
+        const nodeId = String(ctx.profile.adminNodeId || '').trim();
+        usersQuery = usersQuery.where(field, '==', nodeId).limit(300);
+      } else {
+        usersQuery = usersQuery.limit(100);
+      }
+
+      const snap = await usersQuery.get();
+      const items = snap.docs
+        .map(doc => {
+          const d = doc.data() || {};
+          return {
+            uid: doc.id,
+            ...d,
+            displayName: String(d.displayName || d.email?.split('@')[0] || 'Learner'),
+            email: String(d.email || ''),
+            phoneNumber: String(d.phoneNumber || ''),
+            organizationId: String(d.organizationId || ''),
+            organizationName: String(d.organizationName || ''),
+            churchName: String(d.churchName || d.organizationName || ''),
+            information: d.information || {},
+            progress: d.progress || {},
+            disabled: Boolean(d.disabled),
+            role: String(d.role || 'student'),
+          };
+        })
+        .filter(c => {
+          const role = c.role.toLowerCase();
+          if (['super_admin', 'union_admin', 'conference_admin', 'district_admin', 'church_admin'].includes(role)) {
+            return false;
+          }
+          if (search) {
+            const nameMatch = c.displayName.toLowerCase().includes(search);
+            const emailMatch = c.email.toLowerCase().includes(search);
+            const phoneMatch = c.phoneNumber.toLowerCase().includes(search);
+            return nameMatch || emailMatch || phoneMatch;
+          }
+          return true;
+        });
+
+      return response.status(200).json({ ok: true, items });
+    }
+
     if (body.action === 'enroll') {
       const requestedOrganizationId = typeof body.organizationId === 'string' ? body.organizationId.trim() : '';
       const ctx = await authenticateTenant(request, requestedOrganizationId || undefined);
@@ -89,7 +148,7 @@ export default async function handler(request: Request, response: Response) {
       return response.status(200).json({ ok:true, created, resetLink, candidate:{uid:account.uid,email,displayName:displayName || account.displayName || email.split('@')[0],organizationId,guideId} });
     }
 
-    if (body.action === 'updateCandidate') {
+    if (body.action === 'updateCandidate' || body.action === 'update') {
       const targetOrgId = typeof body.organizationId === 'string' ? body.organizationId.trim() : '';
       const ctx = await authenticateTenant(request, targetOrgId || undefined);
       await requirePermission(ctx, 'users', 'update');
@@ -105,11 +164,13 @@ export default async function handler(request: Request, response: Response) {
       const candidateData = candidateSnapshot.data() || {};
       const currentOrgId = String(candidateData.organizationId || '').trim();
 
-      if (!ctx.isSuperAdmin && (ctx.tenantType === 'organization' ? currentOrgId !== ctx.organizationId : !(await organizationInHierarchyScope(ctx, currentOrgId)))) {
+      if (!ctx.isSuperAdmin && currentOrgId && (ctx.tenantType === 'organization' ? currentOrgId !== ctx.organizationId : !(await organizationInHierarchyScope(ctx, currentOrgId)))) {
         return response.status(403).json({ error: 'This candidate belongs outside your authorized organization scope.' });
       }
 
-      await requireSubscriptionFeature(ctx, 'candidates', currentOrgId || ctx.organizationId);
+      if (currentOrgId || ctx.organizationId || targetOrgId) {
+        await requireSubscriptionFeature(ctx, 'candidates', targetOrgId || currentOrgId || ctx.organizationId);
+      }
 
       const nextOrgId = targetOrgId || currentOrgId;
       if (nextOrgId && nextOrgId !== currentOrgId) {

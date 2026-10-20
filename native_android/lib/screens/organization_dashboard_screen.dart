@@ -23,10 +23,12 @@ class OrganizationDashboardScreen extends StatefulWidget {
   final VopUserAccount account;
 
   @override
-  State<OrganizationDashboardScreen> createState() => _OrganizationDashboardScreenState();
+  State<OrganizationDashboardScreen> createState() =>
+      _OrganizationDashboardScreenState();
 }
 
-class _OrganizationDashboardScreenState extends State<OrganizationDashboardScreen> {
+class _OrganizationDashboardScreenState
+    extends State<OrganizationDashboardScreen> {
   late Future<Map<String, dynamic>> _candidatesFuture;
   late Future<Map<String, dynamic>> _graduationsFuture;
   late Future<Map<String, dynamic>> _catalogFuture;
@@ -41,16 +43,25 @@ class _OrganizationDashboardScreenState extends State<OrganizationDashboardScree
 
   void _reload() {
     setState(() {
-      _candidatesFuture = widget.api.adminCandidates(organizationId: widget.account.organizationId)
+      _candidatesFuture = widget.api
+          .adminCandidates(organizationId: widget.account.organizationId)
           .catchError((_) => <String, dynamic>{'items': []});
-      _graduationsFuture = widget.api.adminGraduations(organizationId: widget.account.organizationId)
+      _graduationsFuture = widget.api
+          .adminGraduations(organizationId: widget.account.organizationId)
           .catchError((_) => <String, dynamic>{'items': []});
-      _catalogFuture = widget.api.catalogue()
-          .catchError((_) => <String, dynamic>{'guides': []});
-      _healthFuture = widget.api.adminHealth(detail: false)
+      _catalogFuture = widget.api.catalogue().catchError(
+        (_) => <String, dynamic>{'guides': []},
+      );
+      _healthFuture = widget.api
+          .adminHealth(detail: false)
           .catchError((_) => <String, dynamic>{'status': 'offline'});
-      _plansFuture = widget.api.adminPlans(organizationId: widget.account.organizationId)
-          .catchError((_) => <String, dynamic>{'current': {'name': 'Institutional'}});
+      _plansFuture = widget.api
+          .adminPlans(organizationId: widget.account.organizationId)
+          .catchError(
+            (_) => <String, dynamic>{
+              'current': {'name': 'Institutional'},
+            },
+          );
     });
   }
 
@@ -63,11 +74,19 @@ class _OrganizationDashboardScreenState extends State<OrganizationDashboardScree
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Sign Out'),
-        content: const Text('Are you sure you want to sign out of the organisation portal?'),
+        content: const Text(
+          'Are you sure you want to sign out of the organisation portal?',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Sign Out'),
           ),
@@ -94,7 +113,11 @@ class _OrganizationDashboardScreenState extends State<OrganizationDashboardScree
                 color: VopColors.gold.withAlpha(40),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: const Icon(Icons.corporate_fare, color: VopColors.gold, size: 20),
+              child: const Icon(
+                Icons.corporate_fare,
+                color: VopColors.gold,
+                size: 20,
+              ),
             ),
             const SizedBox(width: 10),
             Flexible(
@@ -103,7 +126,10 @@ class _OrganizationDashboardScreenState extends State<OrganizationDashboardScree
                     ? widget.account.organizationName
                     : 'Organisation Portal',
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 17),
+                style: const TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 17,
+                ),
               ),
             ),
           ],
@@ -134,14 +160,16 @@ class _OrganizationDashboardScreenState extends State<OrganizationDashboardScree
               if (val == 'settings') {
                 _navigate(AccountSettingsScreen(api: widget.api));
               } else if (val == 'learner_preview') {
-                _navigate(Scaffold(
-                  appBar: AppBar(
-                    title: const Text('Learner Workspace Preview'),
-                    backgroundColor: VopColors.navyDeep,
-                    foregroundColor: Colors.white,
+                _navigate(
+                  Scaffold(
+                    appBar: AppBar(
+                      title: const Text('Learner Workspace Preview'),
+                      backgroundColor: VopColors.navyDeep,
+                      foregroundColor: Colors.white,
+                    ),
+                    body: HomeShell(api: widget.api),
                   ),
-                  body: HomeShell(api: widget.api),
-                ));
+                );
               } else if (val == 'sign_out') {
                 _signOut();
               }
@@ -154,7 +182,10 @@ class _OrganizationDashboardScreenState extends State<OrganizationDashboardScree
                   children: [
                     Text(
                       widget.account.displayName,
-                      style: const TextStyle(fontWeight: FontWeight.w700, color: Colors.black87),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: Colors.black87,
+                      ),
                     ),
                     Text(
                       widget.account.displayRoleName,
@@ -163,7 +194,10 @@ class _OrganizationDashboardScreenState extends State<OrganizationDashboardScree
                     if (widget.account.organizationId.isNotEmpty)
                       Text(
                         'Org ID: ${widget.account.organizationId}',
-                        style: const TextStyle(fontSize: 10, color: VopColors.navyDeep),
+                        style: const TextStyle(
+                          fontSize: 10,
+                          color: VopColors.navyDeep,
+                        ),
                       ),
                   ],
                 ),
@@ -209,7 +243,9 @@ class _OrganizationDashboardScreenState extends State<OrganizationDashboardScree
         onRefresh: () async => _reload(),
         child: Center(
           child: ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: isDesktop ? 1100 : double.infinity),
+            constraints: BoxConstraints(
+              maxWidth: isDesktop ? 1100 : double.infinity,
+            ),
             child: ListView(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               children: [
@@ -217,7 +253,10 @@ class _OrganizationDashboardScreenState extends State<OrganizationDashboardScree
                 const SizedBox(height: 18),
                 _buildKpiMetricsGrid(isDesktop),
                 const SizedBox(height: 22),
-                _buildSectionHeader('INSTITUTIONAL WORKSPACE', 'Modules scoped strictly to your organisation'),
+                _buildSectionHeader(
+                  'INSTITUTIONAL WORKSPACE',
+                  'Modules scoped strictly to your organisation',
+                ),
                 const SizedBox(height: 12),
                 _buildModuleCards(isDesktop),
                 const SizedBox(height: 22),
@@ -234,7 +273,7 @@ class _OrganizationDashboardScreenState extends State<OrganizationDashboardScree
   Widget _buildInstitutionalBanner() {
     final orgName = widget.account.organizationName.isNotEmpty
         ? widget.account.organizationName
-        : 'Local Church & School Ministry';
+        : 'Bible School & Ministry';
     final roleName = widget.account.displayRoleName.toUpperCase();
 
     return Container(
@@ -278,14 +317,21 @@ class _OrganizationDashboardScreenState extends State<OrganizationDashboardScree
               const Spacer(),
               if (widget.account.organizationId.isNotEmpty)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.white.withAlpha(20),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
                     'ID: ${widget.account.organizationId}',
-                    style: const TextStyle(color: Colors.white70, fontSize: 10, fontFamily: 'monospace'),
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 10,
+                      fontFamily: 'monospace',
+                    ),
                   ),
                 ),
             ],
@@ -302,7 +348,11 @@ class _OrganizationDashboardScreenState extends State<OrganizationDashboardScree
           const SizedBox(height: 4),
           const Text(
             'Institutional management center: Enroll candidates, assign mentors, review milestone achievements, and issue course graduation approvals.',
-            style: TextStyle(color: Color(0xFFD1E3FF), fontSize: 13, height: 1.35),
+            style: TextStyle(
+              color: Color(0xFFD1E3FF),
+              fontSize: 13,
+              height: 1.35,
+            ),
           ),
         ],
       ),
@@ -347,23 +397,48 @@ class _OrganizationDashboardScreenState extends State<OrganizationDashboardScree
             _plansFuture,
           ]),
           builder: (context, snapshot) {
-            final candidatesData = snapshot.data?[0] as Map<String, dynamic>? ?? {};
-            final graduationsData = snapshot.data?[1] as Map<String, dynamic>? ?? {};
-            final catalogData = snapshot.data?[2] as Map<String, dynamic>? ?? {};
+            final candidatesData =
+                snapshot.data?[0] as Map<String, dynamic>? ?? {};
+            final graduationsData =
+                snapshot.data?[1] as Map<String, dynamic>? ?? {};
+            final catalogData =
+                snapshot.data?[2] as Map<String, dynamic>? ?? {};
 
-            final candidateCount = (candidatesData['items'] as List?)?.length ??
+            final candidateCount =
+                (candidatesData['items'] as List?)?.length ??
                 (candidatesData['candidates'] as List?)?.length ??
                 0;
-            final graduationCount = (graduationsData['items'] as List?)?.length ??
+            final graduationCount =
+                (graduationsData['items'] as List?)?.length ??
                 (graduationsData['requests'] as List?)?.length ??
                 0;
             final guideCount = (catalogData['guides'] as List?)?.length ?? 0;
 
             final kpis = [
-              _OrgKpi('My Learners', '$candidateCount', Icons.people_outline, Colors.blue),
-              _OrgKpi('Graduations', '$graduationCount', Icons.workspace_premium_outlined, VopColors.gold),
-              _OrgKpi('Active Courses', '$guideCount', Icons.auto_stories_outlined, Colors.teal),
-              _OrgKpi('Org Status', 'Verified Active', Icons.verified_outlined, Colors.green),
+              _OrgKpi(
+                'My Learners',
+                '$candidateCount',
+                Icons.people_outline,
+                Colors.blue,
+              ),
+              _OrgKpi(
+                'Graduations',
+                '$graduationCount',
+                Icons.workspace_premium_outlined,
+                VopColors.gold,
+              ),
+              _OrgKpi(
+                'Active Courses',
+                '$guideCount',
+                Icons.auto_stories_outlined,
+                Colors.teal,
+              ),
+              _OrgKpi(
+                'Org Status',
+                'Verified Active',
+                Icons.verified_outlined,
+                Colors.green,
+              ),
             ];
 
             return GridView.builder(
@@ -380,7 +455,10 @@ class _OrganizationDashboardScreenState extends State<OrganizationDashboardScree
                 final kpi = kpis[index];
                 return VopCard(
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -393,7 +471,9 @@ class _OrganizationDashboardScreenState extends State<OrganizationDashboardScree
                               style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,
-                                color: Theme.of(context).colorScheme.onSurface.withAlpha(180),
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurface.withAlpha(180),
                               ),
                             ),
                             Icon(kpi.icon, size: 18, color: kpi.accent),
@@ -423,23 +503,29 @@ class _OrganizationDashboardScreenState extends State<OrganizationDashboardScree
     final modules = [
       _OrgModuleItem(
         title: 'Manage Organisation Learners',
-        subtitle: 'Enroll students, monitor lesson milestones & schedule baptism dates',
+        subtitle:
+            'Enroll students, monitor lesson milestones & schedule baptism dates',
         icon: Icons.badge_outlined,
         color: Colors.blue,
-        onTap: () => _navigate(CandidatesScreen(
-          api: widget.api,
-          organizationId: widget.account.organizationId,
-        )),
+        onTap: () => _navigate(
+          CandidatesScreen(
+            api: widget.api,
+            organizationId: widget.account.organizationId,
+          ),
+        ),
       ),
       _OrgModuleItem(
         title: 'Graduation Approvals & Certificates',
-        subtitle: 'Review average quiz scores, verify completions & approve certificates',
+        subtitle:
+            'Review average quiz scores, verify completions & approve certificates',
         icon: Icons.school_outlined,
         color: VopColors.gold,
-        onTap: () => _navigate(GraduationsScreen(
-          api: widget.api,
-          organizationId: widget.account.organizationId,
-        )),
+        onTap: () => _navigate(
+          GraduationsScreen(
+            api: widget.api,
+            organizationId: widget.account.organizationId,
+          ),
+        ),
       ),
       _OrgModuleItem(
         title: 'Curriculum & Study Guides',
@@ -450,24 +536,29 @@ class _OrganizationDashboardScreenState extends State<OrganizationDashboardScree
       ),
       _OrgModuleItem(
         title: 'Mentoring & Pastoral Support',
-        subtitle: 'Support candidates through personal messaging and lesson review',
+        subtitle:
+            'Support candidates through personal messaging and lesson review',
         icon: Icons.support_agent_outlined,
         color: Colors.indigo,
         onTap: () => _navigate(MentorWorkspaceScreen(api: widget.api)),
       ),
       _OrgModuleItem(
         title: 'Institutional Tier & Seat Quotas',
-        subtitle: 'Manage organisation subscription packages, limits and invoicing',
+        subtitle:
+            'Manage organisation subscription packages, limits and invoicing',
         icon: Icons.payments_outlined,
         color: Colors.purple,
-        onTap: () => _navigate(PlansManagementScreen(
-          api: widget.api,
-          organizationId: widget.account.organizationId,
-        )),
+        onTap: () => _navigate(
+          PlansManagementScreen(
+            api: widget.api,
+            organizationId: widget.account.organizationId,
+          ),
+        ),
       ),
       _OrgModuleItem(
         title: 'Account & Security Preferences',
-        subtitle: 'Update profile details, security sessions and study settings',
+        subtitle:
+            'Update profile details, security sessions and study settings',
         icon: Icons.manage_accounts_outlined,
         color: Colors.deepOrange,
         onTap: () => _navigate(AccountSettingsScreen(api: widget.api)),
@@ -480,7 +571,10 @@ class _OrganizationDashboardScreenState extends State<OrganizationDashboardScree
           padding: const EdgeInsets.only(bottom: 10),
           child: VopCard(
             child: ListTile(
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 8,
+              ),
               leading: Container(
                 width: 44,
                 height: 44,
@@ -492,7 +586,10 @@ class _OrganizationDashboardScreenState extends State<OrganizationDashboardScree
               ),
               title: Text(
                 m.title,
-                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14.5),
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14.5,
+                ),
               ),
               subtitle: Text(m.subtitle, style: const TextStyle(fontSize: 12)),
               trailing: const Icon(Icons.chevron_right, size: 18),
@@ -530,14 +627,21 @@ class _OrganizationDashboardScreenState extends State<OrganizationDashboardScree
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        isHealthy ? 'Organisation Node: Synchronized' : 'Organisation Node: Connecting ($status)',
-                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                        isHealthy
+                            ? 'Organisation Node: Synchronized'
+                            : 'Organisation Node: Connecting ($status)',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                        ),
                       ),
                       Text(
                         'Connected to Voice of Prophecy administrative network',
                         style: TextStyle(
                           fontSize: 11.5,
-                          color: Theme.of(context).colorScheme.onSurface.withAlpha(140),
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withAlpha(140),
                         ),
                       ),
                     ],

@@ -234,7 +234,7 @@ async function assertRegistrationAdmission(
     validRegistrationInvite(db,invitationToken,decoded.email),
   ]);
   const options=settings.data()?.systemOptions||{};
-  if(options.allowRegistrations===true||invited)return {invited,requireApproval:options.requireApproval===true};
+  if(options.allowRegistrations!==false||invited)return {invited,requireApproval:options.requireApproval===true};
   throw new Error('New account registration is currently closed. Use a valid organization invitation or contact VOP administration.');
 }
 

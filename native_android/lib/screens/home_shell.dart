@@ -23,6 +23,7 @@ import 'user_management_screen.dart';
 import 'curriculum_studio_screen.dart';
 import 'plans_management_screen.dart';
 import 'mentor_workspace_screen.dart';
+import 'institution_finder_sheet.dart';
 
 Map<String,dynamic> asMap(dynamic value)=>value is Map
   ?Map<String,dynamic>.from(value):<String,dynamic>{};
@@ -79,6 +80,21 @@ class _HomeShellState extends State<HomeShell> {
   void selectTab(int next)=>setState(()=>tab=next);
   void push(Widget page)=>Navigator.push(context,
     MaterialPageRoute<void>(builder:(_)=>page));
+
+  void _openInstitutionFinder({String currentOrgId = ''}) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => InstitutionFinderSheet(
+        api: widget.api,
+        currentOrganizationId: currentOrgId,
+        onJoined: () {
+          setState(reload);
+        },
+      ),
+    );
+  }
 
   Widget asyncView(Future<Map<String,dynamic>> future,
       Widget Function(Map<String,dynamic>) render)=>FutureBuilder<Map<String,dynamic>>(
@@ -220,6 +236,8 @@ class _HomeShellState extends State<HomeShell> {
         ()=>push(EngagementScreen(api:widget.api))),
       const Divider(),
       _label('COMMUNITY'),
+      _destination('Find Church / Join Ministry',Icons.church_outlined,
+        ()=>_openInstitutionFinder()),
       _destination('Prayer Ministry',Icons.volunteer_activism_outlined,()=>selectTab(3)),
       _destination('Radio & Broadcasts',Icons.radio_outlined,()=>selectTab(4)),
       _destination('Announcements',Icons.campaign_outlined,
@@ -270,6 +288,8 @@ class _HomeShellState extends State<HomeShell> {
             builder:(context,activity){
               final completed=(activity.data?['completedLessons'] as List?)?.length??0;
               final greeting=welcomeGreeting(user['displayName']);
+              final orgId = (user['organizationId'] ?? '').toString().trim();
+              final orgName = (user['organizationName'] ?? user['churchName'] ?? '').toString().trim();
               return RefreshIndicator(onRefresh:()async{
                 setState(reload);await profile.catchError((_) => <String, dynamic>{});},
         child:ListView(key:const PageStorageKey<String>('vop-discover-scroll'),
@@ -289,6 +309,77 @@ class _HomeShellState extends State<HomeShell> {
               child:const Icon(Icons.waving_hand_outlined,size:21)),
           ]),
           const SizedBox(height:12),
+          if (orgId.isEmpty) ...[
+            VopCard(
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: VopColors.gold.withAlpha(40),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.church_outlined, color: VopColors.gold, size: 24),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Connect to a Church or Public Ministry',
+                            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Find your local church congregation or study freely via open public ministry.',
+                            style: TextStyle(fontSize: 11.5, color: Theme.of(context).colorScheme.onSurface.withAlpha(160)),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    FilledButton.tonal(
+                      style: FilledButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      ),
+                      onPressed: () => _openInstitutionFinder(currentOrgId: orgId),
+                      child: const Text('Find / Join', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ] else ...[
+            VopCard(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                child: Row(
+                  children: [
+                    const Icon(Icons.verified_outlined, color: Colors.teal, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Studying with: $orgName',
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () => _openInstitutionFinder(currentOrgId: orgId),
+                      style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+                      child: const Text('Find / Transfer', style: TextStyle(fontSize: 11.5)),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
           VopHeroCard(
             title:'Discover truth.\nGrow in faith.',
             description:'Continue your Bible study journey and explore lessons prepared for you.',
