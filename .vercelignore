@@ -1,0 +1,15 @@
+node_modules
+dist
+dist-ssr
+.git
+.github
+native_android
+android
+.idea
+.vscode
+tests
+tools
+docs
+*.log
+.env*
+!.env.example
