@@ -143,9 +143,10 @@ class _InstitutionFinderSheetState extends State<InstitutionFinderSheet> {
     try {
       await widget.api.joinInstitution(orgId);
       if (mounted) {
-        Navigator.pop(context);
+        final messenger = ScaffoldMessenger.maybeOf(context);
         widget.onJoined();
-        ScaffoldMessenger.of(context).showSnackBar(
+        Navigator.pop(context);
+        messenger?.showSnackBar(
           SnackBar(
             content: Text('Successfully connected to $orgName! Welcome.'),
             backgroundColor: Colors.teal.shade800,
