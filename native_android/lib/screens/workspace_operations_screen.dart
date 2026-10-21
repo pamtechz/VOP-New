@@ -39,7 +39,7 @@ class _WorkspaceOperationsState extends State<WorkspaceOperationsScreen>{
     'prayer'=>widget.api.ministryPrayers(),
     'portfolio'=>widget.api.action('/api/engagement',{'action':'portfolioReviewQueue'}).then((result)=>{...result,'items':result['learners']}),
     'mentoring'=>mentor(['listStudents','listMentors','listAssignments','listSupportRequests','listConversations','getAutomationSettings'][tab]),
-    'payments'=>tab==5?Future.value({'ok':true,'items':<dynamic>[]}):widget.api.action('/api/payments/${['catalog','history','admin/transactions','admin/providers','admin/payable-items'][tab]}',{'action':'list',...scope}),
+    'payments'=>widget.api.action('/api/payments/${['catalog','history','admin/transactions','admin/providers','admin/payable-items','admin/transactions'][tab]}',{'action':'list',...scope}),
     'translations'=>tab==0?widget.api.action('/api/localization',{'action':'list','locale':language}):admin('localization',{'action':['','listProposals','listCollaborators','listApplications','listAccessRequests'][tab],'languageId':language}),
     'permissions'=>widget.api.adminPermissions(),
     'organization'=>admin('organizations',{'action':['listMembers','listInvites','listAudit'][tab]}),
@@ -183,7 +183,38 @@ class _WorkspaceOperationsState extends State<WorkspaceOperationsScreen>{
         if(s.connectionState!=ConnectionState.done)return const VopSkeleton();if(s.hasError)return VopEmpty(icon:Icons.error_outline,message:'${s.error}',onRetry:()=>setState(reload));
         final data=s.data??{};
         if(widget.kind=='permissions')return matrix(data);
-        if(widget.kind=='payments'&&tab==5)return ListView(padding:const EdgeInsets.all(24),children:[const Text('Check pending payments with the configured providers and apply verified results.'),const SizedBox(height:16),FilledButton.icon(onPressed:busy?null:()=>run(()async{final result=await widget.api.action('/api/payments/admin/reconcile',{});if(mounted)details(result);}),icon:const Icon(Icons.sync),label:const Text('Run reconciliation'))]);
+        if(widget.kind=='payments'&&tab==5){
+          final pending=recordRows(data['items']).where((item)=>
+            ['initiated','pending','requires_action','processing'].contains('${item['status']??''}')).toList();
+          return ListView(padding:const EdgeInsets.all(18),children:[
+            const Text('Check pending payments with their configured providers and apply only verified results.'),
+            const SizedBox(height:12),
+            FilledButton.icon(
+              onPressed:busy?null:()=>run(()async{
+                final result=await widget.api.action('/api/payments/admin/reconcile',{});
+                if(mounted)details(result);
+              }),
+              icon:const Icon(Icons.sync),label:const Text('Reconcile pending payments'),
+            ),
+            const SizedBox(height:16),
+            Text('Pending transactions (${pending.length})',style:Theme.of(context).textTheme.titleMedium),
+            if(pending.isEmpty)
+              const Padding(padding:EdgeInsets.symmetric(vertical:24),child:Text('No pending transactions in the current transaction listing.')),
+            for(final item in pending)Card(child:ListTile(
+              title:Text('${item['description']??item['reference']??item['id']??'Payment'}'),
+              subtitle:Text('${item['status']??''} · ${item['amountDecimal']??''} ${item['currency']??''} · ${item['reference']??''}'),
+              onTap:()=>details(item),
+              trailing:IconButton(
+                tooltip:'Reconcile this payment',
+                icon:const Icon(Icons.fact_check_outlined),
+                onPressed:busy?null:()=>run(()async{
+                  final result=await widget.api.action('/api/payments/admin/reconcile',{'paymentId':item['id']});
+                  if(mounted)details(recordMap(result['payment']));
+                }),
+              ),
+            )),
+          ]);
+        }
         final items=recordRows(data['items']);
         final canAdd=(widget.kind=='mentoring'&&[2,5].contains(tab))||(widget.kind=='translations'&&[0,2].contains(tab))||(widget.kind=='organization'&&tab==1)||(widget.kind=='payments'&&tab==4);
         return Column(children:[if(canAdd)Padding(padding:const EdgeInsets.all(12),child:FilledButton.icon(onPressed:busy?null:()=>create(data),icon:const Icon(Icons.add),label:Text(widget.kind=='mentoring'&&tab==5?'Edit automation':'Add'))),
