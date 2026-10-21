@@ -1,24 +1,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {readFileSync,readdirSync} from 'node:fs';
 
-const workflows = [
-  '.github/workflows/apply-vop-review.yml',
-  '.github/workflows/prepare-firebase-seeder.yml',
-  '.github/workflows/vop-firestore-rules.yml',
-  '.github/workflows/vop-fork-pr-gate.yml',
-  '.github/workflows/vop-native-android.yml',
-  '.github/workflows/vop-refresh-lockfile.yml',
-  '.github/workflows/vop-seed-editorial.yml',
-  '.github/workflows/vop-validate.yml',
-  '.github/workflows/vop-verify.yml',
-];
+// Automatically include every workflow so new Actions cannot bypass self-hosted checks.
+const workflows = readdirSync('.github/workflows',{withFileTypes:true})
+  .filter(entry=>entry.isFile()&&/\.ya?ml$/.test(entry.name))
+  .map(entry=>'.github/workflows/'+entry.name)
+  .sort();
 
 test('every VOP GitHub job uses the KASAINSTITUTE self-hosted runner, never GitHub-hosted machines',()=>{
   for(const path of workflows){
     const contents = readFileSync(path,'utf8');
     const runners = [...contents.matchAll(/^[ \t]+runs-on:\s*(.+)$/gm)].map(x=>x[1].trim());
     assert.ok(runners.length>0, path+' must declare a runner');
+    assert.equal((contents.match(/^    runs-on:/gm)||[]).length,runners.length,path+' has unexpected runner declarations');
     const guards=[...contents.matchAll(/^      - name: Verify KASAINSTITUTE runner identity$/gm)].length;
     assert.equal(guards,runners.length,path+' must check identity in every job');
     assert.match(contents,/VOP_ACTUAL_RUNNER: \$\{\{ runner\.name \}\}/,path+' must read registered runner name');
@@ -29,7 +24,7 @@ test('every VOP GitHub job uses the KASAINSTITUTE self-hosted runner, never GitH
         path+' must check identity before downloading untrusted code');
     }
     for(const runner of runners){
-      assert.match(runner,/self-hosted/,path+' contains a hosted Actions job');
+      assert.equal(runner,'[self-hosted, Windows]',path+' must target only self-hosted Windows, with KASAINSTITUTE identity guard');
       assert.doesNotMatch(runner,/KASAINSTITUTE/,path+' must not confuse the runner name with a custom label');
       assert.match(runner,/Windows/,path+' must use the trusted Windows runner platform');
       assert.doesNotMatch(runner,/(?:ubuntu|windows|macos)-latest/);

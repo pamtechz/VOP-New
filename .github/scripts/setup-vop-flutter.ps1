@@ -20,7 +20,7 @@ $roots = @(
 )
 foreach ($root in $roots) {
     if (![string]::IsNullOrWhiteSpace($root)) {
-        [void]$candidates.Add((Join-Path $root 'bin\flutter.bat'))
+        [void]$candidates.Add([System.IO.Path]::Combine($root, 'bin', 'flutter.bat'))
     }
 }
 

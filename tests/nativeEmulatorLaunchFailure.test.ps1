@@ -24,7 +24,9 @@ $originalPath = $env:PATH
 try {
     $env:PATH = "$stubDir;$originalPath"
     $start = Get-Date
-    $output = & (Join-Path $PSHOME "pwsh.exe") -NoProfile -NonInteractive -File $launcher -Mode Emulator -EmulatorId Pixel10 2>&1 | Out-String
+    $currentPowerShell = (Get-Process -Id $PID).Path
+    if (!$currentPowerShell) { throw "Cannot resolve the current PowerShell executable for the launcher test." }
+    $output = & $currentPowerShell -NoProfile -NonInteractive -File $launcher -Mode Emulator -EmulatorId Pixel10 2>&1 | Out-String
     $code = $LASTEXITCODE
     $elapsed = ((Get-Date) - $start).TotalSeconds
     if ($code -eq 0) { throw "Launcher incorrectly reported success after Flutter emulator returned code 1." }
