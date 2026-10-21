@@ -5,12 +5,22 @@ on:
     paths:
       - 'native_android/**'
       - 'run_web.ps1'
+      - 'run_android.ps1'
+      - 'run_vop.ps1'
+      - '.github/scripts/setup-vop-flutter.ps1'
+      - 'tests/native*.test.ps1'
+      - 'tests/vopSelfHostedWorkflows.test.ts'
       - '.github/workflows/vop-native-android.yml'
   push:
     branches: [main, 'feat/**', 'fix/**']
     paths:
       - 'native_android/**'
       - 'run_web.ps1'
+      - 'run_android.ps1'
+      - 'run_vop.ps1'
+      - '.github/scripts/setup-vop-flutter.ps1'
+      - 'tests/native*.test.ps1'
+      - 'tests/vopSelfHostedWorkflows.test.ts'
       - '.github/workflows/vop-native-android.yml'
   workflow_dispatch:
 

@@ -96,6 +96,10 @@ test('native Flutter Android and Web CI invokes Windows-compatible commands',()=
   assert.match(setup,/flutter\.bat/);
   assert.match(setup,/GITHUB_PATH/);
   assert.doesNotMatch(setup,/\/bin\/bash|wsl\.exe/);
+  assert.equal(source.split("      - '.github/scripts/setup-vop-flutter.ps1'").length-1,2,
+    'both PR and push Flutter workflows must run when the Windows SDK bootstrap changes');
+  assert.equal(source.split("      - 'tests/native*.test.ps1'").length-1,2,
+    'Windows launcher test changes must trigger Flutter CI');
   assert.match(source,/flutter build apk --debug/);
   assert.match(source,/flutter build web --release/);
   assert.match(source,/passkeys-bundle\.js/);
