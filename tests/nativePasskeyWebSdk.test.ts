@@ -22,9 +22,12 @@ test('pinned web passkey bundle exposes a callable authenticator initializer', (
 
 test('vendored passkey SDK matches the exact reviewed Corbado 2.4.0 git blob',()=>{
   const bundle=readFileSync('native_android/web/passkeys-bundle.js');
+  // Git records LF-normalized text. Windows checkouts may convert it to CRLF.
+  // Hash the exact canonical Git blob; content changes other than EOL still fail.
+  const canonical=Buffer.from(bundle.toString('utf8').replace(/\r\n/g,'\n'),'utf8');
   const gitBlob=createHash('sha1')
-    .update('blob '+bundle.length+'\0')
-    .update(bundle)
+    .update('blob '+canonical.length+'\0')
+    .update(canonical)
     .digest('hex');
   assert.equal(gitBlob,'fbec4a7969a50b52e12e452ce8032cd3a126dc31',
     'unexpected modifications to the upstream 2.4.0 browser SDK require review and a new checksum');
