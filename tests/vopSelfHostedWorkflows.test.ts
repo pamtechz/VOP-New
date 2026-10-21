@@ -83,6 +83,14 @@ test('long-running Windows pipelines cancel superseded commits on the same branc
   }
 });
 
+test('shared Firestore/Auth emulator integration files run sequentially to isolate platform settings',()=>{
+  const source=readFileSync('.github/workflows/vop-validate.yml','utf8');
+  assert.match(source,/node --test --test-concurrency=1 tests\/engagementApi\.integration\.mjs/,
+    'parallel integration test files can mutate shared system settings and overload the emulator');
+  assert.match(source,/firebase emulators:exec --project demo-vop-security-rules/,
+    'integration tests must stay isolated from the production Firebase project');
+});
+
 test('native Flutter Android and Web CI invokes Windows-compatible commands',()=>{
   const source=readFileSync('.github/workflows/vop-native-android.yml','utf8');
   assert.match(source,/shell: cmd/);
