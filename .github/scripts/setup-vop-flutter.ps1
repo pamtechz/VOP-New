@@ -1,5 +1,5 @@
 # The VOP runner is native Windows. Avoid actions that bootstrap Flutter through
-# /bin/bash (WSL), which is not installed on KASAINSTITUTE.
+# Linux shell scripts; WSL is not installed on KASAINSTITUTE.
 $ErrorActionPreference = 'Stop'
 
 $candidates = New-Object 'System.Collections.Generic.List[string]'
@@ -37,7 +37,7 @@ if (!$flutter) {
 
 $bin = Split-Path -Parent $flutter
 if ($env:GITHUB_PATH) {
-    Add-Content -LiteralPath $env:GITHUB_PATH -Value $bin -Encoding utf8
+    [System.IO.File]::AppendAllText($env:GITHUB_PATH, "$bin`n", [System.Text.UTF8Encoding]::new($false))
 }
 $env:PATH = "$bin;$env:PATH"
 & $flutter --version
