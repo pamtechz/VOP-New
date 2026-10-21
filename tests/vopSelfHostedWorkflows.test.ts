@@ -74,6 +74,20 @@ test('dependency installation has bounded time on the dedicated Windows runner',
   }
 });
 
+test('long-running Windows pipelines cancel superseded commits on the same branch',()=>{
+  for(const path of [
+    '.github/workflows/vop-validate.yml',
+    '.github/workflows/vop-native-android.yml',
+    '.github/workflows/vop-firestore-rules.yml',
+  ]){
+    const source=readFileSync(path,'utf8');
+    assert.match(source,/concurrency:/,path+' must not queue obsolete builds forever');
+    assert.match(source,/group: vop-[a-z-]+-\$\{\{ github\.event\.pull_request\.number \|\| github\.ref \}\}/,
+      path+' must isolate branch or pull request concurrency');
+    assert.match(source,/cancel-in-progress: true/,path+' must cancel superseded runs');
+  }
+});
+
 test('native Flutter Android and Web CI invokes Windows-compatible commands',()=>{
   const source=readFileSync('.github/workflows/vop-native-android.yml','utf8');
   assert.match(source,/shell: cmd/);

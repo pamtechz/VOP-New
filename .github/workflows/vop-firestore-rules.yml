@@ -26,6 +26,9 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: vop-firestore-rules-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
   rules:
     runs-on: [self-hosted, Windows]

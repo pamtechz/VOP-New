@@ -10,6 +10,9 @@ on:
     branches:
       - main
 
+concurrency:
+  group: vop-validate-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
   validate:
     runs-on: [self-hosted, Windows]
