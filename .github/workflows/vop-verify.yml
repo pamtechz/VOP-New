@@ -21,7 +21,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Verify KASAINSTITUTE runner identity
-        shell: pwsh
+        shell: powershell
         env:
           VOP_ACTUAL_RUNNER: ${{ runner.name }}
         run: |
@@ -30,7 +30,7 @@ jobs:
           }
       - name: Reject untrusted fork PR before checking out code
         if: github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository
-        shell: pwsh
+        shell: powershell
         run: |
           throw "Fork pull requests cannot execute code on the VOP KASAINSTITUTE self-hosted runner. Submit a trusted same-repository PR for verification."
       # Never reuse a checkout potentially owned by a different runner account.

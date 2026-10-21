@@ -13,7 +13,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Verify KASAINSTITUTE runner identity
-        shell: pwsh
+        shell: powershell
         env:
           VOP_ACTUAL_RUNNER: ${{ runner.name }}
         run: |
@@ -21,7 +21,7 @@ jobs:
             throw "Only the KASAINSTITUTE Windows self-hosted runner may execute VOP jobs (got '$env:VOP_ACTUAL_RUNNER')."
           }
       - name: Reject fork pull requests without checking out code
-        shell: pwsh
+        shell: powershell
         env:
           VOP_HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
           VOP_BASE_REPOSITORY: ${{ github.repository }}

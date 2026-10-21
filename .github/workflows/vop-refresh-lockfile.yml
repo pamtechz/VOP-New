@@ -20,7 +20,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Verify KASAINSTITUTE runner identity
-        shell: pwsh
+        shell: powershell
         env:
           VOP_ACTUAL_RUNNER: ${{ runner.name }}
         run: |
@@ -38,7 +38,7 @@ jobs:
       - name: Refresh lockfile
         run: npm install --package-lock-only --ignore-scripts
       - name: Commit lockfile
-        shell: pwsh
+        shell: powershell
         run: |
           & git diff --quiet -- package-lock.json
           if ($LASTEXITCODE -eq 0) {

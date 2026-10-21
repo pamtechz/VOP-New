@@ -16,7 +16,7 @@ jobs:
     timeout-minutes: 25
     steps:
       - name: Verify KASAINSTITUTE runner identity
-        shell: pwsh
+        shell: powershell
         env:
           VOP_ACTUAL_RUNNER: ${{ runner.name }}
         run: |

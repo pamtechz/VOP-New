@@ -22,6 +22,7 @@ test('every VOP GitHub job uses the KASAINSTITUTE self-hosted runner, never GitH
     const guards=[...contents.matchAll(/^      - name: Verify KASAINSTITUTE runner identity$/gm)].length;
     assert.equal(guards,runners.length,path+' must check identity in every job');
     assert.match(contents,/VOP_ACTUAL_RUNNER: \$\{\{ runner\.name \}\}/,path+' must read registered runner name');
+    assert.doesNotMatch(contents,/shell: pwsh/,path+' must not depend on uninstalled PowerShell 7');
     for(const job of contents.split(/^    runs-on: \[self-hosted, Windows\]$/m).slice(1)){
       assert.equal(job.match(/^      - (?:name|uses): .+$/m)?.[0],
         '      - name: Verify KASAINSTITUTE runner identity',
@@ -67,7 +68,8 @@ test('fork PRs must fail on trusted runner before any checkout; they must never 
 test('native Flutter Android and Web CI invokes Windows-compatible commands',()=>{
   const source=readFileSync('.github/workflows/vop-native-android.yml','utf8');
   assert.match(source,/shell: cmd/);
-  assert.match(source,/shell: pwsh/);
+  assert.match(source,/shell: powershell/);
+  assert.doesNotMatch(source,/shell: pwsh/);
   assert.match(source,/flutter build apk --debug/);
   assert.match(source,/flutter build web --release/);
   assert.match(source,/passkeys-bundle\.js/);

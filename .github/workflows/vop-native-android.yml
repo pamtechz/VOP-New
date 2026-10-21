@@ -23,7 +23,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Verify KASAINSTITUTE runner identity
-        shell: pwsh
+        shell: powershell
         env:
           VOP_ACTUAL_RUNNER: ${{ runner.name }}
         run: |
@@ -32,7 +32,7 @@ jobs:
           }
       - name: Reject untrusted fork PR before checking out code
         if: github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository
-        shell: pwsh
+        shell: powershell
         run: |
           throw "Fork pull requests cannot execute code on the VOP KASAINSTITUTE self-hosted runner. Submit a trusted same-repository PR for verification."
       - uses: actions/checkout@v4
@@ -40,7 +40,7 @@ jobs:
           ref: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
       - name: Verify PowerShell launcher syntax
-        shell: pwsh
+        shell: powershell
         run: |
           $parseErrors = $null
           foreach ($scriptPath in @('run_android.ps1', 'run_vop.ps1', 'run_web.ps1', 'native_android/run_android.ps1', 'native_android/run_vop.ps1', 'native_android/run_web.ps1', 'native_android/tool/vercel_web_config.ps1', 'native_android/tool/web_port.ps1', 'native_android/tool/vercel_cli.ps1', 'native_android/tool/flutter_device_parser.ps1', 'native_android/tool/resolve_android_target.ps1', 'native_android/tool/vercel_public_config.ps1', 'tests/nativeDeviceDiscovery.test.ps1', 'tests/nativeVercelClientConfig.test.ps1', 'tests/nativeDynamicDeviceSelection.test.ps1', 'tests/nativeWebConfig.test.ps1', 'tests/nativeFlutterWebPort.test.ps1', 'tests/nativeVercelCliWindows.test.ps1', 'tests/nativeEmulatorLaunchFailure.test.ps1')) {
@@ -56,35 +56,35 @@ jobs:
             }
           }
       - name: Verify Flutter device and emulator parser against Windows CLI output
-        shell: pwsh
+        shell: powershell
         run: ./tests/nativeDeviceDiscovery.test.ps1
       - name: Verify Vercel public-client filtering cannot expose server settings
-        shell: pwsh
+        shell: powershell
         run: ./tests/nativeVercelClientConfig.test.ps1
       - name: Verify rotated Android emulator and Wi-Fi device selection
-        shell: pwsh
+        shell: powershell
         run: ./tests/nativeDynamicDeviceSelection.test.ps1
       - name: Verify browser Firebase public-only settings and HTTPS origin validation
-        shell: pwsh
+        shell: powershell
         run: ./tests/nativeWebConfig.test.ps1
       - name: Verify occupied Flutter web ports are detected before launch
-        shell: pwsh
+        shell: powershell
         run: ./tests/nativeFlutterWebPort.test.ps1
       - name: Verify occupied Flutter web ports under Windows PowerShell 5.1
         shell: powershell
         run: .\tests\nativeFlutterWebPort.test.ps1
       - name: Verify Windows Vercel CLI stderr banner is non-fatal while nonzero exits fail
-        shell: pwsh
+        shell: powershell
         run: ./tests/nativeVercelCliWindows.test.ps1
       - name: Abort promptly and explain Flutter emulator startup code 1
-        shell: pwsh
+        shell: powershell
         run: ./tests/nativeEmulatorLaunchFailure.test.ps1
   flutter-android:
     runs-on: [self-hosted, Windows]
     timeout-minutes: 30
     steps:
       - name: Verify KASAINSTITUTE runner identity
-        shell: pwsh
+        shell: powershell
         env:
           VOP_ACTUAL_RUNNER: ${{ runner.name }}
         run: |
@@ -93,7 +93,7 @@ jobs:
           }
       - name: Reject untrusted fork PR before checking out code
         if: github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository
-        shell: pwsh
+        shell: powershell
         run: |
           throw "Fork pull requests cannot execute code on the VOP KASAINSTITUTE self-hosted runner. Submit a trusted same-repository PR for verification."
       - uses: actions/checkout@v4
@@ -149,7 +149,7 @@ jobs:
     timeout-minutes: 25
     steps:
       - name: Verify KASAINSTITUTE runner identity
-        shell: pwsh
+        shell: powershell
         env:
           VOP_ACTUAL_RUNNER: ${{ runner.name }}
         run: |
@@ -158,7 +158,7 @@ jobs:
           }
       - name: Reject untrusted fork PR before checking out code
         if: github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository
-        shell: pwsh
+        shell: powershell
         run: |
           throw "Fork pull requests cannot execute code on the VOP KASAINSTITUTE self-hosted runner. Submit a trusted same-repository PR for verification."
       - uses: actions/checkout@v4
@@ -179,12 +179,12 @@ jobs:
         run: flutter analyze --no-pub --no-fatal-infos
       - name: Compile the same Flutter learner app for browser
         working-directory: native_android
-        shell: pwsh
+        shell: powershell
         run: |
           & flutter build web --release --no-pub --dart-define-from-file=config/web-public.json
           if ($LASTEXITCODE -ne 0) { throw "Flutter web compile failed with exit code $LASTEXITCODE" }
       - name: Verify pinned PasskeyAuthenticator SDK exists in compiled web assets
-        shell: pwsh
+        shell: powershell
         run: |
           $bundle = 'native_android/build/web/passkeys-bundle.js'
           if (!(Test-Path -LiteralPath $bundle -PathType Leaf)) { throw "Flutter web output is missing the passkeys browser SDK." }

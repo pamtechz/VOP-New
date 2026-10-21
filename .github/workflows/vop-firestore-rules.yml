@@ -32,7 +32,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Verify KASAINSTITUTE runner identity
-        shell: pwsh
+        shell: powershell
         env:
           VOP_ACTUAL_RUNNER: ${{ runner.name }}
         run: |
@@ -41,7 +41,7 @@ jobs:
           }
       - name: Reject untrusted fork PR before checking out code
         if: github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository
-        shell: pwsh
+        shell: powershell
         run: |
           throw "Fork pull requests cannot execute code on the VOP KASAINSTITUTE self-hosted runner. Submit a trusted same-repository PR for verification."
       - uses: actions/checkout@v4
@@ -63,7 +63,7 @@ jobs:
         run: npm ci
       - name: Run isolated owner and default-deny proof
         working-directory: vop-rules-${{ github.run_id }}-${{ github.run_attempt }}
-        shell: pwsh
+        shell: powershell
         run: |
           & java -version
           if ($LASTEXITCODE -ne 0) { throw "Java 21 is not available." }
