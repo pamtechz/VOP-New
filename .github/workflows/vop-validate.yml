@@ -13,6 +13,7 @@ on:
 jobs:
   validate:
     runs-on: [self-hosted, Windows]
+    timeout-minutes: 50
     steps:
       - name: Verify KASAINSTITUTE runner identity
         shell: powershell
@@ -35,7 +36,9 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      - name: Install dependencies from the lockfile (bounded)
+        timeout-minutes: 12
+        run: npm ci --no-audit --no-fund --prefer-offline --loglevel=info
       - run: npm audit --omit=dev --audit-level=moderate
       - run: npm run build
       - run: npm run verify:bundle-budget

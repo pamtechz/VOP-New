@@ -59,8 +59,9 @@ jobs:
           distribution: temurin
           java-version: '21'
       - name: Install the exact locked security test tree
+        timeout-minutes: 12
         working-directory: vop-rules-${{ github.run_id }}-${{ github.run_attempt }}
-        run: npm ci
+        run: npm ci --no-audit --no-fund --prefer-offline --loglevel=info
       - name: Run isolated owner and default-deny proof
         working-directory: vop-rules-${{ github.run_id }}-${{ github.run_attempt }}
         shell: powershell

@@ -43,8 +43,9 @@ jobs:
         with:
           node-version: '22'
       - name: Install locked dependencies
+        timeout-minutes: 10
         working-directory: vop-verify-${{ github.run_id }}-${{ github.run_attempt }}
-        run: npm ci
+        run: npm ci --no-audit --no-fund --prefer-offline --loglevel=info
       - name: Regenerate and verify source-derived offline lessons
         working-directory: vop-verify-${{ github.run_id }}-${{ github.run_attempt }}
         run: npm run verify:content
