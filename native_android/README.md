@@ -619,3 +619,34 @@ offline trust/consent, notification permissions, registration and deep links,
 app signing and Play Integrity, crash reporting, accessibility, localization,
 right-to-left layout, actual-device performance and parity against every
 web module. Never silently award progress while offline.
+
+## Separate Vercel Flutter web deployment
+
+The Flutter web deployment is an independent Vercel project, **vop-flutter-web**,
+connected to the same repository with Root Directory set to `native_android`.
+It must **not** replace or retarget the existing Vite project `vop-new`.
+
+- Framework preset: Other (no auto-selected Node framework)
+- Root Directory: `native_android`
+- Build command: `bash tool/vercel-build-web.sh`
+- Install command: `echo "Dependencies managed by Flutter"`
+- Output Directory: `build/web`
+- Production branch: `main`
+- The script installs the reviewed Flutter 3.47.6 tag, verifies its commit,
+  generates the web scaffold, resolves the locked Dart packages, and builds
+  against `config/web-public.json` using only **public** Firebase client values.
+- `native_android/vercel.json` provides history-mode SPA routing and headers.
+
+This project is **static**. All authenticated API operations continue to use
+`VOP_API_BASE_URL` on the existing VOP Vite/Node backend; do not copy server-side
+Firebase Admin keys, payment credentials or other private env vars into Flutter.
+
+Before browser sign-in can work, authorize the Flutter project's production
+hostname in Firebase Authentication's **Authorized domains**. The VOP backend
+also requires that exact HTTPS origin in its server-side
+`VOP_FLUTTER_WEB_ALLOWED_ORIGINS` variable (comma-separated existing origins
+must be preserved). Verify the configuration and deploy the backend variable
+change before considering the Flutter site operational. Git preview hostnames
+must not be wildcard-allowed; prefer an explicit stable hostname.
+
+A successful build is not a claim of complete legacy web/Flutter portal parity.
