@@ -3,7 +3,6 @@ dist
 dist-ssr
 .git
 .github
-native_android
 android
 .idea
 .vscode
