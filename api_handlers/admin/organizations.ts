@@ -226,7 +226,7 @@ export default async function handler(req: Request, res: Response) {
           items.push(item);
           if (items.length >= pageSize) break;
         }
-        hasMore = position !== page.at(-1)?.id || snapshot.size > batchSize;
+        hasMore = position !== page[page.length - 1]?.id || snapshot.size > batchSize;
         if (!hasMore || items.length >= pageSize) break;
       }
       items.sort((a, b) => {
