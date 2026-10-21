@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../core/vop_api.dart';
 import '../theme/vop_theme.dart';
@@ -23,6 +24,15 @@ class _InstitutionFinderSheetState extends State<InstitutionFinderSheet> {
   late Future<Map<String, dynamic>> _directoryFuture;
   String _search = '';
   String? _joiningId;
+  final TextEditingController _searchController = TextEditingController();
+  final List<Map<String, dynamic>> _additionalOrganizations = [];
+  Timer? _searchDebounce;
+  int _directoryRevision = 0;
+  bool _loadedAdditionalPages = false;
+  bool _loadingMore = false;
+  bool _hasMore = false;
+  String _nextCursor = '';
+  String? _pageError;
 
   @override
   void initState() {
@@ -31,9 +41,69 @@ class _InstitutionFinderSheetState extends State<InstitutionFinderSheet> {
   }
 
   void _reload() {
+    _searchDebounce?.cancel();
+    _directoryRevision++;
     setState(() {
-      _directoryFuture = widget.api.publicOrganizations();
+      _additionalOrganizations.clear();
+      _loadedAdditionalPages = false;
+      _loadingMore = false;
+      _hasMore = false;
+      _nextCursor = '';
+      _pageError = null;
+      _directoryFuture = widget.api.publicOrganizations(
+        search: _search,
+        cursor: '',
+      );
     });
+  }
+
+  void _searchChanged(String value) {
+    final next = value.trim().toLowerCase();
+    if (next == _search) return;
+    setState(() => _search = next);
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 350), _reload);
+  }
+
+  Future<void> _loadMore(String cursor) async {
+    if (_loadingMore || cursor.isEmpty) return;
+    final revision = _directoryRevision;
+    setState(() {
+      _loadingMore = true;
+      _pageError = null;
+    });
+    try {
+      final page = await widget.api.publicOrganizations(
+        search: _search,
+        cursor: cursor,
+      );
+      if (!mounted || revision != _directoryRevision) return;
+      setState(() {
+        _loadedAdditionalPages = true;
+        _additionalOrganizations.addAll(
+          (page['items'] as List? ?? [])
+              .whereType<Map>()
+              .map((item) => Map<String, dynamic>.from(item)),
+        );
+        _hasMore = page['hasMore'] == true;
+        _nextCursor = (page['nextCursor'] ?? '').toString();
+      });
+    } catch (e) {
+      if (mounted && revision == _directoryRevision) {
+        setState(() => _pageError = 'Could not load more institutions: $e');
+      }
+    } finally {
+      if (mounted && revision == _directoryRevision) {
+        setState(() => _loadingMore = false);
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _searchDebounce?.cancel();
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _join(Map<String, dynamic> org) async {
@@ -73,9 +143,10 @@ class _InstitutionFinderSheetState extends State<InstitutionFinderSheet> {
     try {
       await widget.api.joinInstitution(orgId);
       if (mounted) {
-        Navigator.pop(context);
+        final messenger = ScaffoldMessenger.maybeOf(context);
         widget.onJoined();
-        ScaffoldMessenger.of(context).showSnackBar(
+        Navigator.pop(context);
+        messenger?.showSnackBar(
           SnackBar(
             content: Text('Successfully connected to $orgName! Welcome.'),
             backgroundColor: Colors.teal.shade800,
@@ -153,19 +224,23 @@ class _InstitutionFinderSheetState extends State<InstitutionFinderSheet> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
             child: TextField(
+              controller: _searchController,
               decoration: InputDecoration(
                 hintText: 'Search church name, school, city or country...',
                 prefixIcon: const Icon(Icons.search, size: 20),
                 suffixIcon: _search.isNotEmpty
                     ? IconButton(
                         icon: const Icon(Icons.clear, size: 18),
-                        onPressed: () => setState(() => _search = ''),
+                        onPressed: () {
+                          _searchController.clear();
+                          _searchChanged('');
+                        },
                       )
                     : null,
                 contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
-              onChanged: (val) => setState(() => _search = val.trim().toLowerCase()),
+              onChanged: _searchChanged,
             ),
           ),
           const SizedBox(height: 8),
@@ -196,37 +271,34 @@ class _InstitutionFinderSheetState extends State<InstitutionFinderSheet> {
                 }
 
                 final rawItems = snapshot.data?['items'] as List? ?? [];
-                final allOrgs = rawItems
-                    .whereType<Map>()
-                    .map((e) => Map<String, dynamic>.from(e))
-                    .toList();
+                final allOrgs = [
+                  ...rawItems.whereType<Map>()
+                      .map((e) => Map<String, dynamic>.from(e)),
+                  ..._additionalOrganizations,
+                ];
+                final hasMore = _loadedAdditionalPages
+                    ? _hasMore
+                    : snapshot.data?['hasMore'] == true;
+                final nextCursor = _loadedAdditionalPages
+                    ? _nextCursor
+                    : (snapshot.data?['nextCursor'] ?? '').toString();
 
-                final publicMinistries = allOrgs
-                    .where((o) => o['isPublicMinistry'] == true)
-                    .toList();
-
-                var churches = allOrgs
-                    .where((o) => o['isPublicMinistry'] != true)
-                    .toList();
-
-                if (_search.isNotEmpty) {
-                  churches = churches.where((o) {
-                    final name = (o['name'] ?? '').toString().toLowerCase();
-                    final slug = (o['slug'] ?? '').toString().toLowerCase();
-                    final country = (o['billingCountry'] ?? '').toString().toLowerCase();
-                    final type = (o['organizationType'] ?? '').toString().toLowerCase();
-                    return name.contains(_search) ||
-                        slug.contains(_search) ||
-                        country.contains(_search) ||
-                        type.contains(_search);
-                  }).toList();
-                }
+                final visibleOrganizations = allOrgs.where((o) {
+                  if (_search.isEmpty) return true;
+                  return [
+                    o['name'], o['slug'], o['billingCountry'],
+                    o['organizationType'], o['city'],
+                  ].any((value) => (value ?? '').toString().toLowerCase().contains(_search));
+                }).toList();
+                final publicMinistries = visibleOrganizations
+                    .where((o) => o['isPublicMinistry'] == true).toList();
+                final churches = visibleOrganizations
+                    .where((o) => o['isPublicMinistry'] != true).toList();
 
                 return ListView(
                   padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
                   children: [
-                    // Super Admin Public Ministry Section
-                    if (_search.isEmpty && publicMinistries.isNotEmpty) ...[
+                    if (publicMinistries.isNotEmpty) ...[
                       const Row(
                         children: [
                           Icon(Icons.public, color: VopColors.gold, size: 18),
@@ -262,7 +334,7 @@ class _InstitutionFinderSheetState extends State<InstitutionFinderSheet> {
                           ),
                         ),
                         Text(
-                          '${churches.length} available',
+                          '${churches.length} shown',
                           style: const TextStyle(fontSize: 11, color: Colors.grey),
                         ),
                       ],
@@ -296,6 +368,27 @@ class _InstitutionFinderSheetState extends State<InstitutionFinderSheet> {
                       )
                     else
                       ...churches.map((church) => _buildChurchCard(church)),
+                    if (_pageError != null)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Text(_pageError!, style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                        )),
+                      ),
+                    if (hasMore && nextCursor.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        child: OutlinedButton.icon(
+                          onPressed: _loadingMore ? null : () => _loadMore(nextCursor),
+                          icon: _loadingMore
+                              ? const SizedBox(width: 16, height: 16,
+                                  child: CircularProgressIndicator(strokeWidth: 2))
+                              : const Icon(Icons.expand_more),
+                          label: Text(_loadingMore
+                              ? 'Loading institutions...'
+                              : 'Load more institutions'),
+                        ),
+                      ),
                   ],
                 );
               },
@@ -425,7 +518,7 @@ class _InstitutionFinderSheetState extends State<InstitutionFinderSheet> {
     final id = (church['id'] ?? '').toString();
     final name = (church['name'] ?? 'Church').toString();
     final type = (church['organizationType'] ?? 'church').toString();
-    final country = (church['billingCountry'] ?? 'Zambia').toString();
+    final country = (church['billingCountry'] ?? '').toString();
     final isCurrent = widget.currentOrganizationId == id;
     final isBusy = _joiningId == id;
 

@@ -1,3 +1,4 @@
+import 'workspace_navigation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../core/portal_access.dart';
@@ -5,12 +6,6 @@ import '../core/vop_api.dart';
 import '../theme/vop_theme.dart';
 import '../widgets/vop_ui.dart';
 import 'account_settings_screen.dart';
-import 'candidates_screen.dart';
-import 'curriculum_studio_screen.dart';
-import 'graduations_screen.dart';
-import 'home_shell.dart';
-import 'mentor_workspace_screen.dart';
-import 'plans_management_screen.dart';
 
 class OrganizationDashboardScreen extends StatefulWidget {
   const OrganizationDashboardScreen({
@@ -29,12 +24,8 @@ class OrganizationDashboardScreen extends StatefulWidget {
 
 class _OrganizationDashboardScreenState
     extends State<OrganizationDashboardScreen> {
-  late Future<Map<String, dynamic>> _candidatesFuture;
-  late Future<Map<String, dynamic>> _graduationsFuture;
-  late Future<Map<String, dynamic>> _catalogFuture;
-  late Future<Map<String, dynamic>> _healthFuture;
-  late Future<Map<String, dynamic>> _plansFuture;
-  late Future<Map<String, dynamic>> _orgFuture;
+  late Future<Map<String,dynamic>> _analyticsFuture;
+  late Future<Map<String,dynamic>> _healthFuture;
 
   @override
   void initState() {
@@ -44,24 +35,12 @@ class _OrganizationDashboardScreenState
 
   void _reload() {
     setState(() {
-      _candidatesFuture = widget.api
-          .adminCandidates(organizationId: widget.account.organizationId)
-          .catchError((_) => <String, dynamic>{'items': []});
-      _graduationsFuture = widget.api
-          .adminGraduations(organizationId: widget.account.organizationId)
-          .catchError((_) => <String, dynamic>{'items': []});
-      _catalogFuture = widget.api.catalogue().catchError(
-        (_) => <String, dynamic>{'guides': []},
-      );
-      _healthFuture = widget.api
-          .adminHealth(detail: false)
-          .catchError((_) => <String, dynamic>{'status': 'offline'});
-      _orgFuture = widget.api
-          .adminOrganizations(organizationId: widget.account.organizationId)
-          .catchError((_) => <String, dynamic>{'items': []});
-      _plansFuture = widget.api
-          .adminSubscription(organizationId: widget.account.organizationId)
-          .catchError((_) => <String, dynamic>{});
+      _analyticsFuture=widget.api.workspace().then((workspace){
+        final permissions=workspace['permissions'] is Map?Map<String,dynamic>.from(workspace['permissions'] as Map):<String,dynamic>{};
+        if(!(permissions['analytics'] as List? ?? []).contains('view'))return <String,dynamic>{'unavailable':true};
+        return widget.api.adminAnalytics(organizationId:widget.account.organizationId);
+      });
+      _healthFuture=widget.api.adminHealth(detail:false);
     });
   }
 
@@ -159,17 +138,6 @@ class _OrganizationDashboardScreenState
             onSelected: (val) {
               if (val == 'settings') {
                 _navigate(AccountSettingsScreen(api: widget.api));
-              } else if (val == 'learner_preview') {
-                _navigate(
-                  Scaffold(
-                    appBar: AppBar(
-                      title: const Text('Learner Workspace Preview'),
-                      backgroundColor: VopColors.navyDeep,
-                      foregroundColor: Colors.white,
-                    ),
-                    body: HomeShell(api: widget.api),
-                  ),
-                );
               } else if (val == 'sign_out') {
                 _signOut();
               }
@@ -210,16 +178,6 @@ class _OrganizationDashboardScreenState
                     Icon(Icons.manage_accounts_outlined, size: 18),
                     SizedBox(width: 10),
                     Text('Account & Preferences'),
-                  ],
-                ),
-              ),
-              const PopupMenuItem(
-                value: 'learner_preview',
-                child: Row(
-                  children: [
-                    Icon(Icons.visibility_outlined, size: 18),
-                    SizedBox(width: 10),
-                    Text('Preview Learner View'),
                   ],
                 ),
               ),
@@ -384,293 +342,32 @@ class _OrganizationDashboardScreenState
     );
   }
 
-  Widget _buildKpiMetricsGrid(bool isDesktop) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final crossAxisCount = constraints.maxWidth >= 750 ? 4 : 2;
+  Widget _buildKpiMetricsGrid(bool isDesktop) => FutureBuilder<Map<String,dynamic>>(
+    future:_analyticsFuture,builder:(context,snapshot){
+      if(snapshot.connectionState!=ConnectionState.done)return const VopSkeleton(rows:2);
+      if(snapshot.hasError)return VopEmpty(icon:Icons.error_outline,message:'${snapshot.error}',onRetry:_reload);
+      if(snapshot.data?['unavailable']==true)return const SizedBox.shrink();
+      final summary=snapshot.data?['summary'] is Map?Map<String,dynamic>.from(snapshot.data!['summary'] as Map):<String,dynamic>{};
+      final items=[_OrgKpi('Learners','${summary['candidates']??0}',Icons.people_outline,Colors.blue),
+        _OrgKpi('Graduation requests','${summary['graduationRequests']??0}',Icons.school_outlined,VopColors.gold),
+        _OrgKpi('Guides','${summary['guides']??0}',Icons.menu_book_outlined,Colors.teal),
+        _OrgKpi('Certificates','${summary['certificates']??0}',Icons.workspace_premium_outlined,Colors.indigo)];
+      return LayoutBuilder(builder:(context,c)=>GridView.builder(shrinkWrap:true,physics:const NeverScrollableScrollPhysics(),itemCount:items.length,
+        gridDelegate:SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount:c.maxWidth>=750?4:2,crossAxisSpacing:10,mainAxisSpacing:10,childAspectRatio:1.6),
+        itemBuilder:(context,i){final item=items[i];return VopCard(child:Padding(padding:const EdgeInsets.all(14),child:Column(crossAxisAlignment:CrossAxisAlignment.start,mainAxisAlignment:MainAxisAlignment.spaceBetween,children:[
+          Row(children:[Expanded(child:Text(item.label,maxLines:2,overflow:TextOverflow.ellipsis)),Icon(item.icon,color:item.accent,size:18)]),
+          Text(item.value,style:Theme.of(context).textTheme.headlineSmall),
+        ])));}));
+    });
 
-        return FutureBuilder<List<dynamic>>(
-          future: Future.wait([
-            _candidatesFuture,
-            _graduationsFuture,
-            _catalogFuture,
-            _orgFuture,
-            _plansFuture,
-          ]),
-          builder: (context, snapshot) {
-            final candidatesData =
-                snapshot.data?[0] as Map<String, dynamic>? ?? {};
-            final graduationsData =
-                snapshot.data?[1] as Map<String, dynamic>? ?? {};
-            final catalogData =
-                snapshot.data?[2] as Map<String, dynamic>? ?? {};
-            final orgData =
-                snapshot.data?[3] as Map<String, dynamic>? ?? {};
-            final plansData =
-                snapshot.data?[4] as Map<String, dynamic>? ?? {};
+  Widget _buildModuleCards(bool isDesktop) => WorkspaceNavigation(api: widget.api);
 
-            final candidateCount =
-                (candidatesData['items'] as List?)?.length ??
-                (candidatesData['candidates'] as List?)?.length ??
-                0;
-            final graduationCount =
-                (graduationsData['items'] as List?)?.length ??
-                (graduationsData['requests'] as List?)?.length ??
-                0;
-            final guideCount = (catalogData['guides'] as List?)?.length ?? 0;
+  Widget _buildHealthStatusCard() => FutureBuilder<Map<String,dynamic>>(future:_healthFuture,builder:(context,s){
+    if(s.connectionState!=ConnectionState.done)return const SizedBox.shrink();
+    if(s.hasError)return ListTile(leading:const Icon(Icons.warning_amber_outlined),title:const Text('Service status unavailable'),subtitle:Text('${s.error}'),trailing:IconButton(tooltip:'Retry',onPressed:_reload,icon:const Icon(Icons.refresh)));
+    return ListTile(leading:const Icon(Icons.cloud_outlined),title:Text('Service status: ${s.data?['status']??'Unavailable'}'));
+  });
 
-            final orgItems = (orgData['items'] as List?)?.whereType<Map>().toList() ?? [];
-            final orgDoc = orgItems.isNotEmpty ? orgItems.first : <String, dynamic>{};
-            final orgStatusRaw = (orgDoc['status'] ?? 'active').toString().toLowerCase();
-            final orgStatusDisplay = orgStatusRaw.isNotEmpty
-                ? '${orgStatusRaw[0].toUpperCase()}${orgStatusRaw.substring(1)}'
-                : 'Active';
-            final isOrgActive = orgStatusRaw == 'active';
-            final subscription = plansData['subscription'] is Map
-                ? plansData['subscription'] as Map<String, dynamic>
-                : <String, dynamic>{};
-            final isSubActive = subscription['status'] == 'active' || plansData['paidPlanActive'] == true || plansData['freeTier'] == true;
-
-            final kpis = [
-              _OrgKpi(
-                'My Learners',
-                '$candidateCount',
-                Icons.people_outline,
-                Colors.blue,
-              ),
-              _OrgKpi(
-                'Graduations',
-                '$graduationCount',
-                Icons.workspace_premium_outlined,
-                VopColors.gold,
-              ),
-              _OrgKpi(
-                'Active Courses',
-                '$guideCount',
-                Icons.auto_stories_outlined,
-                Colors.teal,
-              ),
-              _OrgKpi(
-                'Org Status',
-                orgStatusDisplay,
-                (isOrgActive && isSubActive) ? Icons.verified_outlined : Icons.warning_amber_outlined,
-                (isOrgActive && isSubActive) ? Colors.green : Colors.amber,
-              ),
-            ];
-
-            return GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: kpis.length,
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: crossAxisCount,
-                crossAxisSpacing: 10,
-                mainAxisSpacing: 10,
-                childAspectRatio: 1.6,
-              ),
-              itemBuilder: (context, index) {
-                final kpi = kpis[index];
-                return VopCard(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 12,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              kpi.label,
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.onSurface.withAlpha(180),
-                              ),
-                            ),
-                            Icon(kpi.icon, size: 18, color: kpi.accent),
-                          ],
-                        ),
-                        Text(
-                          kpi.value,
-                          style: TextStyle(
-                            fontSize: kpi.value.length > 5 ? 16 : 22,
-                            fontWeight: FontWeight.w900,
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Widget _buildModuleCards(bool isDesktop) {
-    final modules = [
-      _OrgModuleItem(
-        title: 'Manage Organisation Learners',
-        subtitle:
-            'Enroll students, monitor lesson milestones & schedule baptism dates',
-        icon: Icons.badge_outlined,
-        color: Colors.blue,
-        onTap: () => _navigate(
-          CandidatesScreen(
-            api: widget.api,
-            organizationId: widget.account.organizationId,
-          ),
-        ),
-      ),
-      _OrgModuleItem(
-        title: 'Graduation Approvals & Certificates',
-        subtitle:
-            'Review average quiz scores, verify completions & approve certificates',
-        icon: Icons.school_outlined,
-        color: VopColors.gold,
-        onTap: () => _navigate(
-          GraduationsScreen(
-            api: widget.api,
-            organizationId: widget.account.organizationId,
-          ),
-        ),
-      ),
-      _OrgModuleItem(
-        title: 'Curriculum & Study Guides',
-        subtitle: 'Explore active guides, Plate lessons and publication status',
-        icon: Icons.menu_book_outlined,
-        color: Colors.teal,
-        onTap: () => _navigate(CurriculumStudioScreen(api: widget.api)),
-      ),
-      _OrgModuleItem(
-        title: 'Mentoring & Pastoral Support',
-        subtitle:
-            'Support candidates through personal messaging and lesson review',
-        icon: Icons.support_agent_outlined,
-        color: Colors.indigo,
-        onTap: () => _navigate(MentorWorkspaceScreen(api: widget.api)),
-      ),
-      _OrgModuleItem(
-        title: 'Institutional Tier & Seat Quotas',
-        subtitle:
-            'Manage organisation subscription packages, limits and invoicing',
-        icon: Icons.payments_outlined,
-        color: Colors.purple,
-        onTap: () => _navigate(
-          PlansManagementScreen(
-            api: widget.api,
-            organizationId: widget.account.organizationId,
-          ),
-        ),
-      ),
-      _OrgModuleItem(
-        title: 'Account & Security Preferences',
-        subtitle:
-            'Update profile details, security sessions and study settings',
-        icon: Icons.manage_accounts_outlined,
-        color: Colors.deepOrange,
-        onTap: () => _navigate(AccountSettingsScreen(api: widget.api)),
-      ),
-    ];
-
-    return Column(
-      children: modules.map((m) {
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 10),
-          child: VopCard(
-            child: ListTile(
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 8,
-              ),
-              leading: Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: m.color.withAlpha(28),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(m.icon, color: m.color, size: 24),
-              ),
-              title: Text(
-                m.title,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14.5,
-                ),
-              ),
-              subtitle: Text(m.subtitle, style: const TextStyle(fontSize: 12)),
-              trailing: const Icon(Icons.chevron_right, size: 18),
-              onTap: m.onTap,
-            ),
-          ),
-        );
-      }).toList(),
-    );
-  }
-
-  Widget _buildHealthStatusCard() {
-    return FutureBuilder<Map<String, dynamic>>(
-      future: _healthFuture,
-      builder: (context, snapshot) {
-        final status = snapshot.data?['status']?.toString() ?? 'checking';
-        final isHealthy = status == 'ok';
-
-        return VopCard(
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Row(
-              children: [
-                Container(
-                  width: 12,
-                  height: 12,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: isHealthy ? Colors.green : Colors.amber,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        isHealthy
-                            ? 'Organisation Node: Synchronized'
-                            : 'Organisation Node: Connecting ($status)',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 13,
-                        ),
-                      ),
-                      Text(
-                        'Connected to Voice of Prophecy administrative network',
-                        style: TextStyle(
-                          fontSize: 11.5,
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.onSurface.withAlpha(140),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
 }
 
 class _OrgKpi {
@@ -679,19 +376,4 @@ class _OrgKpi {
   final IconData icon;
   final Color accent;
   _OrgKpi(this.label, this.value, this.icon, this.accent);
-}
-
-class _OrgModuleItem {
-  final String title;
-  final String subtitle;
-  final IconData icon;
-  final Color color;
-  final VoidCallback onTap;
-  _OrgModuleItem({
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-    required this.color,
-    required this.onTap,
-  });
 }

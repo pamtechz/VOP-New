@@ -104,8 +104,12 @@ test('passkey authentication is one-time, server-verified and replay resistant',
       const replay=await call(finishBody);
       assert.equal(replay.code,400,JSON.stringify(replay.payload));
       assert.match(String(replay.payload.error||''),/already used|expired/i);
-      const challenges=await db.collection('passkeyChallenges').get();
-      assert.equal(challenges.size,0,'consumed challenges must be deleted');
+      // The shared emulator runs multiple integration files concurrently.
+      // Assert this exact consumed authentication challenge is gone, not that
+      // unrelated users have no outstanding challenges of their own.
+      const challengeId=credentialDocumentId('authentication:'+begin.payload.challenge);
+      const consumed=await db.doc('passkeyChallenges/'+challengeId).get();
+      assert.equal(consumed.exists,false,'the consumed challenge must be deleted');
     });
 
     await t.test('two different challenges with the same stale authenticator counter cannot both sign in',async()=>{

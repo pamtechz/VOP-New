@@ -5,8 +5,16 @@ permissions:
   contents: write
 jobs:
   prepare:
-    runs-on: [self-hosted, KASAINSTITUTE]
+    runs-on: [self-hosted, Windows]
     steps:
+      - name: Verify KASAINSTITUTE runner identity
+        shell: powershell
+        env:
+          VOP_ACTUAL_RUNNER: ${{ runner.name }}
+        run: |
+          if ($env:VOP_ACTUAL_RUNNER -ne 'KASAINSTITUTE') {
+            throw "Only the KASAINSTITUTE Windows self-hosted runner may execute VOP jobs (got '$env:VOP_ACTUAL_RUNNER')."
+          }
       - uses: actions/checkout@v4
         with:
           path: vop-seed-${{ github.run_id }}-${{ github.run_attempt }}

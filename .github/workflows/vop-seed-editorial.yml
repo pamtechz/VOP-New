@@ -26,9 +26,17 @@ concurrency:
 
 jobs:
   seed:
-    runs-on: [self-hosted, KASAINSTITUTE]
+    runs-on: [self-hosted, Windows]
     timeout-minutes: 15
     steps:
+      - name: Verify KASAINSTITUTE runner identity
+        shell: powershell
+        env:
+          VOP_ACTUAL_RUNNER: ${{ runner.name }}
+        run: |
+          if ($env:VOP_ACTUAL_RUNNER -ne 'KASAINSTITUTE') {
+            throw "Only the KASAINSTITUTE Windows self-hosted runner may execute VOP jobs (got '$env:VOP_ACTUAL_RUNNER')."
+          }
       - name: Checkout VOP source
         uses: actions/checkout@v4
         with:

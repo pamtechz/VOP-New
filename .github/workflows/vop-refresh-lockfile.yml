@@ -16,9 +16,17 @@ concurrency:
 jobs:
   lockfile:
     if: "!contains(github.event.head_commit.message, '[skip lockfile]')"
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Windows]
     timeout-minutes: 10
     steps:
+      - name: Verify KASAINSTITUTE runner identity
+        shell: powershell
+        env:
+          VOP_ACTUAL_RUNNER: ${{ runner.name }}
+        run: |
+          if ($env:VOP_ACTUAL_RUNNER -ne 'KASAINSTITUTE') {
+            throw "Only the KASAINSTITUTE Windows self-hosted runner may execute VOP jobs (got '$env:VOP_ACTUAL_RUNNER')."
+          }
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -30,14 +38,17 @@ jobs:
       - name: Refresh lockfile
         run: npm install --package-lock-only --ignore-scripts
       - name: Commit lockfile
-        shell: bash
+        shell: powershell
         run: |
-          if git diff --quiet -- package-lock.json; then
-            echo "Lockfile already current."
+          & git diff --quiet -- package-lock.json
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "Lockfile already current."
             exit 0
-          fi
-          git config user.name "VOP Lockfile Bot"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add package-lock.json
-          git commit -m "Refresh npm lockfile [skip lockfile]"
-          git push origin HEAD:${{ github.ref_name }}
+          }
+          & git config user.name "VOP Lockfile Bot"
+          & git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          & git add package-lock.json
+          & git commit -m "Refresh npm lockfile [skip lockfile]"
+          if ($LASTEXITCODE -ne 0) { throw "Could not commit the refreshed npm lockfile." }
+          & git push origin ("HEAD:" + $env:GITHUB_REF_NAME)
+          if ($LASTEXITCODE -ne 0) { throw "Could not push the refreshed lockfile." }

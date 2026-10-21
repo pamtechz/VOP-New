@@ -17,7 +17,11 @@ test('mentor workspace is assignment-scoped end to end',async t=>{
   try{
     const {default:mentorship}=await vite.ssrLoadModule('/api/mentorship.ts');
     const org='org-mentor-a',foreignOrg='org-mentor-b';
-    await db.doc('organizations/'+org).set({id:org,status:'active'});
+    // The fixture explicitly grants mentorship to this tenant. Subscription
+    // checks must remain enforced for tenants without that entitlement.
+    await db.doc('organizations/'+org).set({
+      id:org,status:'active',featureEntitlements:{mentorship:true},
+    });
     await db.doc('organizations/'+foreignOrg).set({id:foreignOrg,status:'active'});
 
     async function identity(name,organizationId,role='student',organizationRole=''){

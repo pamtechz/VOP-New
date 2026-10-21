@@ -21,11 +21,12 @@ class VopApiException implements Exception {
 /// Native clients MUST use the same session-aware mutation endpoints as web.
 /// The mobile BFF is read-only; this class never touches a Firestore Admin key.
 class VopApi {
-  VopApi({FirebaseAuth? auth,http.Client? client,OfflineStudy? offline})
+  VopApi({FirebaseAuth? auth,http.Client? client,OfflineStudy? offline,
+      Stream<List<ConnectivityResult>>? connectivity,String? apiBaseUrl})
       : _auth=auth??FirebaseAuth.instance,
         _client=client??http.Client(),
-        _offline=offline??OfflineStudy(){
-    _connection=Connectivity().onConnectivityChanged.listen((states){
+        _offline=offline??OfflineStudy(),_apiBaseUrl=apiBaseUrl??VopConfig.apiUrl{
+    _connection=(connectivity??Connectivity().onConnectivityChanged).listen((states){
       if(states.any((state)=>state!=ConnectivityResult.none)){
         unawaited(syncPending().catchError((_) => <String, dynamic>{}));
       }
@@ -34,6 +35,7 @@ class VopApi {
   final FirebaseAuth _auth;
   final http.Client _client;
   final OfflineStudy _offline;
+  final String _apiBaseUrl;
   StreamSubscription<List<ConnectivityResult>>? _connection;
   bool _syncing=false;
   String get _uid=>_auth.currentUser?.uid??'';
@@ -63,7 +65,7 @@ class VopApi {
     if (!isAllowed) {
       throw const VopApiException('Unsupported VOP API endpoint.');
     }
-    final origin = Uri.parse(VopConfig.apiUrl);
+    final origin = Uri.parse(_apiBaseUrl);
     final uri = origin.replace(
       path: path,
       queryParameters: query?.isEmpty == true ? null : query,
@@ -77,20 +79,20 @@ class VopApi {
 
   Future<Map<String, dynamic>> _execute(
       String path, String method, Object? body, Map<String, String>? query,
-      {bool retried = false}) async {
+      {bool retried = false, bool anonymous = false}) async {
     final user = _auth.currentUser;
-    if (user == null) {
+    if (user == null && !anonymous) {
       throw const VopApiException('Sign in to continue.', status: 401);
     }
     try {
-      final token = await user.getIdToken(retried);
-      if (token == null || token.isEmpty) {
+      final token = anonymous ? null : await user!.getIdToken(retried);
+      if (!anonymous && (token == null || token.isEmpty)) {
         throw const VopApiException('Your sign-in session has expired.', status: 401);
       }
       final request = http.Request(method, _url(path, query))
         ..followRedirects = false
         ..headers.addAll({
-          'Authorization': 'Bearer $token',
+          if (token != null) 'Authorization': 'Bearer $token',
           'Accept': 'application/json',
           'Content-Type': 'application/json',
         });
@@ -103,7 +105,7 @@ class VopApi {
       final response = await http.Response.fromStream(streamed).timeout(_timeout);
       final value = jsonDecode(response.body);
       final data = value is Map ? Map<String, dynamic>.from(value) : <String, dynamic>{};
-      if (response.statusCode == 401 && !retried) {
+      if (response.statusCode == 401 && !retried && !anonymous) {
         return await _execute(path, method, body, query, retried: true);
       }
       if (response.statusCode < 200 || response.statusCode >= 300 ||
@@ -137,6 +139,14 @@ class VopApi {
   Future<Map<String, dynamic>> read(String resource,
       [Map<String, String> params = const {}]) =>
       _execute('/api/mobile', 'GET', null, {'resource': resource, ...params});
+
+  Future<Map<String,dynamic>> registrationPolicy() =>
+      _execute('/api/admin/auth', 'GET', null, {'action':'policy'}, anonymous:true);
+  Future<Map<String,dynamic>> registerUser({required String email,
+      required String password, required String displayName, String phoneNumber='', String inviteToken=''}) =>
+      _execute('/api/admin/auth', 'POST', {'action':'register','email':email,
+        'password':password,'displayName':displayName,'phoneNumber':phoneNumber,
+        if(inviteToken.isNotEmpty)'inviteToken':inviteToken}, null, anonymous:true);
 
   Future<Map<String, dynamic>> action(String path, Map<String, Object?> body,
           {Map<String, String>? query}) =>
@@ -172,6 +182,25 @@ class VopApi {
   Future<Map<String,dynamic>> cancelAccountDeletion() =>
       action('/api/account',{'action':'cancel-deletion'});
   Future<Map<String,dynamic>> supportedLanguages() => read('languages');
+  Future<Map<String,dynamic>> workspace() => read('workspace');
+  Future<Map<String,dynamic>> adminPermissions() => _execute('/api/admin/permissions','GET',null,null);
+
+  static const _engagementKinds={'engagementRequirements':'requirements','engagementMemoryDecks':'memoryDecks','engagementDuelQuestions':'duelQuestions'};
+  Future<Map<String,dynamic>> recordList(String collection, {Map<String,dynamic> payload=const {}}) =>
+      _engagementKinds.containsKey(collection)?action('/api/engagement',{'action':'catalogList','kind':_engagementKinds[collection],...payload}):
+      collection == 'quizzes' ? action('/api/quizzes', {'action':'list', ...payload})
+      : adminContent(collection, action: collection == 'guides' ? 'listGuides' : 'list', payload: payload);
+  Future<Map<String,dynamic>> saveRecord(String collection, String id, Map<String,dynamic> data,
+      {Map<String,dynamic> payload=const {}}) => _engagementKinds.containsKey(collection)
+      ?action('/api/engagement',{'action':'catalogUpsert','kind':_engagementKinds[collection],'id':id,'data':data,...payload}):collection == 'quizzes'
+      ? action('/api/quizzes', {'action':'upsert','id':id,'data':data,...payload})
+      : adminContent(collection, action: collection == 'guides' ? 'upsertGuide' : 'upsert',
+          payload:{'id':id,'data':data,...payload});
+  Future<Map<String,dynamic>> deleteRecord(String collection, String id,
+      {Map<String,dynamic> payload=const {}}) => _engagementKinds.containsKey(collection)
+      ?action('/api/engagement',{'action':'catalogArchive','kind':_engagementKinds[collection],'id':id,...payload}):collection == 'quizzes'
+      ? action('/api/quizzes', {'action':'archive','id':id,...payload})
+      : adminContent(collection, action:collection=='guides'?'deleteGuide':'delete',payload:{'id':id,...payload});
   Future<Map<String,dynamic>> languagePack(String code)=>
     _cachedRead('locale',code,
       ()=>_execute('/api/localization','GET',null,{'locale':code}));
@@ -215,6 +244,7 @@ class VopApi {
       _execute('/api/certificates', 'GET', null, {'action': 'mine'});
   Future<Map<String, dynamic>> prayers({bool mine = true}) =>
       _execute('/api/prayer','GET',null,{'mine': mine ? 'true' : 'false'});
+  Future<Map<String,dynamic>> ministryPrayers()=>_execute('/api/prayer','GET',null,{'ministry':'true'});
   Future<Map<String,dynamic>> submitPrayer({
       required String requestText,required String category,
       required bool isPrivate}) =>
@@ -344,17 +374,32 @@ class VopApi {
           'organizationId': organizationId,
       }, query: {'__vopRoute': 'organizations'});
 
-  Future<Map<String, dynamic>> publicOrganizations({String? search}) =>
-      action('/api/admin', {
-        'action': 'publicDirectory',
-        if (search != null && search.isNotEmpty) 'search': search,
-      }, query: {'__vopRoute': 'organizations'});
+  Future<Map<String, dynamic>> publicOrganizations({String? search, String? cursor}) async {
+    Future<Map<String,dynamic>> page(String? next) => action('/api/admin', {
+      'action':'publicDirectory',
+      if(search?.isNotEmpty==true)'search':search,
+      if(next?.isNotEmpty==true)'cursor':next,
+    }, query:{'__vopRoute':'organizations'});
+    var result=await page(cursor);
+    if(cursor!=null)return result;
+    final items=<dynamic>[...(result['items'] as List? ?? [])];
+    final seen=<String>{};
+    while(result['hasMore']==true){
+      final next=(result['nextCursor']??'').toString();
+      if(next.isEmpty||!seen.add(next))throw const VopApiException('The institution directory could not be loaded. Please retry.');
+      result=await page(next);items.addAll(result['items'] as List? ?? []);
+    }
+    return {...result,'items':items};
+  }
 
-  Future<Map<String, dynamic>> joinInstitution(String organizationId) =>
-      action('/api/admin', {
+  Future<Map<String, dynamic>> joinInstitution(String organizationId) async {
+      final result = await action('/api/admin', {
         'action': 'joinInstitution',
         'organizationId': organizationId,
       }, query: {'__vopRoute': 'organizations'});
+      await _auth.currentUser?.getIdToken(true);
+      return result;
+  }
 
   Future<Map<String, dynamic>> setPublicMinistry({
     required String organizationId,
@@ -389,7 +434,7 @@ class VopApi {
       action('/api/admin', {
         'action': 'update',
         'organizationId': organizationId,
-        ...updates,
+        'data': updates,
       }, query: {'__vopRoute': 'organizations'});
 
   // --- User Administration APIs ---
@@ -411,10 +456,14 @@ class VopApi {
     Map<String, dynamic>? privileges,
   }) =>
       action('/api/admin', {
-        'action': 'assignRole',
-        'targetUid': targetUid,
-        'role': role,
-        if (adminNodeType != null) 'adminNodeType': adminNodeType,
+        'action': 'update',
+        'uid': targetUid,
+        'userType': role == 'super_admin' ? 'super_admin'
+            : role.endsWith('_admin') || role == 'admin' ? 'admin'
+            : role == 'teacher' || role == 'mentor' || role == 'guest' ? role : 'learner',
+        if (role.endsWith('_admin') && role != 'super_admin') 'assignmentMode': 'hierarchy',
+        if (role.endsWith('_admin') && role != 'super_admin')
+          'adminNodeType': adminNodeType ?? role.replaceAll('_admin', ''),
         if (adminNodeId != null) 'adminNodeId': adminNodeId,
         if (organizationId != null) 'organizationId': organizationId,
         if (organizationRole != null) 'organizationRole': organizationRole,
@@ -422,13 +471,17 @@ class VopApi {
       }, query: {'__vopRoute': 'users'});
 
   // --- Graduations & Approvals APIs ---
-  Future<Map<String, dynamic>> adminGraduations({String? organizationId, String? status}) =>
-      action('/api/admin', {
-        'action': 'list',
-        if (organizationId != null && organizationId.isNotEmpty)
-          'organizationId': organizationId,
-        if (status != null && status.isNotEmpty) 'status': status,
-      }, query: {'__vopRoute': 'graduations'});
+  Future<Map<String, dynamic>> adminGraduations({String? organizationId, String? status}) async {
+    final result = await adminContent('graduationRequests', payload: {
+      if (organizationId != null && organizationId.isNotEmpty) 'organizationId': organizationId,
+    });
+    if (status == null || status.isEmpty) return result;
+    final items = (result['items'] as List? ?? []).whereType<Map>().where((item) {
+      final current = (item['status'] ?? '').toString();
+      return status == 'pending' ? current.startsWith('pending') : current == status;
+    }).toList();
+    return {...result, 'items': items};
+  }
 
   Future<Map<String, dynamic>> reviewGraduation({
     required String requestId,
@@ -437,7 +490,7 @@ class VopApi {
     String? organizationId,
   }) =>
       action('/api/admin', {
-        'action': 'review',
+        'action': 'decision',
         'requestId': requestId,
         'decision': decision,
         if (notes != null) 'notes': notes,
@@ -466,7 +519,7 @@ class VopApi {
 
   Future<Map<String, dynamic>> adminPlans({String? organizationId, String? billingTenantType}) =>
       action('/api/admin', {
-        'action': (organizationId != null && organizationId.isNotEmpty) ? 'listAvailablePlans' : 'listPlans',
+        'action': 'listAvailablePlans',
         if (organizationId != null && organizationId.isNotEmpty)
           'organizationId': organizationId,
         if (billingTenantType != null) 'billingTenantType': billingTenantType,
@@ -474,13 +527,13 @@ class VopApi {
 
   Future<Map<String, dynamic>> adminCreatePlan(Map<String, dynamic> data) =>
       action('/api/admin', {
-        'action': 'createPlan',
+        'action': 'upsertPlan',
         ...data,
       }, query: {'__vopRoute': 'plans'});
 
   Future<Map<String, dynamic>> adminUpdatePlan(String planId, Map<String, dynamic> data) =>
       action('/api/admin', {
-        'action': 'updatePlan',
+        'action': 'upsertPlan',
         'planId': planId,
         ...data,
       }, query: {'__vopRoute': 'plans'});
@@ -494,10 +547,14 @@ class VopApi {
   Future<Map<String, dynamic>> adminAssignPlan({
     required String planId,
     required String organizationId,
+    required String overrideReason,
+    String activationSource='manual_override',
     String? billingTenantType,
   }) =>
       action('/api/admin', {
         'action': 'assignPlan',
+        'overrideReason':overrideReason,
+        'activationSource':activationSource,
         'planId': planId,
         'organizationId': organizationId,
         if (billingTenantType != null) 'billingTenantType': billingTenantType,
@@ -520,17 +577,16 @@ class VopApi {
       _execute('/api/admin', 'GET', null, {'__vopRoute': 'health', if (detail) 'detail': '1'});
 
   // --- Mentorship Workspace APIs ---
-  Future<Map<String, dynamic>> mentorWorkspace({String? mentorUid}) =>
-      action('/api/mentorship', {
-        'action': 'workspace',
-        if (mentorUid != null && mentorUid.isNotEmpty) 'mentorUid': mentorUid,
-      });
-
-  Future<Map<String, dynamic>> mentorCandidates({String? mentorUid}) =>
-      action('/api/mentorship', {
-        'action': 'candidates',
-        if (mentorUid != null && mentorUid.isNotEmpty) 'mentorUid': mentorUid,
-      });
+  Future<Map<String, dynamic>> mentorWorkspace({String? mentorUid}) async {
+    final response=await accountProfile();
+    final profile=response['profile'] is Map?Map<String,dynamic>.from(response['profile'] as Map):<String,dynamic>{};
+    final mentor=profile['role']=='mentor'||profile['organizationRole']=='mentor';
+    final result=await action('/api/mentorship',{'action':mentor?'listMyAssignments':'listStudents'});
+    if(!mentor)return result;
+    return {...result,'items':(result['items'] as List? ?? []).whereType<Map>().map((row)=>{
+      ...row,if(row['student'] is Map)...Map<String,dynamic>.from(row['student'] as Map),
+    }).toList()};
+  }
 
   Future<Map<String, dynamic>> mentorAssignCandidate({
     required String studentId,
@@ -538,32 +594,15 @@ class VopApi {
     String? organizationId,
   }) =>
       action('/api/mentorship', {
-        'action': 'assignMentor',
+        'action': 'assign',
         'studentId': studentId,
         'mentorId': mentorId,
         if (organizationId != null) 'organizationId': organizationId,
       });
 
   Future<Map<String, dynamic>> mentorConversations() =>
-      action('/api/mentorship', {'action': 'conversations'});
+      action('/api/mentorship', {'action': 'listMyConversations'});
 
-  Future<Map<String, dynamic>> mentorMessages(String conversationId) =>
-      action('/api/mentorship', {
-        'action': 'messages',
-        'conversationId': conversationId,
-      });
-
-  Future<Map<String, dynamic>> mentorSendMessage(
-    String conversationId,
-    String content, {
-    List<dynamic>? attachments,
-  }) =>
-      action('/api/mentorship', {
-        'action': 'sendMessage',
-        'conversationId': conversationId,
-        'content': content,
-        if (attachments != null) 'attachments': attachments,
-      });
   Future<List<Map<String,dynamic>>> downloadedStudies()=>
     _offline.list(_uid);
   Future<List<Map<String,dynamic>>> pendingOfflineChanges()=>

@@ -1,4 +1,4 @@
-import { FieldValue } from 'firebase-admin/firestore';
+import { FieldValue, FieldPath } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
 import { authenticateTenant, ensureOrganizationDefaultSubscription, getAdminDb, requireOrgRole, writeTenantAudit, enforceOrganizationMembershipQuotas, organizationUsageSnapshot } from '../../server/tenant.js';
 import { requirePermission } from '../../server/permissions.js';
@@ -129,6 +129,15 @@ async function resolveManagedOrganization(ctx: Awaited<ReturnType<typeof authent
 }
 
 const CANDIDATE_ROLES=new Set(['learner','student','candidate']);
+function organizationDirectoryDetails(data:Record<string,any>){
+  return {
+    city:String(data.city||data.profile?.city||''),description:String(data.description||''),
+    billingCountry:String(data.billingCountry||data.billingProfile?.countryName||''),
+    countryCode:String(data.countryCode||data.billingProfile?.countryCode||''),
+    allowSelfEnrollment:data.allowSelfEnrollment!==false,
+    churchId:String(data.churchId||data.hierarchy?.churchId||(data.hierarchyType==='church'?data.hierarchyId:'')||''),
+  };
+}
 function organizationPeopleCounts(documents:Array<{data:()=>Record<string,unknown>}>){
   let candidates=0;
   for(const document of documents){
@@ -165,50 +174,110 @@ export default async function handler(req: Request, res: Response) {
 
     const authorization = req.headers?.authorization ?? req.headers?.Authorization;
     if (!authorization) throw new Error('Sign in first.');
-    const ctx = await authenticateTenant(req, action === 'delete' ? undefined : requestedOrg, ['acceptInvite','declineInvite','listInvites','dismissInvite','clearInviteHistory','publicDirectory','joinInstitution','setPublicMinistry'].includes(action));
+    // Joining is an admission operation, not an existing-tenant operation.
+    // Resolve the caller first; validate and create the target membership below.
+    const admissionAction = action === 'joinInstitution' || action === 'publicDirectory';
+    const ctx = await authenticateTenant(req, action === 'delete' || admissionAction ? undefined : requestedOrg, ['acceptInvite','declineInvite','listInvites','dismissInvite','clearInviteHistory','publicDirectory','joinInstitution','setPublicMinistry'].includes(action));
     const permissionAction = action === 'list' ? 'view' : action === 'create' ? 'create' : ['update','assignOwner','transferOwnership','setPublicMinistry'].includes(action) ? 'update' : action === 'delete' ? 'delete' : '';
     if (permissionAction) await requirePermission(ctx, 'organizations', permissionAction);
 
     if (action === 'publicDirectory') {
-      const snap = await bootstrapDb.collection('organizations').where('status', '==', 'active').limit(300).get();
-      const items = snap.docs.map(doc => {
-        const d = doc.data() || {};
-        return {
-          id: doc.id,
-          name: String(d.name || doc.id),
-          slug: String(d.slug || doc.id),
-          organizationType: String(d.organizationType || 'church'),
-          customOrganizationType: String(d.customOrganizationType || ''),
-          isPublicMinistry: Boolean(d.isPublicMinistry),
-          billingCountry: String(d.billingCountry || 'Zambia'),
-          status: 'active',
-        };
-      });
+      const pageSize = Math.max(1, Math.min(100, Math.trunc(Number(body.limit) || 40)));
+      const search = String(body.search || '').trim().toLowerCase().slice(0, 120);
+      const cursor = String(body.cursor || '').trim();
+      if (cursor) id(cursor);
+
+      // Search the complete directory, not only the first page of IDs.
+      // Bound the number of scanned records per request for predictable cost;
+      // continue from nextCursor to search the remaining records.
+      const baseQuery = bootstrapDb.collection('organizations')
+        .where('status', '==', 'active').orderBy(FieldPath.documentId());
+      const scanLimit = search ? 500 : pageSize;
+      const batchLimit = search ? 100 : pageSize;
+      const items: Array<Record<string, unknown>> = [];
+      let position = cursor;
+      let examined = 0;
+      let hasMore = false;
+      while (items.length < pageSize && examined < scanLimit) {
+        const batchSize = Math.min(batchLimit, scanLimit - examined);
+        const query = position ? baseQuery.startAfter(position) : baseQuery;
+        const snapshot = await query.limit(batchSize + 1).get();
+        if (snapshot.empty) { hasMore = false; break; }
+        const page = snapshot.docs.slice(0, batchSize);
+        for (const doc of page) {
+          position = doc.id;
+          examined += 1;
+          const d = doc.data() || {};
+          if (d.allowSelfEnrollment === false) continue;
+          const item = {
+            id: doc.id,
+            name: String(d.name || doc.id),
+            slug: String(d.slug || doc.id),
+            organizationType: String(d.organizationType || 'church'),
+            customOrganizationType: String(d.customOrganizationType || ''),
+            isPublicMinistry: Boolean(d.isPublicMinistry),
+            billingCountry: String(d.billingCountry || d.billingProfile?.countryName || ''),
+            city: String(d.city || d.address?.city || ''),
+            churchId: String(d.churchId || d.hierarchy?.churchId || ''),
+            status: 'active',
+          };
+          if (search && ![item.name, item.slug, item.billingCountry, item.city, item.organizationType]
+            .some(value => value.toLowerCase().includes(search))) continue;
+          items.push(item);
+          if (items.length >= pageSize) break;
+        }
+        hasMore = position !== page[page.length - 1]?.id || snapshot.size > batchSize;
+        if (!hasMore || items.length >= pageSize) break;
+      }
       items.sort((a, b) => {
         if (a.isPublicMinistry && !b.isPublicMinistry) return -1;
         if (!a.isPublicMinistry && b.isPublicMinistry) return 1;
-        return a.name.localeCompare(b.name);
+        return String(a.name).localeCompare(String(b.name));
       });
-      return res.status(200).json({ ok: true, items });
+      return res.status(200).json({
+        ok: true, items, hasMore, nextCursor: hasMore ? position : '',
+      });
     }
 
     if (action === 'joinInstitution') {
-      const targetOrgId = String(body.organizationId || '').trim();
-      if (!targetOrgId) throw new Error('An institution must be selected.');
+      const targetOrgId = id(body.organizationId);
+      const callerRole = String(ctx.profile.role || 'student').toLowerCase();
+      if (!['student','learner','candidate','guest'].includes(callerRole) || ctx.profile.adminNodeId ||
+          (ctx.organizationId && !['learner','student','candidate','viewer'].includes(String(ctx.membership.role || '')))) {
+        throw new Error('Only learner accounts can join an institution. Staff assignments must be managed by an administrator.');
+      }
+      if (ctx.organizationId && ctx.organizationId !== targetOrgId) {
+        throw new Error('Your account is already attached to an institution. Ask an administrator to arrange a transfer.');
+      }
       const orgRef = bootstrapDb.doc('organizations/' + targetOrgId);
       const orgSnap = await orgRef.get();
       if (!orgSnap.exists || orgSnap.data()?.status !== 'active') {
         throw new Error('The selected institution is not active or available.');
       }
       const orgData = orgSnap.data() || {};
+      if (orgData.allowSelfEnrollment === false) throw new Error('This institution accepts learners by invitation only.');
       const orgName = String(orgData.name || targetOrgId);
       const now = new Date().toISOString();
       const userRef = bootstrapDb.doc('users/' + ctx.auth.uid);
-      const userSnap = await userRef.get();
-      const userData = userSnap.data() || {};
-      const previousOrgId = String(userData.organizationId || '').trim();
-
+      await enforceOrganizationMembershipQuotas(ctx, targetOrgId, 'learner', ctx.auth.uid);
       await bootstrapDb.runTransaction(async tx => {
+        const [userSnap, currentOrg, targetMember] = await Promise.all([
+          tx.get(userRef), tx.get(orgRef),
+          tx.get(bootstrapDb.doc('organizations/' + targetOrgId + '/members/' + ctx.auth.uid)),
+        ]);
+        const userData = userSnap.data() || {};
+        const previousOrgId = String(userData.organizationId || '').trim();
+        const previousMember = previousOrgId && previousOrgId !== targetOrgId
+          ? await tx.get(bootstrapDb.doc('organizations/' + previousOrgId + '/members/' + ctx.auth.uid)) : null;
+        if (!currentOrg.exists || currentOrg.data()?.status !== 'active' || currentOrg.data()?.allowSelfEnrollment === false) {
+          throw new Error('The selected institution is no longer accepting learners.');
+        }
+        if (previousMember?.data()?.active === true) throw new Error('Your institution changed. Refresh your account before joining.');
+        if (targetMember.exists && targetMember.data()?.active === false) throw new Error('This membership is inactive. Contact the institution administrator.');
+        if (!['student','learner','candidate','guest'].includes(String(userData.role || 'student')) || userData.adminNodeId ||
+            (targetMember.exists && !['learner','student','candidate','viewer'].includes(String(targetMember.data()?.role || '')))) {
+          throw new Error('Staff assignments must be managed by an administrator.');
+        }
         if (previousOrgId && previousOrgId !== targetOrgId) {
           tx.set(bootstrapDb.doc('organizations/' + previousOrgId + '/members/' + ctx.auth.uid), {
             active: false,
@@ -221,7 +290,7 @@ export default async function handler(req: Request, res: Response) {
           role: 'learner',
           active: true,
           source: 'learner_self_join',
-          joinedAt: now,
+          joinedAt: targetMember.data()?.joinedAt || now,
           updatedAt: now,
         }, { merge: true });
         tx.set(userRef, {
@@ -234,12 +303,16 @@ export default async function handler(req: Request, res: Response) {
       });
 
       const authService = getAuth();
+      const authUser = await authService.getUser(ctx.auth.uid);
       await authService.setCustomUserClaims(ctx.auth.uid, {
-        role: String(userData.role || 'student'),
+        ...authUser.customClaims,
+        role: callerRole,
         organizationId: targetOrgId,
         organizationRole: 'learner',
         accountType: 'organization',
-      }).catch(() => {});
+      });
+      await writeTenantAudit(ctx, 'organization.learner_self_join', 'users/' + ctx.auth.uid, undefined,
+        { organizationId: targetOrgId, organizationRole: 'learner' });
 
       return res.status(200).json({
         ok: true,
@@ -259,6 +332,7 @@ export default async function handler(req: Request, res: Response) {
       if (!orgSnap.exists) throw new Error('The organization does not exist.');
       await orgRef.set({
         isPublicMinistry: isPublic,
+        ...(isPublic ? {allowSelfEnrollment:true} : {}),
         updatedAt: new Date().toISOString(),
       }, { merge: true });
       return res.status(200).json({ ok: true, organizationId: targetOrgId, isPublicMinistry: isPublic });
@@ -293,7 +367,8 @@ function sanitizeOrgType(rawType: unknown, rawCustom: unknown): { organizationTy
       const { organizationType, customOrganizationType } = sanitizeOrgType(body.organizationType, body.customOrganizationType);
       const name = String(body.name || '').trim();
       const organizationId = id(body.id || slug(name));
-      const billingCountry=normalizedBillingCountryName(body.billingCountry||'Zambia');
+      if(!String(body.billingCountry||'').trim())throw new Error('The billing country is required.');
+      const billingCountry=normalizedBillingCountryName(body.billingCountry);
       const billingProfile=organizationBillingProfile({billingCountry});
       const ref = bootstrapDb.doc(`organizations/${organizationId}`);
       if ((await ref.get()).exists) throw new Error('That organization already exists.');
@@ -302,6 +377,8 @@ function sanitizeOrgType(rawType: unknown, rawCustom: unknown): { organizationTy
         id:organizationId,name,slug:slug(name),status:'active',ownerUid:'',
         organizationType,customOrganizationType,
         isPublicMinistry: Boolean(body.isPublicMinistry),
+        city:String(body.city||'').trim().slice(0,160),description:String(body.description||'').trim().slice(0,2500),
+        allowSelfEnrollment:body.allowSelfEnrollment!==false,
         billingCountry,countryCode:billingProfile.countryCode,billingProfile,
         plan:'unsubscribed',quotas:{},featureEntitlements:{},billingAccessSuspended:false,
         createdAt:now,updatedAt:now,
@@ -588,7 +665,7 @@ function sanitizeOrgType(rawType: unknown, rawCustom: unknown): { organizationTy
           const data = organization.data() || {};
           const members = await organization.ref.collection('members').where('active','==',true).get();
           const people=organizationPeopleCounts(members.docs as unknown as Array<{data:()=>Record<string,unknown>}>);
-          return { id:organization.id, name:String(data.name || organization.id), slug:String(data.slug || organization.id), status:String(data.status || 'active'), ownerUid:String(data.ownerUid || ''), organizationType:String(data.organizationType || 'church'), customOrganizationType:String(data.customOrganizationType || ''), isPublicMinistry:Boolean(data.isPublicMinistry), plan:String(data.plan || 'unsubscribed'), quotas:data.quotas || {}, billingCountry:String(data.billingCountry||data.billingProfile?.countryName||(String(data.countryCode||'ZM')==='ZM'?'Zambia':'International')), countryCode:String(data.countryCode||data.billingProfile?.countryCode||'ZM'), billingProfile:data.billingProfile||organizationBillingProfile(data), createdAt:String(data.createdAt || ''), updatedAt:String(data.updatedAt || ''), ...people };
+          return { id:organization.id, name:String(data.name || organization.id), slug:String(data.slug || organization.id), status:String(data.status || 'active'), ownerUid:String(data.ownerUid || ''), organizationType:String(data.organizationType || 'church'), customOrganizationType:String(data.customOrganizationType || ''), isPublicMinistry:Boolean(data.isPublicMinistry), plan:String(data.plan || 'unsubscribed'), quotas:data.quotas || {}, billingCountry:String(data.billingCountry||data.billingProfile?.countryName||(String(data.countryCode||'ZM')==='ZM'?'Zambia':'International')), countryCode:String(data.countryCode||data.billingProfile?.countryCode||'ZM'), billingProfile:data.billingProfile||organizationBillingProfile(data), createdAt:String(data.createdAt || ''), updatedAt:String(data.updatedAt || ''), ...people, ...organizationDirectoryDetails(data) };
         }));
         return res.status(200).json({ok:true,items:items.filter(item => item.status === 'active')});
       }
@@ -601,7 +678,7 @@ function sanitizeOrgType(rawType: unknown, rawCustom: unknown): { organizationTy
         return res.status(200).json({ ok:true, items:[{
           id: organization.id, name:String(data.name || organization.id), slug:String(data.slug || organization.id),
           status:String(data.status || 'active'), ownerUid:String(data.ownerUid || ''), organizationType:String(data.organizationType || 'church'), customOrganizationType:String(data.customOrganizationType || ''), isPublicMinistry:Boolean(data.isPublicMinistry), plan:String(data.plan || 'unsubscribed'),
-          quotas:data.quotas || {}, billingCountry:String(data.billingCountry||data.billingProfile?.countryName||(String(data.countryCode||'ZM')==='ZM'?'Zambia':'International')), countryCode:String(data.countryCode||data.billingProfile?.countryCode||'ZM'), billingProfile:data.billingProfile||organizationBillingProfile(data), createdAt:String(data.createdAt || ''), updatedAt:String(data.updatedAt || ''), ...people
+          quotas:data.quotas || {}, billingCountry:String(data.billingCountry||data.billingProfile?.countryName||(String(data.countryCode||'ZM')==='ZM'?'Zambia':'International')), countryCode:String(data.countryCode||data.billingProfile?.countryCode||'ZM'), billingProfile:data.billingProfile||organizationBillingProfile(data), createdAt:String(data.createdAt || ''), updatedAt:String(data.updatedAt || ''), ...people, ...organizationDirectoryDetails(data)
         }]});
       }
       const snap = await bootstrapDb.collection('organizations').orderBy('name').get();
@@ -625,7 +702,7 @@ function sanitizeOrgType(rawType: unknown, rawCustom: unknown): { organizationTy
           billingProfile:data.billingProfile||organizationBillingProfile(data),
           createdAt: String(data.createdAt || ''),
           updatedAt: String(data.updatedAt || ''),
-          ...people,
+          ...people,...organizationDirectoryDetails(data),
         };
       }));
       return res.status(200).json({ ok: true, items });
@@ -726,8 +803,18 @@ function sanitizeOrgType(rawType: unknown, rawCustom: unknown): { organizationTy
         countryCode:nextBillingProfile?.countryCode,
         billingProfile:nextBillingProfile,
         branding: data.branding && typeof data.branding === 'object' ? data.branding : undefined,
+        city:typeof data.city==='string'?data.city.trim().slice(0,160):undefined,
+        description:typeof data.description==='string'?data.description.trim().slice(0,2500):undefined,
+        allowSelfEnrollment:typeof data.allowSelfEnrollment==='boolean'?data.allowSelfEnrollment:undefined,
         updatedAt: FieldValue.serverTimestamp(),
       };
+      if(data.churchId!==undefined){
+        if(!ctx.isSuperAdmin)throw new Error('Only the VOP Super Admin can link an organization to the church hierarchy.');
+        const churchId=String(data.churchId||'').trim();
+        const church=churchId?await ctx.db.doc('churches/'+id(churchId)).get():null;
+        if(churchId&&!church?.exists)throw new Error('Choose an existing church.');
+        Object.assign(allowed,{churchId,districtId:String(church?.data()?.districtId||''),conferenceId:String(church?.data()?.conferenceId||''),unionId:String(church?.data()?.unionId||'')});
+      }
       Object.keys(allowed).forEach(key => allowed[key] === undefined && delete allowed[key]);
       const before = await ctx.db.doc(`organizations/${managedOrganizationId}`).get();
       await ctx.db.doc(`organizations/${managedOrganizationId}`).set(allowed, { merge:true });
@@ -979,11 +1066,10 @@ function sanitizeOrgType(rawType: unknown, rawCustom: unknown): { organizationTy
       if (String(existingMember.data()?.role || '') === 'owner' || String(existingData.organizationRole || '') === 'owner') {
         throw new Error('The organization owner cannot be changed from the member manager.');
       }
-      if (existingOrganizationId && existingOrganizationId !== ctx.organizationId) {
+      if (existingOrganizationId && existingOrganizationId !== managedOrganizationId) {
         throw new Error('This user belongs to another organization and cannot be managed from this organization.');
       }
       const now = new Date().toISOString();
-      const previousMemberRef = null;
       await ctx.db.runTransaction(async transaction => {
         transaction.set(targetMemberRef, {
           uid, organizationId: managedOrganizationId, role: memberRole, active: body.active !== false,
@@ -994,7 +1080,8 @@ function sanitizeOrgType(rawType: unknown, rawCustom: unknown): { organizationTy
         }, { merge: true });
       });
       const authService = getAuth();
-      await authService.setCustomUserClaims(uid, { role: hierarchyRole(String(existingData.role || '')) || 'student', ...(hierarchyRole(String(existingData.role || '')) ? { adminNodeType:existingData.adminNodeType, adminNodeId:existingData.adminNodeId } : {}), organizationId:managedOrganizationId, organizationRole:memberRole, accountType:'organization' });
+      const authUser=await authService.getUser(uid);
+      await authService.setCustomUserClaims(uid, { ...authUser.customClaims,role:String(existingData.role||'student'), organizationId:managedOrganizationId, organizationRole:memberRole, accountType:'organization' });
       await writeTenantAudit(ctx, 'membership.upsert', targetMemberRef.path, existingMember.exists ? existingMember.data() : undefined, { uid, role:memberRole, active:body.active !== false, previousOrganizationId: existingOrganizationId || null });
       return res.status(200).json({ ok: true });
     }

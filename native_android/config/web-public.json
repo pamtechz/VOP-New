@@ -1,0 +1,8 @@
+{
+  "VOP_API_BASE_URL": "https://vopafrica.vercel.app",
+  "VOP_FIREBASE_API_KEY": "AIzaSyBUrEyrgfjwpUrZfx4XmaZIjrWODB-Om8U",
+  "VOP_FIREBASE_WEB_APP_ID": "1:895527572069:web:7ab4b8894a82529875ec8c",
+  "VOP_FIREBASE_WEB_AUTH_DOMAIN": "voiceofprophecy.firebaseapp.com",
+  "VOP_FIREBASE_SENDER_ID": "895527572069",
+  "VOP_FIREBASE_PROJECT_ID": "voiceofprophecy"
+}

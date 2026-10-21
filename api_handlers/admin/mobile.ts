@@ -6,6 +6,7 @@ import {authenticateTenant} from '../../server/tenant.js';
 import {curriculumPages,containsPublicQuizAnswer} from '../../shared/curriculumStructure.js';
 import {normalizeStudyPlateDocument} from '../../shared/studyPlateDocument.js';
 import {isSafeHttpsMediaUrl} from '../../shared/mediaSources.js';
+import {mobileWorkspace,mobileAppInfo} from '../../server/mobileWorkspace.js';
 import type {QueryDocumentSnapshot,DocumentData} from 'firebase-admin/firestore';
 
 type Request={method?:string;query?:Record<string,string|string[]|undefined>;headers?:Record<string,string|string[]|undefined>};
@@ -99,19 +100,22 @@ export default async function mobile(req:Request,res:Response){
   res.setHeader?.('X-Content-Type-Options','nosniff');
   if(req.method!=='GET')return res.status(405).json({ok:false,code:'METHOD_NOT_ALLOWED',error:'Use GET for read-only mobile endpoints.'});
   const resource=param(req,'resource');
-  if(!['bootstrap','catalog','guide','lesson','progress','announcements','resources','events','radio','languages'].includes(resource))
+  if(!['bootstrap','workspace','catalog','guide','lesson','progress','announcements','resources','events','radio','languages'].includes(resource))
     return res.status(404).json({ok:false,code:'NOT_FOUND',error:'Unknown mobile API resource.'});
   try{
     const ctx=await authenticateTenant(req,undefined,true);
     const scope={organizationId:ctx.organizationId,isSuperAdmin:ctx.isSuperAdmin};
     const db=ctx.db;
     const uid=ctx.auth.uid;
+    if(resource==='workspace')return res.status(200).json(await mobileWorkspace(ctx));
     if(resource==='bootstrap'){
       const organization=scope.organizationId?await db.doc('organizations/'+scope.organizationId).get():null;
       return res.status(200).json({ok:true,version:1,
+        appInfo:await mobileAppInfo(ctx),
         account:{uid,displayName:string(ctx.profile.displayName||ctx.profile.name||ctx.auth.name),
           email:string(ctx.auth.email),role:string(ctx.profile.role||'student'),
           organizationId:scope.organizationId,
+          organizationRole:string(ctx.membership.role),
           organizationName:string(organization?.data()?.name||organization?.data()?.title),
           studyLanguage:string(ctx.profile.studyLanguage||ctx.profile.preferredLanguage||'en'),
           uiLocale:string(ctx.profile.uiLocale||'en')},

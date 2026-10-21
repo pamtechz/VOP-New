@@ -23,7 +23,7 @@ class _MentorWorkspaceScreenState extends State<MentorWorkspaceScreen> {
 
   void _reload() {
     setState(() {
-      _workspaceFuture = widget.api.mentorWorkspace().catchError((_) => widget.api.mentorCandidates()).catchError((_) => <String, dynamic>{'candidates': []});
+      _workspaceFuture = widget.api.mentorWorkspace();
     });
   }
 
@@ -53,6 +53,8 @@ class _MentorWorkspaceScreenState extends State<MentorWorkspaceScreen> {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
+
+          if (snapshot.hasError) return VopEmpty(icon: Icons.error_outline, message: '${snapshot.error}', onRetry: _reload);
 
           final rawList = snapshot.data?['candidates'] ?? snapshot.data?['items'] ?? [];
           final candidates = (rawList as List)
@@ -182,9 +184,9 @@ class _MentorWorkspaceScreenState extends State<MentorWorkspaceScreen> {
   Widget _buildCandidateCard(Map<String, dynamic> c) {
     final name = (c['displayName'] ?? c['name'] ?? 'Learner').toString();
     final email = (c['email'] ?? '').toString();
-    final guide = (c['guideTitle'] ?? c['currentGuide'] ?? 'Voice of Prophecy Course').toString();
-    final progress = c['progress'] ?? 0;
-    final progressNum = progress is num ? progress.toDouble() : 0.0;
+    final progress = c['progress'] is Map ? Map<String,dynamic>.from(c['progress'] as Map) : <String,dynamic>{};
+    final completed = (progress['completedLessons'] as List?)?.length;
+    final guide = (c['guideTitle'] ?? c['currentGuide'] ?? '').toString();
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
@@ -235,19 +237,10 @@ class _MentorWorkspaceScreenState extends State<MentorWorkspaceScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(guide, style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w600)),
-                  Text('${progressNum.toStringAsFixed(0)}% complete', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
+                  Text(completed==null?'':'$completed lessons completed', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
                 ],
               ),
               const SizedBox(height: 6),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(4),
-                child: LinearProgressIndicator(
-                  value: progressNum > 0 ? (progressNum / 100).clamp(0.0, 1.0) : 0.05,
-                  minHeight: 6,
-                  backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-                  valueColor: const AlwaysStoppedAnimation<Color>(VopColors.gold),
-                ),
-              ),
             ],
           ),
         ),

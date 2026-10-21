@@ -1,3 +1,4 @@
+import 'workspace_navigation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../core/portal_access.dart';
@@ -5,13 +6,6 @@ import '../core/vop_api.dart';
 import '../theme/vop_theme.dart';
 import '../widgets/vop_ui.dart';
 import 'account_settings_screen.dart';
-import 'candidates_screen.dart';
-import 'organizations_screen.dart';
-import 'graduations_screen.dart';
-import 'home_shell.dart';
-import 'user_management_screen.dart';
-import 'curriculum_studio_screen.dart';
-import 'plans_management_screen.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({
@@ -40,7 +34,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   void _reload() {
     setState(() {
       _analyticsFuture = widget.api.adminAnalytics();
-      _healthFuture = widget.api.adminHealth(detail: false).catchError((_) => <String, dynamic>{'status': 'offline'});
+      _healthFuture = widget.api.adminHealth(detail: false);
     });
   }
 
@@ -116,15 +110,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             onSelected: (val) {
               if (val == 'settings') {
                 _navigate(AccountSettingsScreen(api: widget.api));
-              } else if (val == 'learner_preview') {
-                _navigate(Scaffold(
-                  appBar: AppBar(
-                    title: const Text('Learner Workspace Preview'),
-                    backgroundColor: VopColors.navyDeep,
-                    foregroundColor: Colors.white,
-                  ),
-                  body: HomeShell(api: widget.api),
-                ));
               } else if (val == 'sign_out') {
                 _signOut();
               }
@@ -154,16 +139,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     Icon(Icons.manage_accounts_outlined, size: 18),
                     SizedBox(width: 10),
                     Text('Account & Preferences'),
-                  ],
-                ),
-              ),
-              const PopupMenuItem(
-                value: 'learner_preview',
-                child: Row(
-                  children: [
-                    Icon(Icons.visibility_outlined, size: 18),
-                    SizedBox(width: 10),
-                    Text('Preview Learner View'),
                   ],
                 ),
               ),
@@ -405,125 +380,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
   }
 
-  Widget _buildActionModules() {
-    final modules = [
-      _ModuleItem(
-        title: 'Candidate Roster',
-        subtitle: 'Enroll, track progress, schedule baptism & verify milestones',
-        icon: Icons.badge_outlined,
-        color: Colors.blue,
-        onTap: () => _navigate(CandidatesScreen(api: widget.api)),
-      ),
-      _ModuleItem(
-        title: 'Organizations & Hierarchy',
-        subtitle: 'Manage unions, conferences, districts, churches & schools',
-        icon: Icons.account_tree_outlined,
-        color: Colors.teal,
-        onTap: () => _navigate(OrganizationsScreen(api: widget.api)),
-      ),
-      _ModuleItem(
-        title: 'Graduation Approvals',
-        subtitle: 'Multi-stage approval workflow & certificate issuance',
-        icon: Icons.workspace_premium_outlined,
-        color: VopColors.gold,
-        onTap: () => _navigate(GraduationsScreen(api: widget.api)),
-      ),
-      _ModuleItem(
-        title: 'User & Role Directory',
-        subtitle: 'Platform & institutional permissions, roles & access',
-        icon: Icons.manage_accounts_outlined,
-        color: Colors.deepOrange,
-        onTap: () => _navigate(UserManagementScreen(api: widget.api)),
-      ),
-      _ModuleItem(
-        title: 'Curriculum & Content Studio',
-        subtitle: 'Courses, guides, plate lessons, tests & publication status',
-        icon: Icons.menu_book_outlined,
-        color: Colors.indigo,
-        onTap: () => _navigate(CurriculumStudioScreen(api: widget.api)),
-      ),
-      _ModuleItem(
-        title: 'Subscriptions & Billing',
-        subtitle: 'Institutional packages, seat quotas, invoices & plans',
-        icon: Icons.payments_outlined,
-        color: Colors.purple,
-        onTap: () => _navigate(PlansManagementScreen(api: widget.api)),
-      ),
-    ];
+  Widget _buildActionModules() => WorkspaceNavigation(api: widget.api);
 
-    return Column(
-      children: modules.map((m) {
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 10),
-          child: VopCard(
-            child: ListTile(
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-              leading: Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: m.color.withAlpha(28),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(m.icon, color: m.color, size: 24),
-              ),
-              title: Text(m.title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14.5)),
-              subtitle: Text(m.subtitle, style: const TextStyle(fontSize: 12)),
-              trailing: const Icon(Icons.chevron_right, size: 18),
-              onTap: m.onTap,
-            ),
-          ),
-        );
-      }).toList(),
-    );
-  }
+  Widget _buildHealthStatusCard()=>FutureBuilder<Map<String,dynamic>>(future:_healthFuture,builder:(context,s){
+    if(s.connectionState!=ConnectionState.done)return const SizedBox.shrink();
+    if(s.hasError)return ListTile(leading:const Icon(Icons.warning_amber_outlined),title:const Text('Service status unavailable'),subtitle:Text('${s.error}'),trailing:IconButton(tooltip:'Retry',onPressed:_reload,icon:const Icon(Icons.refresh)));
+    return ListTile(leading:const Icon(Icons.cloud_outlined),title:Text('Service status: ${s.data?['status']??'Unavailable'}'));
+  });
 
-  Widget _buildHealthStatusCard() {
-    return FutureBuilder<Map<String, dynamic>>(
-      future: _healthFuture,
-      builder: (context, snapshot) {
-        final status = snapshot.data?['status']?.toString() ?? 'checking';
-        final isHealthy = status == 'ok';
-
-        return VopCard(
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Row(
-              children: [
-                Container(
-                  width: 12,
-                  height: 12,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: isHealthy ? Colors.green : Colors.amber,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        isHealthy ? 'System Health: Operational' : 'System Health: Monitoring ($status)',
-                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
-                      ),
-                      Text(
-                        'Database & VOP Backend connected to live cluster',
-                        style: TextStyle(
-                          fontSize: 11.5,
-                          color: Theme.of(context).colorScheme.onSurface.withAlpha(140),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
 }
 
 class _KpiItem {
@@ -532,13 +396,4 @@ class _KpiItem {
   final IconData icon;
   final Color accent;
   _KpiItem(this.label, this.count, this.icon, this.accent);
-}
-
-class _ModuleItem {
-  final String title;
-  final String subtitle;
-  final IconData icon;
-  final Color color;
-  final VoidCallback onTap;
-  _ModuleItem({required this.title, required this.subtitle, required this.icon, required this.color, required this.onTap});
 }

@@ -4,31 +4,48 @@ on:
     branches:
       - main
       - 'prod/**'
-  pull_request:
+      - 'feat/**'
+      - 'fix/**'
+  pull_request_target:
     branches:
       - main
   workflow_dispatch:
 concurrency:
-  group: vop-verify-${{ github.ref }}
+  group: vop-verify-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 permissions:
   contents: read
 jobs:
   verify:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Windows]
     timeout-minutes: 20
     steps:
+      - name: Verify KASAINSTITUTE runner identity
+        shell: powershell
+        env:
+          VOP_ACTUAL_RUNNER: ${{ runner.name }}
+        run: |
+          if ($env:VOP_ACTUAL_RUNNER -ne 'KASAINSTITUTE') {
+            throw "Only the KASAINSTITUTE Windows self-hosted runner may execute VOP jobs (got '$env:VOP_ACTUAL_RUNNER')."
+          }
+      - name: Reject untrusted fork PR before checking out code
+        if: github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository
+        shell: powershell
+        run: |
+          throw "Fork pull requests cannot execute code on the VOP KASAINSTITUTE self-hosted runner. Submit a trusted same-repository PR for verification."
       # Never reuse a checkout potentially owned by a different runner account.
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.sha || github.sha }}
           path: vop-verify-${{ github.run_id }}-${{ github.run_attempt }}
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
       - name: Install locked dependencies
+        timeout-minutes: 10
         working-directory: vop-verify-${{ github.run_id }}-${{ github.run_attempt }}
-        run: npm ci
+        run: npm ci --no-audit --no-fund --prefer-offline --loglevel=info
       - name: Regenerate and verify source-derived offline lessons
         working-directory: vop-verify-${{ github.run_id }}-${{ github.run_attempt }}
         run: npm run verify:content

@@ -1,0 +1,32 @@
+name: VOP trusted pull request gate
+on:
+  pull_request_target:
+    branches: [main]
+    types: [opened, reopened, synchronize, ready_for_review]
+permissions:
+  contents: read
+jobs:
+  trusted-source:
+    # This workflow is evaluated from the trusted base branch. NEVER checkout
+    # pull request source here, run PR scripts, or expose deployment secrets.
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 5
+    steps:
+      - name: Verify KASAINSTITUTE runner identity
+        shell: powershell
+        env:
+          VOP_ACTUAL_RUNNER: ${{ runner.name }}
+        run: |
+          if ($env:VOP_ACTUAL_RUNNER -ne 'KASAINSTITUTE') {
+            throw "Only the KASAINSTITUTE Windows self-hosted runner may execute VOP jobs (got '$env:VOP_ACTUAL_RUNNER')."
+          }
+      - name: Reject fork pull requests without checking out code
+        shell: powershell
+        env:
+          VOP_HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+          VOP_BASE_REPOSITORY: ${{ github.repository }}
+        run: |
+          if ($env:VOP_HEAD_REPOSITORY -ne $env:VOP_BASE_REPOSITORY) {
+            throw 'This VOP pull request originates from an untrusted fork. CI on self-hosted runners requires a trusted same-repository branch and code review.'
+          }
+          Write-Host 'Trusted VOP same-repository pull request source verified; other workflows must still pass.'

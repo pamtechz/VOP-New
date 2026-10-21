@@ -175,7 +175,7 @@ class _CandidatesScreenState extends State<CandidatesScreen> {
                     final info = c['information'] is Map ? c['information'] as Map<String, dynamic> : <String, dynamic>{};
                     if (_filter == 'unassigned') {
                       final orgId = (c['organizationId'] ?? '').toString().trim();
-                      final isPublic = c['isPublicMinistry'] == true || (c['organizationName'] ?? '').toString().toLowerCase().contains('public');
+                      final isPublic = c['isPublicMinistry'] == true;
                       return orgId.isEmpty || isPublic;
                     }
                     if (_filter == 'graduating') return info['graduating'] == true;
@@ -551,7 +551,7 @@ class _CandidateDetailSheetState extends State<_CandidateDetailSheet> {
         candidateId: candidateId,
         organizationId: orgId,
         churchName: orgName,
-        churchId: orgId,
+        churchId: (selected['churchId'] ?? '').toString(),
       );
       if (mounted) {
         Navigator.of(context).pop();
@@ -695,7 +695,7 @@ class _AssignChurchDialogState extends State<_AssignChurchDialog> {
   @override
   void initState() {
     super.initState();
-    _orgsFuture = widget.api.publicOrganizations();
+    _orgsFuture = widget.api.adminOrganizations();
   }
 
   @override
@@ -746,13 +746,15 @@ class _AssignChurchDialogState extends State<_AssignChurchDialog> {
                     var orgs = raw
                         .whereType<Map>()
                         .map((e) => Map<String, dynamic>.from(e))
+                        .where((o)=>o['organizationType']=='church'&&o['status']=='active'&&'${o['churchId']??''}'.isNotEmpty)
                         .toList();
 
                     if (_search.isNotEmpty) {
                       orgs = orgs.where((o) {
                         final name = (o['name'] ?? '').toString().toLowerCase();
                         final country = (o['billingCountry'] ?? '').toString().toLowerCase();
-                        return name.contains(_search) || country.contains(_search);
+                        final city=(o['city']??'').toString().toLowerCase();
+                        return name.contains(_search) || country.contains(_search)||city.contains(_search);
                       }).toList();
                     }
 
@@ -767,7 +769,7 @@ class _AssignChurchDialogState extends State<_AssignChurchDialog> {
                         final o = orgs[i];
                         final name = (o['name'] ?? 'Church').toString();
                         final type = (o['organizationType'] ?? 'church').toString();
-                        final country = (o['billingCountry'] ?? 'Zambia').toString();
+                        final country = (o['billingCountry'] ?? '').toString();
                         final isPublic = o['isPublicMinistry'] == true;
 
                         return ListTile(

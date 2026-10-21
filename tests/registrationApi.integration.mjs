@@ -72,6 +72,7 @@ test('registration policy is server authoritative and invitation aware',async t=
         email:'invited-registration@vop-test.invalid',
         password:'local-emulator-only',
         inviteToken:token,
+        displayName:'Invited learner',phoneNumber:'+260970000001',
       },'203.0.113.22');
       assert.equal(res.code,201,JSON.stringify(res.payload));
       assert.ok(res.payload.customToken);
@@ -79,6 +80,8 @@ test('registration policy is server authoritative and invitation aware',async t=
       const profile=await db.doc('users/'+account.uid).get();
       assert.equal(profile.exists,true);
       assert.equal(profile.data()?.registration?.source,'organization_invitation');
+      assert.equal(profile.data()?.displayName,'Invited learner');
+      assert.equal(profile.data()?.phoneNumber,'+260970000001');
     });
 
     await t.test('approval-required open registration creates a disabled pending account instead of a usable session',async()=>{

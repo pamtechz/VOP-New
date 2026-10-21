@@ -132,7 +132,7 @@ export function roleForPermission(profile: { role?: unknown; organizationRole?: 
   const role = String(profile.role || '');
   if (role === 'super_admin' || role === 'union_admin' || role === 'conference_admin' || role === 'district_admin' || role === 'church_admin') return role;
   const organizationRole = String(profile.organizationRole || '');
-  if (organizationRole === 'owner' || organizationRole === 'admin' || organizationRole === 'editor' || organizationRole === 'teacher' || organizationRole === 'mentor') return organizationRole;
+  if (organizationRole === 'owner' || organizationRole === 'admin' || organizationRole === 'editor' || organizationRole === 'teacher' || organizationRole === 'mentor' || organizationRole === 'staff') return organizationRole;
   if (role === 'learner') return 'student';
   if (PERMISSION_ROLES.includes(role as PermissionRole)) return role as PermissionRole;
   if (profile.privileges?.manager === true) return 'staff';

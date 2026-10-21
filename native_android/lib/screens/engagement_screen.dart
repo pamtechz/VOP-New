@@ -111,11 +111,11 @@ class _EngagementScreenState extends State<EngagementScreen> {
             onTap:()=>_startChallenge()),
           const SizedBox(height:18),
           Row(children:[
-            Expanded(child:_score('LEVEL','${stats['level']??1}',Icons.trending_up)),
+            Expanded(child:_score('LEVEL','${stats['level']??'—'}',Icons.trending_up)),
             const SizedBox(width:10),
-            Expanded(child:_score('POINTS','${stats['points']??0}',Icons.stars_outlined)),
+            Expanded(child:_score('POINTS','${stats['points']??'—'}',Icons.stars_outlined)),
             const SizedBox(width:10),
-            Expanded(child:_score('SOLO','${stats['soloCompleted']??0}',Icons.bolt_outlined)),
+            Expanded(child:_score('SOLO','${stats['soloCompleted']??'—'}',Icons.bolt_outlined)),
           ]),
           const SizedBox(height:18),
           VopSectionTitle('Continue challenges',subtitle:'Your active attempts'),
@@ -185,10 +185,10 @@ class _EngagementScreenState extends State<EngagementScreen> {
             message:'No participating learners yet.')
           :ListView.builder(padding:const EdgeInsets.all(16),itemCount:items.length,
             itemBuilder:(context,index)=>Card(child:ListTile(
-              leading:CircleAvatar(child:Text('${items[index]['rank']??index+1}')),
+              leading:CircleAvatar(child:Text('${items[index]['rank']??'—'}')),
               title:Text('${items[index]['displayName']??'Learner'}'),
-              subtitle:Text('${items[index]['rating']??1200} rating'),
-              trailing:Text('${items[index]['points']??0} pts')))),
+              subtitle:Text(items[index]['rating']==null?'Rating unavailable':'${items[index]['rating']} rating'),
+              trailing:Text('${items[index]['points']??'—'} pts')))),
       )));
     }catch(e){
       if (mounted) {

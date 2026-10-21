@@ -3,6 +3,7 @@ import { getAuth } from 'firebase-admin/auth';
 import { getApps } from 'firebase-admin/app';
 import { authenticateTenant, requireOrgRole, writeTenantAudit, organizationInHierarchyScope, enforceOrganizationMembershipQuotas } from '../../server/tenant.js';
 import { requirePermission, requireSubscriptionFeature } from '../../server/permissions.js';
+import {isLearnerProfile} from '../../shared/learnerProfiles.js';
 
 type Request = {
   method?: string;
@@ -51,6 +52,9 @@ export default async function handler(request: Request, response: Response) {
       }
 
       const snap = await usersQuery.get();
+      const orgIds=[...new Set(snap.docs.map(doc=>String(doc.data().organizationId||'')).filter(Boolean))];
+      const orgs=orgIds.length?await ctx.db.getAll(...orgIds.map(orgId=>ctx.db.doc('organizations/'+orgId))):[];
+      const orgData=new Map(orgs.map(doc=>[doc.id,doc.data()||{}]));
       const items = snap.docs
         .map(doc => {
           const d = doc.data() || {};
@@ -61,7 +65,8 @@ export default async function handler(request: Request, response: Response) {
             email: String(d.email || ''),
             phoneNumber: String(d.phoneNumber || ''),
             organizationId: String(d.organizationId || ''),
-            organizationName: String(d.organizationName || ''),
+            organizationName: String(orgData.get(String(d.organizationId||''))?.name || d.organizationName || ''),
+            isPublicMinistry:orgData.get(String(d.organizationId||''))?.isPublicMinistry===true,
             churchName: String(d.churchName || d.organizationName || ''),
             information: d.information || {},
             progress: d.progress || {},
@@ -70,10 +75,7 @@ export default async function handler(request: Request, response: Response) {
           };
         })
         .filter(c => {
-          const role = c.role.toLowerCase();
-          if (['super_admin', 'union_admin', 'conference_admin', 'district_admin', 'church_admin'].includes(role)) {
-            return false;
-          }
+          if (!isLearnerProfile(c)) return false;
           if (search) {
             const nameMatch = c.displayName.toLowerCase().includes(search);
             const emailMatch = c.email.toLowerCase().includes(search);
@@ -162,6 +164,7 @@ export default async function handler(request: Request, response: Response) {
       if (!candidateSnapshot.exists) return response.status(404).json({ error: 'Candidate was not found.' });
 
       const candidateData = candidateSnapshot.data() || {};
+      if(!isLearnerProfile(candidateData))return response.status(400).json({error:'Use User Management to manage a staff or administrator account.'});
       const currentOrgId = String(candidateData.organizationId || '').trim();
 
       if (!ctx.isSuperAdmin && currentOrgId && (ctx.tenantType === 'organization' ? currentOrgId !== ctx.organizationId : !(await organizationInHierarchyScope(ctx, currentOrgId)))) {
@@ -188,7 +191,7 @@ export default async function handler(request: Request, response: Response) {
       const authUpdates: Parameters<typeof authService.updateUser>[1] = {};
       const displayName = typeof body.displayName === 'string' ? body.displayName.trim() : '';
       const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
-      const phoneNumber = typeof body.phoneNumber === 'string' ? body.phoneNumber.trim() : '';
+      const phoneNumber = typeof body.phoneNumber === 'string' ? body.phoneNumber.trim() : undefined;
       const disabled = typeof body.disabled === 'boolean' ? body.disabled : undefined;
 
       if (displayName) authUpdates.displayName = displayName;
@@ -197,9 +200,7 @@ export default async function handler(request: Request, response: Response) {
       if (disabled !== undefined) authUpdates.disabled = disabled;
 
       if (Object.keys(authUpdates).length > 0) {
-        await authService.updateUser(candidateId, authUpdates).catch(err => {
-          console.warn('Could not update Firebase Auth record for candidate', err);
-        });
+        await authService.updateUser(candidateId, authUpdates);
       }
 
       const conferenceName = typeof body.conferenceName === 'string' ? body.conferenceName.trim() : undefined;
@@ -236,6 +237,7 @@ export default async function handler(request: Request, response: Response) {
           ...(phoneNumber !== undefined ? { phoneNumber } : {}),
           ...(disabled !== undefined ? { disabled } : {}),
           organizationId: nextOrgId,
+          ...(nextOrgId !== currentOrgId ? { organizationRole:'learner' } : {}),
           accountType: nextOrgId ? 'organization' : 'personal',
           ...(orgName ? { organizationName: orgName } : {}),
           ...(conferenceName !== undefined ? { conferenceName } : {}),
@@ -248,19 +250,21 @@ export default async function handler(request: Request, response: Response) {
         }, { merge: true });
       });
 
-      if (nextOrgId && nextOrgId !== currentOrgId) {
+      if (nextOrgId && targetOrgId) {
+        const authUser=await authService.getUser(candidateId);
         await authService.setCustomUserClaims(candidateId, {
+          ...authUser.customClaims,
           role: String(candidateData.role || 'student'),
           organizationId: nextOrgId,
           organizationRole: 'learner',
           accountType: nextOrgId ? 'organization' : 'personal',
-        }).catch(() => {});
+        });
       }
 
       const updatedSnap = await candidateRef.get();
       const updatedData = updatedSnap.data() || {};
       await writeTenantAudit(ctx, 'candidate.update', `users/${candidateId}`, undefined, {
-        displayName, email, phoneNumber, organizationId: nextOrgId, previousOrganizationId: currentOrgId,
+        displayName, email, ...(phoneNumber!==undefined?{phoneNumber}:{}), organizationId: nextOrgId, previousOrganizationId: currentOrgId,
       });
 
       return response.status(200).json({

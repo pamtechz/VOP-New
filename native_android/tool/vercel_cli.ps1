@@ -11,15 +11,26 @@ function Invoke-VopVercelEnvironmentPull {
         [string]$Environment = "production"
     )
 
-    $vercel = Get-Command -Name "vercel.cmd" -CommandType Application -ErrorAction SilentlyContinue
+    # Resolve the first vercel.cmd on the current PATH, not PowerShell's
+    # previously cached command discovery. This also allows a temporary test
+    # installation to shadow the real CLI without invoking cmd.exe.
+    $vercelPath = $null
+    foreach ($directory in ($env:PATH -split ';')) {
+        if ([string]::IsNullOrWhiteSpace($directory)) { continue }
+        $candidate = Join-Path $directory 'vercel.cmd'
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+            $vercelPath = (Resolve-Path -LiteralPath $candidate).Path
+            break
+        }
+    }
     $node = Get-Command -Name "node.exe" -CommandType Application -ErrorAction SilentlyContinue
-    if (!$vercel -or !$node) {
+    if (!$vercelPath -or !$node) {
         throw "Vercel CLI and Node.js Windows executables are required. Run npm install -g vercel and vercel login."
     }
     if (!(Test-Path -LiteralPath $ProjectRoot -PathType Container)) {
         throw "The Vercel project directory does not exist."
     }
-    $entrypoint = Join-Path (Split-Path -Parent $vercel.Source) "node_modules\vercel\dist\vc.js"
+    $entrypoint = Join-Path (Split-Path -Parent $vercelPath) "node_modules\vercel\dist\vc.js"
     if (!(Test-Path -LiteralPath $entrypoint -PathType Leaf)) {
         throw "The Vercel CLI Node entrypoint was not found alongside vercel.cmd. Reinstall Vercel with npm install -g vercel."
     }

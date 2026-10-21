@@ -84,6 +84,8 @@ export default async function handler(req:Request,res:Response){
     const body=req.body&&typeof req.body==='object'?req.body as Record<string,unknown>:{};
     const email=address(body.email);
     const password=String(body.password||'');
+    const displayName=String(body.displayName||'').trim().slice(0,120);
+    const phoneNumber=String(body.phoneNumber||'').trim().slice(0,40);
     const token=invitationToken(body.inviteToken);
     if(!/^\S+@\S+\.\S+$/.test(email))return res.status(400).json({error:'Enter a valid email address.'});
     if(password.length<6||password.length>128)return res.status(400).json({error:'Password must contain between 6 and 128 characters.'});
@@ -91,16 +93,16 @@ export default async function handler(req:Request,res:Response){
     const settings=await db.doc('system/settings').get();
     const options=settings.data()?.systemOptions||{};
     const invited=await invitationAllowsRegistration(db,token,email);
-    if(options.allowRegistrations===false&&!invited){
+    if(options.allowRegistrations!==true&&!invited){
       return res.status(403).json({error:'New account registration is currently closed. Use a valid organization invitation or contact VOP administration.'});
     }
 
     const auth=getAuth();
-    const record=await auth.createUser({email,password,emailVerified:false,disabled:false});
+    const record=await auth.createUser({email,password,...(displayName?{displayName}:{}),emailVerified:false,disabled:false});
     createdUid=record.uid;
     const now=new Date().toISOString();
     await db.doc('users/'+record.uid).set({
-      uid:record.uid,email,displayName:email.split('@')[0]||'VOP Student',
+      uid:record.uid,email,displayName:displayName||email.split('@')[0]||'VOP Student',phoneNumber,
       photoURL:null,role:'student',organizationId:'',organizationRole:'',
       adminNodeType:null,adminNodeId:null,
       privileges:{admin:false,superAdmin:false,guardian:false,editor:false,manager:false,developer:false,coordinator:false},
