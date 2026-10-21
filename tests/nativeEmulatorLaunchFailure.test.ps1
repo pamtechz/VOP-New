@@ -26,8 +26,16 @@ try {
     $start = Get-Date
     $currentPowerShell = (Get-Process -Id $PID).Path
     if (!$currentPowerShell) { throw "Cannot resolve the current PowerShell executable for the launcher test." }
-    $output = & $currentPowerShell -NoProfile -NonInteractive -File $launcher -Mode Emulator -EmulatorId Pixel10 2>&1 | Out-String
-    $code = $LASTEXITCODE
+    # A nonzero child exit and its stderr are the test subject; Windows
+    # PowerShell 5.1 must not convert them into a terminating NativeCommandError.
+    $stdoutPath = Join-Path $stubDir 'launcher.stdout'
+    $stderrPath = Join-Path $stubDir 'launcher.stderr'
+    $child = Start-Process -FilePath $currentPowerShell -ArgumentList @(
+        '-NoProfile', '-NonInteractive', '-File', ('"' + $launcher + '"'),
+        '-Mode', 'Emulator', '-EmulatorId', 'Pixel10'
+    ) -Wait -PassThru -NoNewWindow -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath
+    $output = (Get-Content -LiteralPath $stdoutPath -Raw) + (Get-Content -LiteralPath $stderrPath -Raw)
+    $code = $child.ExitCode
     $elapsed = ((Get-Date) - $start).TotalSeconds
     if ($code -eq 0) { throw "Launcher incorrectly reported success after Flutter emulator returned code 1." }
     if ($output -notmatch 'failed to start \(exit code 1\)') {
