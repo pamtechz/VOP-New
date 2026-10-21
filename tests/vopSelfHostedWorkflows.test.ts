@@ -79,6 +79,14 @@ test('native Flutter Android and Web CI invokes Windows-compatible commands',()=
   assert.match(source,/shell: cmd/);
   assert.match(source,/shell: powershell/);
   assert.doesNotMatch(source,/shell: pwsh/);
+  assert.doesNotMatch(source,/subosito\/flutter-action/, 'Flutter CI must not invoke a bash-based installer on native Windows');
+  const setupInvocation = String.raw`run: .\.github\scripts\setup-vop-flutter.ps1`;
+  assert.equal(source.split(setupInvocation).length-1,2,
+    'both Flutter build jobs must use the trusted Windows SDK bootstrap');
+  const setup=readFileSync('.github/scripts/setup-vop-flutter.ps1','utf8');
+  assert.match(setup,/flutter\.bat/);
+  assert.match(setup,/GITHUB_PATH/);
+  assert.doesNotMatch(setup,/\/bin\/bash|wsl\.exe/);
   assert.match(source,/flutter build apk --debug/);
   assert.match(source,/flutter build web --release/);
   assert.match(source,/passkeys-bundle\.js/);
