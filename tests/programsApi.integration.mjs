@@ -106,6 +106,49 @@ for(const [id,org,uid] of [[guideA,a,author.uid],[guideB,b,outsider.uid]]){
     archived:false,sharingScope:'organization',canonical:true,
   });
 }
+await test('Super Admin curriculum saves survive stale hierarchy metadata and selected organization drift',async()=>{
+  const superProfile=db.doc('users/'+superAdmin.uid);
+  await superProfile.update({adminNodeId:'historic-no-longer-linked-union',adminNodeType:'union'});
+  const lessonId='program-test-super-admin-cross-scope';
+  const ref=db.doc('guides/'+guideA+'/lessons/'+lessonId);
+  try {
+    // The editor can retain the previous organisation while switching guides.
+    // Super Admin must not silently transfer guide A lessons into B.
+    const payload={guideId:guideA,lessonId,language:'en',title:'Cross-scope study',
+      lessonNumber:'82',type:'Lesson',published:false,sharingScope:'organization'};
+    const saved=await call(superAdmin,{collection:'curriculum',action:'upsertLesson',
+      id:lessonId,organizationId:b,data:payload});
+    assert.equal(saved.status,200,JSON.stringify(saved.value));
+    assert.equal((await ref.get()).data()?.organizationId,a);
+    assert.equal((await ref.get()).data()?.ownerOrganizationId,a);
+
+    const published=await call(superAdmin,{collection:'curriculum',action:'publishLesson',
+      id:lessonId,organizationId:b,data:payload});
+    assert.equal(published.status,200,JSON.stringify(published.value));
+    assert.equal((await ref.get()).data()?.organizationId,a);
+    assert.equal((await ref.get()).data()?.published,true);
+
+    const edited=await call(superAdmin,{collection:'curriculum',action:'upsertLesson',
+      id:lessonId,organizationId:b,data:{...payload,title:'Updated across organizations',published:true}});
+    assert.equal(edited.status,200,JSON.stringify(edited.value));
+    assert.equal((await ref.get()).data()?.title,'Updated across organizations');
+    assert.equal((await ref.get()).data()?.organizationId,a);
+
+    const invalid=await call(superAdmin,{collection:'curriculum',action:'upsertLesson',
+      id:'program-test-invalid-lesson',organizationId:a,
+      data:{guideId:guideA,lessonId:'program-test-invalid-lesson',language:''}});
+    assert.equal(invalid.status,400,'missing language is validation, not forbidden');
+    assert.equal(invalid.value.code,'INVALID_REQUEST');
+
+    const rejected=await call(outsider,{collection:'curriculum',action:'upsertLesson',
+      id:'program-test-forbidden-lesson',organizationId:b,
+      data:{...payload,lessonId:'program-test-forbidden-lesson'}});
+    assert.notEqual(rejected.status,200,'B owner cannot edit A guide');
+  }finally{
+    await superProfile.update({adminNodeId:'',adminNodeType:''});
+  }
+});
+
 const base={title:'Foundations of Faith',description:'A guided study',
   coverImageUrl:'',entryMode:'sections',guideIds:[guideA],
   sharingScope:'organization',published:true,archived:false};
