@@ -41,8 +41,32 @@ const plainProgram=(id:string,row:Raw)=>({
   entryMode:row.entryMode==='sections'?'sections':'lessons',
   organizationId:string(row.organizationId||row.ownerOrganizationId),
 });
+// Safe section directory: only published lesson metadata. Never transmit
+// section documents, blocks, private questions, answers or teacher notes here.
+const sectionOutline=(row:Raw)=>{
+  if(row.type==='Test')return [];
+  const pages=Array.isArray(row.chapters)&&row.chapters.length
+    ?curriculumPages(row.chapters as Parameters<typeof curriculumPages>[0])
+    :(Array.isArray(row.contentPages)?row.contentPages:[]);
+  const sections=new Map<string,{id:string;title:string;chapterTitle:string;pageIndex:number;pageCount:number;number:number}>();
+  for(const [index,raw] of pages.slice(0,200).entries()){
+    if(!raw||typeof raw!=='object')continue;
+    const page=raw as unknown as Raw;
+    const id=string(page.sectionId);
+    if(!id||!idPattern.test(id))continue;
+    const existing=sections.get(id);
+    if(existing){existing.pageCount++;continue;}
+    sections.set(id,{
+      id,title:string(page.sectionTitle||page.title)||'Untitled section',
+      chapterTitle:string(page.chapterTitle),pageIndex:index,pageCount:1,
+      number:sections.size+1,
+    });
+  }
+  return [...sections.values()];
+};
 const plainLesson=(id:string,row:Raw)=>({
   id,title:string(row.title||row.lessonTitle||row.name),description:string(row.description),
+  sections:sectionOutline(row),
   lessonNumber:string(row.lessonNumber||id),type:row.type==='Test'?'Test':'Lesson',
   estimatedMinutes:Number.isFinite(Number(row.estimatedMinutes))?Number(row.estimatedMinutes):15,
   pageCount:row.type==='Test'?0:

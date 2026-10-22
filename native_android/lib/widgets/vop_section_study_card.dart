@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 class VopSectionStudyCard extends StatelessWidget {
   const VopSectionStudyCard({
     required this.title,
+    this.headingLabel='Section',
     required this.description,
     required this.number,
     required this.pageCount,
@@ -19,6 +20,7 @@ class VopSectionStudyCard extends StatelessWidget {
     super.key,
   });
   final String title;
+  final String headingLabel;
   final String description;
   final String number;
   final int pageCount;
@@ -72,7 +74,7 @@ class VopSectionStudyCard extends StatelessWidget {
             child:Row(children:[
               Expanded(child:Column(
                 crossAxisAlignment:CrossAxisAlignment.start,children:[
-                  Text('Section $number: $title',maxLines:3,
+                  Text('$headingLabel $number: $title',maxLines:3,
                     overflow:TextOverflow.ellipsis,
                     style:TextStyle(color:foreground,fontWeight:FontWeight.w800,
                       fontSize:17,height:1.3)),

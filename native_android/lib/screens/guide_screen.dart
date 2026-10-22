@@ -167,12 +167,12 @@ class _GuideScreenState extends State<GuideScreen> {
               ],
             ]),
             const SizedBox(height:16),
-            Text('Lessons',
+            Text(details['learnerEntryMode']=='sections'?'Sections':'Lessons',
               style:Theme.of(context).textTheme.titleLarge),
             const SizedBox(height:8),
             if(studyLessons.isEmpty)const Padding(padding:EdgeInsets.all(25),
               child:Text('There are no published lessons in this guide.')),
-            ...studyLessons.map((lesson){
+            ...studyLessons.expand((lesson){
               final locked=lesson['locked']==true;
               final completed=lesson['completed']==true;
               final attached=lessons.firstWhere(
@@ -185,7 +185,6 @@ class _GuideScreenState extends State<GuideScreen> {
                   (lesson['attachedQuizId']!=null&&(e['id']==lesson['attachedQuizId']||e['sourceQuizId']==lesson['attachedQuizId']))||
                   ((e['attachedLessonId']==null||'${e['attachedLessonId']}'.isEmpty)&&e['lessonId']==lesson['id'])),
                 orElse:()=><String,dynamic>{});
-              final attachedQuizId=attached.isNotEmpty?'${attached['id']}':null;
               final currentIndex = studyLessons.indexOf(lesson);
               String lockedReason = 'Finish earlier lessons to unlock';
               if (locked && currentIndex > 0) {
@@ -202,6 +201,33 @@ class _GuideScreenState extends State<GuideScreen> {
                 ?(lesson['pageCount'] as num).toInt().clamp(0,200).toInt():0;
               final time=(lesson['estimatedMinutes'] is num
                 ?(lesson['estimatedMinutes'] as num).toInt():15).clamp(1,240).toInt();
+              // Chapter/section-first guides show one card per authored section.
+              // Other guides retain a single lesson card for every lesson.
+              final outlines=(lesson['sections'] as List? ?? [])
+                .whereType<Map>().map((part)=>Map<String,dynamic>.from(part)).toList();
+              final sectionFirst=details['learnerEntryMode']=='sections';
+              final cardRows=sectionFirst&&outlines.isNotEmpty
+                ?outlines:<Map<String,dynamic>>[{}];
+              return cardRows.map((section){
+                final isSection=section.isNotEmpty;
+                final startPage=section['pageIndex'] is num
+                  ?(section['pageIndex'] as num).toInt():0;
+                final sectionPages=section['pageCount'] is num
+                  ?(section['pageCount'] as num).toInt().clamp(0,200).toInt():pageCount;
+                final sectionTitle=isSection
+                  ?(section['title']??'').toString():(lesson['title']??'Lesson').toString();
+                final sectionId=isSection?(section['id']??'').toString():null;
+                final anchoredTest=isSection?lessons.where((e)=>
+                    e['type']=='Test'&&e['attachmentType']=='section'&&
+                    e['anchorId']==sectionId&&e['published']!=false)
+                  .toList():<Map<String,dynamic>>[];
+                final chosenTest=anchoredTest.isNotEmpty?anchoredTest.first:
+                  (!isSection||section['number']==outlines.length)
+                    ?attached:<String,dynamic>{};
+                final chosenQuizId=chosenTest.isNotEmpty
+                  ?(chosenTest['id']??'').toString():null;
+                final sectionMinutes=isSection&&outlines.isNotEmpty
+                  ?(time/outlines.length).ceil().clamp(1,240).toInt():time;
               Future<void> openLesson()async{
                 await Navigator.push(context,MaterialPageRoute<void>(
                   builder:(_)=>LessonScreen(
@@ -210,38 +236,44 @@ class _GuideScreenState extends State<GuideScreen> {
                     lessonId:'${lesson['id']}',
                     language:language,
                     title:'${lesson['title']}',
-                    attachedQuizId:attachedQuizId,
+                    attachedQuizId:chosenQuizId,
+                    initialPageIndex:isSection?startPage:null,
                   ),
                 ));
                 if(mounted)setState(reload);
               }
               return VopSectionStudyCard(
-                title:'${lesson['title']??'Lesson'}',
-                description:locked?lockedReason:'${lesson['description']??''}',
-                number:'${lesson['lessonNumber']??currentIndex+1}',
-                pageCount:pageCount,
-                readMinutes:time,
+                title:sectionTitle,
+                headingLabel:isSection?'Section':'Lesson',
+                description:locked?lockedReason:isSection
+                  ?(section['chapterTitle']??'').toString()
+                  :(lesson['description']??'').toString(),
+                number:isSection?(section['number']??currentIndex+1).toString()
+                  :(lesson['lessonNumber']??currentIndex+1).toString(),
+                pageCount:isSection?sectionPages:pageCount,
+                readMinutes:sectionMinutes,
                 completed:completed,
                 locked:locked,
                 onOpen:locked?null:openLesson,
-                onTakeTest:locked||attachedQuizId==null?null:()async{
+                onTakeTest:locked||chosenQuizId==null||chosenQuizId.isEmpty?null:()async{
                   await Navigator.push(context,MaterialPageRoute<void>(
                     builder:(_)=>QuizScreen(api:widget.api,
-                      guideId:widget.guideId,lessonId:attachedQuizId,
-                      language:language,title:'${attached['title']??'Lesson review'}')));
+                      guideId:widget.guideId,lessonId:chosenQuizId,
+                      language:language,title:(chosenTest['title']??'Lesson review').toString())));
                   if(mounted)setState(reload);
                 },
-                onFlashcards:locked||pageCount==0?null:()=>
+                onFlashcards:locked||(isSection?sectionPages:pageCount)==0?null:()=>
                   Navigator.push(context,MaterialPageRoute<void>(
                     builder:(_)=>LessonFlashcardsScreen(
                       api:widget.api,guideId:widget.guideId,
                       lessonId:'${lesson['id']}',
-                      title:'${lesson['title']??'Lesson'}'))),
+                      title:sectionTitle,sectionId:sectionId))),
                 onEditQuestions:widget.canEditChapterQuestions&&
                   widget.onEditQuestions!=null&&!locked
                   ?()=>widget.onEditQuestions!('${lesson['id']}'):null,
-                onReset:completed?()=>_confirmResetLesson(lesson,language):null,
+                onReset:completed&&!isSection?()=>_confirmResetLesson(lesson,language):null,
               );
+              });
             }),
             if(guideAssessments.isNotEmpty)...[
               const SizedBox(height:20),

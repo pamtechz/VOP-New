@@ -8,10 +8,12 @@ class LessonFlashcardsScreen extends StatefulWidget {
     required this.guideId,
     required this.lessonId,
     required this.title,
+    this.sectionId,
     super.key,
   });
   final VopApi api;
   final String guideId,lessonId,title;
+  final String? sectionId;
   @override State<LessonFlashcardsScreen> createState()=>_LessonFlashcardsScreenState();
 }
 class _LessonFlashcardsScreenState extends State<LessonFlashcardsScreen> {
@@ -33,7 +35,9 @@ class _LessonFlashcardsScreenState extends State<LessonFlashcardsScreen> {
           textAlign:TextAlign.center)));
       final result=s.data??{};
       final lesson=result['lesson'] is Map?result['lesson'] as Map:{};
-      final pages=(lesson['pages'] as List? ?? []).whereType<Map>().map((page){
+      final pages=(lesson['pages'] as List? ?? []).whereType<Map>()
+        .where((page)=>widget.sectionId==null||page['sectionId']==widget.sectionId)
+        .map((page){
         final title=(page['title']??widget.title).toString();
         final quote=page['scriptureQuote'] is Map?page['scriptureQuote'] as Map:{};
         final raw=(page['keyTakeaway']??'').toString().trim();

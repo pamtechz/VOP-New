@@ -57,3 +57,23 @@ test('flashcards use actual authorised lesson content and metadata is not fabric
   assert.match(flashWeb,/page\.keyTakeaway\|\|page\.scriptureQuote\?\.text\|\|page\.content/);
   assert.doesNotMatch(flashWeb,/correctOptionIndex|answerKey/);
 });
+
+test('Classic renders authored sections as cards and opens only their published pages',()=>{
+  const mobile=read('api_handlers/admin/mobile.ts');
+  const guide=read('native_android/lib/screens/guide_screen.dart');
+  const lesson=read('native_android/lib/screens/lesson_screen.dart');
+  const flashcards=read('native_android/lib/screens/lesson_flashcards_screen.dart');
+  const card=read('native_android/lib/widgets/vop_section_study_card.dart');
+  assert.match(mobile,/const sectionOutline=/);
+  assert.match(mobile,/sections:sectionOutline\(row\)/);
+  assert.match(mobile,/pageIndex:index,pageCount:1/);
+  assert.match(guide,/details\['learnerEntryMode'\]=='sections'/);
+  assert.match(guide,/studyLessons\.expand\(\(lesson\)/);
+  assert.match(guide,/initialPageIndex:isSection\?startPage:null/);
+  assert.match(guide,/sectionId:sectionId/);
+  assert.match(card,/headingLabel='Section'/);
+  assert.match(lesson,/widget\.initialPageIndex == null/);
+  assert.match(flashcards,/page\['sectionId'\]==widget\.sectionId/);
+  // Learner shell opens GuideScreen with no administrator capability.
+  assert.doesNotMatch(read('native_android/lib/screens/home_shell.dart'),/canEditChapterQuestions\s*:/);
+});
