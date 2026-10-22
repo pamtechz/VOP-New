@@ -1,0 +1,7 @@
+{
+  "framework": null,
+  "installCommand": "npm ci --ignore-scripts",
+  "buildCommand": "node run-vop-guide-import.mjs --mode=preview",
+  "outputDirectory": "import-report",
+  "ignoreCommand": "node ../../scripts/vercel-production-gate.mjs"
+}

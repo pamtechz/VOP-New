@@ -11,6 +11,11 @@ import {fileURLToPath} from 'node:url';
 const here=dirname(fileURLToPath(import.meta.url));
 const mode=process.argv.find(value=>value.startsWith('--mode='))?.slice(7)||'preview';
 if(!['preview','apply'].includes(mode))throw new Error('Choose --mode=preview or --mode=apply.');
+if(process.env.VERCEL&&mode==='apply'){
+  if(process.env.VERCEL_ENV==='production')throw new Error('Import execution must not promote or replace the production deployment.');
+  if(process.env.VERCEL_PROJECT_ID&&process.env.VERCEL_PROJECT_ID!=='prj_zxOpr6AsBlSI0PuzQtflJmL2RPrU')
+    throw new Error('Unexpected Vercel project for this controlled import.');
+}
 const args=[join(here,'seed-vop-guides.mjs'),'--connect','--project-id','voiceofprophecy',
   '--program-id','program-8f8ef60d94fa4c16b8236a678fbf5e76','--publish'];
 if(mode==='apply')args.push('--apply','--confirm-project','voiceofprophecy',
