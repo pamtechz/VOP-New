@@ -47,3 +47,18 @@ test('Flutter has an expanded desktop navigation without changing the phone bott
   assert.match(shell,/final desktop=MediaQuery\.sizeOf\(context\)\.width>=1120/);
   assert.match(shell,/bottomNavigationBar:wide\?null:NavigationBar/);
 });
+
+test('management portals have persistent role-authorized desktop navigation',()=>{
+  const shell=readFileSync('native_android/lib/widgets/workspace_desktop_shell.dart','utf8');
+  const navigation=readFileSync('native_android/lib/screens/workspace_navigation.dart','utf8');
+  const admin=readFileSync('native_android/lib/screens/admin_dashboard_screen.dart','utf8');
+  const organization=readFileSync('native_android/lib/screens/organization_dashboard_screen.dart','utf8');
+  assert.match(shell,/width >= 1180/);
+  assert.match(shell,/WorkspaceNavigation\(api: api\)/);
+  assert.match(navigation,/permissions/);
+  assert.match(navigation,/bool can\(String resource,String action\)/);
+  assert.match(admin,/body: WorkspaceDesktopShell\(api: widget\.api/);
+  assert.match(organization,/body: WorkspaceDesktopShell\(api: widget\.api/);
+  assert.match(admin,/if \(!WorkspaceDesktopShell\.activeFor\(context\)\)/);
+  assert.match(organization,/if \(!WorkspaceDesktopShell\.activeFor\(context\)\)/);
+});
