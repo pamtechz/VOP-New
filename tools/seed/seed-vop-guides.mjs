@@ -9,7 +9,9 @@ import {fileURLToPath,pathToFileURL} from 'node:url';
 
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'../..');
 const idPattern=/^[A-Za-z0-9_-]{1,120}$/;
-const hash=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
+const canonical=value=>value===null||typeof value!=='object'?value:Array.isArray(value)?value.map(canonical):
+  Object.fromEntries(Object.keys(value).sort().map(key=>[key,canonical(value[key])]));
+const hash=value=>createHash('sha256').update(JSON.stringify(canonical(value))).digest('hex');
 const same=(a,b)=>String(a||'').trim().toLowerCase()===String(b||'').trim().toLowerCase();
 const configurations=[
   {language:'bem',title:'Ukusanga',languageName:'Bemba',nativeName:'Ichibemba',directory:'bemba'},
@@ -61,10 +63,10 @@ export function validateMaster(master,languages=['bem','toi']){
 }
 
 export function applySourceOverrides(master,overrides){
-  requireValue(overrides?.schemaVersion===2&&Array.isArray(overrides.lessons),'Invalid supplied lesson overrides.');
+  validateMaster(overrides,['bem']);
   const values=new Map();
   for(const lesson of overrides.lessons){
-    requireValue(lesson.lang==='bem'&&['lesson-01','lesson-02'].includes(lesson.lessonId),'Only the two supplied Ukusanga lessons can override this import.');
+    requireValue(lesson.lang==='bem','Only supplied Ukusanga lessons can override this import.');
     requireValue(!values.has(lesson.lessonId),'Duplicate supplied lesson override.');
     values.set(lesson.lessonId,lesson);
   }
@@ -128,6 +130,10 @@ export function existingLessonFor(source,existing){
   requireValue(existingLesson.data.seed?.sourceContentHash===hash(source),
     `Existing lesson ${existingLesson.id} differs or has no verified import fingerprint; it will not be overwritten.`);
   return existingLesson;
+}
+
+export function matchesWrittenFields(actual,expected){
+  return Object.entries(expected).every(([key,value])=>Object.hasOwn(actual,key)&&hash(actual[key])===hash(value));
 }
 
 async function editionFor(app,projectId,databaseId){
@@ -223,9 +229,8 @@ async function main(){
   const option=name=>{const i=args.indexOf(name);return i<0?undefined:args[i+1];};
   const has=name=>args.includes(name);
   let master=JSON.parse(await readFile(resolve(option('--master')||resolve(root,'content/lessons.master.json')),'utf8'));
-  const overridePath=resolve(option('--overrides')||resolve(root,'content/ukusanga-supplied-lessons-01-02.json'));
-  try{master=applySourceOverrides(master,JSON.parse(await readFile(overridePath,'utf8')));}
-  catch(error){if(error.code!=='ENOENT'||option('--overrides'))throw error;}
+  const overridePath=resolve(option('--overrides')||resolve(root,'content/ukusanga-supplied-lessons.json'));
+  master=applySourceOverrides(master,JSON.parse(await readFile(overridePath,'utf8')));
   const inventory=validateMaster(master);
   const englishPath=option('--english-master');
   if(englishPath){
@@ -286,8 +291,7 @@ async function main(){
   });
   await batch.commit();
   const verification=await db.getAll(...plan.writes.map(item=>db.doc(item.path)));
-  requireValue(verification.every((item,index)=>item.exists&&Object.entries(plan.writes[index].data).every(
-    ([key,value])=>hash(item.data()[key])===hash(value))),
+  requireValue(verification.every((item,index)=>item.exists&&matchesWrittenFields(item.data(),plan.writes[index].data)),
     'Import committed but exact-field read-back verification failed. Inspect the receipt before retrying.');
   console.log(`Verified ${plan.writes.length} imported or linked documents. Receipt: ${receipt.path}`);
 }

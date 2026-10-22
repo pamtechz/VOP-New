@@ -12,20 +12,29 @@ writing and refuses conflicts.
 
 | Guide | Language code | Prepared full lessons | Status |
 | --- | --- | ---: | --- |
-| Ukusanga | bem | 26 | Supplied archive already present in this repository |
+| Ukusanga | bem | 26 | All supplied text files and pasted closing lessons verified |
 | Discover | en | 0 | Needs authorized user-supplied lesson files |
 | Kojana | toi | 26 | Supplied archive already present in this repository |
 
-The 52 supplied translations contain 364 original sections and reference 170
+The 52 supplied translations contain 368 reading sections and reference 170
 original illustrations. Text, images, section boundaries, order, source hashes
 and original copyright attributions are retained. No assessment questions were
 present in that archive; no questions, answers or certificates are fabricated.
 New guides retain VOP's required-final-exam flag and are not certificate eligible.
 
-The two Bemba text files supplied on 22 October 2026 are recorded separately in
-`content/ukusanga-supplied-lessons-01-02.json`. They replace lessons 1 and 2
-when the importer runs. Both match the source archive word for word after
-whitespace normalization; their exact uploaded-file checksums are retained.
+All 26 Bemba lessons supplied on 22 October 2026 are recorded separately in
+`content/ukusanga-supplied-lessons.json` and replace the archive transcriptions.
+The 21 unique uploaded text files retain their exact file checksums. The five
+closing lessons pasted into chat were checked against the publisher's linked
+HTML and the complete archive reading text. The original supplied attribution,
+`copyright © 2002 The Voice of Prophecy`, is retained. The source manifest
+records the complete reading-text checksum and section count for every lesson.
+
+The duplicate upload of lesson 5 and repeated pasted lesson 23 are included
+once each. Lesson 21 restores four closing numbered sections and the remaining
+text of section 4 omitted by the older archive parser. Each lesson contains one
+chapter with an introduction section followed by its numbered source sections.
+Numbered lists within a section remain reading content.
 
 ## Sources
 
@@ -51,7 +60,7 @@ Run from the repository or extracted package root:
 node tools/seed/seed-vop-guides.mjs
 ```
 
-Expected: 26 Bemba lessons, 26 Tonga lessons, 364 sections; English marked
+Expected: 26 Bemba lessons, 26 Tonga lessons, 368 sections; English marked
 `needs_authorized_source`. Bemba files 11 and 12 show the number 10 inside the
 original source documents. The import keeps filename order 11 and 12 and does
 not silently rewrite their prose.
@@ -121,7 +130,8 @@ for `lang: "en"`.
 
 Run `node --test tests/vopGuideSeed.test.mjs` from the full repository.
 Coverage includes canonical reader/editor compatibility, preservation of all
-364 sections, actual source-image hashes, duplicate detection, repeat-run
+368 sections, the supplied Bemba reading checksums, complete lesson 21,
+actual source-image hashes, duplicate detection, repeat-run
 idempotency, preservation of existing IDs/program assignments, and refusal
 of changed content, disabled languages or archived guides.
 

@@ -3,9 +3,11 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {createServer} from 'vite';
-import {validateMaster,buildLesson,existingLessonFor,planImport,applySourceOverrides} from '../tools/seed/seed-vop-guides.mjs';
+import {validateMaster,buildLesson,existingLessonFor,planImport,applySourceOverrides,matchesWrittenFields} from '../tools/seed/seed-vop-guides.mjs';
 
-const master=JSON.parse(readFileSync(new URL('../content/lessons.master.json',import.meta.url),'utf8'));
+const archive=JSON.parse(readFileSync(new URL('../content/lessons.master.json',import.meta.url),'utf8'));
+const supplied=JSON.parse(readFileSync(new URL('../content/ukusanga-supplied-lessons.json',import.meta.url),'utf8'));
+const master=applySourceOverrides(archive,supplied);
 const vite=await createServer({configFile:false,server:{middlewareMode:true,hmr:false},appType:'custom',logLevel:'error'});
 after(async()=>vite.close());
 const {normalizeCurriculumStructure}=await vite.ssrLoadModule('/shared/curriculumStructure.ts');
@@ -31,7 +33,7 @@ test('all supplied lessons remain readable in the canonical app schema, with ori
       assert.ok(!('questions'in lesson)&&!('quiz'in lesson));
     }
   }
-  assert.equal(pages,364);
+  assert.equal(pages,368);
 });
 
 test('lesson images point to existing deployment asset paths and match the approved archive checksums',()=>{
@@ -90,19 +92,33 @@ test('a disabled language or an archived guide blocks the complete plan before a
   assert.equal(records.has('guides/ukusanga/lessons/lesson-01'),false);
 });
 
-test('the supplied lessons replace only Bemba 1 and 2 and preserve every source word',()=>{
-  const supplied=JSON.parse(readFileSync(new URL('../content/ukusanga-supplied-lessons-01-02.json',import.meta.url),'utf8'));
-  const updated=applySourceOverrides(master,supplied);
-  const text=lesson=>lesson.pages.map(page=>page.blocks.filter(block=>block.type==='text').map(block=>block.text).join(' ')).join(' ').replace(/\s+/g,' ');
-  for(const lesson of supplied.lessons){
-    const original=master.lessons.find(item=>item.lang==='bem'&&item.lessonId===lesson.lessonId);
-    const changed=updated.lessons.find(item=>item.lang==='bem'&&item.lessonId===lesson.lessonId);
-    assert.equal(text(changed),text(original));
-    assert.equal(changed.source.sha256,lesson.source.sha256);
-    assert.deepEqual(changed.pages.map(page=>page.title),original.pages.map(page=>page.title));
+test('all 26 supplied Bemba lessons preserve source reading checksums, original attribution and deduplicated numbering',()=>{
+  const manifest=JSON.parse(readFileSync(new URL('../content/ukusanga-supplied-source-manifest.json',import.meta.url),'utf8'));
+  assert.equal(manifest.lessons.length,26);
+  assert.equal(manifest.lessons.filter(item=>item.sourceKind==='uploaded_text').length,21);
+  assert.equal(supplied.lessons.length,26);
+  for(const expected of manifest.lessons){
+    const actual=inventory.get('bem').find(item=>item.lessonId===expected.lessonId);
+    const reading=actual.pages.map(page=>page.title+' '+page.blocks.filter(block=>block.type==='text').map(block=>block.text).join(' ')).join(' ').replace(/\s+/g,' ').trim();
+    assert.equal(createHash('sha256').update(reading).digest('hex'),expected.readingSha256,expected.lessonId);
+    assert.equal(actual.pages.length,expected.sections);
+    assert.equal(actual.source.sha256,expected.sha256);
+    assert.equal(actual.attribution,'copyright © 2002 The Voice of Prophecy');
   }
-  assert.equal(updated.lessons.find(item=>item.lang==='toi'&&item.lessonId==='lesson-01'),master.lessons.find(item=>item.lang==='toi'&&item.lessonId==='lesson-01'));
-  assert.throws(()=>applySourceOverrides(master,{schemaVersion:2,lessons:[{...supplied.lessons[0],lessonId:'lesson-03'}]}),/two supplied/);
+  assert.equal(master.lessons.find(item=>item.lang==='toi'&&item.lessonId==='lesson-01'),archive.lessons.find(item=>item.lang==='toi'&&item.lessonId==='lesson-01'));
+  const wrongLanguage=structuredClone(supplied);
+  wrongLanguage.lessons.push({...wrongLanguage.lessons[0],lang:'toi'});
+  assert.throws(()=>applySourceOverrides(archive,wrongLanguage),/Only supplied/);
+  assert.throws(()=>applySourceOverrides(archive,{schemaVersion:2,lessons:supplied.lessons.slice(0,2)}),/exactly 26/);
+});
+
+test('lesson 21 includes the supplied closing four sections and numbered body lists remain within their section',()=>{
+  const lesson=inventory.get('bem')[20];
+  assert.equal(lesson.pages.length,9);
+  assert.equal(lesson.pages.at(-1).title,'BUSHE ICIKALAMBA ICILIPO CINSHI?');
+  assert.ok(lesson.pages.at(-1).blocks.some(block=>block.text?.includes('(John 15:11)')));
+  assert.equal(inventory.get('bem')[10].pages.length,9);
+  assert.equal(inventory.get('bem')[17].pages.length,9);
 });
 
 test('legacy uppercase language registry entries can be used without renaming languages',async()=>{
@@ -128,6 +144,15 @@ test('fingerprinted lessons are reused under the original ID and edited content 
   assert.throws(()=>existingLessonFor(source,[existing,{id:source.lessonId,data}]),/Ambiguous/);
 });
 
+test('read-back verification accepts reordered Firestore map keys and detects changed or missing reading fields',()=>{
+  const expected={chapters:[{title:'Reading',sections:[{id:'one',blocks:[{type:'paragraph',text:'Source words'}]}]}],published:true};
+  const actual={published:true,chapters:[{sections:[{blocks:[{text:'Source words',type:'paragraph'}],id:'one'}],title:'Reading'}],extraMetadata:'preserved'};
+  assert.equal(matchesWrittenFields(actual,expected),true);
+  actual.chapters[0].sections[0].blocks[0].text='Changed';
+  assert.equal(matchesWrittenFields(actual,expected),false);
+  assert.equal(matchesWrittenFields({published:true},expected),false);
+});
+
 test('partial inventories, duplicate numbers, unsafe image paths and embedded assessment keys are rejected',()=>{
   const change=callback=>{const value=structuredClone(master);callback(value);return value;};
   assert.throws(()=>validateMaster(change(value=>value.lessons.pop())),/exactly 26/);
@@ -139,9 +164,8 @@ test('partial inventories, duplicate numbers, unsafe image paths and embedded as
 });
 
 test('Bemba lessons 11 and 12 retain distinct ordering despite incorrect headings in the source',()=>{
-  const lessons=inventory.get('bem');
   for(const number of [11,12]){
-    const source=lessons[number-1];
+    const source=archive.lessons.filter(item=>item.lang==='bem')[number-1];
     assert.equal(source.source.reportedLessonNumber,10);
     const lesson=buildLesson(source,{guideId:'ukusanga'});
     assert.equal(lesson.lessonNumber,String(number));

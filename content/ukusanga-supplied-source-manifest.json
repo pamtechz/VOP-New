@@ -1,0 +1,278 @@
+{
+  "schemaVersion": 1,
+  "providedOn": "2026-10-22",
+  "lessons": [
+    {
+      "lessonId": "lesson-01",
+      "title": "KUTI TWA SUMINA MULI LESA",
+      "sourceKind": "uploaded_text",
+      "file": "Pasted text(20261022-152516).txt",
+      "sha256": "3f9fa0c9613f399fb0fb5be64a51f0e935c306b1a8c538969e56f172ff5bedae",
+      "url": "https://languages.bibleschools.com/bemba/bemba01.htm",
+      "sections": 6,
+      "readingSha256": "19ae3acee96352594d5bdd97dba602de3c0e557f395e7a0c94913365160264dc"
+    },
+    {
+      "lessonId": "lesson-02",
+      "title": "KUTI TWA CETEKELA ICIPINGO",
+      "sourceKind": "uploaded_text",
+      "file": "Pasted text (2)(2).txt",
+      "sha256": "79ab1114cd387f3466e8108997844485e7a01487927c49514e5ceb15f3383565",
+      "url": "https://languages.bibleschools.com/bemba/bemba02.htm",
+      "sections": 7,
+      "readingSha256": "72ff16530f33be48c3ebd84069e6472d0253b3637d80a4a3eba6e88a3ae28874"
+    },
+    {
+      "lessonId": "lesson-03",
+      "title": "BUSHE LESA ICINE CINE ALISAKAMANA UMWEO WANDI",
+      "sourceKind": "uploaded_text",
+      "file": "Pasted text(20261022-153055).txt",
+      "sha256": "3f9570fa5864ab71b53030f69f384d30a3d3b9b995f89645b622d2f2b29bf46a",
+      "url": "https://languages.bibleschools.com/bemba/bemba03.htm",
+      "sections": 9,
+      "readingSha256": "75e70a9eee7896f807c1a4765c34b9e8b167030222cf8e450195e9476ec8b5d9"
+    },
+    {
+      "lessonId": "lesson-04",
+      "title": "UBUPEKANYO BWA MWEO OBE",
+      "sourceKind": "uploaded_text",
+      "file": "Pasted text (2)(4).txt",
+      "sha256": "8c1955dcf466db4cb52bc47c02cc30fbb57d2a45ec18ccc9cd337e70ca03ce50",
+      "url": "https://languages.bibleschools.com/bemba/bemba04.htm",
+      "sections": 7,
+      "readingSha256": "3b7648d98960c025ef9f9c74621f1c2bf914a83226cd847a60f3e3bfdb4a9a62"
+    },
+    {
+      "lessonId": "lesson-05",
+      "title": "UBULALO BWAKUMWEO USUMA",
+      "sourceKind": "uploaded_text",
+      "file": "Pasted text (3)(2).txt",
+      "sha256": "0c4ed08c37d393fa3688287d26d1d61aa1723e208f113f6b21c91798d5a97b75",
+      "url": "https://languages.bibleschools.com/bemba/bemba05.htm",
+      "sections": 5,
+      "readingSha256": "4b1911333dc5849f6765c7e5aa1545de599267e5f7f6cd51513867a2e25f7f6b"
+    },
+    {
+      "lessonId": "lesson-06",
+      "title": "UKUBA NO BUMI NAKABILI",
+      "sourceKind": "uploaded_text",
+      "file": "Pasted text (5)(1).txt",
+      "sha256": "60de8804cc3cb287882e0a18d3d2fc22b41563ab9e9ffd5192f3802cc49d2770",
+      "url": "https://languages.bibleschools.com/bemba/bemba06.htm",
+      "sections": 6,
+      "readingSha256": "58dbf005258f3bbea8ddce16adc1ad0686636cfb94f1c1d51599303e2de29037"
+    },
+    {
+      "lessonId": "lesson-07",
+      "title": "PALWANSHIKU SHOBE ISHAKUNTANSHI",
+      "sourceKind": "uploaded_text",
+      "file": "Pasted text (6).txt",
+      "sha256": "4c0ea726926a74c89bbfde3f720ec87ca2637465465def33e42bfe4bdc8dfaa2",
+      "url": "https://languages.bibleschools.com/bemba/bemba07.htm",
+      "sections": 6,
+      "readingSha256": "d77bb4a67ca501471eb2c8ab612c731ec3f74073f8eff06cdc9ee3665f27d36e"
+    },
+    {
+      "lessonId": "lesson-08",
+      "title": "ELYO YESU AKESA PAMULANDU OBE",
+      "sourceKind": "uploaded_text",
+      "file": "Pasted text (7).txt",
+      "sha256": "c349e9b5d5437fed647b5bf30072d3f03dce386077b99d0584b5ae94a2198b57",
+      "url": "https://languages.bibleschools.com/bemba/bemba08.htm",
+      "sections": 5,
+      "readingSha256": "7e621c5af54ea57d5e8395dfe65717a1ef1fe6c9e84646d2f93d8f103cfdb774"
+    },
+    {
+      "lessonId": "lesson-09",
+      "title": "KUMULU EKUMWENU",
+      "sourceKind": "uploaded_text",
+      "file": "Pasted text (8).txt",
+      "sha256": "46e3cbb417e93d4758cd9a03cb0b5b87278fbb8dda734ed603a4d3ba036db121",
+      "url": "https://languages.bibleschools.com/bemba/bemba09.htm",
+      "sections": 7,
+      "readingSha256": "a0177180ccb1e421116c82a5478a5c82b9328725ec3fc1988c8df61219417ce9"
+    },
+    {
+      "lessonId": "lesson-10",
+      "title": "BUSHE UKWISA KWA KWA YESU KULI MUPEPI?",
+      "sourceKind": "uploaded_text",
+      "file": "Pasted text (9).txt",
+      "sha256": "bcfdf780b7963d129398416b77c454639e1480b4251ddde5ae601d0dde5a06d4",
+      "url": "https://languages.bibleschools.com/bemba/bemba10.htm",
+      "sections": 4,
+      "readingSha256": "4690d92a93051aad326a2d1db328facbc85f8d830968c24cb76da44ffbc1de1e"
+    },
+    {
+      "lessonId": "lesson-11",
+      "title": "AMAKA AYAIBEELA MU BUMI BWANDI",
+      "sourceKind": "uploaded_text",
+      "file": "Pasted text (10).txt",
+      "sha256": "3a1adbb7026cfc6f96b65b4dd85734377a390388b084f971dcecdedf485672a1",
+      "url": "https://languages.bibleschools.com/bemba/bemba11.htm",
+      "sections": 9,
+      "readingSha256": "3b6bb90d3d3572b3bcb8686fbd89ba9327eff548ca04baaf557a351115c41939"
+    },
+    {
+      "lessonId": "lesson-12",
+      "title": "UMUPUSUSHI USANGWA INSHITA YONSE",
+      "sourceKind": "uploaded_text",
+      "file": "Pasted text (11).txt",
+      "sha256": "a8cf5e507c7df6d425d859e1b24e6de911a1eebeb759d024b2cd5ad813347f03",
+      "url": "https://languages.bibleschools.com/bemba/bemba12.htm",
+      "sections": 7,
+      "readingSha256": "eca4b881e59e2dee2a1252cf19f15077a815b0b13c84372bfdbb296ece42b2e0"
+    },
+    {
+      "lessonId": "lesson-13",
+      "title": "UKUFUMA KULI BUMPULA MAFUNDE NO KUBA UWAELELWA UMULUNGAMI",
+      "sourceKind": "uploaded_text",
+      "file": "Pasted text (12).txt",
+      "sha256": "5e7590f4c391151129af256860835eaa2f19c0d2fb5bddbb8191289292d0abbb",
+      "url": "https://languages.bibleschools.com/bemba/bemba13.htm",
+      "sections": 7,
+      "readingSha256": "9efed3de018b6f68eb3116bb1cf54c3605ee31178180063fd97f4ca015c3890d"
+    },
+    {
+      "lessonId": "lesson-14",
+      "title": "INKAMA YE PEPO ILYA SUKWA",
+      "sourceKind": "uploaded_text",
+      "file": "Pasted text (13).txt",
+      "sha256": "536c6b7b562c737e486d7bf7d9e1de1e19d6053935a6285b57ca09d82dd552d9",
+      "url": "https://languages.bibleschools.com/bemba/bemba14.htm",
+      "sections": 8,
+      "readingSha256": "4e9641b8798849f9e74ee0802c7fda12b6d0402fd6f814a047abefe53e7555bc"
+    },
+    {
+      "lessonId": "lesson-15",
+      "title": "INKAMA YA KUBA UWANSANSA",
+      "sourceKind": "uploaded_text",
+      "file": "Pasted text (14).txt",
+      "sha256": "3129edd413ef08f70e5d0b06753ad46241839931504f819c2e79998c8eda283f",
+      "url": "https://languages.bibleschools.com/bemba/bemba15.htm",
+      "sections": 10,
+      "readingSha256": "03bab67fcd7354f51381aed8f35c898934b5d4c3d564af7a6112029924569a6d"
+    },
+    {
+      "lessonId": "lesson-16",
+      "title": "INKAMA IYI TWALA KUBUTUSHO BWAMUMULU",
+      "sourceKind": "uploaded_text",
+      "file": "Pasted text (15).txt",
+      "sha256": "cf12f7094e3a793358631003d2d7ca6a4804a6af58e080fbcffdf0b50b1332a3",
+      "url": "https://languages.bibleschools.com/bemba/bemba16.htm",
+      "sections": 5,
+      "readingSha256": "d03177f205f0cbe1fe6496c4afe2136e76b388d87d5f529667acb8f83a3b0b5c"
+    },
+    {
+      "lessonId": "lesson-17",
+      "title": "INKAMA YAKUKULA MULI BUKAMBONI",
+      "sourceKind": "uploaded_text",
+      "file": "Pasted text (16).txt",
+      "sha256": "53510ee13786d08b3cf119ae7e7dfbf61858c4c6a6d822fb958ebbfb15399ccb",
+      "url": "https://languages.bibleschools.com/bemba/bemba17.htm",
+      "sections": 7,
+      "readingSha256": "0dfc9efd18f429db9f02a8a5a8501389ecd1bdddcf942722e038e7c6cc6ef9a9"
+    },
+    {
+      "lessonId": "lesson-18",
+      "title": "INKAMA YA MIBELE YABUMI",
+      "sourceKind": "uploaded_text",
+      "file": "Pasted text (17).txt",
+      "sha256": "9d7a818d00ff4ac8135e6bf02b19762397350acd76ffbe3580e12d45e6a69c03",
+      "url": "https://languages.bibleschools.com/bemba/bemba18.htm",
+      "sections": 9,
+      "readingSha256": "0791a877a7ffcd9da4bd20095dbf6befc08954e1de0cd4632da8b7e1012ac950"
+    },
+    {
+      "lessonId": "lesson-19",
+      "title": "UKWINGILA MUBWIKASHI BWA BWINA KRISTU",
+      "sourceKind": "uploaded_text",
+      "file": "Pasted text (18).txt",
+      "sha256": "7104700f18874a8d5e132874c713a5bb3bd2baebf9d6005af33b885b44c52dfa",
+      "url": "https://languages.bibleschools.com/bemba/bemba19.htm",
+      "sections": 8,
+      "readingSha256": "c858e907bf746237672b9e9fbaf4f0429876d194dd1d241a76ba020f7f792c55"
+    },
+    {
+      "lessonId": "lesson-20",
+      "title": "INKAMA YAKUKULA UKUPITILA MUBWAMPANO",
+      "sourceKind": "uploaded_text",
+      "file": "Pasted text (19).txt",
+      "sha256": "4d7a1470a878cdcb0cf64d4fd5421ec360f80ee7eaec2fdb7ea1efc48548c797",
+      "url": "https://languages.bibleschools.com/bemba/bemba20.htm",
+      "sections": 8,
+      "readingSha256": "2ed2366fc4098b09cc41910d6560456ce799a8f18c59744a5fbaa4c6c3a3217a"
+    },
+    {
+      "lessonId": "lesson-21",
+      "title": "BUSHE ICINABWINGI KUTI CA LUBA?",
+      "sourceKind": "uploaded_text",
+      "file": "Pasted text (20).txt",
+      "sha256": "051d7e017444cd7f8def6552eb5fe5cefec202cc2471a1eced3f42f05d0eb49d",
+      "url": "https://languages.bibleschools.com/bemba/bemba21.htm",
+      "sections": 9,
+      "readingSha256": "0904000af9c01a8800bdd99671bc1f6858a5b505d7922f7148de8cdce3f169bf"
+    },
+    {
+      "lessonId": "lesson-22",
+      "title": "BUSHE LESA WAMULINGANYA?",
+      "sourceKind": "pasted_text_verified_against_publisher",
+      "file": "bemba22.htm",
+      "sha256": "9d54a9c58cc9201ee3e800fe46e1257753393f8fa7f6ffcafff5a91cd2c94b77",
+      "url": "https://languages.bibleschools.com/bemba/bemba22.htm",
+      "sections": 9,
+      "readingSha256": "235519076ecbe1a4019cbd049e45eaf9567fa5a591b785bdd234ad03314a212b"
+    },
+    {
+      "lessonId": "lesson-23",
+      "title": "BUSHE INGEHENA CINSHI KABILI YABA KWI?",
+      "sourceKind": "pasted_text_verified_against_publisher",
+      "file": "bemba23.htm",
+      "sha256": "8379ee13c01ca78c7cf74144fc39caa5cc535b69c407b39fbe8aea1e44be39fb",
+      "url": "https://languages.bibleschools.com/bemba/bemba23.htm",
+      "sections": 7,
+      "readingSha256": "0e6ad297495f86755579fb25cc22b9448395b2a611994cd750c667f26b2953aa"
+    },
+    {
+      "lessonId": "lesson-24",
+      "title": "UMUNTU NGA AFWA, CINSHI CIKONKAPO?",
+      "sourceKind": "pasted_text_verified_against_publisher",
+      "file": "bemba24.htm",
+      "sha256": "3d5e5ff685ebbb94a263079c6269c99bf21453f5a3a7dae0912487afea29d43c",
+      "url": "https://languages.bibleschools.com/bemba/bemba24.htm",
+      "sections": 9,
+      "readingSha256": "8600730d07efcca1c64b2fe36a40fcd1cf76a4d2844f82b2dfda9e876e5e371d"
+    },
+    {
+      "lessonId": "lesson-25",
+      "title": "BUSHE KUTI NASANGA ICILONGANINO CAKWA LESA ILELO?",
+      "sourceKind": "pasted_text_verified_against_publisher",
+      "file": "bemba25.htm",
+      "sha256": "87722ca448217054378155b074c5f04cbc02dbfac08a5d9b4f1d32dedf419bb2",
+      "url": "https://languages.bibleschools.com/bemba/bemba25.htm",
+      "sections": 5,
+      "readingSha256": "a53815c3af26af83d4d120d24b1e6f4cd6ad2774d7dc8f0cfb148952bbf46c4a"
+    },
+    {
+      "lessonId": "lesson-26",
+      "title": "BUSHE LESA NAKWATA IMBILA IYAIBELA MUNSHIKU SHESU SHINO?",
+      "sourceKind": "pasted_text_verified_against_publisher",
+      "file": "bemba26.htm",
+      "sha256": "d64bee3410b19a4858a406ccc977046facb88288320ddaba97bad8e626127298",
+      "url": "https://languages.bibleschools.com/bemba/bemba26.htm",
+      "sections": 5,
+      "readingSha256": "a13971202623c24f637273895eb1476011d59a0f427a6fb438483f02b1a59e5d"
+    }
+  ],
+  "duplicateFiles": [
+    {
+      "file": "Pasted text (4)(2).txt",
+      "duplicateOf": "Pasted text (3)(2).txt",
+      "lessonId": "lesson-05",
+      "sha256": "0c4ed08c37d393fa3688287d26d1d61aa1723e208f113f6b21c91798d5a97b75"
+    }
+  ],
+  "pastedDuplicateLessons": [
+    "lesson-23"
+  ],
+  "note": "Each numbered source heading is one section; the introduction is a separate section. Supplied copyright attributions replace the archive transcription."
+}
