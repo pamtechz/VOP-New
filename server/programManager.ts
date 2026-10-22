@@ -114,7 +114,8 @@ export async function handleCurriculumPrograms(ctx:TenantContext,
   // Existing programme ownership is immutable. A Super Admin editing a
   // programme after changing the UI tenant filter must retain its source.
   const programOrganizationId=ctx.isSuperAdmin&&previous.exists
-    ?String(current.organizationId||'').trim():targetOrganizationId;
+    ?String(current.scope==='platform'?'':current.organizationId||current.ownerOrganizationId||'').trim()
+    :targetOrganizationId;
   await requirePermission(ctx,'curriculum',
     action==='delete'?'delete':previous.exists?'update':'create');
   if(!ctx.isSuperAdmin&&programOrganizationId&&action!=='delete'){
