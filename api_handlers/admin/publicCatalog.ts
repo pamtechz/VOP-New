@@ -14,7 +14,7 @@ const owner=(row:RecordData)=>string(row.organizationId||row.ownerOrganizationId
 export function isPublicStudy(row:RecordData):boolean{
   return row.published===true&&row.archived!==true&&
     (row.sharingScope==='shared'||(!owner(row)&&
-      (!row.sharingScope||row.sharingScope==='public'||row.sharingScope==='platform'));
+      (!row.sharingScope||row.sharingScope==='public'||row.sharingScope==='platform')));
 }
 export function publicLessonMetadata(id:string,row:RecordData,guide:RecordData){
   if(!itemId(id)||!isPublicStudy(row))return null;
