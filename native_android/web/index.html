@@ -9,7 +9,15 @@
   <meta name="application-name" content="Voice of Prophecy">
   <link rel="manifest" href="manifest.json">
   <title>Voice of Prophecy</title>
-  <style>html,body{margin:0;min-height:100%;background:#071a33}body{overflow:hidden}</style>
+  <style>
+    html,body{margin:0;min-height:100%;background:#071a33}body{overflow:hidden}
+    #vop-experience-switch{position:fixed;right:16px;bottom:max(20px,env(safe-area-inset-bottom));z-index:2147483000;align-items:center;gap:4px;padding:5px 6px;border:1px solid #314c6b;border-radius:28px;background:#142b46;color:#dbeafe;box-shadow:0 4px 18px #0004;font:600 13px/1.3 system-ui,sans-serif}
+    #vop-experience-switch:not([hidden]){display:flex}
+    #vop-experience-switch a{padding:9px 12px;border-radius:20px;color:inherit;text-decoration:none}
+    #vop-experience-switch a:hover{background:#25466b}
+    #vop-experience-switch a:focus-visible{outline:3px solid #f5c34b;outline-offset:2px}
+    #vop-experience-switch span{padding:9px 10px;color:#b7d4ff}
+  </style>
   <script>
     window.PasskeyAuthenticator = window.PasskeyAuthenticator || {
       init: function() {},
@@ -56,6 +64,15 @@
   </script>
 </head>
 <body>
+  <!-- Keep web navigation outside Flutter's pre-layout focus traversal. -->
+  <nav id="vop-experience-switch" aria-label="Choose VOP experience" hidden>
+    <a href="/" aria-label="Switch to Legacy web">Legacy</a>
+    <span aria-current="page">Classic</span>
+  </nav>
+  <script id="vop-experience-init">
+    document.getElementById('vop-experience-switch').hidden =
+      !window.location.pathname.startsWith('/classic/');
+  </script>
   <script src="passkeys-bundle.js" type="application/javascript"></script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
