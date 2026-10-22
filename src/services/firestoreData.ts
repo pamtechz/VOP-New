@@ -208,7 +208,9 @@ export async function loadFirestoreGuides(_language?: LanguageCode, scopeUser?: 
       if (!withinScope && data.sharingScope !== 'shared') continue;
     }
 
-    const id = String(data.id ?? item.id).trim();
+    // Programme references use canonical Firestore document IDs, not an old
+    // embedded `id` field that may survive a migration or content fork.
+    const id = legacy ? String(data.id || item.id).trim() : item.id;
     const guide: DiscoverGuide = {
       id,
       ownerOrganizationId: String(data.ownerOrganizationId ?? data.organizationId ?? '').trim() || undefined,
