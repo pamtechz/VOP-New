@@ -54,7 +54,9 @@ export async function authenticateTenant(request: Request, requestedOrganization
   const profileOrganizationId = String(profile.organizationId || '').trim();
   const requestedId = String(requestedOrganizationId || '').trim();
 
-  if (hierarchyAdmin) {
+  // A Super Administrator always operates as the platform principal, even if
+  // obsolete hierarchy metadata remains on their profile from an earlier role.
+  if (hierarchyAdmin && !isSuperAdmin) {
     const nodeId = adminNodeId || String(profile.adminNodeId || '').trim();
     if (!nodeId) throw new Error('This administrator account is not linked to a hierarchy tenant.');
     const role = hierarchyRoleName;
