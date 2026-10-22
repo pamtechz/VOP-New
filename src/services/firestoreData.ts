@@ -294,7 +294,6 @@ export async function loadFirestoreGuides(_language?: LanguageCode, scopeUser?: 
         a.lessonNumber.localeCompare(b.lessonNumber, undefined, { numeric: true }) || a.title.localeCompare(b.title),
       ),
     }))
-    .filter(guide => guide.lessons.length > 0)
     .sort((a, b) => a.discoverNumber - b.discoverNumber || a.language.localeCompare(b.language));
 }
 
