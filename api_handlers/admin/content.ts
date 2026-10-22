@@ -1496,9 +1496,11 @@ export default async function handler(req: Request, res: Response) {
           ownerOrganizationId: existing.data()?.ownerOrganizationId || contentOrganizationId,
           ownerUid: existing.data()?.ownerUid || ctx.auth.uid,
           scope: contentOrganizationId?'organization':'platform',
-          sharingScope: !contentOrganizationId
-            ?(incoming.published===true?'shared':'private')
-            :(existing.data()?.sharingScope || 'organization'),
+          // Do not alter organization-level sharing decisions from the
+          // submitted content. Only platform taxonomy has mandatory visibility.
+          ...(!contentOrganizationId ? {
+            sharingScope:incoming.published===true?'shared':'private',
+          } : {}),
           canonical: true,
           createdAt: existing.data()?.createdAt || new Date().toISOString(),
           updatedAt: FieldValue.serverTimestamp(),
