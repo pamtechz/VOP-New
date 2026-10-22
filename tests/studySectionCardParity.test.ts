@@ -19,7 +19,8 @@ test('Legacy lesson and section cards match the study-card reference design',()=
 test('student accounts cannot see chapter-question editing in Legacy',()=>{
   const component=read('src/components/guide/DiscoverGuideView.tsx');
   const app=read('src/App.tsx');
-  assert.match(component,/currentUser\.role!=='student'&&currentUser\.role!=='mentor'/);
+  assert.match(component,/Boolean\(onEditQuestions\)&&hasAdminPortalAccess\(currentUser\)/);
+  assert.match(component,/from '..\/..\/services\/portalAccess'/);
   assert.match(component,/mayEditQuestions&&onEditQuestions/);
   assert.match(app,/onEditQuestions=\{hasAdminPortalAccess\(currentUser\)/);
   assert.match(app,/navigate\('admin'\)/);
@@ -32,6 +33,9 @@ test('Classic Flutter web and Android use the same permission-aware section card
   assert.match(guide,/return VopSectionStudyCard\(/);
   assert.match(guide,/onEditQuestions:widget\.canEditChapterQuestions&&/);
   assert.match(guide,/this\.canEditChapterQuestions=false/);
+  const learner=read('native_android/lib/screens/home_shell.dart');
+  assert.doesNotMatch(learner,/canEditChapterQuestions\s*:/);
+  assert.match(studio,/quizPerm\.contains\('update'\)/);
   assert.match(guide,/onTakeTest:locked\|\|attachedQuizId==null/);
   assert.match(card,/if\(onTakeTest!=null\)/);
   assert.match(card,/if\(onFlashcards!=null\)/);

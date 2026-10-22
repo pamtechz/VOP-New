@@ -9,6 +9,7 @@ import { getTranslation, getUiLocale } from '../../services/i18n';
 import { calculateCurriculumProgress } from '../../services/progress';
 import { getAttachedAssessmentsForLesson, isLessonUnlocked, lessonAttachedTestsAreComplete, lessonIsComplete, lessonScoreForDisplay } from '../../services/lessonProgress';
 import { resolveLessonResumeBookmark } from '../../services/lessonBookmark';
+import { hasAdminPortalAccess } from '../../services/portalAccess';
 import { resetLessonProgress } from '../../services/localStudy';
 import './guide-sections.css';
 import './section-study-flashcards.css';
@@ -45,7 +46,7 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
   const [resetTargetLesson, setResetTargetLesson] = useState<Lesson | null>(null);
   const [resetting, setResetting] = useState(false);
   const [flashcardSelection,setFlashcardSelection] = useState<{title:string;pages:NonNullable<Lesson['contentPages']>}|null>(null);
-  const mayEditQuestions=Boolean(onEditQuestions)&&currentUser.role!=='student'&&currentUser.role!=='mentor';
+  const mayEditQuestions=Boolean(onEditQuestions)&&hasAdminPortalAccess(currentUser);
 
   const handleResetProgress = async () => {
     if (!resetTargetLesson) return;
@@ -318,7 +319,7 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
                   </button>
                   <div className="vop-section-study-meta">
                     <span><BookOpen size={14}/>{t('guide.page_count','{count} {pages}',{
-                      count:Math.max(1,sectionPages.length),
+                      count:sectionPages.length,
                       pages:sectionPages.length===1?t('guide.page_singular','page'):t('guide.page_plural','pages'),
                     })}</span>
                     <span><Clock size={14}/>{t('guide.read_minutes','~{minutes} min read',{minutes:readMinutes(sectionPages,fallbackMinutes)})}</span>
@@ -396,7 +397,7 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
               </button>
               <div className="vop-section-study-meta">
                 <span><BookOpen size={14}/>{t('guide.page_count','{count} {pages}',{
-                  count:Math.max(1,pages.length),
+                  count:pages.length,
                   pages:pages.length===1?t('guide.page_singular','page'):t('guide.page_plural','pages'),
                 })}</span>
                 <span><Clock size={14}/>{t('guide.read_minutes','~{minutes} min read',{minutes:readMinutes(pages,lesson.estimatedMinutes||15)})}</span>
