@@ -29,7 +29,7 @@ test('public discovery stays consistent on old web, Flutter web and Android befo
   assert.match(catalogue,/Sign in to open this course/);
   assert.match(publicEntry,/_api\.publicCatalog\(\)/);
   assert.match(publicEntry,/Sign in to study this course/);
-  assert.match(publicEntry,/constraints\.maxWidth >= 1020/);
+  assert.match(publicEntry,/MediaQuery\.sizeOf\(context\)\.width >= 1020/);
   assert.match(app,/if \(!snapshot\.hasData\) return const PublicEntryScreen\(\);/);
   assert.match(nativeApi,/anonymous: true/);
   assert.match(nativeApi,/'\/api\/public-catalog'/);
