@@ -75,6 +75,18 @@ test('programme selection never opens an empty page because guides have zero pub
   assert.ok(mobile.includes('!snap.exists||!hasAccess(snap.data()||{},scope)'));
   assert.ok(flutter.includes('No accessible courses are published under this programme.'));
 });
+test('Super Admin curriculum changes retain canonical guide ownership',()=>{
+  const handler=read('api_handlers/admin/content.ts');
+  const tenant=read('server/tenant.ts');
+  const studio=read('src/pages/CurriculumManager.tsx');
+  assert.match(tenant,/hierarchyAdmin && !isSuperAdmin/);
+  assert.match(handler,/const guideOrganizationId = ctx.isSuperAdmin && existing.exists/);
+  assert.match(handler,/organizationId: guideOrganizationId/);
+  assert.match(handler,/const lessonOrganizationId = ctx.isSuperAdmin \? guideOrgId : effectiveOrganizationId/);
+  assert.match(handler,/organizationId: lessonOrganizationId/);
+  assert.match(studio,/const targetOrganizationId = isSuperAdmin/);
+  assert.match(handler,/code:status===401\?'UNAUTHENTICATED':status===403\?'PERMISSION_DENIED':'INVALID_REQUEST'/);
+});
 test('private instructor notes cannot be persisted in the learner-readable lesson record',()=>{
   const handler=read('api_handlers/admin/content.ts');
   const rules=read('firestore.rules');
