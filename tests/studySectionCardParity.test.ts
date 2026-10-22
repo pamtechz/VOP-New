@@ -44,7 +44,8 @@ test('flashcards use actual authorised lesson content and metadata is not fabric
   const api=read('api_handlers/admin/mobile.ts');
   const flashFlutter=read('native_android/lib/screens/lesson_flashcards_screen.dart');
   const flashWeb=read('src/components/guide/SectionStudyFlashcards.tsx');
-  assert.match(api,/pageCount:row\.type==='Test'\?0:lessonPages\(row\)\.length/);
+  assert.match(api,/pageCount:row\.type==='Test'\?0:/);
+  assert.match(api,/Math\.min\(200,Array\.isArray\(row\.contentPages\)/);
   assert.match(flashFlutter,/widget\.api\.lesson\(widget\.guideId,widget\.lessonId\)/);
   assert.match(flashFlutter,/page\['keyTakeaway'\]/);
   assert.match(flashWeb,/page\.keyTakeaway\|\|page\.scriptureQuote\?\.text\|\|page\.content/);
