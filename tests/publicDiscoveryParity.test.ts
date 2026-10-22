@@ -10,7 +10,9 @@ test('public study discovery is a GET-only metadata endpoint with explicit publi
   assert.match(handler,/row\.published===true/);
   assert.match(handler,/row\.archived!==true/);
   assert.match(handler,/row\.sharingScope==='shared'/);
-  assert.match(handler,/row\.sharingScope==='private'/);
+  assert.match(handler,/if\(!itemId\(id\)\|\|!isPublicStudy\(row\)\)return null/);
+  assert.match(handler,/owner\(row\)&&owner\(row\)!==owner\(guide\)/);
+  assert.match(handler,/row\.sharingScope==='platform'/);
   assert.match(handler,/lessons'.*where\('published','==',true\)/s);
   assert.doesNotMatch(handler,/\b(?:quizAnswers|correctAnswers|contentPages|pageBlocks|scriptureQuote|correctOption|assessmentBank)\s*:/);
   assert.match(handler,/publicLessonMetadata/);
@@ -27,8 +29,12 @@ test('public discovery stays consistent on old web, Flutter web and Android befo
   assert.match(home,/PublicStudyCatalogue onSignIn/);
   assert.match(catalogue,/fetch\('\/api\/public-catalog'/);
   assert.match(catalogue,/Sign in to open this course/);
+  assert.match(catalogue,/Published programmes/);
+  assert.match(catalogue,/publicly browsable/);
   assert.match(publicEntry,/_api\.publicCatalog\(\)/);
   assert.match(publicEntry,/Sign in to study this course/);
+  assert.match(publicEntry,/Published study programmes/);
+  assert.match(publicEntry,/publicly browsable courses/);
   assert.match(publicEntry,/MediaQuery\.sizeOf\(context\)\.width >= 1020/);
   assert.match(app,/if \(!snapshot\.hasData\) return const PublicEntryScreen\(\);/);
   assert.match(nativeApi,/anonymous: true/);

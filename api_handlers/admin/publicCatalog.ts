@@ -13,13 +13,14 @@ const itemId=(value:string)=>/^[A-Za-z0-9_-]{1,120}$/.test(value);
 const owner=(row:RecordData)=>string(row.organizationId||row.ownerOrganizationId);
 export function isPublicStudy(row:RecordData):boolean{
   return row.published===true&&row.archived!==true&&
-    (row.sharingScope==='shared'||(!owner(row)&&row.sharingScope!=='private'));
+    (row.sharingScope==='shared'||(!owner(row)&&
+      (!row.sharingScope||row.sharingScope==='public'||row.sharingScope==='platform'));
 }
 export function publicLessonMetadata(id:string,row:RecordData,guide:RecordData){
-  if(!itemId(id)||row.published!==true||row.archived===true||row.sharingScope==='private')return null;
-  // A lesson inherits the public visibility of its explicitly published guide;
-  // do not expose a lesson owned by another organisation.
-  if(owner(row)&&owner(row)!==owner(guide)&&row.sharingScope!=='shared')return null;
+  if(!itemId(id)||!isPublicStudy(row))return null;
+  // A published course cannot expose an organisation-only lesson.
+  // Require its own public-sharing policy and matching ownership.
+  if(owner(row)&&owner(row)!==owner(guide))return null;
   return {
     id,title:clip(row.title||row.lessonTitle||row.name,150),
     description:clip(row.description,240),

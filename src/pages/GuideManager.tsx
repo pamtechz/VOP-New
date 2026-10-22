@@ -563,7 +563,7 @@ export default function GuideManager({
             <input type="checkbox" checked={editing.requiresFinalExam} disabled={editing.requiresFinalExam} onChange={event=>setEditing({...editing,requiresFinalExam:event.target.checked})}/>
           </div>
           <div className="vop-setting-row">
-            <div><div className="vop-setting-name">Sharing</div><div className="vop-setting-help">Shared guides can be consumed by other organizations. Canonical editing remains with the owner and VOP Super Admin.</div></div>
+            <div><div className="vop-setting-name">Sharing</div><div className="vop-setting-help">Shared, published guides also expose their title, description and permitted lesson outline in the public VOP catalogue before sign-in. Full lessons and assessments stay protected. Keep private material Organization only or Private.</div></div>
             <select value={editing.sharingScope} onChange={e => setEditing({...editing,sharingScope:e.target.value as GuideRecord['sharingScope']})}><option value="private">Private</option><option value="organization">Organization only</option><option value="shared">Shared</option></select>
           </div>
           <div className="vop-setting-row">

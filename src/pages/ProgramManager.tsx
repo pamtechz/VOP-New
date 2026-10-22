@@ -266,6 +266,7 @@ export default function ProgramManager({
               <option value="shared">Shared · platform governed</option>}
           </select>
         </label>
+        <span className="vop-program-visibility-help">Published, shared programmes expose their title and description in the public study catalogue; only individually published and shared courses appear in its outline.</span>
         <label className="vop-program-publish"><input type="checkbox" checked={editing.published}
           onChange={event=>setEditing({...editing,published:event.target.checked})}/> Published</label>
         <button type="button" className="vop-secondary" onClick={()=>setEditing(null)}>Cancel</button>

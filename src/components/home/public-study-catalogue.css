@@ -34,3 +34,17 @@
 @media(max-width:1000px){.vop-catalogue-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:680px){.vop-catalogue{padding:64px 18px}.vop-catalogue-grid{grid-template-columns:1fr}.vop-catalogue-card{padding:19px}.vop-catalogue-heading p{font-size:14px}}
 @media(prefers-reduced-motion:reduce){.vop-catalogue *{scroll-behavior:auto!important;transition:none!important}}
+
+.vop-catalogue-programs{margin:16px 0 30px}
+.vop-catalogue-programs-heading h3{margin:0 0 7px;font-size:23px}
+.vop-catalogue-programs-heading p{font-size:13px;margin:0 0 17px;color:var(--theme-muted,#526782);line-height:1.65}
+.vop-catalogue-program-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:15px}
+.vop-catalogue-program-card{background:var(--theme-surface,#fff);border:1px solid var(--theme-border,#dce4ee);border-radius:16px;padding:20px;min-width:0}
+.vop-catalogue-program-card>span{display:flex;align-items:center;gap:7px;color:#3b7ebe;font-size:11px;font-weight:850;letter-spacing:.08em;text-transform:uppercase}
+.vop-catalogue-program-card h4{font-size:19px;line-height:1.3;margin:13px 0 7px}
+.vop-catalogue-program-card p{color:var(--theme-muted,#526782);line-height:1.6;font-size:13px}
+.vop-catalogue-program-card small{display:block;color:var(--theme-muted,#526782);font-size:12px;margin:11px 0 16px}
+.vop-catalogue-program-card button{display:flex;align-items:center;gap:8px;background:transparent;color:#3174b3;border:0;padding:7px 0;font-weight:800;font-size:12px;text-align:left}
+.vop-catalogue-program-card button[aria-pressed=true]{color:var(--theme-title,#10294a)}
+@media(max-width:1000px){.vop-catalogue-program-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:680px){.vop-catalogue-program-grid{grid-template-columns:1fr}}

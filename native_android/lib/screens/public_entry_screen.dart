@@ -79,10 +79,12 @@ class _PublicEntryScreenState extends State<PublicEntryScreen> {
             style:TextStyle(color:Colors.white,
               fontSize:18,fontWeight:FontWeight.w900))),
         ])),
-        TextButton(
-          onPressed: () => _jumpToCatalog(),
-          child: const Text('Browse studies', style: TextStyle(color: Colors.white)),
-        ),
+        if (MediaQuery.sizeOf(context).width >= 550)
+          TextButton(
+            onPressed: _jumpToCatalog,
+            child: const Text('Browse studies',
+              style: TextStyle(color: Colors.white)),
+          ),
         const SizedBox(width: 12),
         FilledButton(
           onPressed: () => setState(() => _signIn = true),
@@ -266,13 +268,67 @@ class _PublicEntryScreenState extends State<PublicEntryScreen> {
                   Expanded(child: filter),
                 ]) : Column(children: [search, const SizedBox(height: 12), filter]);
               }),
+              if (programs.isNotEmpty) ...[
+                const SizedBox(height: 27),
+                Text('Published study programmes',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w800)),
+                const SizedBox(height: 5),
+                Text('Browse learning paths and their published outlines.',
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                const SizedBox(height: 13),
+                LayoutBuilder(builder: (context, layout) {
+                  final columns = layout.maxWidth >= 1020 ? 3
+                    : layout.maxWidth >= 650 ? 2 : 1;
+                  final cardWidth = (layout.maxWidth - (columns - 1) * 16) / columns;
+                  return Wrap(spacing: 16, runSpacing: 16, children: [
+                    for (final program in programs)
+                      SizedBox(width: cardWidth, child: Card(
+                        clipBehavior: Clip.antiAlias,
+                        child: Padding(padding: const EdgeInsets.all(18),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              const Row(children: [
+                                Icon(Icons.school_outlined, size: 19),
+                                SizedBox(width: 8),
+                                Text('PUBLISHED PROGRAMME',
+                                  style: TextStyle(fontSize: 11,
+                                    fontWeight: FontWeight.w800)),
+                              ]),
+                              const SizedBox(height: 14),
+                              Text(program['title']?.toString() ?? '',
+                                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w800)),
+                              if ((program['description']?.toString() ?? '').isNotEmpty) ...[
+                                const SizedBox(height: 9),
+                                Text(program['description'].toString(),
+                                  style: TextStyle(height: 1.5,
+                                    color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                              ],
+                              const SizedBox(height: 12),
+                              Text('${(program['guideIds'] as List? ?? []).length} publicly browsable courses',
+                                style: Theme.of(context).textTheme.bodySmall),
+                              const SizedBox(height: 8),
+                              OutlinedButton.icon(
+                                onPressed: () => setState(() =>
+                                  _selectedProgram = program['id']?.toString() ?? ''),
+                                icon: const Icon(Icons.arrow_forward, size: 17),
+                                label: const Text('View published courses'),
+                              ),
+                            ])),
+                      )),
+                  ]);
+                }),
+              ],
               const SizedBox(height: 18),
-              Text('${guides.length} published courses',
+              Text('${guides.length} publicly browsable courses',
                 style: Theme.of(context).textTheme.labelLarge),
               const SizedBox(height: 12),
               if (guides.isEmpty)
                 const Padding(padding: EdgeInsets.all(28),
-                  child: Text('No published studies match your search.')),
+                  child: Text('No publicly browsable course outlines match your search. Published programmes are listed above; sign in to access full lessons.')),
               LayoutBuilder(builder: (context, layout) {
                 final columns = layout.maxWidth >= 1020 ? 3
                   : layout.maxWidth >= 650 ? 2 : 1;

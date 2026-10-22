@@ -64,11 +64,32 @@ export function PublicStudyCatalogue({onSignIn}:{onSignIn:()=>void}){
       </div>
       {loading&&<div className="vop-catalogue-status" role="status">Loading published studies…</div>}
       {!loading&&error&&<div className="vop-catalogue-status" role="status">{error} You can still sign in to VOP.</div>}
+      {!loading&&!error&&(data?.programs.length??0)>0&&
+        <div className="vop-catalogue-programs" aria-label="Published study programmes">
+          <div className="vop-catalogue-programs-heading">
+            <h3>Published programmes</h3>
+            <p>Discover available learning paths. Course outlines appear as they are published for public browsing.</p>
+          </div>
+          <div className="vop-catalogue-program-grid">
+            {data!.programs.filter(program=>!search.trim()||
+              [program.title,program.description].some(value=>
+                value.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()))).map(program=>
+              <article className="vop-catalogue-program-card" key={program.id}>
+                <span><GraduationCap size={19} aria-hidden="true"/> Programme</span>
+                <h4>{program.title}</h4>
+                {program.description&&<p>{program.description}</p>}
+                <small>{program.guideIds.length} publicly browsable {program.guideIds.length===1?'course':'courses'}</small>
+                <button type="button" onClick={()=>setProgramme(program.id)} aria-pressed={programme===program.id}>
+                  {programme===program.id?'Showing this programme':'View published courses'} <ArrowRight size={15} aria-hidden="true"/>
+                </button>
+              </article>)}
+          </div>
+        </div>}
       {!loading&&!error&&<div className="vop-catalogue-result-count" aria-live="polite">
-        {matches.length} published {matches.length===1?'course':'courses'} to explore
+        {matches.length} publicly browsable {matches.length===1?'course':'courses'}
       </div>}
       {!loading&&!error&&matches.length===0&&
-        <div className="vop-catalogue-status">No published studies match your filters. Try another search or programme.</div>}
+        <div className="vop-catalogue-status">No publicly browsable course outlines match these filters. Published programmes can still be explored above. Full lessons require sign-in.</div>}
       <div className="vop-catalogue-grid">
         {matches.map(guide=>{
           const open=expanded.includes(guide.id);
