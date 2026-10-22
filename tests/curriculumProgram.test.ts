@@ -65,7 +65,13 @@ test('programme selection never opens an empty page because guides have zero pub
   assert.match(mobile,/const missingIds=\[\.\.\.new Set\(programs\.flatMap\(program=>program\.guideIds\)\)\]/);
   assert.match(mobile,/!doc\.exists\|\|!hasAccess\(doc\.data\(\)\|\|\{\},scope\)/);
   assert.match(mobile,/guideIds:program\.guideIds\.filter\(id=>knownGuideIds\.has\(id\)\)/);
-  assert.match(flutter,/push\(_ProgrammeScreen\(title:/);
+  assert.match(flutter,/push\\(_ProgrammeScreen\\(\\s*programId:/);
+  assert.match(flutter,/widget\\.api\\.programme\\(widget\\.programId\\)/);
+  assert.match(flutter,/const guides=asRows\\(s\\.data\\?\\['guides'\\]\\)/);
+  const api=read('native_android/lib/core/vop_api.dart');
+  assert.match(api,/read\\('program', \\{'programId': programId\\}\\)/);
+  assert.match(mobile,/if\\(resource==='program'\\)/);
+  assert.match(mobile,/!snap\\.exists\\|\\|!hasAccess\\(snap\\.data\\(\\)\\|\\|\\{\\},scope\\)/);
   assert.match(flutter,/message:'No courses have been published under this programme\.'/);
 });
 test('private instructor notes cannot be persisted in the learner-readable lesson record',()=>{
