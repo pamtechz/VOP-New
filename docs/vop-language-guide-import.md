@@ -1,6 +1,15 @@
 # VOP language guide import
 
-This is a prepared import, not evidence of a completed production write.
+Completed on 22 October 2026: 26 Bemba and 26 Tonga lessons are published and
+linked to the existing VOP program. Every written field was read back and
+verified, and a second connected preview reused all 52 lessons with zero writes.
+English Discover remains pending authorized lesson files.
+
+The atomic import updated 55 lesson/parent documents and created receipt
+`curriculumImports/e96dfe54e062e7a5235f8450975f9bfa7aedd556341a854f879323b6ab9192cd`.
+The isolated apply deployment was `dpl_FdqEX7VbVrvSYH7zM2F6yL1hKsNF` at commit
+`77d0dd151a7818510e6e4df978df9688b6fa6f75`; the following read-only verification
+was `dpl_A1wgYpf4PCagRcNvsmyMMFSpbfHv`. No application release was promoted.
 
 The requested destination is the existing **VOP** program at
 `https://vopafrica.vercel.app`. The public catalogue checked on 22 October 2026
@@ -12,9 +21,9 @@ writing and refuses conflicts.
 
 | Guide | Language code | Prepared full lessons | Status |
 | --- | --- | ---: | --- |
-| Ukusanga | bem | 26 | All supplied text files and pasted closing lessons verified |
+| Ukusanga | bem | 26 | Published; supplied text files and pasted closing lessons verified |
 | Discover | en | 0 | Needs authorized user-supplied lesson files |
-| Kojana | toi | 26 | Supplied archive already present in this repository |
+| Kojana | toi | 26 | Published from the supplied archive |
 
 The 52 supplied translations contain 368 reading sections and reference 170
 original illustrations. Text, images, section boundaries, order, source hashes
