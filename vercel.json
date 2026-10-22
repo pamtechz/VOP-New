@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/api/public-catalog",
+      "destination": "/api/admin?__vopRoute=public-catalog"
+    },
+    {
       "source": "/api/mobile",
       "destination": "/api/admin?__vopRoute=mobile"
     },

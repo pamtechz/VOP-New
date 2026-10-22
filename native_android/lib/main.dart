@@ -12,7 +12,7 @@ import 'core/pending_invitation.dart';
 import 'core/vop_i18n.dart';
 import 'theme/vop_theme.dart';
 import 'screens/admin_dashboard_screen.dart';
-import 'screens/auth_screen.dart';
+import 'screens/public_entry_screen.dart';
 import 'screens/home_shell.dart';
 import 'screens/mentor_workspace_screen.dart';
 import 'screens/organization_dashboard_screen.dart';
@@ -107,7 +107,7 @@ class _VopAndroidAppState extends State<VopAndroidApp> {
                           body: Center(child: CircularProgressIndicator()),
                         );
                       }
-                      if (!snapshot.hasData) return const AuthScreen();
+                      if (!snapshot.hasData) return const PublicEntryScreen();
                       return _AuthenticatedHome(uid: snapshot.data!.uid);
                     },
                   ),

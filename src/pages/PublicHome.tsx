@@ -5,6 +5,7 @@ import {
   ShieldCheck, Sparkles, Swords, Users, X,
 } from 'lucide-react';
 import './public-home.css';
+import {PublicStudyCatalogue} from '../components/home/PublicStudyCatalogue';
 
 type Props = {
   onSignIn: () => void;
@@ -40,6 +41,7 @@ export const PublicHome: React.FC<Props> = ({onSignIn,onRegister,configurationMi
           <img src="/assets/vop_logo_2.png" alt="" /><span><strong>Voice of Prophecy</strong><small>One connected ministry</small></span>
         </a>
         <nav className={menuOpen?'vop-public-links open':'vop-public-links'} aria-label="Public site">
+          <button type="button" onClick={()=>navigate('study-catalogue')}>Browse studies</button>
           <button type="button" onClick={()=>navigate('features')}>Discover VOP</button>
           <button type="button" onClick={()=>navigate('how-it-works')}>How it works</button>
           <button type="button" onClick={()=>navigate('organizations')}>For organizations</button>
@@ -61,7 +63,7 @@ export const PublicHome: React.FC<Props> = ({onSignIn,onRegister,configurationMi
           <p className="vop-public-lead">Bible study, discipleship, youth leadership and church connection—united in one secure, mobile-first ministry experience.</p>
           <div className="vop-public-hero-actions">
             {registrationAllowed?<button type="button" className="vop-public-primary" onClick={onRegister}>Begin your journey <ArrowRight size={19}/></button>:<button type="button" className="vop-public-primary" onClick={onSignIn}>Sign in to continue <ArrowRight size={19}/></button>}
-            <button type="button" className="vop-public-secondary" onClick={()=>navigate('features')}>Explore the platform <ChevronDown size={18}/></button>
+            <button type="button" className="vop-public-secondary" onClick={()=>navigate('study-catalogue')}>Explore published studies <ChevronDown size={18}/></button>
           </div>
           <div className="vop-public-trust"><span><CheckCircle2 size={17}/> Self-paced lessons</span><span><CheckCircle2 size={17}/> Multilingual learning</span><span><CheckCircle2 size={17}/> Account-linked progress</span></div>
           {configurationMissing&&<p className="vop-public-config-notice" role="status">Account sign-in is temporarily unavailable because Firebase configuration is missing for this deployment.</p>}
@@ -81,6 +83,7 @@ export const PublicHome: React.FC<Props> = ({onSignIn,onRegister,configurationMi
         </div>
       </div>
     </section>
+    <PublicStudyCatalogue onSignIn={onSignIn}/>
     <section className="vop-public-feature-section" id="features">
       <div className="vop-public-section-head"><span>BUILT FOR GROWTH</span><h2>Everything you need to learn, connect and serve</h2><p>Choose the ministry experience that fits where you are on your journey.</p></div>
       <div className="vop-public-feature-grid">{features.map(({icon:Icon,label,title,detail})=><article key={title} className="vop-public-feature">
