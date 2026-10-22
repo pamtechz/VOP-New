@@ -939,9 +939,14 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
       || guides.find(item => String(item.id) === editor.guideId);
     if (!existingGuideRecord) return setError('Choose an editable guide within your selected organization. Refresh if the guide was recently created.');
     if (String(existingGuideRecord.language).trim().toLowerCase() !== normalizedLanguage) return setError(tx('curriculum.guideLanguageMismatch', 'The selected guide is not available for this language.'));
-    const guideOrganizationId = valueText((existingGuideRecord as unknown as Record<string, unknown>).organizationId);
-    const targetOrganizationId = scopeOrganizationId || guideOrganizationId;
-    if (isSuperAdmin && guideOrganizationId && guideOrganizationId !== scopeOrganizationId) setScopeOrganizationId(guideOrganizationId);
+    const guideMetadata = existingGuideRecord as unknown as Record<string, unknown>;
+    const guideOrganizationId = valueText(guideMetadata.organizationId || guideMetadata.ownerOrganizationId).trim();
+    // The selected guide, not the last organization filter, owns its lessons.
+    // Super Admin may edit any authorized guide, including platform content.
+    const targetOrganizationId = isSuperAdmin
+      ? (guideOrganizationId || (guideMetadata.scope === 'platform' ? '' : scopeOrganizationId))
+      : (scopeOrganizationId || guideOrganizationId);
+    if (isSuperAdmin && targetOrganizationId !== scopeOrganizationId) setScopeOrganizationId(targetOrganizationId);
 
     const guide = existingGuideRecord;
 
