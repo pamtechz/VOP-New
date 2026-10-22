@@ -106,12 +106,15 @@ test('package lock matches supported runtime, Vite, and gRPC dependencies', () =
   assert.equal(readFileSync(join(root,'.nvmrc'),'utf8').trim(),'22.16.0');
   assert.equal(readFileSync(join(root,'.node-version'),'utf8').trim(),'22.16.0');
   assert.equal(readFileSync(join(root,'.npmrc'),'utf8').trim(),'engine-strict=true');
-  assert.equal(pkg.devDependencies.vite,'8.3.0');
-  assert.equal(lock.packages[''].devDependencies.vite,'8.3.0');
+  assert.equal(pkg.devDependencies.vite,'8.3.5');
+  assert.equal(lock.packages[''].devDependencies.vite,'8.3.5');
   assert.equal(lock.packages[''].engines.node,'>=22.12 <23');
   assert.equal(lock.packages[''].engines.npm,'>=10 <11');
-  assert.equal(lock.packages['node_modules/vite'].version,'8.3.0');
+  assert.equal(lock.packages['node_modules/vite'].version,'8.3.5');
   assert.notEqual(lock.packages['node_modules/vite'].peer,true);
+  assert.equal(pkg.devDependencies['firebase-tools'],'15.34.1');
+  assert.equal(lock.packages[''].devDependencies['firebase-tools'],'15.34.1');
+  assert.equal(lock.packages['node_modules/firebase-tools'].version,'15.34.1');
   assert.equal(pkg.overrides['@grpc/grpc-js'],'1.14.5');
   assert.equal(lock.packages['node_modules/@grpc/grpc-js'].version,'1.14.5');
   assert.equal(lock.packages['node_modules/@grpc/grpc-js/node_modules/@grpc/proto-loader'].version,'0.8.1');

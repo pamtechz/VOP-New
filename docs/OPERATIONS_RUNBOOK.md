@@ -174,4 +174,23 @@ Vercel's Ignored Build Step must be configured as:
 
 For Preview deployments the script allows the build. A Production deployment from any branch other than `main` is denied. For Production `main`, it queries GitHub for pull requests associated with `VERCEL_GIT_COMMIT_SHA` and allows the build only when the exact SHA is the merge result of a closed, merged PR targeting `main`. GitHub lookup failure, timeout, repository mismatch, a direct commit, or an unrelated PR fails closed and causes Vercel to ignore the deployment.
 
-This is a deployment backstop, not a replacement for GitHub branch protection. Protect `main` in GitHub and require the hosted verification/validation checks before merge.
+This is a deployment backstop, not a replacement for GitHub branch protection. Protect `main` in GitHub and require the KASAINSTITUTE self-hosted verification/validation checks before merge.
+
+## Development tool dependency audit
+
+The 22 October 2026 dependency repair pins Vite 8.3.5 and Firebase CLI 15.34.1,
+and updates compatible MCP/Hono dependencies in the npm lockfile. Installed
+production dependency versions are unchanged. Production audits remain enforced
+with `npm audit --omit=dev --audit-level=moderate`; the separate full audit
+continues to report development-tool findings without concealing them.
+
+One upstream advisory remains in the development-only chain
+`firebase-tools -> chokidar@3.6.0 -> braces@3.0.3`:
+[GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm).
+The advisory currently has no patched braces release, so npm reports three
+affected package entries for this one chain. Do not use npm's suggested
+major downgrade to the obsolete Firebase CLI 6.8.0 or override chokidar with an
+incompatible major version. Keep the existing trusted-repository runner guards
+and isolated demo-project emulator tests. Review the chain when an upstream
+compatible repair is published; this is not a claim of a clean full-toolchain
+audit.
