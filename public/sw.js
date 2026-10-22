@@ -23,6 +23,8 @@ self.addEventListener('fetch', event => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
   if (url.pathname.startsWith('/api/')) return;
+  // Classic owns its independent /classic/ service-worker and offline scope.
+  if (url.pathname === '/classic' || url.pathname.startsWith('/classic/')) return;
 
   const navigation = request.mode === 'navigate';
   const publicShell = APP_SHELL.includes(url.pathname) && !url.search;

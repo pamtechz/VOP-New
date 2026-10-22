@@ -4,7 +4,11 @@ import 'package:flutter/foundation.dart';
 /// Public Firebase client values are injected at compile time.
 /// Never provide service account credentials, payment keys or private tokens.
 class VopConfig {
-  static const apiUrl = String.fromEnvironment('VOP_API_BASE_URL');
+  // Browser and API are hosted on the same origin in the unified release.
+  // Android continues using the explicit configured backend origin.
+  static String get apiUrl => kIsWeb
+      ? Uri.base.origin
+      : const String.fromEnvironment('VOP_API_BASE_URL');
   static const apiKey = String.fromEnvironment('VOP_FIREBASE_API_KEY');
   static const appId = String.fromEnvironment('VOP_FIREBASE_ANDROID_APP_ID');
   static const webAppId = String.fromEnvironment('VOP_FIREBASE_WEB_APP_ID');

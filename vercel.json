@@ -29,6 +29,14 @@
       "destination": "/api/payments?__vopPaymentRoute=:route*"
     },
     {
+      "source": "/classic/",
+      "destination": "/classic/index.html"
+    },
+    {
+      "source": "/classic/((?!.*[.][A-Za-z0-9]{1,8}$).*)",
+      "destination": "/classic/index.html"
+    },
+    {
       "source": "/((?!api(?:/|$)|\\.well-known(?:/|$)).*)",
       "destination": "/index.html"
     }
@@ -94,6 +102,33 @@
           "value": "public, max-age=3600"
         }
       ]
+    },
+    {
+      "source": "/classic/index.html",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, no-store, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/classic/flutter_bootstrap.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, no-store, must-revalidate"
+        }
+      ]
+    }
+  ],
+  "buildCommand": "npm run build && bash scripts/build-unified-web.sh",
+  "outputDirectory": "dist",
+  "redirects": [
+    {
+      "source": "/classic",
+      "destination": "/classic/",
+      "permanent": true
     }
   ]
 }

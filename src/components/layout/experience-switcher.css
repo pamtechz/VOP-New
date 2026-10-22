@@ -1,0 +1,6 @@
+.vop-experience-switch{position:fixed;right:18px;bottom:18px;z-index:120;display:flex;align-items:center;gap:7px;padding:5px 6px 5px 13px;background:#102947;color:#fff;border:1px solid rgba(255,255,255,.15);border-radius:999px;box-shadow:0 8px 27px rgba(5,22,46,.3);font-size:12px;font-weight:750}
+.vop-experience-switch span{padding:7px 6px;color:#f6d18c}
+.vop-experience-switch a{display:inline-flex;align-items:center;gap:7px;background:#fff;color:#10385d;text-decoration:none;padding:10px 14px;border-radius:999px}
+.vop-experience-switch a:hover{background:#f1f7fd}
+.vop-experience-switch a:focus-visible{outline:3px solid #f6c76c;outline-offset:3px}
+@media(max-width:520px){.vop-experience-switch{right:9px;bottom:9px;font-size:11px}.vop-experience-switch a{padding:9px 11px}}

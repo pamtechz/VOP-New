@@ -28,6 +28,7 @@ flutter config --enable-web
 flutter create --platforms=web --org com.sda --project-name vop .
 flutter pub get --enforce-lockfile
 flutter build web --release --no-pub \
+  --base-href "${VOP_FLUTTER_WEB_BASE_HREF:-/}" \
   --dart-define-from-file=config/web-public.json
 
 test -s build/web/index.html

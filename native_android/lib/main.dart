@@ -1,6 +1,8 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'core/legacy_navigation_io.dart' if (dart.library.js_interop) 'core/legacy_navigation_web.dart' as legacyNavigation;
 
 import 'dart:ui';
 import 'dart:async';
@@ -80,7 +82,31 @@ class _VopAndroidAppState extends State<VopAndroidApp> {
                   ),
                   child: Directionality(
                     textDirection: VopI18n.direction == 'rtl' ? TextDirection.rtl : TextDirection.ltr,
-                    child: child ?? const SizedBox.shrink(),
+                    child: Stack(children: [
+                      child ?? const SizedBox.shrink(),
+                      if (kIsWeb && Uri.base.path.startsWith('/classic/'))
+                        Positioned(right: 16, bottom: 20, child: SafeArea(
+                          child: Material(
+                            elevation: 8,
+                            borderRadius: BorderRadius.circular(24),
+                            color: Theme.of(context).colorScheme.surface,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+                              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                                TextButton.icon(
+                                  onPressed: legacyNavigation.openLegacy,
+                                  icon: const Icon(Icons.swap_horiz, size: 17),
+                                  label: const Text('Legacy'),
+                                ),
+                                Padding(padding: const EdgeInsets.symmetric(horizontal: 9),
+                                  child: Text('Classic', style: TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                    color: Theme.of(context).colorScheme.primary))),
+                              ]),
+                            ),
+                          ),
+                        )),
+                    ]),
                   ),
                 ),
               ),

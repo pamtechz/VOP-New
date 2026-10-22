@@ -19,6 +19,7 @@ test('service worker has versioned cache lifecycle and excludes API authority', 
   assert.match(source, /skipWaiting\(\)/);
   assert.match(source, /clients\.claim\(\)/);
   assert.match(source, /url\.pathname\.startsWith\('\/api\/'\)/);
+  assert.match(source, /url\.pathname\.startsWith\('\/classic\/'\)/);
   assert.match(source, /caches\.keys\(\)/);
   assert.match(source, /caches\.match\(request\)/);
   assert.match(source, /publicShell/);
