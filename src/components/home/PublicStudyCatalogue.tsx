@@ -87,7 +87,7 @@ export function PublicStudyCatalogue({onSignIn}:{onSignIn:()=>void}){
                 </button>
                 {programme===program.id&&<div id={`vop-programme-courses-${program.id}`} className="vop-catalogue-program-courses" role="region" aria-label={`Published courses in ${program.title}`}>
                   {data!.guides.filter(guide=>program.guideIds.includes(guide.id)).length===0
-                    ?<p>No course outlines have been published for public browsing in this programme.</p>
+                    ?<p>{t('public.catalogue.noPublishedCourseOutlines','No course outlines have been published for public browsing in this programme.')}</p>
                     :<ul>{data!.guides.filter(guide=>program.guideIds.includes(guide.id)).map(guide=>
                       <li key={guide.id}>
                         <BookOpen size={15} aria-hidden="true"/>
