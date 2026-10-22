@@ -11,7 +11,9 @@ test('public study discovery is a GET-only metadata endpoint with explicit publi
   assert.match(handler,/row\.archived!==true/);
   assert.match(handler,/row\.sharingScope==='shared'/);
   assert.match(handler,/if\(!itemId\(id\)\|\|!isPublicStudy\(row\)\)return null/);
+  assert.match(handler,/owner\(guide\)&&row\.sharingScope!=='shared'/);
   assert.match(handler,/owner\(row\)&&owner\(row\)!==owner\(guide\)/);
+  assert.match(handler,/Cache-Control','no-store'/);
   assert.match(handler,/row\.sharingScope==='platform'/);
   assert.match(handler,/lessons'.*where\('published','==',true\)/s);
   assert.doesNotMatch(handler,/\b(?:quizAnswers|correctAnswers|contentPages|pageBlocks|scriptureQuote|correctOption|assessmentBank)\s*:/);

@@ -18,8 +18,9 @@ export function isPublicStudy(row:RecordData):boolean{
 }
 export function publicLessonMetadata(id:string,row:RecordData,guide:RecordData){
   if(!itemId(id)||!isPublicStudy(row))return null;
-  // A published course cannot expose an organisation-only lesson.
-  // Require its own public-sharing policy and matching ownership.
+  // Do not inherit a public sharing grant from a published parent course:
+  // organisation-owned courses require an explicit lesson-level grant.
+  if(owner(guide)&&row.sharingScope!=='shared')return null;
   if(owner(row)&&owner(row)!==owner(guide))return null;
   return {
     id,title:clip(row.title||row.lessonTitle||row.name,150),
@@ -71,7 +72,7 @@ export default async function publicCatalog(req:Request,res:Response){
             .filter((id):id is string=>typeof id==='string'&&guideIds.has(id)).slice(0,80)};
       }).filter(program=>program.title)
       .sort((a,b)=>a.title.localeCompare(b.title)).slice(0,40);
-    res.setHeader?.('Cache-Control','public, s-maxage=90, stale-while-revalidate=180');
+    res.setHeader?.('Cache-Control','no-store');
     return res.status(200).json({ok:true,programs,guides:publicGuides});
   }catch{
     res.setHeader?.('Cache-Control','no-store');
