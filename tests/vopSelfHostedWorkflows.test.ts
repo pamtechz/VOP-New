@@ -110,6 +110,12 @@ test('native Flutter Android and Web CI invokes Windows-compatible commands',()=
     'Windows launcher test changes must trigger Flutter CI');
   assert.match(source,/flutter build apk --debug/);
   assert.match(source,/flutter build web --release/);
+  assert.equal(source.split('flutter pub get --enforce-lockfile').length-1,2,
+    'both Flutter builds must resolve the reviewed application lockfile');
+  assert.match(source,/python native_android\/tool\/prepare_scaffold\.py --platform android/);
+  assert.match(source,/python native_android\/tool\/prepare_scaffold\.py --platform web/);
+  assert.match(source,/python tests\/flutter_scaffold_test\.py/);
+  assert.match(source,/--base-href \/classic\//);
   assert.match(source,/passkeys-bundle\.js/);
   assert.doesNotMatch(source,/shell: bash/);
   assert.doesNotMatch(source,/run: python3 /);

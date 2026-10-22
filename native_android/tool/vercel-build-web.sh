@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build ONLY the independent Flutter web client; do not deploy the Vite site.
+# Build Flutter for the shared Classic path or a standalone preview.
 set -Eeuo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
@@ -25,7 +25,7 @@ export CI=true
 # the reviewed passkeys SDK must remain unchanged.
 flutter --version
 flutter config --enable-web
-flutter create --no-pub --platforms=web --org com.sda --project-name vop .
+python3 tool/prepare_scaffold.py --platform web
 flutter pub get --enforce-lockfile
 flutter build web --release --no-pub \
   --base-href "${VOP_FLUTTER_WEB_BASE_HREF:-/}" \

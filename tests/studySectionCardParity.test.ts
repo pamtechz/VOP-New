@@ -36,7 +36,8 @@ test('Classic Flutter web and Android use the same permission-aware section card
   const learner=read('native_android/lib/screens/home_shell.dart');
   assert.doesNotMatch(learner,/canEditChapterQuestions\s*:/);
   assert.match(studio,/quizPerm\.contains\('update'\)/);
-  assert.match(guide,/onTakeTest:locked\|\|attachedQuizId==null/);
+  assert.match(guide,/onTakeTest:locked\|\|chosenQuizId==null\|\|chosenQuizId\.isEmpty\?null:/);
+  assert.match(guide,/guideId:widget\.guideId,lessonId:chosenQuizId/);
   assert.match(card,/if\(onTakeTest!=null\)/);
   assert.match(card,/if\(onFlashcards!=null\)/);
   assert.match(card,/if\(onEditQuestions!=null\)/);

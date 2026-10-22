@@ -620,33 +620,36 @@ app signing and Play Integrity, crash reporting, accessibility, localization,
 right-to-left layout, actual-device performance and parity against every
 web module. Never silently award progress while offline.
 
-## Separate Vercel Flutter web deployment
+## Unified Vercel web deployment
 
-The Flutter web deployment is an independent Vercel project, **vop-flutter-web**,
-connected to the same repository with Root Directory set to `native_android`.
-It must **not** replace or retarget the existing Vite project `vop-new`.
+The existing **vop-new** Vercel project serves Legacy at `/`, Flutter Classic at
+`/classic/`, and the shared backend at `/api/`. Keep the project Root Directory
+at the repository root. The root `vercel.json` builds Vite and then runs
+`scripts/build-unified-web.sh`, which packages Flutter in `dist/classic`.
+The two interfaces include links for switching experiences on the same origin.
 
-- Framework preset: Other (no auto-selected Node framework)
-- Root Directory: `native_android`
-- Build command: `bash tool/vercel-build-web.sh`
-- Install command: `echo "Dependencies managed by Flutter"`
-- Output Directory: `build/web`
-- Production branch: `main`
-- The script installs the reviewed Flutter 3.47.6 tag, verifies its commit,
-  generates the web scaffold, resolves the locked Dart packages, and builds
-  against `config/web-public.json` using only **public** Firebase client values.
-- `native_android/vercel.json` provides history-mode SPA routing and headers.
+The Flutter build uses the reviewed 3.47.6 SDK tag and verifies its commit.
+`tool/prepare_scaffold.py` preserves `pubspec.yaml` and `pubspec.lock` while
+generating platform files: Flutter 3.47.6 otherwise overwrites the full app
+lockfile with SDK-only dependencies, including when `--no-pub` is supplied.
+Both Vercel and Windows CI then run `flutter pub get --enforce-lockfile`.
+An incompatible or missing lockfile fails the build; dependency changes must
+be resolved intentionally and committed for review. Run
+`python tests/flutter_scaffold_test.py` from the repository root to verify
+preservation and failure handling.
 
-This project is **static**. All authenticated API operations continue to use
-`VOP_API_BASE_URL` on the existing VOP Vite/Node backend; do not copy server-side
-Firebase Admin keys, payment credentials or other private env vars into Flutter.
+Browser API requests use the current origin. Android uses the configured
+HTTPS `VOP_API_BASE_URL`. Only public Firebase client configuration belongs
+in `config/web-public.json`; server credentials remain on the backend.
+Legacy's service worker excludes Classic routes, and Flutter's base href is
+`/classic/`. Verify the main page, Classic deep links, manifest, passkeys SDK,
+shared API, and Firebase sign-in before promoting a release.
 
-Before browser sign-in can work, authorize the Flutter project's production
-hostname in Firebase Authentication's **Authorized domains**. The VOP backend
-also requires that exact HTTPS origin in its server-side
-`VOP_FLUTTER_WEB_ALLOWED_ORIGINS` variable (comma-separated existing origins
-must be preserved). Verify the configuration and deploy the backend variable
-change before considering the Flutter site operational. Git preview hostnames
-must not be wildcard-allowed; prefer an explicit stable hostname.
+The former standalone **vop-flutter-web** project is retained only until the
+unified production deployment is verified. Its standalone build script remains
+available for isolated previews. Such previews require their own exact Firebase
+authorized hostname and backend CORS origin; never wildcard preview domains.
+Retire the redundant project after the unified production checks pass.
 
-A successful build is not a claim of complete legacy web/Flutter portal parity.
+A successful build does not establish complete web/Android feature parity or
+physical-device acceptance.
