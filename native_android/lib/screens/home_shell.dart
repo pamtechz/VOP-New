@@ -634,6 +634,7 @@ class _ProgrammeScreenState extends State<_ProgrammeScreen> {
       },
     ),
   );
+}
 class _ProgressScreen extends StatelessWidget{
   const _ProgressScreen({required this.api});
   final VopApi api;
