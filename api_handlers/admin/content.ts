@@ -590,7 +590,10 @@ export default async function handler(req: Request, res: Response) {
       const guideRef = ctx.db.doc(`guides/${guideId}`);
       const guide = await guideRef.get();
       const guideData = guide.data() || {};
-      const guideOrgId = String(guideData.organizationId || '');
+      const guideOrgId = String(guideData.organizationId || guideData.ownerOrganizationId || '').trim();
+      // The guide record is authoritative for Super Admin lesson ownership.
+      // A stale organization selected in the UI must never reparent a lesson.
+      const lessonOrganizationId = ctx.isSuperAdmin ? guideOrgId : effectiveOrganizationId;
       const guideMatchesTenant = ctx.isSuperAdmin
         || guideOrgId === effectiveOrganizationId
         || (!guideOrgId && guideData.sharingScope === 'shared');
@@ -667,8 +670,8 @@ export default async function handler(req: Request, res: Response) {
         } : {}),
         id: lessonId,
         lessonId,
-        organizationId: effectiveOrganizationId || guideOrgId,
-        ownerOrganizationId: existing.data()?.ownerOrganizationId || effectiveOrganizationId || guideOrgId,
+        organizationId: lessonOrganizationId,
+        ownerOrganizationId: existing.data()?.ownerOrganizationId || lessonOrganizationId,
         ownerTenantId: existing.data()?.ownerTenantId || guideData.ownerTenantId || tenantOwnerKey(ctx),
         ownerUid: existing.data()?.ownerUid || ctx.auth.uid,
         canonical: true,
@@ -685,7 +688,7 @@ export default async function handler(req: Request, res: Response) {
       if(notesIncluded||historicalNotes){
         batch.set(privateNotesRef,{
           text:savedNotes,guideId,lessonId,
-          ownerOrganizationId:existing.data()?.ownerOrganizationId || effectiveOrganizationId,
+          ownerOrganizationId:existing.data()?.ownerOrganizationId || lessonOrganizationId,
           ownerTenantId:existing.data()?.ownerTenantId || guideData.ownerTenantId || tenantOwnerKey(ctx),
           ownerUid:existing.data()?.ownerUid || ctx.auth.uid,
           updatedAt:FieldValue.serverTimestamp(),updatedBy:ctx.auth.uid,
@@ -709,7 +712,8 @@ export default async function handler(req: Request, res: Response) {
       const requestedGuideId = safeId(data.guideId);
       const guide = await ctx.db.doc(`guides/${requestedGuideId}`).get();
       const guideData = guide.data() || {};
-      const guideOrgId = String(guideData.organizationId || '');
+      const guideOrgId = String(guideData.organizationId || guideData.ownerOrganizationId || '').trim();
+      const lessonOrganizationId = ctx.isSuperAdmin ? guideOrgId : effectiveOrganizationId;
       const guideMatchesTenant = ctx.isSuperAdmin
         || guideOrgId === effectiveOrganizationId
         || (!guideOrgId && guideData.sharingScope === 'shared');
@@ -737,8 +741,8 @@ export default async function handler(req: Request, res: Response) {
       await ref.set({
         id: lessonId,
         lessonId,
-        organizationId: effectiveOrganizationId || guideOrgId,
-        ownerOrganizationId: current.data()?.ownerOrganizationId || effectiveOrganizationId || guideOrgId,
+        organizationId: lessonOrganizationId,
+        ownerOrganizationId: current.data()?.ownerOrganizationId || lessonOrganizationId,
         ownerUid: current.data()?.ownerUid || ctx.auth.uid,
         canonical: true,
         sharingScope: guideSystemWide
@@ -1586,7 +1590,13 @@ export default async function handler(req: Request, res: Response) {
     return res.status(400).json({ error:'Unsupported content action.' });
   } catch (error) {
     const message=error instanceof Error ? error.message : 'Content operation failed.';
-    const status=/Sign in first/.test(message)?401:/permission|Only|membership|Select|available|required|subscription|organization/.test(message)?403:400;
-    return res.status(status).json({error:message});
+    // Validation errors must not masquerade as authorization failures.
+    // In particular "A valid guide ... is required" is a 400, not a 403.
+    const status=/Sign in first|session has expired|id.token|token.expired|token.revoked/i.test(message)
+      ?401
+      :/\bpermission\b|\bunauthori[sz]ed\b|^Only\b|^You (?:cannot|do not have|are not)\b|\boutside your (?:authorized|curriculum|tenant)\b|\bnot a member\b|\bsubscription\b|\bquota\b/i.test(message)
+      ?403:400;
+    return res.status(status).json({error:message,
+      code:status===401?'UNAUTHENTICATED':status===403?'PERMISSION_DENIED':'INVALID_REQUEST'});
   }
 }
