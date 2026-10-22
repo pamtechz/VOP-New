@@ -1410,10 +1410,21 @@ export default async function handler(req: Request, res: Response) {
     }
 
     if (ORG_COLLECTIONS.has(collection)) {
-      if (!effectiveOrganizationId) throw new Error('Select an organization within your authorized scope before managing content.');
+      // A platform Super Admin may maintain global curriculum taxonomy without
+      // selecting an organization. Other organization-only resources remain scoped.
+      const platformCurriculum=ctx.isSuperAdmin &&
+        ['learningPaths','bibleTopics','seasons'].includes(collection);
+      if (!effectiveOrganizationId && !platformCurriculum)
+        throw new Error('Select an organization within your authorized scope before managing content.');
       if (ctx.tenantType === 'hierarchy' && !(await organizationInHierarchyScope(ctx, effectiveOrganizationId))) throw new Error('The organization is outside your hierarchy scope.');
       const ref = ctx.db.doc(`${collection}/${id}`);
       const existing = await ref.get();
+      const current=existing.data()||{};
+      const contentOrganizationId=ctx.isSuperAdmin&&existing.exists
+        ?String(current.scope==='platform'?'':current.organizationId||current.ownerOrganizationId||'').trim()
+        :effectiveOrganizationId;
+      if(!contentOrganizationId&&!platformCurriculum)
+        throw new Error('Organization-owned content requires its original organization.');
 
       // Official certificates are issued only by /api/certificates.
       // This generic endpoint may never create, replace, revoke, or rewrite
@@ -1481,10 +1492,13 @@ export default async function handler(req: Request, res: Response) {
           ...incoming,
           id,
           ...(Object.prototype.hasOwnProperty.call(incoming, 'published') ? { published: incoming.published === true } : {}),
-          organizationId: effectiveOrganizationId,
-          ownerOrganizationId: existing.data()?.ownerOrganizationId || effectiveOrganizationId,
+          organizationId: contentOrganizationId,
+          ownerOrganizationId: existing.data()?.ownerOrganizationId || contentOrganizationId,
           ownerUid: existing.data()?.ownerUid || ctx.auth.uid,
-          scope: 'organization',
+          scope: contentOrganizationId?'organization':'platform',
+          sharingScope: !contentOrganizationId
+            ?(incoming.published===true?'shared':'private')
+            :(existing.data()?.sharingScope || 'organization'),
           canonical: true,
           createdAt: existing.data()?.createdAt || new Date().toISOString(),
           updatedAt: FieldValue.serverTimestamp(),
@@ -1508,7 +1522,7 @@ export default async function handler(req: Request, res: Response) {
           try {
             const notificationType = collection === 'events' ? 'event' : 'announcement';
             delivery = await notifyOrganizationMembers(ctx.db, {
-              organizationId: effectiveOrganizationId,
+              organizationId: contentOrganizationId,
               sourceId: id,
               title: String(incoming.title || (collection === 'events' ? 'New event' : 'New announcement')),
               body: String(incoming.description || '').trim() || (collection === 'events' ? 'A new ministry event has been published.' : 'A new announcement has been published.'),
