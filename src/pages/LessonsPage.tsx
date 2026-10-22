@@ -161,7 +161,7 @@ export const LessonsPage: React.FC<Props> = ({
               );
             }):<p role="status">No accessible published courses are currently linked to this programme. An administrator can check the programme's assigned guides and publication settings.</p>}
             {programGuides.length>0&&programGuides.every(guide=>!guide.lessons.some(lesson=>lesson.type==='Lesson'))&&
-              <p role="status">These courses are published, but their lessons have not been published yet.</p>}
+              <p role="status">{t('lessons.programLessonsUnpublished','These courses are published, but their lessons have not been published yet.')}</p>}
           </div>
         </div>:<>
           <div className="vop-program-catalog-intro"><div>
