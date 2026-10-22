@@ -25,7 +25,7 @@ export CI=true
 # the reviewed passkeys SDK must remain unchanged.
 flutter --version
 flutter config --enable-web
-flutter create --platforms=web --org com.sda --project-name vop .
+flutter create --no-pub --platforms=web --org com.sda --project-name vop .
 flutter pub get --enforce-lockfile
 flutter build web --release --no-pub \
   --base-href "${VOP_FLUTTER_WEB_BASE_HREF:-/}" \
