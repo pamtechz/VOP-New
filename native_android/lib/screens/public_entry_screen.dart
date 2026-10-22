@@ -312,11 +312,39 @@ class _PublicEntryScreenState extends State<PublicEntryScreen> {
                                 style: Theme.of(context).textTheme.bodySmall),
                               const SizedBox(height: 8),
                               OutlinedButton.icon(
-                                onPressed: () => setState(() =>
-                                  _selectedProgram = program['id']?.toString() ?? ''),
+                                onPressed: () => setState(() {
+                                  _selectedProgram = program['id']?.toString() ?? '';
+                                  _search.clear();
+                                }),
                                 icon: const Icon(Icons.arrow_forward, size: 17),
-                                label: const Text('View published courses'),
+                                label: Text(_selectedProgram == program['id']
+                                  ? 'Showing this programme' : 'View published courses'),
                               ),
+                              if (_selectedProgram == program['id']) ...[
+                                const Divider(height: 24),
+                                if (all.where((guide) =>
+                                  (program['guideIds'] as List? ?? []).contains(guide['id'])).isEmpty)
+                                  const Text('No course outlines have been published for public browsing in this programme.'),
+                                ...all.where((guide) =>
+                                  (program['guideIds'] as List? ?? []).contains(guide['id'])).map(
+                                  (guide) => Padding(
+                                    padding: const EdgeInsets.symmetric(vertical: 7),
+                                    child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                      const Icon(Icons.menu_book_outlined, size: 17),
+                                      const SizedBox(width: 9),
+                                      Expanded(child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text((guide['title'] ?? '').toString(),
+                                            style: const TextStyle(fontWeight: FontWeight.w700)),
+                                          Text('${_items(guide['lessons']).length} published lessons',
+                                            style: Theme.of(context).textTheme.bodySmall),
+                                        ],
+                                      )),
+                                    ]),
+                                  ),
+                                ),
+                              ],
                             ])),
                       )),
                   ]);
