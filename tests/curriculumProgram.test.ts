@@ -51,6 +51,23 @@ test('program UI links canonical guides and passes section-first entry mode to t
   assert.match(reader,/vop-section-study-card/);
   assert.match(reader,/onSelectLesson\(lesson,actualIndex\)/);
 });
+test('programme selection never opens an empty page because guides have zero published lessons',()=>{
+  const learner=read('src/pages/LessonsPage.tsx');
+  const loader=read('src/services/firestoreData.ts');
+  const flutter=read('native_android/lib/screens/home_shell.dart');
+  const mobile=read('api_handlers/admin/mobile.ts');
+  assert.match(learner,/const availablePrograms=programs;/);
+  assert.match(learner,/const activeProgram=programs\.find\(program=>program\.id===selectedProgramId\)/);
+  assert.match(learner,/filter\(id=>guides\.some\(guide=>guide\.id===id\)\)/);
+  assert.match(learner,/No accessible published courses are currently linked to this programme/);
+  assert.doesNotMatch(loader,/\.filter\(guide => guide\.lessons\.length > 0\)/);
+  assert.match(loader,/const id = legacy \? String\(data\.id \|\| item\.id\)\.trim\(\) : item\.id/);
+  assert.match(mobile,/const missingIds=\[\.\.\.new Set\(programs\.flatMap\(program=>program\.guideIds\)\)\]/);
+  assert.match(mobile,/!doc\.exists\|\|!hasAccess\(doc\.data\(\)\|\|\{\},scope\)/);
+  assert.match(mobile,/guideIds:program\.guideIds\.filter\(id=>knownGuideIds\.has\(id\)\)/);
+  assert.match(flutter,/push\(_ProgrammeScreen\(title:/);
+  assert.match(flutter,/message:'No courses have been published under this programme\.'/);
+});
 test('private instructor notes cannot be persisted in the learner-readable lesson record',()=>{
   const handler=read('api_handlers/admin/content.ts');
   const rules=read('firestore.rules');
