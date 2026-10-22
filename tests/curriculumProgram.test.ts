@@ -65,14 +65,15 @@ test('programme selection never opens an empty page because guides have zero pub
   assert.match(mobile,/const missingIds=\[\.\.\.new Set\(programs\.flatMap\(program=>program\.guideIds\)\)\]/);
   assert.match(mobile,/!doc\.exists\|\|!hasAccess\(doc\.data\(\)\|\|\{\},scope\)/);
   assert.match(mobile,/guideIds:program\.guideIds\.filter\(id=>knownGuideIds\.has\(id\)\)/);
-  assert.match(flutter,/push\\(_ProgrammeScreen\\(\\s*programId:/);
-  assert.match(flutter,/widget\\.api\\.programme\\(widget\\.programId\\)/);
-  assert.match(flutter,/const guides=asRows\\(s\\.data\\?\\['guides'\\]\\)/);
+  assert.ok(flutter.includes('push(_ProgrammeScreen('));
+  assert.ok(flutter.includes("programId:(p['id']??'').toString()"));
+  assert.ok(flutter.includes('widget.api.programme(widget.programId)'));
+  assert.ok(flutter.includes("final guides=asRows(s.data?['guides']);"));
   const api=read('native_android/lib/core/vop_api.dart');
-  assert.match(api,/read\\('program', \\{'programId': programId\\}\\)/);
-  assert.match(mobile,/if\\(resource==='program'\\)/);
-  assert.match(mobile,/!snap\\.exists\\|\\|!hasAccess\\(snap\\.data\\(\\)\\|\\|\\{\\},scope\\)/);
-  assert.match(flutter,/message:'No courses have been published under this programme\.'/);
+  assert.ok(api.includes("read('program', {'programId': programId})"));
+  assert.ok(mobile.includes("if(resource==='program')"));
+  assert.ok(mobile.includes('!snap.exists||!hasAccess(snap.data()||{},scope)'));
+  assert.ok(flutter.includes('No accessible courses are published under this programme.'));
 });
 test('private instructor notes cannot be persisted in the learner-readable lesson record',()=>{
   const handler=read('api_handlers/admin/content.ts');
