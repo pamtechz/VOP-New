@@ -149,6 +149,41 @@ await test('Super Admin curriculum saves survive stale hierarchy metadata and se
   }
 });
 
+await test('platform curriculum taxonomy is editable only by the Super Admin',async()=>{
+  for(const collection of ['learningPaths','bibleTopics','seasons']){
+    const id='program-test-global-'+collection;
+    const published=await call(superAdmin,{
+      collection,action:'upsert',id,
+      data:{title:'Platform '+collection,published:true},
+    });
+    assert.equal(published.status,200,JSON.stringify(published.value));
+    const ref=db.doc(collection+'/'+id);
+    assert.equal((await ref.get()).data()?.organizationId,'');
+    assert.equal((await ref.get()).data()?.scope,'platform');
+    assert.equal((await ref.get()).data()?.sharingScope,'shared');
+
+    const updated=await call(superAdmin,{
+      collection,action:'upsert',id,organizationId:b,
+      data:{title:'Updated global '+collection,published:true},
+    });
+    assert.equal(updated.status,200,JSON.stringify(updated.value));
+    assert.equal((await ref.get()).data()?.organizationId,'');
+    assert.equal((await ref.get()).data()?.title,'Updated global '+collection);
+
+    const denied=await call(outsider,{
+      collection,action:'upsert',id,organizationId:b,
+      data:{title:'Unauthorized update',published:true},
+    });
+    assert.notEqual(denied.status,200);
+    assert.equal((await ref.get()).data()?.title,'Updated global '+collection);
+  }
+  const certificate=await call(superAdmin,{
+    collection:'certificates',action:'upsert',id:'program-test-no-platform-certificate',
+    data:{title:'Not an issuance'},
+  });
+  assert.notEqual(certificate.status,200);
+});
+
 const base={title:'Foundations of Faith',description:'A guided study',
   coverImageUrl:'',entryMode:'sections',guideIds:[guideA],
   sharingScope:'organization',published:true,archived:false};
