@@ -42,7 +42,9 @@ test('the two UIs offer a shared-origin mode switch without external redirects',
   assert.match(classic,/Uri\.base\.path\.startsWith\('\/classic\/'\)/);
   assert.match(classicWeb,/_assign\('\/'\.toJS\)/);
   const config=read('native_android/lib/core/config.dart');
-  assert.match(config,/kIsWeb\s*\? Uri\.base\.origin/);
+  assert.match(config,/if \(isWeb && page\.path\.startsWith\('\/classic\/'\)\) return page\.origin/);
+  assert.match(config,/isWeb: kIsWeb/);
+  assert.match(config,/page: Uri\.base/);
   assert.match(config,/String\.fromEnvironment\('VOP_API_BASE_URL'\)/);
 });
 test('the old app service worker never returns the Legacy shell for Flutter Classic routes',()=>{

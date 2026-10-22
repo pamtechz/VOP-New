@@ -3,6 +3,55 @@ import 'package:vop/core/config.dart';
 import 'package:vop/widgets/plate_page.dart';
 
 void main() {
+  test('Classic uses its own origin for all nested study URLs', () {
+    for (final path in [
+      '/classic/',
+      '/classic/programmes',
+      '/classic/guide/one',
+    ]) {
+      expect(
+        resolveVopApiOrigin(
+          isWeb: true,
+          page: Uri.parse('https://preview.example$path'),
+          configured: 'https://backend.example',
+        ),
+        'https://preview.example',
+      );
+    }
+  });
+
+  test(
+    'local and standalone Flutter previews keep their configured backend',
+    () {
+      for (final url in [
+        'http://127.0.0.1:7357/',
+        'http://localhost:7358/',
+        'https://preview.example/',
+        'https://preview.example/classic-other/',
+      ]) {
+        expect(
+          resolveVopApiOrigin(
+            isWeb: true,
+            page: Uri.parse(url),
+            configured: 'https://backend.example',
+          ),
+          'https://backend.example',
+        );
+      }
+    },
+  );
+
+  test('Android never derives a backend from a browser page', () {
+    expect(
+      resolveVopApiOrigin(
+        isWeb: false,
+        page: Uri.parse('https://preview.example/classic/'),
+        configured: 'https://backend.example',
+      ),
+      'https://backend.example',
+    );
+  });
+
   test('configuration fails closed without the required Android values', () {
     // CI passes public dart defines for build; unit tests intentionally do not.
     expect(VopConfig.error, isNotNull);
@@ -15,12 +64,15 @@ void main() {
   });
 
   test('Plate plain text traverses children, not arbitrary HTML', () {
-    expect(plainNode({
-      'type': 'p',
-      'children': [
-        {'text': 'Grace'},
-        {'text': ' and love'}
-      ]
-    }), 'Grace  and love');
+    expect(
+      plainNode({
+        'type': 'p',
+        'children': [
+          {'text': 'Grace'},
+          {'text': ' and love'},
+        ],
+      }),
+      'Grace  and love',
+    );
   });
 }

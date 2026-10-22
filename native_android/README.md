@@ -638,8 +638,9 @@ be resolved intentionally and committed for review. Run
 `python tests/flutter_scaffold_test.py` from the repository root to verify
 preservation and failure handling.
 
-Browser API requests use the current origin. Android uses the configured
-HTTPS `VOP_API_BASE_URL`. Only public Firebase client configuration belongs
+Browser API requests under `/classic/` use the current origin. Standalone
+development previews and Android use the configured HTTPS `VOP_API_BASE_URL`.
+Only public Firebase client configuration belongs
 in `config/web-public.json`; server credentials remain on the backend.
 Legacy's service worker excludes Classic routes, and Flutter's base href is
 `/classic/`. Verify the main page, Classic deep links, manifest, passkeys SDK,
