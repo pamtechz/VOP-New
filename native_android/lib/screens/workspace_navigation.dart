@@ -27,7 +27,7 @@ class _WorkspaceNavigationState extends State<WorkspaceNavigation>{
     bool can(String resource,String action)=>(permissions[resource] as List? ?? []).contains(action);
     final org=(s.data?['organizationId']??'').toString();
     Widget tile(String title,IconData icon,Widget page)=>ListTile(title:Text(title),leading:Icon(icon),trailing:const Icon(Icons.chevron_right),onTap:()=>open(page));
-    return Column(children:[
+    final links=<Widget>[
       if(can('users','view'))tile('Candidates & enrollment',Icons.people_outline,CandidatesScreen(api:widget.api,organizationId:org.isEmpty?null:org)),
       if(can('users','view'))tile('User & role management',Icons.manage_accounts_outlined,UserManagementScreen(api:widget.api)),
       if(can('organizations','view'))tile('Organizations & membership',Icons.corporate_fare,OrganizationsScreen(api:widget.api)),
@@ -43,6 +43,18 @@ class _WorkspaceNavigationState extends State<WorkspaceNavigation>{
       if(can('audit','view'))tile('Audit history',Icons.history,WorkspaceOperationsScreen(api:widget.api,kind:'audit',workspace:s.data!)),
       if(s.data?['isSuperAdmin']==true)tile('Permissions',Icons.admin_panel_settings_outlined,WorkspaceOperationsScreen(api:widget.api,kind:'permissions',workspace:s.data!)),
       if(can('translations','view'))tile('Translation Studio',Icons.translate,WorkspaceOperationsScreen(api:widget.api,kind:'translations',workspace:s.data!)),
-    ]);
+    ];
+    return LayoutBuilder(builder:(context,constraints){
+      final columns=constraints.maxWidth>=950?3:
+        constraints.maxWidth>=620?2:1;
+      final width=(constraints.maxWidth-((columns-1)*12))/columns;
+      return Wrap(spacing:12,runSpacing:12,children:[
+        for(final link in links)
+          SizedBox(width:width,child:Card(
+            clipBehavior:Clip.antiAlias,
+            margin:EdgeInsets.zero,
+            child:link)),
+      ]);
+    });
   });
 }

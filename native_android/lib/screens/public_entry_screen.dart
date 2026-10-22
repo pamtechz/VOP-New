@@ -71,7 +71,14 @@ class _PublicEntryScreenState extends State<PublicEntryScreen> {
     child: Center(child: ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 1240),
       child: Row(children: [
-        const Expanded(child: VopBrand(compact: true)),
+        const Expanded(child:Row(children:[
+          Icon(Icons.auto_stories,color:Color(0xFFF6C76C),size:29),
+          SizedBox(width:11),
+          Flexible(child:Text('Voice of Prophecy',
+            overflow:TextOverflow.ellipsis,
+            style:TextStyle(color:Colors.white,
+              fontSize:18,fontWeight:FontWeight.w900))),
+        ])),
         TextButton(
           onPressed: () => _jumpToCatalog(),
           child: const Text('Browse studies', style: TextStyle(color: Colors.white)),
