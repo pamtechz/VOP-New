@@ -64,3 +64,8 @@ test('management portals have persistent role-authorized desktop navigation',()=
   assert.match(admin,/if \(!WorkspaceDesktopShell\.activeFor\(context\)\)/);
   assert.match(organization,/if \(!WorkspaceDesktopShell\.activeFor\(context\)\)/);
 });
+
+test('public brand name is explicitly white in the dark navigation header',()=>{
+  const css=readFileSync('src/pages/public-home.css','utf8');
+  assert.match(css,/\.vop-public-brand strong\{[^}]*color:#fff[^}]*\}/);
+});

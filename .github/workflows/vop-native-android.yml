@@ -12,7 +12,7 @@ on:
       - 'tests/vopSelfHostedWorkflows.test.ts'
       - '.github/workflows/vop-native-android.yml'
   push:
-    branches: [main, 'feat/**', 'fix/**']
+    branches: [main]
     paths:
       - 'native_android/**'
       - 'run_web.ps1'

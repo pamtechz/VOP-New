@@ -7,7 +7,7 @@
 .vop-public-header-inner{max-width:1280px;min-height:78px;margin:auto;padding:10px 29px;display:flex;align-items:center;gap:34px}
 .vop-public-brand{display:flex;align-items:center;gap:10px;min-width:0;color:#fff;text-decoration:none}
 .vop-public-brand img{width:46px;height:46px;object-fit:contain}
-.vop-public-brand span{display:grid;gap:2px}.vop-public-brand strong{font-size:16px;font-weight:900;letter-spacing:-.03em;white-space:nowrap}.vop-public-brand small{color:#b8cce6;letter-spacing:.055em;text-transform:uppercase;font-size:9px;font-weight:750}
+.vop-public-brand span{display:grid;gap:2px}.vop-public-brand strong{font-size:16px;font-weight:900;letter-spacing:-.03em;white-space:nowrap;color:#fff}.vop-public-brand small{color:#b8cce6;letter-spacing:.055em;text-transform:uppercase;font-size:9px;font-weight:750}
 .vop-public-links{display:flex;align-items:center;gap:6px;margin-left:auto}.vop-public-links button{border:0;border-radius:10px;padding:10px 12px;background:transparent;color:#dce6f3;font-size:12px;font-weight:800;white-space:nowrap}.vop-public-links button:hover{background:rgba(255,255,255,.1);color:#fff}
 .vop-public-header-actions{display:flex;align-items:center;gap:8px;margin-left:8px}
 .vop-public-header-actions button{min-height:41px;border-radius:10px;font-size:12px;font-weight:850;padding:11px 16px;white-space:nowrap}
