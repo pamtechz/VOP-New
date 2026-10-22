@@ -283,7 +283,8 @@ export default async function handler(req: Request, res: Response) {
       const ref = ctx.db.doc(`guides/${id}`);
       const existing = await ref.get();
       const current = existing.exists ? existing.data() || {} : {};
-      const ownerOrganizationId = String(current.organizationId || current.ownerOrganizationId || '').trim();
+      const ownerOrganizationId = String(current.scope === 'platform'
+        ? '' : current.organizationId || current.ownerOrganizationId || '').trim();
       // Preserve the existing owner even when Super Admin switches between
       // organisation and platform records before the selector catches up.
       const guideOrganizationId = ctx.isSuperAdmin && existing.exists
@@ -596,7 +597,8 @@ export default async function handler(req: Request, res: Response) {
       const guideRef = ctx.db.doc(`guides/${guideId}`);
       const guide = await guideRef.get();
       const guideData = guide.data() || {};
-      const guideOrgId = String(guideData.organizationId || guideData.ownerOrganizationId || '').trim();
+      const guideOrgId = String(guideData.scope === 'platform'
+        ? '' : guideData.organizationId || guideData.ownerOrganizationId || '').trim();
       // The guide record is authoritative for Super Admin lesson ownership.
       // A stale organization selected in the UI must never reparent a lesson.
       const lessonOrganizationId = ctx.isSuperAdmin ? guideOrgId : effectiveOrganizationId;
@@ -718,7 +720,8 @@ export default async function handler(req: Request, res: Response) {
       const requestedGuideId = safeId(data.guideId);
       const guide = await ctx.db.doc(`guides/${requestedGuideId}`).get();
       const guideData = guide.data() || {};
-      const guideOrgId = String(guideData.organizationId || guideData.ownerOrganizationId || '').trim();
+      const guideOrgId = String(guideData.scope === 'platform'
+        ? '' : guideData.organizationId || guideData.ownerOrganizationId || '').trim();
       const lessonOrganizationId = ctx.isSuperAdmin ? guideOrgId : effectiveOrganizationId;
       const guideMatchesTenant = ctx.isSuperAdmin
         || guideOrgId === effectiveOrganizationId
