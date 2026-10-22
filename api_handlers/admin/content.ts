@@ -277,14 +277,28 @@ export default async function handler(req: Request, res: Response) {
       const data = body.data && typeof body.data === 'object' ? body.data as Record<string, unknown> : {};
       const lang = String(data.language || '').trim().toLowerCase();
       if (!isLanguageCode(lang)) throw new Error('A valid language code is required for a guide.');
+      const title = String(data.title || '').trim();
+      if (!title) throw new Error('Guide title is required.');
+      const id = data.id ? safeId(data.id) : safeId(`guide-${randomUUID().replace(/-/g, '').slice(0,24)}`);
+      const ref = ctx.db.doc(`guides/${id}`);
+      const existing = await ref.get();
+      const current = existing.exists ? existing.data() || {} : {};
+      const ownerOrganizationId = String(current.organizationId || current.ownerOrganizationId || '').trim();
+      // Preserve the existing owner even when Super Admin switches between
+      // organisation and platform records before the selector catches up.
+      const guideOrganizationId = ctx.isSuperAdmin && existing.exists
+        ? ownerOrganizationId : effectiveOrganizationId;
+      if (existing.exists && ownerOrganizationId !== guideOrganizationId) {
+        throw new Error('Moving a guide to another organization is not allowed. Copy it into the destination tenant instead.');
+      }
       if (!isEnglishLocale(lang)) {
         // A tenant cannot claim another organization's private language simply
         // by submitting its code. The global or own organization registry
         // must contain an enabled entry before a guide can use the language.
         const [globalLanguage, tenantLanguage] = await Promise.all([
           ctx.db.doc('languages/' + lang).get(),
-          effectiveOrganizationId
-            ? ctx.db.doc('organizations/' + effectiveOrganizationId + '/languages/' + lang).get()
+          guideOrganizationId
+            ? ctx.db.doc('organizations/' + guideOrganizationId + '/languages/' + lang).get()
             : Promise.resolve(null),
         ]);
         if (!(globalLanguage.exists && globalLanguage.data()?.enabled !== false)
@@ -292,15 +306,7 @@ export default async function handler(req: Request, res: Response) {
           throw new Error('Choose an enabled platform language or a language registered by your organization.');
         }
       }
-      const title = String(data.title || '').trim();
-      if (!title) throw new Error('Guide title is required.');
-      const id = data.id ? safeId(data.id) : safeId(`guide-${randomUUID().replace(/-/g, '').slice(0,24)}`);
-      const ref = ctx.db.doc(`guides/${id}`);
-      const existing = await ref.get();
-      const current = existing.exists ? existing.data() || {} : {};
-      if (existing.exists && String(current.organizationId || '').trim() !== effectiveOrganizationId) {
-        throw new Error('Moving a guide to another organization is not allowed. Copy it into the destination tenant instead.');
-      }
+
       if (!existing.exists && !ctx.isSuperAdmin) await enforceOwnedQuota('guides','maxGuides');
       await requirePermission(ctx,'curriculum',existing.exists?'update':'create');
       if(data.published===true)await requirePermission(ctx,'curriculum','publish');
@@ -319,24 +325,24 @@ export default async function handler(req: Request, res: Response) {
           const requirementOrg=String(value.organizationId||'');
           const platformRequirement=!requirementOrg&&String(value.scope||'')==='platform';
           if(!requirement.exists||value.status!=='published'||
-            (!platformRequirement&&requirementOrg!==effectiveOrganizationId)){
+            (!platformRequirement&&requirementOrg!==guideOrganizationId)){
             throw new Error('Every certification requirement must be published and available to the guide organization.');
           }
         }
       }
       const nextGuide = {
         id,
-        organizationId: effectiveOrganizationId,
-        ownerOrganizationId: current.ownerOrganizationId || effectiveOrganizationId,
+        organizationId: guideOrganizationId,
+        ownerOrganizationId: current.ownerOrganizationId || guideOrganizationId,
         ownerTenantId: current.ownerTenantId || tenantOwnerKey(ctx),
         ownerUid: current.ownerUid || ctx.auth.uid,
-        scope: effectiveOrganizationId ? 'organization' : 'platform',
+        scope: guideOrganizationId ? 'organization' : 'platform',
         canonical: true,
-        sharingScope: !effectiveOrganizationId && data.published === true
+        sharingScope: !guideOrganizationId && data.published === true
           ? 'shared'
           : data.sharingScope === 'shared' ? 'shared'
           : data.sharingScope === 'private' ? 'private'
-          : (effectiveOrganizationId ? 'organization' : 'shared'),
+          : (guideOrganizationId ? 'organization' : 'shared'),
         curriculumId: 'discover',
         discoverNumber: Math.max(1, Number(data.discoverNumber ?? 1) || 1),
         title,
@@ -365,7 +371,7 @@ export default async function handler(req: Request, res: Response) {
         updatedAt: FieldValue.serverTimestamp(),
         updatedBy: ctx.auth.uid,
       };
-      const isSharedPublication = Boolean(effectiveOrganizationId &&
+      const isSharedPublication = Boolean(guideOrganizationId &&
         data.published===true && data.sharingScope==='shared');
       if (isSharedPublication) {
         // Cross-tenant visibility implies platform language stewardship.
@@ -374,12 +380,12 @@ export default async function handler(req: Request, res: Response) {
           const currentSnapshot=await transaction.get(ref);
           if(currentSnapshot.exists){
             const now=currentSnapshot.data()||{};
-            if(String(now.organizationId||'')!==effectiveOrganizationId ||
+            if(String(now.organizationId||now.ownerOrganizationId||'')!==guideOrganizationId ||
               !(await canManageOrganizationContent(ctx,now)))
               throw new Error('The guide is no longer editable in this organization.');
             assertMutableTenantResource(ctx.isSuperAdmin,now,'edit');
           }
-          await adoptOrganizationLanguage(ctx,transaction,effectiveOrganizationId,lang);
+          await adoptOrganizationLanguage(ctx,transaction,guideOrganizationId,lang);
           transaction.set(ref,nextGuide,{merge:true});
         });
         // A system-wide guide is an atomic learner-facing unit: every published
