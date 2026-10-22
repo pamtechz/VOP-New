@@ -966,6 +966,13 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
             onBack={goBack} onSelectLesson={(lesson,initialPageIndex) =>
               openStudyItem(activeGuide,lesson,initialPageIndex,'home')}
             onOpenCertificate={() => navigate('certificates')}
+            onEditQuestions={hasAdminPortalAccess(currentUser)&&
+              (currentUser.role==='super_admin'||currentUser.privileges?.editor||
+               currentUser.privileges?.manager||currentUser.privileges?.admin||
+               currentUser.role?.endsWith('_admin'))
+              ?()=>{try{sessionStorage.setItem('vop-admin-tab-v1:'+currentUser.uid,'curriculum');}catch{}
+                navigate('admin');}
+              :undefined}
             onProgressReset={async () => {
               if (!auth?.currentUser) return;
               const refreshed = await loadFirestoreUser(auth.currentUser.uid);

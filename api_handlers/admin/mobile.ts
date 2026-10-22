@@ -45,6 +45,7 @@ const plainLesson=(id:string,row:Raw)=>({
   id,title:string(row.title||row.lessonTitle||row.name),description:string(row.description),
   lessonNumber:string(row.lessonNumber||id),type:row.type==='Test'?'Test':'Lesson',
   estimatedMinutes:Number.isFinite(Number(row.estimatedMinutes))?Number(row.estimatedMinutes):15,
+  pageCount:row.type==='Test'?0:lessonPages(row).length,
   assessmentKind:string(row.assessmentKind),sourceQuizId:string(row.sourceQuizId),
   attachedLessonId:string(row.attachedLessonId),attachmentType:string(row.attachmentType),
   anchorId:string(row.anchorId),lessonId:string(row.lessonId),
