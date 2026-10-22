@@ -5,11 +5,16 @@ import '../core/vop_api.dart';
 import 'learner_support_screen.dart';
 import 'lesson_screen.dart';
 import 'quiz_screen.dart';
+import 'lesson_flashcards_screen.dart';
+import '../widgets/vop_section_study_card.dart';
 
 class GuideScreen extends StatefulWidget {
-  const GuideScreen({required this.api,required this.guideId,super.key});
+  const GuideScreen({required this.api,required this.guideId,
+    this.canEditChapterQuestions=false,this.onEditQuestions,super.key});
   final VopApi api;
   final String guideId;
+  final bool canEditChapterQuestions;
+  final void Function(String lessonId)? onEditQuestions;
   @override State<GuideScreen> createState()=>_GuideScreenState();
 }
 class _GuideScreenState extends State<GuideScreen> {
@@ -162,12 +167,12 @@ class _GuideScreenState extends State<GuideScreen> {
               ],
             ]),
             const SizedBox(height:16),
-            Text('Lessons',
+            Text(details['learnerEntryMode']=='sections'?'Sections':'Lessons',
               style:Theme.of(context).textTheme.titleLarge),
             const SizedBox(height:8),
             if(studyLessons.isEmpty)const Padding(padding:EdgeInsets.all(25),
               child:Text('There are no published lessons in this guide.')),
-            ...studyLessons.map((lesson){
+            ...studyLessons.expand((lesson){
               final locked=lesson['locked']==true;
               final completed=lesson['completed']==true;
               final attached=lessons.firstWhere(
@@ -180,7 +185,6 @@ class _GuideScreenState extends State<GuideScreen> {
                   (lesson['attachedQuizId']!=null&&(e['id']==lesson['attachedQuizId']||e['sourceQuizId']==lesson['attachedQuizId']))||
                   ((e['attachedLessonId']==null||'${e['attachedLessonId']}'.isEmpty)&&e['lessonId']==lesson['id'])),
                 orElse:()=><String,dynamic>{});
-              final attachedQuizId=attached.isNotEmpty?'${attached['id']}':null;
               final currentIndex = studyLessons.indexOf(lesson);
               String lockedReason = 'Finish earlier lessons to unlock';
               if (locked && currentIndex > 0) {
@@ -193,129 +197,83 @@ class _GuideScreenState extends State<GuideScreen> {
                 }
               }
 
-              final scheme = Theme.of(context).colorScheme;
-              return Card(
-                margin: const EdgeInsets.only(bottom: 12),
-                elevation: locked ? 0.5 : 1.5,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  side: BorderSide(
-                    color: locked
-                      ? scheme.outlineVariant.withValues(alpha: 0.3)
-                      : (completed ? const Color(0xFF16A34A).withValues(alpha: 0.3) : scheme.outlineVariant.withValues(alpha: 0.5)),
+              final pageCount=lesson['pageCount'] is num
+                ?(lesson['pageCount'] as num).toInt().clamp(0,200).toInt():0;
+              final time=(lesson['estimatedMinutes'] is num
+                ?(lesson['estimatedMinutes'] as num).toInt():15).clamp(1,240).toInt();
+              // Chapter/section-first guides show one card per authored section.
+              // Other guides retain a single lesson card for every lesson.
+              final outlines=(lesson['sections'] as List? ?? [])
+                .whereType<Map>().map((part)=>Map<String,dynamic>.from(part)).toList();
+              final sectionFirst=details['learnerEntryMode']=='sections';
+              final cardRows=sectionFirst&&outlines.isNotEmpty
+                ?outlines:<Map<String,dynamic>>[{}];
+              return cardRows.map((section){
+                final isSection=section.isNotEmpty;
+                final startPage=section['pageIndex'] is num
+                  ?(section['pageIndex'] as num).toInt():0;
+                final sectionPages=section['pageCount'] is num
+                  ?(section['pageCount'] as num).toInt().clamp(0,200).toInt():pageCount;
+                final sectionTitle=isSection
+                  ?(section['title']??'').toString():(lesson['title']??'Lesson').toString();
+                final sectionId=isSection?(section['id']??'').toString():null;
+                final anchoredTest=isSection?lessons.where((e)=>
+                    e['type']=='Test'&&e['attachmentType']=='section'&&
+                    e['anchorId']==sectionId&&e['published']!=false)
+                  .toList():<Map<String,dynamic>>[];
+                final chosenTest=anchoredTest.isNotEmpty?anchoredTest.first:
+                  (!isSection||section['number']==outlines.length)
+                    ?attached:<String,dynamic>{};
+                final chosenQuizId=chosenTest.isNotEmpty
+                  ?(chosenTest['id']??'').toString():null;
+                final sectionMinutes=isSection&&outlines.isNotEmpty
+                  ?(time/outlines.length).ceil().clamp(1,240).toInt():time;
+              Future<void> openLesson()async{
+                await Navigator.push(context,MaterialPageRoute<void>(
+                  builder:(_)=>LessonScreen(
+                    api:widget.api,
+                    guideId:widget.guideId,
+                    lessonId:'${lesson['id']}',
+                    language:language,
+                    title:'${lesson['title']}',
+                    attachedQuizId:chosenQuizId,
+                    initialPageIndex:isSection?startPage:null,
                   ),
-                ),
-                child: ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  leading: Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: locked
-                        ? Colors.grey.withValues(alpha: 0.12)
-                        : (completed
-                            ? const Color(0xFFDCFCE7)
-                            : const Color(0xFF002D72).withValues(alpha: 0.1)),
-                      shape: BoxShape.circle,
-                    ),
-                    alignment: Alignment.center,
-                    child: Icon(
-                      locked
-                        ? Icons.lock_outline_rounded
-                        : (completed ? Icons.check_circle_rounded : Icons.auto_stories_rounded),
-                      size: 22,
-                      color: locked
-                        ? Colors.grey.shade500
-                        : (completed ? const Color(0xFF16A34A) : const Color(0xFF002D72)),
-                    ),
-                  ),
-                  title: Text(
-                    '${lesson['title'] ?? 'Lesson'}',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      color: locked ? scheme.onSurface.withValues(alpha: 0.55) : null,
-                    ),
-                  ),
-                  subtitle: Padding(
-                    padding: const EdgeInsets.only(top: 4),
-                    child: Row(
-                      children: [
-                        if (locked) ...[
-                          Icon(Icons.lock_clock_outlined, size: 14, color: scheme.error.withValues(alpha: 0.8)),
-                          const SizedBox(width: 4),
-                          Expanded(
-                            child: Text(
-                              lockedReason,
-                              style: TextStyle(fontSize: 12, color: scheme.error.withValues(alpha: 0.85), fontWeight: FontWeight.w600),
-                            ),
-                          ),
-                        ] else if (completed) ...[
-                          const Icon(Icons.done_all_rounded, size: 14, color: Color(0xFF16A34A)),
-                          const SizedBox(width: 4),
-                          const Text(
-                            'Completed',
-                            style: TextStyle(fontSize: 12, color: Color(0xFF16A34A), fontWeight: FontWeight.w700),
-                          ),
-                        ] else ...[
-                          Icon(Icons.schedule_rounded, size: 13, color: scheme.onSurfaceVariant),
-                          const SizedBox(width: 4),
-                          Text(
-                            '${lesson['estimatedMinutes'] ?? 15} min read',
-                            style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
-                          ),
-                          if (attachedQuizId != null) ...[
-                            const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFFBBF24).withValues(alpha: 0.2),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: const Text(
-                                'QUIZ',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w900,
-                                  color: Color(0xFFB45309),
-                                  letterSpacing: 0.4,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ],
-                    ),
-                  ),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (completed)
-                        IconButton(
-                          icon: const Icon(Icons.restart_alt_rounded, size: 20, color: Colors.grey),
-                          tooltip: 'Reset progress',
-                          onPressed: () => _confirmResetLesson(lesson, language),
-                        ),
-                      Icon(
-                        locked ? Icons.lock_outline_rounded : Icons.chevron_right_rounded,
-                        color: locked ? scheme.onSurface.withValues(alpha: 0.3) : scheme.onSurfaceVariant,
-                      ),
-                    ],
-                  ),
-                  onTap:locked?null:()async{
-                    await Navigator.push(context, MaterialPageRoute<void>(
-                      builder: (_) => LessonScreen(
-                        api: widget.api,
-                        guideId: widget.guideId,
-                        lessonId: '${lesson['id']}',
-                        language: language,
-                        title: '${lesson['title']}',
-                        attachedQuizId: attachedQuizId,
-                      ),
-                    ));
-                    if (mounted) setState(reload);
-                  },
-                ),
+                ));
+                if(mounted)setState(reload);
+              }
+              return VopSectionStudyCard(
+                title:sectionTitle,
+                headingLabel:isSection?'Section':'Lesson',
+                description:locked?lockedReason:isSection
+                  ?(section['chapterTitle']??'').toString()
+                  :(lesson['description']??'').toString(),
+                number:isSection?(section['number']??currentIndex+1).toString()
+                  :(lesson['lessonNumber']??currentIndex+1).toString(),
+                pageCount:isSection?sectionPages:pageCount,
+                readMinutes:sectionMinutes,
+                completed:completed,
+                locked:locked,
+                onOpen:locked?null:openLesson,
+                onTakeTest:locked||chosenQuizId==null||chosenQuizId.isEmpty?null:()async{
+                  await Navigator.push(context,MaterialPageRoute<void>(
+                    builder:(_)=>QuizScreen(api:widget.api,
+                      guideId:widget.guideId,lessonId:chosenQuizId,
+                      language:language,title:(chosenTest['title']??'Lesson review').toString())));
+                  if(mounted)setState(reload);
+                },
+                onFlashcards:locked||(isSection?sectionPages:pageCount)==0?null:()=>
+                  Navigator.push(context,MaterialPageRoute<void>(
+                    builder:(_)=>LessonFlashcardsScreen(
+                      api:widget.api,guideId:widget.guideId,
+                      lessonId:'${lesson['id']}',
+                      title:sectionTitle,sectionId:sectionId))),
+                onEditQuestions:widget.canEditChapterQuestions&&
+                  widget.onEditQuestions!=null&&!locked
+                  ?()=>widget.onEditQuestions!('${lesson['id']}'):null,
+                onReset:completed&&!isSection?()=>_confirmResetLesson(lesson,language):null,
               );
+              });
             }),
             if(guideAssessments.isNotEmpty)...[
               const SizedBox(height:20),

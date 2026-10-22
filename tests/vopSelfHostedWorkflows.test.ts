@@ -110,6 +110,12 @@ test('native Flutter Android and Web CI invokes Windows-compatible commands',()=
     'Windows launcher test changes must trigger Flutter CI');
   assert.match(source,/flutter build apk --debug/);
   assert.match(source,/flutter build web --release/);
+  assert.equal(source.split('flutter pub get --enforce-lockfile').length-1,2,
+    'both Flutter builds must resolve the reviewed application lockfile');
+  assert.match(source,/python native_android\/tool\/prepare_scaffold\.py --platform android/);
+  assert.match(source,/python native_android\/tool\/prepare_scaffold\.py --platform web/);
+  assert.match(source,/python tests\/flutter_scaffold_test\.py/);
+  assert.match(source,/--base-href \/classic\//);
   assert.match(source,/passkeys-bundle\.js/);
   assert.doesNotMatch(source,/shell: bash/);
   assert.doesNotMatch(source,/run: python3 /);
@@ -125,4 +131,20 @@ test('fork metadata gate is evaluated from trusted base without downloading PR c
   assert.match(gate,/throw 'This VOP pull request originates from an untrusted fork/);
   assert.doesNotMatch(gate,/uses:\s*actions\/checkout/);
   assert.doesNotMatch(gate,/\$\{\{[^}]*secrets\./);
+});
+
+test('single-run feature PR policy avoids duplicate push builds on KASAINSTITUTE',()=>{
+  for(const path of [
+    '.github/workflows/vop-native-android.yml',
+    '.github/workflows/vop-validate.yml',
+    '.github/workflows/vop-verify.yml',
+    '.github/workflows/vop-firestore-rules.yml',
+  ]){
+    const workflow=readFileSync(path,'utf8');
+    const pushSection=workflow.split(/^  push:\s*$/m)[1]?.split(/^  [a-z_]+:\s*$/m)[0] ?? '';
+    assert.match(pushSection,/\bmain\b/,path+' must validate main on push');
+    assert.doesNotMatch(pushSection,/feat\/\*\*|fix\/\*\*/,path+' must not duplicate PR jobs through feature branch pushes');
+    assert.match(workflow,/pull_request_target:/,path+' must still validate trusted pull requests');
+    assert.match(workflow,/cancel-in-progress: true/,path+' must keep obsolete commit cancellation');
+  }
 });

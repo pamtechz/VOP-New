@@ -619,3 +619,38 @@ offline trust/consent, notification permissions, registration and deep links,
 app signing and Play Integrity, crash reporting, accessibility, localization,
 right-to-left layout, actual-device performance and parity against every
 web module. Never silently award progress while offline.
+
+## Unified Vercel web deployment
+
+The existing **vop-new** Vercel project serves Legacy at `/`, Flutter Classic at
+`/classic/`, and the shared backend at `/api/`. Keep the project Root Directory
+at the repository root. The root `vercel.json` builds Vite and then runs
+`scripts/build-unified-web.sh`, which packages Flutter in `dist/classic`.
+The two interfaces include links for switching experiences on the same origin.
+
+The Flutter build uses the reviewed 3.47.6 SDK tag and verifies its commit.
+`tool/prepare_scaffold.py` preserves `pubspec.yaml` and `pubspec.lock` while
+generating platform files: Flutter 3.47.6 otherwise overwrites the full app
+lockfile with SDK-only dependencies, including when `--no-pub` is supplied.
+Both Vercel and Windows CI then run `flutter pub get --enforce-lockfile`.
+An incompatible or missing lockfile fails the build; dependency changes must
+be resolved intentionally and committed for review. Run
+`python tests/flutter_scaffold_test.py` from the repository root to verify
+preservation and failure handling.
+
+Browser API requests under `/classic/` use the current origin. Standalone
+development previews and Android use the configured HTTPS `VOP_API_BASE_URL`.
+Only public Firebase client configuration belongs
+in `config/web-public.json`; server credentials remain on the backend.
+Legacy's service worker excludes Classic routes, and Flutter's base href is
+`/classic/`. Verify the main page, Classic deep links, manifest, passkeys SDK,
+shared API, and Firebase sign-in before promoting a release.
+
+The former standalone **vop-flutter-web** project is retained only until the
+unified production deployment is verified. Its standalone build script remains
+available for isolated previews. Such previews require their own exact Firebase
+authorized hostname and backend CORS origin; never wildcard preview domains.
+Retire the redundant project after the unified production checks pass.
+
+A successful build does not establish complete web/Android feature parity or
+physical-device acceptance.

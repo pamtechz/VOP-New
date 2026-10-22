@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import '../core/vop_api.dart';
 import '../widgets/vop_ui.dart';
+import '../widgets/vop_section_study_card.dart';
+import 'lesson_flashcards_screen.dart';
+import 'quiz_screen.dart';
 import 'workspace_records_screen.dart';
 
 class CurriculumLessonEditorScreen extends StatefulWidget{
@@ -78,7 +81,55 @@ class _CurriculumLessonEditorState extends State<CurriculumLessonEditorScreen>{
       body:FutureBuilder<Map<String,dynamic>>(future:future,builder:(context,s){
         if(s.connectionState!=ConnectionState.done)return const VopSkeleton();if(s.hasError)return VopEmpty(icon:Icons.error_outline,message:'${s.error}',onRetry:()=>setState(reload));
         final items=recordRows(s.data?['items']);if(items.isEmpty)return const VopEmpty(icon:Icons.menu_book_outlined,message:'No lessons have been added.');
-        return ListView.separated(padding:const EdgeInsets.fromLTRB(16,8,16,96),itemCount:items.length,separatorBuilder:(_,__)=>const Divider(),itemBuilder:(_,i){final item=items[i];return ListTile(
+        return ListView.separated(padding:const EdgeInsets.fromLTRB(16,8,16,96),itemCount:items.length,separatorBuilder:(_,__)=>const Divider(),itemBuilder:(_,i){final item=items[i];
+          final editable=actions.contains('update')&&item['canEdit']==true;
+          if(item['type']!='Test'){
+            final guideId=(widget.guide['id']??'').toString();
+            final quizPerm=recordMap(widget.workspace['permissions'])['quizzes'] as List? ?? [];
+            final pages=item['contentPages'] is List?item['contentPages'] as List:<dynamic>[];
+            final chapters=item['chapters'] is List?item['chapters'] as List:<dynamic>[];
+            final attachedTests=items.where((entry)=>
+              entry['type']=='Test'&&entry['published']==true&&
+              entry['assessmentKind']!='final_exam'&&
+              entry['attachmentType']!='guide'&&
+              (entry['attachedLessonId']==item['id']||
+                entry['lessonId']==item['id']||
+                entry['id']=='quiz_${item['id']}'||
+                entry['id']=='quiz-${item['id']}'||
+                entry['id']==item['quizLessonId']||
+                entry['id']==item['attachedQuizId'])).toList();
+            final attachedTest=attachedTests.isEmpty?null:attachedTests.first;
+            final pageCount=pages.isNotEmpty?pages.length:chapters.fold<int>(0,
+              (sum,chapter)=>sum+((chapter is Map&&chapter['sections'] is List)
+                ?(chapter['sections'] as List).length:0));
+            return VopSectionStudyCard(
+              title:recordTitle(item),
+              description:(item['description']??'').toString(),
+              number:(item['lessonNumber']??i+1).toString(),
+              pageCount:pageCount,
+              readMinutes:(num.tryParse('${item['estimatedMinutes']??15}')??15)
+                .round().clamp(1,240).toInt(),
+              completed:false,locked:false,
+              onOpen:editable?()=>edit(item):null,
+              onTakeTest:attachedTest==null?null:()=>
+                Navigator.push(context,MaterialPageRoute<void>(
+                  builder:(_)=>QuizScreen(api:widget.api,
+                    guideId:guideId,lessonId:'${attachedTest['id']}',
+                    language:(widget.guide['language']??'en').toString(),
+                    title:recordTitle(attachedTest)))),
+              onFlashcards:item['published']==true&&pageCount>0?()=>
+                Navigator.push(context,MaterialPageRoute<void>(
+                  builder:(_)=>LessonFlashcardsScreen(api:widget.api,
+                    guideId:guideId,lessonId:'${item['id']}',
+                    title:recordTitle(item)))):null,
+              onEditQuestions:editable&&quizPerm.contains('update')?()=>
+                Navigator.push(context,MaterialPageRoute<void>(
+                  builder:(_)=>WorkspaceRecordsScreen(api:widget.api,
+                    collection:'quizzes',
+                    organizationId:widget.guide['organizationId']?.toString()))):null,
+            );
+          }
+          return ListTile(
           title:Text(recordTitle(item)),subtitle:Text('${item['type']??'Lesson'} · ${item['published']==true?'Published':'Draft'}'),
           onTap:item['canEdit']==true?()=>edit(item):null,trailing:item['canEdit']==true?Wrap(children:[
             if(actions.contains('update'))IconButton(tooltip:'Edit',onPressed:()=>edit(item),icon:const Icon(Icons.edit_outlined)),

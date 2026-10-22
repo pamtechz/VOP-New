@@ -113,6 +113,7 @@ class _HomeShellState extends State<HomeShell> {
 
   @override Widget build(BuildContext context){
     final wide=MediaQuery.sizeOf(context).width>=880;
+    final desktop=MediaQuery.sizeOf(context).width>=1120;
     final labels=[
       VopI18n.text('navigation.discover','Discover'),
       VopI18n.text('navigation.lessons','Lessons'),
@@ -150,7 +151,7 @@ class _HomeShellState extends State<HomeShell> {
       ),
       drawer:Drawer(child:_drawer()),
       body:wide?Row(children:[
-        NavigationRail(
+        if(desktop) _desktopSidebar(labels,icons) else NavigationRail(
           backgroundColor:Theme.of(context).colorScheme.surface,
           selectedIndex:tab,labelType:NavigationRailLabelType.all,
           onDestinationSelected:selectTab,
@@ -159,7 +160,7 @@ class _HomeShellState extends State<HomeShell> {
             label:Text(labels[index]))),
         ),
         const VerticalDivider(width:1),
-        Expanded(child:body),
+        Expanded(child:Center(child:ConstrainedBox(constraints:const BoxConstraints(maxWidth:1480),child:body))),
       ]):body,
       bottomNavigationBar:wide?null:NavigationBar(
         selectedIndex:tab,
@@ -169,6 +170,47 @@ class _HomeShellState extends State<HomeShell> {
           label:labels[index])),
       ),
     );
+  }
+
+  Widget _desktopSidebar(List<String> labels,List<IconData> icons){
+    final colors=Theme.of(context).colorScheme;
+    Widget tile(int index)=>ListTile(
+      leading:Icon(icons[index],size:21),
+      title:Text(labels[index],style:const TextStyle(fontWeight:FontWeight.w700)),
+      selected:tab==index,
+      selectedTileColor:colors.primaryContainer.withValues(alpha:.45),
+      shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(11)),
+      onTap:()=>selectTab(index));
+    return SizedBox(width:252,child:Material(color:colors.surface,
+      child:ListView(padding:const EdgeInsets.fromLTRB(14,24,14,20),children:[
+        const Padding(padding:EdgeInsets.fromLTRB(8,0,8,18),child:VopBrand()),
+        const Divider(),
+        const Padding(padding:EdgeInsets.fromLTRB(9,16,0,9),
+          child:Text('LEARNING',style:TextStyle(fontSize:11,
+            fontWeight:FontWeight.w900,letterSpacing:1.5))),
+        for(var i=0;i<labels.length;i++)tile(i),
+        const SizedBox(height:10),
+        const Divider(),
+        const Padding(padding:EdgeInsets.fromLTRB(9,15,0,8),
+          child:Text('YOUR WORKSPACE',style:TextStyle(fontSize:11,
+            fontWeight:FontWeight.w900,letterSpacing:1.5))),
+        ListTile(leading:const Icon(Icons.forum_outlined),
+          title:const Text('Mentoring inbox'),
+          onTap:()=>push(Scaffold(appBar:AppBar(title:const Text('Mentoring')),
+            body:MentorScreen(api:widget.api)))),
+        ListTile(leading:const Icon(Icons.insights_outlined),
+          title:const Text('My progress'),
+          onTap:()=>push(_ProgressScreen(api:widget.api))),
+        ListTile(leading:const Icon(Icons.psychology_outlined),
+          title:const Text('Scripture challenges'),
+          onTap:()=>push(EngagementScreen(api:widget.api))),
+        ListTile(leading:const Icon(Icons.church_outlined),
+          title:const Text('Find a church'),
+          onTap:()=>_openInstitutionFinder()),
+        ListTile(leading:const Icon(Icons.workspace_premium_outlined),
+          title:const Text('My certificates'),
+          onTap:()=>push(CertificatesScreen(api:widget.api))),
+      ])));
   }
 
   Widget _drawer(){
@@ -369,9 +411,11 @@ class _HomeShellState extends State<HomeShell> {
             subtitle:'Learning and encouragement at your fingertips'),
           const SizedBox(height:4),
           GridView.count(
-            crossAxisCount:2,shrinkWrap:true,
-            physics:const NeverScrollableScrollPhysics(),
-            crossAxisSpacing:10,mainAxisSpacing:10,childAspectRatio:1.53,
+            crossAxisCount:MediaQuery.sizeOf(context).width>=1120?4:
+               MediaQuery.sizeOf(context).width>=750?3:2,
+            shrinkWrap:true,physics:const NeverScrollableScrollPhysics(),
+            crossAxisSpacing:10,mainAxisSpacing:10,
+            childAspectRatio:MediaQuery.sizeOf(context).width>=750?2.15:1.53,
             children:[
               VopFeatureTile(title:'Bible Lessons',subtitle:'Grow through guided study',
                 icon:Icons.auto_stories_rounded,tint:VopColors.navyBright,
@@ -469,7 +513,14 @@ class _HomeShellState extends State<HomeShell> {
         if(visible.isEmpty)const SizedBox(height:180,
           child:VopEmpty(icon:Icons.search_off,
             message:'No guides match your search.')),
-        ...visible.map(guideCard),
+        LayoutBuilder(builder:(context,constraints){
+          final cols=constraints.maxWidth>=1050?3:
+            constraints.maxWidth>=650?2:1;
+          final width=(constraints.maxWidth-(cols-1)*14)/cols;
+          return Wrap(spacing:14,runSpacing:14,
+            children:visible.map((guide)=>SizedBox(width:width,
+              child:guideCard(guide))).toList());
+        }),
         const SizedBox(height:20),
       ]));
   });

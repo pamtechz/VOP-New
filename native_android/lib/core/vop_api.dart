@@ -47,6 +47,7 @@ class VopApi {
   Uri _url(String path, [Map<String, String>? query]) {
     const allowedPrefixes = [
       '/api/mobile',
+      '/api/public-catalog',
       '/api/study/progress',
       '/api/mentorship',
       '/api/engagement',
@@ -139,6 +140,9 @@ class VopApi {
   Future<Map<String, dynamic>> read(String resource,
       [Map<String, String> params = const {}]) =>
       _execute('/api/mobile', 'GET', null, {'resource': resource, ...params});
+
+  Future<Map<String,dynamic>> publicCatalog() =>
+      _execute('/api/public-catalog', 'GET', null, null, anonymous: true);
 
   Future<Map<String,dynamic>> registrationPolicy() =>
       _execute('/api/admin/auth', 'GET', null, {'action':'policy'}, anonymous:true);

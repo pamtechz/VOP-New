@@ -5,6 +5,7 @@ import '../core/portal_access.dart';
 import '../core/vop_api.dart';
 import '../theme/vop_theme.dart';
 import '../widgets/vop_ui.dart';
+import '../widgets/workspace_desktop_shell.dart';
 import 'account_settings_screen.dart';
 
 class OrganizationDashboardScreen extends StatefulWidget {
@@ -197,7 +198,8 @@ class _OrganizationDashboardScreenState
           const SizedBox(width: 8),
         ],
       ),
-      body: RefreshIndicator(
+      body: WorkspaceDesktopShell(api: widget.api, title: 'Organisation',
+        child: RefreshIndicator(
         onRefresh: () async => _reload(),
         child: Center(
           child: ConstrainedBox(
@@ -211,20 +213,22 @@ class _OrganizationDashboardScreenState
                 const SizedBox(height: 18),
                 _buildKpiMetricsGrid(isDesktop),
                 const SizedBox(height: 22),
-                _buildSectionHeader(
-                  'INSTITUTIONAL WORKSPACE',
-                  'Modules scoped strictly to your organisation',
-                ),
-                const SizedBox(height: 12),
-                _buildModuleCards(isDesktop),
-                const SizedBox(height: 22),
+                if (!WorkspaceDesktopShell.activeFor(context)) ...[
+                  _buildSectionHeader(
+                    'INSTITUTIONAL WORKSPACE',
+                    'Modules scoped strictly to your organisation',
+                  ),
+                  const SizedBox(height: 12),
+                  _buildModuleCards(isDesktop),
+                  const SizedBox(height: 22),
+                ],
                 _buildHealthStatusCard(),
                 const SizedBox(height: 30),
               ],
             ),
           ),
         ),
-      ),
+      )),
     );
   }
 

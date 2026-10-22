@@ -9,7 +9,8 @@ import '../core/vop_api.dart';
 import '../core/pending_invitation.dart';
 
 class AuthScreen extends StatefulWidget {
-  const AuthScreen({super.key});
+  const AuthScreen({this.onBack, super.key});
+  final VoidCallback? onBack;
   @override
   State<AuthScreen> createState() => _AuthScreenState();
 }
@@ -252,6 +253,15 @@ class _AuthScreenState extends State<AuthScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                if (widget.onBack != null) ...[
+                  Align(alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: widget.onBack,
+                      icon: const Icon(Icons.arrow_back),
+                      label: const Text('Explore published studies'),
+                    )),
+                  const SizedBox(height: 10),
+                ],
                 Text('VOP', textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.headlineLarge?.copyWith(
                     fontWeight: FontWeight.w900, letterSpacing: 1.6,

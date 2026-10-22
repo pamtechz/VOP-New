@@ -5,6 +5,7 @@ import '../core/portal_access.dart';
 import '../core/vop_api.dart';
 import '../theme/vop_theme.dart';
 import '../widgets/vop_ui.dart';
+import '../widgets/workspace_desktop_shell.dart';
 import 'account_settings_screen.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
@@ -158,7 +159,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           const SizedBox(width: 6),
         ],
       ),
-      body: RefreshIndicator(
+      body: WorkspaceDesktopShell(api: widget.api, title: 'Administration',
+        child: RefreshIndicator(
         onRefresh: () async => _reload(),
         child: Center(
           child: ConstrainedBox(
@@ -170,17 +172,19 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 const SizedBox(height: 18),
                 _buildKpiGrid(),
                 const SizedBox(height: 22),
-                _buildSectionHeader('MANAGEMENT MODULES', 'Direct access to administrative services'),
-                const SizedBox(height: 12),
-                _buildActionModules(),
-                const SizedBox(height: 22),
+                if (!WorkspaceDesktopShell.activeFor(context)) ...[
+                  _buildSectionHeader('MANAGEMENT MODULES', 'Direct access to administrative services'),
+                  const SizedBox(height: 12),
+                  _buildActionModules(),
+                  const SizedBox(height: 22),
+                ],
                 _buildHealthStatusCard(),
                 const SizedBox(height: 30),
               ],
             ),
           ),
         ),
-      ),
+      )),
     );
   }
 

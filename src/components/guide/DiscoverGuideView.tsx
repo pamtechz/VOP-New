@@ -2,15 +2,18 @@ import React, { useMemo, useState } from 'react';
 import type { DiscoverGuide, Lesson, User } from '../../types';
 import {
   ArrowLeft, Award, BookOpen, Bookmark, CheckCircle2, ChevronRight, Clock,
-  FileQuestion, Lock, Play, RotateCcw, Trophy,
+  FileQuestion, Lock, Play, RotateCcw, Trophy, Layers, ListChecks,
 } from 'lucide-react';
 import { getStoredGuides, getStoredSettings } from '../../services/storage';
 import { getTranslation, getUiLocale } from '../../services/i18n';
 import { calculateCurriculumProgress } from '../../services/progress';
 import { getAttachedAssessmentsForLesson, isLessonUnlocked, lessonAttachedTestsAreComplete, lessonIsComplete, lessonScoreForDisplay } from '../../services/lessonProgress';
 import { resolveLessonResumeBookmark } from '../../services/lessonBookmark';
+import { hasAdminPortalAccess } from '../../services/portalAccess';
 import { resetLessonProgress } from '../../services/localStudy';
 import './guide-sections.css';
+import './section-study-flashcards.css';
+import {SectionStudyFlashcards} from './SectionStudyFlashcards';
 
 interface DiscoverGuideViewProps {
   guide: DiscoverGuide;
@@ -19,6 +22,7 @@ interface DiscoverGuideViewProps {
   onSelectLesson: (lesson: Lesson, initialPageIndex?: number) => void;
   onOpenCertificate: () => void;
   onProgressReset?: () => void | Promise<void>;
+  onEditQuestions?: (lesson: Lesson, sectionId?: string) => void;
 }
 
 const ordered=(items:Lesson[])=>[...items].sort((a,b)=>{
@@ -37,10 +41,12 @@ function readMinutes(pages:NonNullable<Lesson['contentPages']>,fallback=1){
 }
 
 export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
-  guide,currentUser,onBack,onSelectLesson,onOpenCertificate,onProgressReset,
+  guide,currentUser,onBack,onSelectLesson,onOpenCertificate,onProgressReset,onEditQuestions,
 }) => {
   const [resetTargetLesson, setResetTargetLesson] = useState<Lesson | null>(null);
   const [resetting, setResetting] = useState(false);
+  const [flashcardSelection,setFlashcardSelection] = useState<{title:string;pages:NonNullable<Lesson['contentPages']>}|null>(null);
+  const mayEditQuestions=Boolean(onEditQuestions)&&hasAdminPortalAccess(currentUser);
 
   const handleResetProgress = async () => {
     if (!resetTargetLesson) return;
@@ -130,6 +136,21 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
       <FileQuestion size={14}/><span>{actionLabel}</span>
       {hasScore&&<em>{passed?t('guide.passed','Passed'):t('guide.score','Score')} {Math.round(score!)}%</em>}
     </button>;
+  };
+
+
+  const studyActions=(lesson:Lesson,pages:NonNullable<Lesson['contentPages']>,title:string,sectionId?:string,allowFlashcards=true)=>{
+    const available=pages.some(page=>Boolean(page.keyTakeaway||page.scriptureQuote?.text||page.content));
+    return <>
+      {available&&allowFlashcards&&<button type="button" className="vop-section-flashcards"
+        onClick={()=>setFlashcardSelection({title,pages})}>
+        <Layers size={14}/>{t('guide.flashcards','Flashcards')}
+      </button>}
+      {mayEditQuestions&&onEditQuestions&&<button type="button"
+        className="vop-section-edit-questions" onClick={()=>onEditQuestions(lesson,sectionId)}>
+        <ListChecks size={14}/>{t('guide.edit_chapter_questions','Edit chapter questions')}
+      </button>}
+    </>;
   };
 
   const assessmentCard=(assessment:Lesson)=>{
@@ -246,7 +267,8 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
                 count:studyLessons.length,lessons:studyLessons.length===1?t('guide.lesson_singular','lesson'):t('guide.lesson_plural','lessons'),
               })}</span>
           </div>
-
+
+
           {studyLessons.flatMap((lesson,lessonIndex)=>{
             const completed=lessonIsComplete(guide,lesson,currentUser,threshold);
             const unlocked=isLessonUnlocked(guide,lessonIndex,currentUser,threshold,studyLessons);
@@ -279,8 +301,7 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
                     aria-disabled={!unlocked}>
                     <span className="vop-section-study-marker">{completed?<CheckCircle2 size={24}/>:!unlocked?<Lock size={22}/>:sectionNumber}</span>
                     <span className="vop-section-study-copy">
-                      <small>{t('guide.section','Section')} {sectionNumber}{!unlocked?' · '+t('guide.locked','Locked'):''}</small>
-                      <strong>{section.title}</strong>
+                      <strong>{t('guide.section','Section')} {sectionNumber}: {section.title}</strong>
                       {isBookmarkedSection && lessonBookmark && (
                         <span
                           className="vop-section-bookmark-tag"
@@ -298,14 +319,15 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
                   </button>
                   <div className="vop-section-study-meta">
                     <span><BookOpen size={14}/>{t('guide.page_count','{count} {pages}',{
-                      count:Math.max(1,sectionPages.length),
+                      count:sectionPages.length,
                       pages:sectionPages.length===1?t('guide.page_singular','page'):t('guide.page_plural','pages'),
                     })}</span>
                     <span><Clock size={14}/>{t('guide.read_minutes','~{minutes} min read',{minutes:readMinutes(sectionPages,fallbackMinutes)})}</span>
-                    {unlocked&&<div className="vop-section-study-tests">
-                      {sectionTests.map(item=>inlineAssessment(item,t('guide.take_test','Take test')))}
-                      {chapterTests.map(item=>inlineAssessment(item,t('guide.chapter_test','Chapter test')))}
-                      {lessonTests.map(item=>inlineAssessment(item,t('guide.lesson_test','Lesson test')))}
+                    {(unlocked||mayEditQuestions)&&<div className="vop-section-study-tests">
+                      {unlocked&&sectionTests.map(item=>inlineAssessment(item,t('guide.take_test','Take test')))}
+                      {unlocked&&chapterTests.map(item=>inlineAssessment(item,t('guide.chapter_test','Chapter test')))}
+                      {unlocked&&lessonTests.map(item=>inlineAssessment(item,t('guide.lesson_test','Lesson test')))}
+                      {studyActions(lesson,sectionPages,section.title,section.id,unlocked)}
                     </div>}
                     {completed&&chapterIndex===chapters.length-1&&sectionIndex===chapter.sections.length-1&&(
                       <button
@@ -368,20 +390,20 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
                 aria-disabled={!unlocked}>
                 <span className="vop-section-study-marker">{completed?<CheckCircle2 size={24}/>:!unlocked?<Lock size={22}/>:lessonIndex+1}</span>
                 <span className="vop-section-study-copy">
-                  <small>{t('guide.lesson','Lesson')} {lesson.lessonNumber}{lessonTests.length > 0 ? ' · ' + t('guide.includes_quiz', 'Includes review quiz') : ''}{!unlocked?' · '+t('guide.locked','Locked'):''}</small>
-                  <strong>{lesson.title}</strong>
+                  <strong>{t('guide.lesson','Lesson')} {lesson.lessonNumber}: {lesson.title}</strong>
                   <em>{!unlocked ? getLockedMessage(lessonIndex) : (lesson.description||'')}</em>
                 </span>
                 <ChevronRight size={19}/>
               </button>
               <div className="vop-section-study-meta">
                 <span><BookOpen size={14}/>{t('guide.page_count','{count} {pages}',{
-                  count:Math.max(1,pages.length),
+                  count:pages.length,
                   pages:pages.length===1?t('guide.page_singular','page'):t('guide.page_plural','pages'),
                 })}</span>
                 <span><Clock size={14}/>{t('guide.read_minutes','~{minutes} min read',{minutes:readMinutes(pages,lesson.estimatedMinutes||15)})}</span>
-                {unlocked&&<div className="vop-section-study-tests">
-                  {lessonTests.map(item=>inlineAssessment(item,t('guide.take_test','Take test')))}
+                {(unlocked||mayEditQuestions)&&<div className="vop-section-study-tests">
+                  {unlocked&&lessonTests.map(item=>inlineAssessment(item,t('guide.take_test','Take test')))}
+                  {studyActions(lesson,pages,lesson.title,undefined,unlocked)}
                 </div>}
                 {completed&&(
                   <button
@@ -438,6 +460,8 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
         </button>}
       </div>}
 
+      {flashcardSelection&&<SectionStudyFlashcards title={flashcardSelection.title}
+        pages={flashcardSelection.pages} onClose={()=>setFlashcardSelection(null)}/>}
       {resetTargetLesson && (
         <div style={{
           position: 'fixed', inset: 0, zIndex: 1100,

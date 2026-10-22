@@ -1,10 +1,25 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 
+String resolveVopApiOrigin({
+  required bool isWeb,
+  required Uri page,
+  required String configured,
+}) {
+  if (isWeb && page.path.startsWith('/classic/')) return page.origin;
+  return configured;
+}
+
 /// Public Firebase client values are injected at compile time.
 /// Never provide service account credentials, payment keys or private tokens.
 class VopConfig {
-  static const apiUrl = String.fromEnvironment('VOP_API_BASE_URL');
+  // Browser and API are hosted on the same origin in the unified release.
+  // Standalone development previews and Android use the configured backend.
+  static String get apiUrl => resolveVopApiOrigin(
+        isWeb: kIsWeb,
+        page: Uri.base,
+        configured: const String.fromEnvironment('VOP_API_BASE_URL'),
+      );
   static const apiKey = String.fromEnvironment('VOP_FIREBASE_API_KEY');
   static const appId = String.fromEnvironment('VOP_FIREBASE_ANDROID_APP_ID');
   static const webAppId = String.fromEnvironment('VOP_FIREBASE_WEB_APP_ID');

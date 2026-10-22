@@ -412,3 +412,54 @@
 .vop-retake-cancel{border:1px solid var(--theme-border-strong);background:var(--theme-surface);color:var(--theme-text)}
 .vop-retake-confirm-button{border:1px solid #b45309;background:#b45309;color:#fff}
 .vop-retake-confirm-button:disabled,.vop-retake-cancel:disabled{opacity:.55;cursor:not-allowed}
+
+
+/* Course sections: common information hierarchy in Legacy and Classic. */
+.vop-section-study-card{
+  position:relative;isolation:isolate;
+  background:var(--theme-surface,#1c202a);
+  border:1px solid var(--theme-border,#323746);
+  border-radius:21px;
+}
+.vop-section-study-card::before{
+  content:"";position:absolute;inset:0 auto 0 0;width:87px;
+  background:#1645a5;border-radius:20px 0 0 20px;z-index:-1;
+}
+.vop-section-study-card.completed::before{background:#45a552}
+.vop-section-study-card.locked::before{background:#667085}
+.vop-section-study-main{grid-template-columns:87px minmax(0,1fr) 24px;min-height:98px}
+.vop-section-study-marker{min-width:87px;background:transparent!important;font-size:27px}
+.vop-section-study-card.completed .vop-section-study-marker{background:transparent!important}
+.vop-section-study-copy{gap:4px;padding:16px 20px 7px}
+.vop-section-study-copy small{font-size:12px;letter-spacing:.01em;text-transform:none}
+.vop-section-study-copy strong{color:var(--theme-title,#f0f1f7);font-size:17px;font-weight:800}
+.vop-section-study-copy em{font-size:13px;white-space:normal;line-height:1.5;color:var(--theme-muted,#b0b3bf)}
+.vop-section-study-main>svg{margin-right:12px}
+.vop-section-study-meta{
+  padding:2px 14px 17px 107px;
+  justify-content:flex-start;gap:10px 17px;font-size:12px;
+  min-height:40px;color:#48ad54;
+}
+.vop-section-study-tests{margin-left:0;gap:9px 14px}
+.vop-section-test{background:transparent;border:0;border-radius:6px;
+  color:#ff9000;padding:4px 0;min-height:26px;font-size:12px}
+.vop-section-test:hover{background:transparent;text-decoration:underline}
+.vop-section-flashcards,.vop-section-edit-questions{
+  display:inline-flex;gap:6px;align-items:center;background:transparent;
+  border:0;padding:4px 0;cursor:pointer;font:800 12px/1.3 inherit;
+  color:#ba39df;
+}
+.vop-section-flashcards:hover,.vop-section-edit-questions:hover{text-decoration:underline}
+.vop-section-flashcards:focus-visible,.vop-section-edit-questions:focus-visible,.vop-section-test:focus-visible{
+  outline:2px solid #d4abff;outline-offset:3px;
+}
+@media(max-width:580px){
+  .vop-section-study-card::before{width:60px}
+  .vop-section-study-main{grid-template-columns:60px minmax(0,1fr) 19px;min-height:94px}
+  .vop-section-study-marker{min-width:60px;font-size:23px}
+  .vop-section-study-copy{padding:13px 10px 6px}
+  .vop-section-study-copy strong{font-size:14px}
+  .vop-section-study-copy small,.vop-section-study-copy em{font-size:11px}
+  .vop-section-study-meta{padding-left:72px;font-size:11px;gap:8px 12px}
+  .vop-section-study-tests{width:100%}
+}

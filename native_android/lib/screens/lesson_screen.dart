@@ -13,11 +13,13 @@ class LessonScreen extends StatefulWidget {
     required this.language,
     required this.title,
     this.attachedQuizId,
+    this.initialPageIndex,
     super.key,
   });
   final VopApi api;
   final String guideId, lessonId, language, title;
   final String? attachedQuizId;
+  final int? initialPageIndex;
   @override State<LessonScreen> createState()=>_LessonScreenState();
 }
 
@@ -47,6 +49,7 @@ class _LessonScreenState extends State<LessonScreen> {
 
   @override void initState() {
     super.initState();
+    page = widget.initialPageIndex ?? 0;
     resolvedQuizId = widget.attachedQuizId;
     lesson = widget.api.lesson(widget.guideId, widget.lessonId);
     resume = widget.api.progress();
@@ -65,7 +68,7 @@ class _LessonScreenState extends State<LessonScreen> {
       if (rows is! Map) return;
       final key = '${widget.language}:${widget.guideId}:${widget.lessonId}';
       final entry = rows[key];
-      if (entry is Map && entry['pageIndex'] is num && mounted) {
+      if (widget.initialPageIndex == null && entry is Map && entry['pageIndex'] is num && mounted) {
         setState(() => page = (entry['pageIndex'] as num).toInt());
       }
     }).catchError((Object error) {});
