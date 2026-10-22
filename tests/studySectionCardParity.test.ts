@@ -37,6 +37,8 @@ test('Classic Flutter web and Android use the same permission-aware section card
   assert.match(card,/if\(onFlashcards!=null\)/);
   assert.match(card,/if\(onEditQuestions!=null\)/);
   assert.match(studio,/editable&&quizPerm\.contains\('update'\)/);
+  assert.match(studio,/onTakeTest:attachedTest==null\?null/);
+  assert.match(studio,/entry\['published'\]==true/);
   assert.match(studio,/VopSectionStudyCard\(/);
 });
 

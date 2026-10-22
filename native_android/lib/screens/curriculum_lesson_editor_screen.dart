@@ -3,6 +3,7 @@ import '../core/vop_api.dart';
 import '../widgets/vop_ui.dart';
 import '../widgets/vop_section_study_card.dart';
 import 'lesson_flashcards_screen.dart';
+import 'quiz_screen.dart';
 import 'workspace_records_screen.dart';
 
 class CurriculumLessonEditorScreen extends StatefulWidget{
@@ -87,6 +88,17 @@ class _CurriculumLessonEditorState extends State<CurriculumLessonEditorScreen>{
             final quizPerm=recordMap(widget.workspace['permissions'])['quizzes'] as List? ?? [];
             final pages=item['contentPages'] is List?item['contentPages'] as List:<dynamic>[];
             final chapters=item['chapters'] is List?item['chapters'] as List:<dynamic>[];
+            final attachedTests=items.where((entry)=>
+              entry['type']=='Test'&&entry['published']==true&&
+              entry['assessmentKind']!='final_exam'&&
+              entry['attachmentType']!='guide'&&
+              (entry['attachedLessonId']==item['id']||
+                entry['lessonId']==item['id']||
+                entry['id']=='quiz_${item['id']}'||
+                entry['id']=='quiz-${item['id']}'||
+                entry['id']==item['quizLessonId']||
+                entry['id']==item['attachedQuizId'])).toList();
+            final attachedTest=attachedTests.isEmpty?null:attachedTests.first;
             final pageCount=pages.isNotEmpty?pages.length:chapters.fold<int>(0,
               (sum,chapter)=>sum+((chapter is Map&&chapter['sections'] is List)
                 ?(chapter['sections'] as List).length:0));
@@ -99,6 +111,12 @@ class _CurriculumLessonEditorState extends State<CurriculumLessonEditorScreen>{
                 .round().clamp(1,240).toInt(),
               completed:false,locked:false,
               onOpen:editable?()=>edit(item):null,
+              onTakeTest:attachedTest==null?null:()=>
+                Navigator.push(context,MaterialPageRoute<void>(
+                  builder:(_)=>QuizScreen(api:widget.api,
+                    guideId:guideId,lessonId:'${attachedTest['id']}',
+                    language:(widget.guide['language']??'en').toString(),
+                    title:recordTitle(attachedTest)))),
               onFlashcards:item['published']==true&&pageCount>0?()=>
                 Navigator.push(context,MaterialPageRoute<void>(
                   builder:(_)=>LessonFlashcardsScreen(api:widget.api,
