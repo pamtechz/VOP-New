@@ -78,10 +78,13 @@ test('programme selection never opens an empty page because guides have zero pub
 test('Super Admin curriculum changes retain canonical guide ownership',()=>{
   const handler=read('api_handlers/admin/content.ts');
   const tenant=read('server/tenant.ts');
+  const programManager=read('server/programManager.ts');
   const studio=read('src/pages/CurriculumManager.tsx');
   assert.match(tenant,/hierarchyAdmin && !isSuperAdmin/);
   assert.match(handler,/const guideOrganizationId = ctx.isSuperAdmin && existing.exists/);
   assert.match(handler,/organizationId: guideOrganizationId/);
+  assert.match(programManager,/const programOrganizationId=ctx.isSuperAdmin&&previous.exists/);
+  assert.match(programManager,/organizationId:programOrganizationId/);
   assert.match(handler,/const lessonOrganizationId = ctx.isSuperAdmin \? guideOrgId : effectiveOrganizationId/);
   assert.match(handler,/organizationId: lessonOrganizationId/);
   assert.match(studio,/const targetOrganizationId = isSuperAdmin/);
