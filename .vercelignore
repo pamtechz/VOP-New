@@ -7,7 +7,13 @@ android
 .idea
 .vscode
 tests
-tools
+tools/*
+!tools/seed/
+tools/seed/*
+!tools/seed/package.json
+!tools/seed/package-lock.json
+!tools/seed/seed-vop-guides.mjs
+!tools/seed/run-vop-guide-import.mjs
 docs
 *.log
 .env*
