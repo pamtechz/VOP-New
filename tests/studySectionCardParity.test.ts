@@ -8,8 +8,8 @@ test('Legacy lesson and section cards match the study-card reference design',()=
   const component=read('src/components/guide/DiscoverGuideView.tsx');
   const css=read('src/components/guide/guide-sections.css');
   assert.match(component,/vop-section-study-card/);
-  assert.match(component,/studyActions\(lesson,sectionPages,section\.title,section\.id\)/);
-  assert.match(component,/studyActions\(lesson,pages,lesson\.title\)/);
+  assert.match(component,/studyActions\(lesson,sectionPages,section\.title,section\.id,unlocked\)/);
+  assert.match(component,/studyActions\(lesson,pages,lesson\.title,undefined,unlocked\)/);
   assert.match(css,/\.vop-section-study-card\.completed::before\{background:#45a552\}/);
   assert.match(css,/\.vop-section-flashcards,\.vop-section-edit-questions/);
   assert.match(component,/onSelectLesson\(lesson,actualIndex\)/);
