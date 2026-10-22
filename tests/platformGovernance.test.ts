@@ -550,7 +550,7 @@ test('subscription capabilities are enforced server-side and reflected in instit
   assert.match(graduations,/requireSubscriptionFeature\(ctx,'certification',requestOrganizationId\)/);
   assert.match(graduationAutomation,/organizationSubscriptionFeatureBlockReason\(db,'certification',organizationId\)/);
   assert.match(contentApi,/code:status===401\?'UNAUTHENTICATED':status===403\?'PERMISSION_DENIED':'INVALID_REQUEST'/);
-  assert.match(contentApi,/\bsubscription\b/);
+  assert.match(contentApi,/requireOrganizationSubscriptionFeature/);
   assert.doesNotMatch(contentApi,/\/permission\|Only\|membership\|Select\|available\|required\|subscription\|organization\//);
 
   assert.match(admin,/loadInstitutionalSubscriptionState/);
