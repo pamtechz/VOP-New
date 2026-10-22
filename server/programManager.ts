@@ -111,19 +111,23 @@ export async function handleCurriculumPrograms(ctx:TenantContext,
   const ref=ctx.db.doc('programs/'+id);
   const previous=await ref.get();
   const current=previous.data()||{};
+  // Existing programme ownership is immutable. A Super Admin editing a
+  // programme after changing the UI tenant filter must retain its source.
+  const programOrganizationId=ctx.isSuperAdmin&&previous.exists
+    ?String(current.organizationId||'').trim():targetOrganizationId;
   await requirePermission(ctx,'curriculum',
     action==='delete'?'delete':previous.exists?'update':'create');
-  if(!ctx.isSuperAdmin&&targetOrganizationId&&action!=='delete'){
+  if(!ctx.isSuperAdmin&&programOrganizationId&&action!=='delete'){
     if(ctx.tenantType==='hierarchy')await requireSubscriptionFeature(ctx,'curriculum','');
-    else await requireOrganizationSubscriptionFeature(ctx.db,'curriculum',targetOrganizationId);
+    else await requireOrganizationSubscriptionFeature(ctx.db,'curriculum',programOrganizationId);
   }
-  if(!ctx.isSuperAdmin&&targetOrganizationId&&action==='upsert'&&!previous.exists){
+  if(!ctx.isSuperAdmin&&programOrganizationId&&action==='upsert'&&!previous.exists){
     if(ctx.tenantType==='hierarchy'){
       const billingTarget=billingTenantFromContext(ctx);
       if(!billingTarget)throw new Error('This hierarchy administrator is not linked to a billing tenant.');
       await enforceBillingTenantQuota(ctx.db,billingTarget.type,billingTarget.id,'programs','maxPrograms');
     }else{
-      await enforceOrganizationQuota(ctx.db,targetOrganizationId,'programs','maxPrograms');
+      await enforceOrganizationQuota(ctx.db,programOrganizationId,'programs','maxPrograms');
     }
   }
   if(previous.exists){
@@ -146,31 +150,31 @@ export async function handleCurriculumPrograms(ctx:TenantContext,
     await writeTenantAudit(ctx,'program.archive',ref.path,current,{...current,archived:true,published:false});
     return res.status(200).json({ok:true,id,archived:true});
   }
-  if(previous.exists&&String(current.organizationId||'')!==targetOrganizationId)
+  if(previous.exists&&String(current.organizationId||'')!==programOrganizationId)
     throw new Error('A program cannot be transferred between tenant scopes by editing.');
   if(!ctx.isSuperAdmin){
     if(ctx.tenantType==='hierarchy'){
-      if(!targetOrganizationId||
-         !(await organizationInHierarchyScope(ctx,targetOrganizationId)))
+      if(!programOrganizationId||
+         !(await organizationInHierarchyScope(ctx,programOrganizationId)))
         throw new Error('Choose an organization in your authorized hierarchy for this program.');
-    }else if(!ownScope(ctx,targetOrganizationId)||!targetOrganizationId){
+    }else if(!ownScope(ctx,programOrganizationId)||!programOrganizationId){
       throw new Error('The selected organization is outside your curriculum scope.');
     }
   }
-  if(targetOrganizationId){
-    const organization=await ctx.db.doc('organizations/'+targetOrganizationId).get();
+  if(programOrganizationId){
+    const organization=await ctx.db.doc('organizations/'+programOrganizationId).get();
     if(!organization.exists||organization.data()?.status!=='active')
       throw new Error('The selected organization is not active.');
   }
   const input=normalizeProgramDraft(raw);
   // A published platform program is, by definition, system-wide. Do not
   // permit a platform publication whose visibility contradicts its scope.
-  if(!targetOrganizationId&&input.published)input.sharingScope='shared';
+  if(!programOrganizationId&&input.published)input.sharingScope='shared';
   if(input.sharingScope==='shared'&&!ctx.isSuperAdmin)
     throw new Error('Only VOP Super Admin may publish a cross-organization program.');
-  if(!targetOrganizationId&&input.sharingScope==='organization')
+  if(!programOrganizationId&&input.sharingScope==='organization')
     throw new Error('Platform-wide programs must be private or shared.');
-  if(targetOrganizationId && !ctx.isSuperAdmin && input.published &&
+  if(programOrganizationId && !ctx.isSuperAdmin && input.published &&
      input.sharingScope==='private')
     throw new Error('Publish an organization-visible program instead of a private draft.');
   if(input.archived&&input.published)
@@ -183,7 +187,7 @@ export async function handleCurriculumPrograms(ctx:TenantContext,
     for(const guide of snapshots){
       const value=guide.data()||{};
       if(!guide.exists||value.archived===true||
-         String(value.organizationId||'')!==targetOrganizationId)
+         String(value.organizationId||'')!==programOrganizationId)
         throw new Error('A selected guide is missing or belongs to another organization.');
       if(input.published&&value.published!==true)
         throw new Error('Publish every assigned guide before publishing the program.');
@@ -194,14 +198,14 @@ export async function handleCurriculumPrograms(ctx:TenantContext,
     }
   }
   const next={
-    ...input,id,organizationId:targetOrganizationId,
+    ...input,id,organizationId:programOrganizationId,
     ownerOrganizationId:previous.exists
-      ?String(current.ownerOrganizationId||''):targetOrganizationId,
+      ?String(current.ownerOrganizationId||''):programOrganizationId,
     ownerTenantId:previous.exists
       ?String(current.ownerTenantId||''):tenantOwnerKey(ctx),
     ownerUid:previous.exists
       ?String(current.ownerUid||''):ctx.auth.uid,
-    scope:targetOrganizationId?'organization':'platform',
+    scope:programOrganizationId?'organization':'platform',
     canonical:true,
     // Adoption remains permanent even after unpublishing or archiving. An
     // organization must never regain control over publicly adopted material.
@@ -214,5 +218,5 @@ export async function handleCurriculumPrograms(ctx:TenantContext,
   await writeTenantAudit(ctx,previous.exists?'program.update':'program.create',
     ref.path,previous.exists?current:undefined,next);
   return res.status(200).json({ok:true,item:{...input,id,
-    organizationId:targetOrganizationId,canEdit:true}});
+    organizationId:programOrganizationId,canEdit:true}});
 }
