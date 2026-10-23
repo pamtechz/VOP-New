@@ -662,6 +662,8 @@ export default async function handler(req: Request, res: Response) {
           throw new Error('Lesson media must be an approved public HTTPS embed or direct media file.');
         }
       }
+      await requirePermission(ctx,'curriculum',existing.exists?'update':'create');
+      if(data.published===true)await requirePermission(ctx,'curriculum','publish');
       if (existing.exists && !(ctx.tenantType === 'hierarchy' ? await canManageOrganizationContent(ctx, existing.data()) : canEditCanonicalContent(ctx, existing.data()))) throw new Error('Only an authorized tenant administrator or VOP Super Admin can edit this lesson.');
       if (existing.exists) assertMutableTenantResource(ctx.isSuperAdmin, existing.data(), 'edit');
       const { teacherNotes: _incomingNotes, ...publicData }=data;
@@ -702,6 +704,8 @@ export default async function handler(req: Request, res: Response) {
           : data.sharingScope === 'private' ? 'private'
           : 'organization',
         published: data.published === true,
+        ...(data.published===true&&existing.data()?.published!==true
+          ?{publishedAt:FieldValue.serverTimestamp(),publishedBy:ctx.auth.uid}:{}),
         createdAt: existing.data()?.createdAt || new Date().toISOString(),
         updatedAt: FieldValue.serverTimestamp(),
         updatedBy: ctx.auth.uid,
