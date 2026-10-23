@@ -1016,8 +1016,10 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
         sharingScope: editor.sharingScope,
       };
 
+      // The authoritative save commits content and publication together.
+      // A second request could fail after a successful first write and make
+      // retrying look like a new/duplicate lesson.
       await adminContent('upsertLesson', 'curriculum', id, payload, targetOrganizationId);
-      if (publish) await adminContent('publishLesson', 'curriculum', id, payload, targetOrganizationId);
       await load();
       const savedEditor={ ...editor, id, title: resolvedTitle, guideTitle: valueText(guide.title) || editor.guideTitle, published: publish || editor.published };
       savedEditorSignature.current=JSON.stringify(savedEditor);
