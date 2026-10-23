@@ -54,28 +54,14 @@ async function mine(req:Request,res:Response){
  // organization. New certificate issuance still follows its separate
  // organization/platform authorization and graduation review policies.
  const certificateQuery=db.collection('certificates').where('candidateId','==',decoded.uid);
- let certificateDocs: FirebaseFirestore.QueryDocumentSnapshot[] = [];
- if (organizationId) {
-   certificateDocs=(await certificateQuery.where('organizationId','==',organizationId).limit(20).get()).docs;
- } else if (profileRole === 'super_admin' || !hierarchyField) {
-   // The query is already restricted to the authenticated candidate ID.
-   certificateDocs=(await certificateQuery.limit(20).get()).docs;
- } else if (hierarchyField) {
-   // Hierarchy records may use either the legacy flat field or the canonical
-   // nested hierarchy object. Read both forms and deduplicate by certificate ID.
-   const [flat,nested]=await Promise.all([
-     certificateQuery.where(hierarchyField,'==',adminNodeId).limit(20).get(),
-     certificateQuery.where('hierarchy.'+hierarchyField,'==',adminNodeId).limit(20).get(),
-   ]);
-   const byId=new Map<string,FirebaseFirestore.QueryDocumentSnapshot>();
-   [...flat.docs,...nested.docs].forEach(doc=>byId.set(doc.id,doc));
-   certificateDocs=[...byId.values()];
- } else {
-   certificateDocs=(await certificateQuery.limit(20).get()).docs;
- }
+ // This endpoint is "mine", so candidateId is the authorization boundary.
+ // Retain historical certificates when a learner moves between ministries.
+ // Issuance permissions remain scoped to the issuing authority.
+ const certificateDocs=(await certificateQuery.limit(40).get()).docs;
  const reviewSnapshot=await db.collection('graduationRequests').where('candidateId','==',decoded.uid).limit(100).get();
  const reviews=reviewSnapshot.docs.map(document=>({id:document.id,...document.data()} as Record<string,unknown>&{id:string}))
-   .filter(record=>!organizationId||String(record.organizationId||'')===organizationId)
+   // Reviews are also the candidate's own history, independent of their
+   // present church membership.
    .sort((a,b)=>Date.parse(String(dateValue(b.submittedAt)||''))-Date.parse(String(dateValue(a.submittedAt)||'')));
  const latestReview=reviews[0]||null;
  let automaticallyAwarded:Record<string,unknown>|null=null;
