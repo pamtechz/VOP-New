@@ -16,7 +16,7 @@ interface StoredNavigation {
 
 const PREFIX='vop:learner-location:';
 const routes=new Set<AppRoute>([
-  'home','guide','lesson','about','profile','personal-settings','localization','resources','lessons',
+  'home','guide','lesson','about','profile','personal-settings','institution-finder','localization','resources','lessons',
   'master-guide','scripture-memory','iron-duels','prayer','radio','announcements',
   'events','notifications','invites','support','mentor','admin','certificates','certificate-verification',
 ]);
