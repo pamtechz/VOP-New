@@ -480,6 +480,10 @@ export default async function handler(req: Request, res: Response) {
     if (permissionAction) await requirePermissionForProfile(db, actor as Record<string, unknown>, 'mentoring', permissionAction);
     let organizationId = String(body.organizationId || actor.organizationId || '').trim();
     if (isAdmin(actor)) organizationId = await assertOrganizationScope(db, { ...actor, uid: decoded.uid }, organizationId);
+    // Only Super Admin may explicitly select the independent-learner queue.
+    // Never infer it from a stale organization attached to the admin profile.
+    if(action==='listSupportRequests'&&body.supportScope==='platform'
+       &&String(actor.role||'')==='super_admin')organizationId='';
     if(permissionAction&&!['view','read'].includes(permissionAction)&&organizationId&&String(actor.role||'')!=='super_admin'){
       await requireOrganizationSubscriptionFeature(db,'mentorship',organizationId);
     }
@@ -962,7 +966,9 @@ export default async function handler(req: Request, res: Response) {
         // Read only the relevant tenant queue. Without a selected scope,
         // Super Admin gets the independent-learner (platform) queue; local
         // organization administrators get their own tenant's requests.
-        const scope=organizationId||(
+        const platformSelection=body.supportScope==='platform'
+          &&String(actor.role||'')==='super_admin';
+        const scope=platformSelection?'':organizationId||(
           String(actor.role||'')==='super_admin'?'':String(actor.organizationId||'').trim()
         );
         const supportQuery=scope
