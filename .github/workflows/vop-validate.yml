@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - 'feature/independent-learners-20261023'
   pull_request_target:
     branches:
       - main
