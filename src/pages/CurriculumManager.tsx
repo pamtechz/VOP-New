@@ -473,6 +473,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
   const [error, setError] = useState('');
   const [editor, setEditor] = useState<EditorState | null>(null);
   const savedEditorSignature=useRef('');
+  const pendingLessonId=useRef('');
   const [editorDirty,setEditorDirty]=useState(false);
   const [plateValidationErrors,setPlateValidationErrors]=useState<Record<string,string>>({});
   const [mediaSourceInput, setMediaSourceInput] = useState('');
@@ -804,6 +805,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
   const currentCollectionCount = tab === 'paths' ? collectionCounts.paths : tab === 'topics' ? collectionCounts.topics : tab === 'seasons' ? collectionCounts.seasons : 0;
 
   const openLesson = (row: LessonRow,sectionId='') => {
+    pendingLessonId.current='';
     const source: RecordItem = row.raw || { id: row.key };
     const organizationId = valueText(source.organizationId || source.ownerOrganizationId);
     if (isSuperAdmin && organizationId && organizationId !== scopeOrganizationId) setScopeOrganizationId(organizationId);
@@ -826,6 +828,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
   };
 
   const openNewLesson = (guideId = selectedGuideId) => {
+    pendingLessonId.current='';
     if (!guideId) {
       setLessonModuleRequiredModalOpen(true);
       return;
@@ -917,7 +920,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
   };
 
   const saveLesson = async (publish: boolean = false) => {
-    if (!editor) return;
+    if (!editor || saving) return;
     if(Object.values(plateValidationErrors).some(Boolean)){
       setError('The Plate document has invalid unsaved content. Correct the page before saving or publishing.');
       setEditorTab('content');
@@ -960,7 +963,11 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
     setSaving(true);
     setError('');
     try {
-      const id = editor.id || newId('lesson');
+      // A failed publish, refresh or network acknowledgement must never create
+      // a second lesson on retry. Persist the generated key immediately.
+      const id = editor.id || pendingLessonId.current || newId('lesson');
+      pendingLessonId.current=id;
+      if (!editor.id) setEditor(previous=>previous?{...previous,id}:previous);
       const chapters = editor.chapters.length ? normalizeCurriculumStructure(editor.chapters) : undefined;
       const structuredPages = chapters ? curriculumPages(chapters) : undefined;
       const sourceBlocks = editor.content.trim() ? contentToBlocks(editor.content) : editor.blocks;
@@ -1002,14 +1009,14 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
         tags: editor.tags.split(',').map(value => value.trim()).filter(Boolean),
         estimatedMinutes: Math.max(1, Number(editor.estimatedMinutes) || 15),
         type: 'Lesson',
-        published: publish,
+        published: publish || editor.published,
         sharingScope: editor.sharingScope,
       };
 
       await adminContent('upsertLesson', 'curriculum', id, payload, targetOrganizationId);
       if (publish) await adminContent('publishLesson', 'curriculum', id, payload, targetOrganizationId);
       await load();
-      const savedEditor={ ...editor, id, title: resolvedTitle, guideTitle: valueText(guide.title) || editor.guideTitle, published: publish };
+      const savedEditor={ ...editor, id, title: resolvedTitle, guideTitle: valueText(guide.title) || editor.guideTitle, published: publish || editor.published };
       savedEditorSignature.current=JSON.stringify(savedEditor);
       clearLocalDraft(editor.guideId, editor.id);
       if (editor.id !== id) clearLocalDraft(editor.guideId, '');
