@@ -246,6 +246,17 @@ test('unaffiliated learners retain private prayer and platform support without t
       assert.equal(historical.presentationSnapshot.issuerName,'Original VOP Ministry');
       assert.equal(historical.presentationSnapshot.logoUrl,'https://example.invalid/original-logo.png');
       assert.equal(historical.presentationSnapshot.signatureUrl,'https://example.invalid/original-signature.png');
+      await db.doc('system/certification').set({
+        verificationEnabled:true,issuerName:'A different current issuer',
+        logoUrl:'https://example.invalid/different-logo.png',
+      });
+      const publicVerification=await call(certificates,null,{},'GET',{
+        certificateNumber:'VOP-PRIVATE-TEST',
+      });
+      assert.equal(publicVerification.statusCode,200,JSON.stringify(publicVerification.body));
+      assert.equal(publicVerification.body.verified,true);
+      assert.equal(publicVerification.body.config.issuerName,'Original VOP Ministry');
+      assert.equal(publicVerification.body.config.logoUrl,'https://example.invalid/original-logo.png');
       await db.doc('users/'+personal.uid).set({organizationId:'personal-test-church',organizationRole:'learner'},{merge:true});
       const afterJoin=await call(certificates,personal,{},'GET',{action:'mine'});
       assert.equal(afterJoin.statusCode,200,JSON.stringify(afterJoin.body));
