@@ -842,7 +842,7 @@ export default async function handler(req: Request, res: Response) {
         ?(await db.collection('users').where('role','==','super_admin').limit(20).get()).docs.map(doc=>doc.id)
         :(target==='support_team'||target==='both')
           ?await supportTeamRecipients(db,candidateOrganizationId):[];
-      if(target==='support_team'&&!teamRecipients.length){
+      if(target==='support_team'&&!teamRecipients.length&&!personal){
         throw new Error('The organization support team is not configured yet.');
       }
       const recipients=[...new Set([
