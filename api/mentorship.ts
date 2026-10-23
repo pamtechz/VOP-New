@@ -912,9 +912,17 @@ export default async function handler(req: Request, res: Response) {
     if (action === 'listSupportRequests') {
       let items:Record<string,unknown>[]=[];
       if(isAdmin(actor)){
-        const supportQuery=organizationId
-          ?db.collection('learningSupportRequests').where('organizationId','==',organizationId).limit(200)
-          :db.collection('learningSupportRequests').limit(300);
+        // Read only the relevant tenant queue. Without a selected scope,
+        // Super Admin gets the independent-learner (platform) queue; local
+        // organization administrators get their own tenant's requests.
+        const scope=organizationId||(
+          String(actor.role||'')==='super_admin'?'':String(actor.organizationId||'').trim()
+        );
+        const supportQuery=scope
+          ?db.collection('learningSupportRequests').where('organizationId','==',scope).limit(200)
+          :String(actor.role||'')==='super_admin'
+            ?db.collection('learningSupportRequests').where('organizationId','==','').limit(200)
+            :db.collection('learningSupportRequests').limit(300);
         const snapshot=await supportQuery.get();
         const allowed:Record<string,unknown>[]=[];
         for(const doc of snapshot.docs){
