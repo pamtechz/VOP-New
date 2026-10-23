@@ -186,12 +186,15 @@ export default async function handler(req: Request, res: Response) {
       const ownerOrganizationId = String(guide.data()?.organizationId || guide.data()?.ownerOrganizationId || '').trim();
       const platformGuide = String(guide.data()?.scope || '') === 'platform' || !ownerOrganizationId;
       const isShared = guide.data()?.sharingScope === 'shared' && guide.data()?.published === true;
+      // Public/platform ownership does not make an unpublished guide public.
+      // A foreign tenant may only inspect a published, non-archived guide.
+      const publicGuide = guide.data()?.published === true && guide.data()?.archived !== true
+        && (platformGuide || isShared);
       const permitted = ctx.isSuperAdmin
-        || platformGuide
-        || isShared
+        || publicGuide
         || (ctx.tenantType === 'hierarchy'
           ? Boolean(ownerOrganizationId && await organizationInHierarchyScope(ctx, ownerOrganizationId))
-          : ownerOrganizationId === ctx.organizationId);
+          : Boolean(ownerOrganizationId && ownerOrganizationId === ctx.organizationId));
       if (!permitted) throw new Error('This guide is outside your authorized curriculum scope.');
       const canReadDrafts=ctx.isSuperAdmin ||
         Boolean(ownerOrganizationId && (ctx.tenantType==='hierarchy'
