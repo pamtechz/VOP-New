@@ -96,7 +96,7 @@ export default async function handler(req: Request, res: Response) {
         updatedAt: now,
       };
       await ref.set(record);
-      await writeTenantAudit(ctx,'prayer.create',`prayerRequests/${ref.id}`,undefined,record);
+      if(record.organizationId)await writeTenantAudit(ctx,'prayer.create',`prayerRequests/${ref.id}`,undefined,record);
       if(ctx.organizationId){
         const members=await ctx.db.collection(`organizations/${ctx.organizationId}/members`).where('active','==',true).get();
         const recipients=members.docs
@@ -132,7 +132,7 @@ export default async function handler(req: Request, res: Response) {
       const now=new Date().toISOString();
       if(action==='markAnswered'){
         await ref.update({status:'Answered',updatedAt:now,answeredAt:now,answeredBy:ctx.auth.uid});
-        await writeTenantAudit(ctx,'prayer.answered',ref.path,data,{...data,status:'Answered'});
+        if(!ownPersonal)await writeTenantAudit(ctx,'prayer.answered',ref.path,data,{...data,status:'Answered'});
         return res.status(200).json({ok:true,item:{...data,status:'Answered',updatedAt:now,answeredAt:now}});
       }
       if(String(data.status||'')==='Answered')
@@ -145,7 +145,7 @@ export default async function handler(req: Request, res: Response) {
         return res.status(400).json({error:'Choose a valid prayer category.'});
       const changes={requestText,category,isPrivate:!String(data.organizationId||'')||body.isPrivate===true,updatedAt:now};
       await ref.update(changes);
-      await writeTenantAudit(ctx,'prayer.edit',ref.path,data,{...data,...changes});
+      if(!ownPersonal)await writeTenantAudit(ctx,'prayer.edit',ref.path,data,{...data,...changes});
       return res.status(200).json({ok:true,item:{...data,...changes}});
     }
 
@@ -189,7 +189,7 @@ export default async function handler(req: Request, res: Response) {
       const ownPersonal=!String(data.organizationId||'')&&String(data.candidateId||'')===ctx.auth.uid;
       if (!ownPersonal&&!ctx.isSuperAdmin && !(ctx.tenantType === 'hierarchy' ? await organizationInHierarchyScope(ctx, String(data.organizationId || '')) : String(data.organizationId || '') === ctx.organizationId)) throw new Error('You cannot delete a prayer request outside your authorized scope.');
       await ref.delete();
-      await writeTenantAudit(ctx,'prayer.delete',`prayerRequests/${requestId}`,data,undefined);
+      if(!ownPersonal)await writeTenantAudit(ctx,'prayer.delete',`prayerRequests/${requestId}`,data,undefined);
       return res.status(200).json({ ok:true,id:requestId });
     }
 
