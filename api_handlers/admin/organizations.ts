@@ -338,7 +338,7 @@ export default async function handler(req: Request, res: Response) {
       if (!orgSnap.exists) throw new Error('The organization does not exist.');
       await orgRef.set({
         isPublicMinistry: isPublic,
-        ...(isPublic ? {allowSelfEnrollment:true} : {}),
+        ...(isPublic ? {allowSelfEnrollment:true} : orgSnap.data()?.isPublicMinistry===true ? {allowSelfEnrollment:false} : {}),
         updatedAt: new Date().toISOString(),
       }, { merge: true });
       return res.status(200).json({ ok: true, organizationId: targetOrgId, isPublicMinistry: isPublic });
