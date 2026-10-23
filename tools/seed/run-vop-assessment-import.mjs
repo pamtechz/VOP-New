@@ -1,0 +1,13 @@
+import {execFileSync} from 'node:child_process';
+import {mkdir,writeFile} from 'node:fs/promises';
+import {join,dirname} from 'node:path';
+import {tmpdir} from 'node:os';
+import {fileURLToPath} from 'node:url';
+const here=dirname(fileURLToPath(import.meta.url));
+const mode=process.argv.find(v=>v.startsWith('--mode='))?.slice(7)||'preview';
+if(!['preview','apply'].includes(mode))throw new Error('Choose preview or apply.');
+const args=[join(here,'seed-vop-assessments.mjs'),'--payload',join(here,'private-assessments.json.gz'),'--connect'];
+if(mode==='apply')args.push('--apply','--confirm-project','voiceofprophecy','--backup-file',join(tmpdir(),`vop-assessments-before-${Date.now()}.json`));
+execFileSync(process.execPath,args,{stdio:'inherit',cwd:here,timeout:240000});
+await mkdir(join(here,'import-report'),{recursive:true});
+await writeFile(join(here,'import-report/index.html'),`<!doctype html><html lang="en"><meta charset="utf-8"><title>VOP assessment import</title><main><h1>Assessment import ${mode} completed</h1><p>Check the authenticated VOP curriculum and quiz library for the saved assessments.</p></main></html>`);
