@@ -62,6 +62,14 @@ test('unaffiliated learners retain private prayer and platform support without t
       const mine=await call(prayer,personal,{},'GET',{mine:'true'});
       assert.equal(mine.statusCode,200,JSON.stringify(mine.body));
       assert.ok(mine.body.items.some(item=>item.id===personalPrayerId));
+      const ministryView=await call(prayer,superAdmin,{},'GET',{ministry:'true'});
+      assert.equal(ministryView.statusCode,200,JSON.stringify(ministryView.body));
+      assert.ok(!ministryView.body.items.some(item=>item.id===personalPrayerId),
+        'even the platform ministry inbox must not reveal a private personal journal');
+      const ministryStatus=await call(prayer,superAdmin,{
+        action:'status',id:personalPrayerId,status:'Praying',
+      });
+      assert.notEqual(ministryStatus.statusCode,200);
       const strangerView=await call(prayer,stranger,{},'GET',{mine:'true'});
       assert.equal(strangerView.statusCode,200);
       assert.ok(!strangerView.body.items.some(item=>item.id===personalPrayerId));
