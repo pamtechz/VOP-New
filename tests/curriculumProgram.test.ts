@@ -88,6 +88,7 @@ test('saving preserves canonical IDs and programme association does not clone gu
   assert.doesNotMatch(guides,/guideAdmin\('upsert',[\s\S]{0,80}\.\.\.targetProg/);
   assert.ok(lesson.includes('pendingLessonId.current'));
   assert.ok(lesson.includes('published: publish || editor.published'));
+  assert.doesNotMatch(lesson,/if \(publish\) await adminContent\('publishLesson'/);
   assert.ok(native.includes('final stableLessonId='));
   assert.ok(native.includes("'id':stableLessonId"));
   const nativeRecords=read('native_android/lib/screens/workspace_records_screen.dart');
@@ -95,6 +96,9 @@ test('saving preserves canonical IDs and programme association does not clone gu
   assert.ok(nativeRecords.includes("widget.collection:draftId"));
   assert.ok(backend.includes("if(action==='attachGuide')"));
   assert.ok(backend.includes('transaction.update(programRef,{guideIds,'));
+  const content=read('api_handlers/admin/content.ts');
+  assert.ok(content.includes("if(data.published===true)await requirePermission(ctx,'curriculum','publish')"));
+  assert.ok(content.includes('publishedAt:FieldValue.serverTimestamp()'));
   assert.ok(backend.includes('if(ids.includes(guideId))return'));
   assert.ok(backend.includes("const isSharedGuide=value.published===true&&value.sharingScope==='shared'"));
 });
