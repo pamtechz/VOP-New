@@ -108,6 +108,15 @@ test('public institution admission creates only learner memberships and preserve
       const configured=await call(administrator,{action:'setPublicMinistry',organizationId:otherOrganizationId,isPublicMinistry:true});
       assert.equal(configured.code,200,JSON.stringify(configured.body));
       assert.equal((await db.doc('organizations/'+otherOrganizationId).get()).data().allowSelfEnrollment,true);
+      const closed=await call(administrator,{action:'setPublicMinistry',
+        organizationId:otherOrganizationId,isPublicMinistry:false});
+      assert.equal(closed.code,200,JSON.stringify(closed.body));
+      assert.equal((await db.doc('organizations/'+otherOrganizationId).get()).data().allowSelfEnrollment,false);
+      const outsider=await identity('depublished-ministry');
+      assert.notEqual((await call(outsider,{action:'joinInstitution',organizationId:otherOrganizationId})).code,200);
+      const reopened=await call(administrator,{action:'setPublicMinistry',
+        organizationId:otherOrganizationId,isPublicMinistry:true});
+      assert.equal(reopened.code,200,JSON.stringify(reopened.body));
       const churchId='org-church-admission';
       await db.doc('organizations/'+churchId).set({name:'Local Church',status:'active',organizationType:'church',plan:'admission-plan'});
       const result={code:200,body:null,status(code){this.code=code;return this;},json(value){this.body=value;return this;}};
