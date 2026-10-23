@@ -1,0 +1,82 @@
+/* Viewport-safe modal layout for long VOP forms and read-only dialogs.
+   Prefer a contained scroll region; do not scroll the underlying application. */
+:where(.vop-modal-layer [role="dialog"][aria-modal="true"],
+       .vop-modal-layer [role="alertdialog"]) {
+  max-height: calc(100dvh - 24px);
+  min-height: 0;
+  overscroll-behavior: contain;
+}
+:is(.vop-admin-editor-backdrop,.vop-ann-editor-backdrop,
+    .vop-radio-editor-backdrop,.vop-candidate-modal-backdrop,
+    .vop-cert-issuer-backdrop,.vop-user-modal-backdrop,
+    .vop-cs-modal-backdrop,.vop-payment-modal-layer) {
+  max-height: 100dvh;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+:is(.vop-ann-editor-modal,.vop-candidate-modal,.vop-cert-issuer-modal,
+    .vop-user-modal,.vop-cs-modal,.vop-payment-modal) {
+  max-height: calc(100dvh - 32px);
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.vop-admin-editor-modal {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: calc(100dvh - 32px);
+  overflow: hidden;
+}
+.vop-admin-editor-modal .vop-section-title {
+  flex: 0 0 auto;
+}
+.vop-admin-editor-modal .vop-admin-editor-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.vop-admin-editor-modal > div:last-child {
+  flex: 0 0 auto;
+}
+.vop-radio-editor-modal {
+  min-height: 0;
+  max-height: calc(100dvh - 32px);
+  overflow: hidden;
+}
+.vop-radio-editor-modal .vop-radio-editor-body {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.vop-radio-editor-modal > footer {
+  flex: 0 0 auto;
+}
+@media (max-width: 700px), (max-height: 540px) {
+  :is(.vop-admin-editor-backdrop,.vop-ann-editor-backdrop,
+      .vop-radio-editor-backdrop,.vop-candidate-modal-backdrop,
+      .vop-cert-issuer-backdrop,.vop-user-modal-backdrop,
+      .vop-cs-modal-backdrop,.vop-payment-modal-layer) {
+    padding: 0;
+    align-items: stretch;
+    place-items: stretch;
+  }
+  :is(.vop-admin-editor-modal,.vop-ann-editor-modal,.vop-radio-editor-modal,
+      .vop-candidate-modal,.vop-cert-issuer-modal,.vop-user-modal,
+      .vop-cs-modal,.vop-payment-modal) {
+    width: 100%;
+    height: 100dvh;
+    max-height: 100dvh;
+    border-radius: 0;
+    min-height: 0;
+  }
+  .vop-admin-editor-modal .vop-admin-editor-scroll {
+    scrollbar-gutter: auto;
+  }
+}
