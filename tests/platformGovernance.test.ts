@@ -159,7 +159,8 @@ test('Mentoring & Insights is an operational inbox with responsive drill-down an
 
   assert.match(api,/collection\('mentorAssignments'\)\.where\('organizationId','==',organizationId\)\.limit\(500\)/);
   assert.match(api,/collection\('mentorConversations'\)\.where\('organizationId','==',organizationId\)\.limit\(300\)/);
-  assert.match(api,/collection\('learningSupportRequests'\)\.where\('organizationId','==',organizationId\)\.limit\(200\)/);
+  assert.match(api,/collection\('learningSupportRequests'\)\.where\('organizationId','==',scope\)\.limit\(200\)/);
+  assert.match(api,/collection\('learningSupportRequests'\)\.where\('organizationId','==',''\)\.limit\(200\)/);
   assert.match(api,/const studentIds=\[\.\.\.new Set/);
 
   assert.match(css,/\.vop-mentoring-overview\{display:grid/);
