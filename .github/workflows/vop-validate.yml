@@ -53,8 +53,12 @@ jobs:
               $acquired = $true
             }
             if (-not $acquired) { throw 'Timed out waiting for the shared npm install lock.' }
-            & npm ci --no-audit --no-fund --prefer-offline --loglevel=warn --maxsockets=8
+            & npm ci --ignore-scripts --no-audit --no-fund --prefer-offline --loglevel=warn --maxsockets=8
             if ($LASTEXITCODE -ne 0) { throw "npm ci failed with exit code $LASTEXITCODE" }
+            # The reviewed build, lint and emulator gates still execute normally.
+            # Validate the native Windows build-tool binaries explicitly.
+            & node -e "const fs=require('fs');for(const mod of ['typescript','vite','esbuild','rollup']){require.resolve(mod);};"
+            if ($LASTEXITCODE -ne 0) { throw 'A required build package is missing after the script-free install.' }
           } finally {
             if ($acquired) { $lock.ReleaseMutex() }
             $lock.Dispose()
