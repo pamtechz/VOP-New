@@ -3,8 +3,18 @@
 Completed on 22 October 2026: 26 Bemba and 26 Tonga lessons are published and
 linked to the existing VOP program. Every written field was read back and
 verified, and a second connected preview reused all 52 lessons with zero writes.
-The user supplied the full English PDF on 23 October 2026. Its 26 reading
-guides are prepared as lessons under the English Discover guide.
+Completed on 23 October 2026: the user-supplied English PDF is published as
+26 lessons and 184 sections under Discover, linked to the same VOP program.
+The complete VOP inventory now contains 78 lessons in its three language guides.
+Every field of all 28 new/linked English import documents passed server read-back
+verification. The receipt is
+`curriculumImports/91b9926c1595c557776e50eb133093dedbd66d845861d2a7b65eff2941c5f705`.
+Apply deployment `dpl_8DxjvKqWNVMceQULo18h3np3WGB8` ran commit
+`57507d7e1101b38e11dc8023d9e5c8c60969d088`. No app release was promoted.
+The post-import read-only deployment `dpl_G91ta7r2j56jMXBRm7CkMLLt7Pqc`
+reused all 78 lessons and planned zero writes. In-app checks verified all three
+published guide counts, the first English lesson's six sections and continuous
+cross-column reading text, and the final English lesson's five sections.
 
 The atomic import updated 55 lesson/parent documents and created receipt
 `curriculumImports/e96dfe54e062e7a5235f8450975f9bfa7aedd556341a854f879323b6ab9192cd`.
@@ -23,7 +33,7 @@ writing and refuses conflicts.
 | Guide | Language code | Prepared full lessons | Status |
 | --- | --- | ---: | --- |
 | Ukusanga | bem | 26 | Published; supplied text files and pasted closing lessons verified |
-| Discover | en | 26 | Prepared from the user-supplied English PDF |
+| Discover | en | 26 | Published from the user-supplied English PDF |
 | Kojana | toi | 26 | Published from the supplied archive |
 
 The 52 supplied translations contain 368 reading sections and reference 170
@@ -149,7 +159,8 @@ exactly lessons 01 through 26 for `lang: "en"`.
 
 Run `node --test tests/vopGuideSeed.test.mjs` from the full repository.
 Coverage includes canonical reader/editor compatibility, preservation of all
-368 sections, the supplied Bemba reading checksums, complete lesson 21,
+552 sections, the supplied English/Bemba reading checksums, continuous
+English topics across columns/pages, complete Bemba lesson 21,
 actual source-image hashes, duplicate detection, repeat-run
 idempotency, preservation of existing IDs/program assignments, and refusal
 of changed content, disabled languages or archived guides.
