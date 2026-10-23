@@ -1065,7 +1065,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
   };
 
   const saveRecord = async (kind: 'paths' | 'topics' | 'seasons') => {
-    if (!editingRecord) return;
+    if (!editingRecord || saving) return;
     if (editingRecord.canEdit === false) {
       setError(tx('curriculum.recordOwnedByAnotherEdit', 'This curriculum record is owned by another contributor and cannot be edited here.'));
       return;
@@ -1075,6 +1075,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
     setSaving(true);
     try {
       const id = editingRecord.id || newId(kind);
+      if(!editingRecord.id)setEditingRecord(previous=>previous?{...previous,id}:previous);
       await adminContent('upsert', COLLECTIONS[kind], id, {
         ...editingRecord,
         id,
