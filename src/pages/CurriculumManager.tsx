@@ -1030,7 +1030,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
       setEditor(savedEditor);
       setEditorDirty(false);
       setSelectedGuideId(editor.guideId);
-      notify(publish ? tx('curriculum.lessonPublished', 'Lesson published.') : tx('curriculum.lessonDraftSaved', 'Lesson draft saved.'));
+      notify((publish || editor.published) ? tx('curriculum.lessonPublished', 'Lesson published.') : tx('curriculum.lessonDraftSaved', 'Lesson draft saved.'));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : tx('curriculum.couldNotSaveLesson', 'Could not save lesson.'));
     } finally {
