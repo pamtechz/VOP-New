@@ -19,7 +19,9 @@ export default async function handler(req: Request, res: Response) {
   if (applyFlutterPreviewCors(req, res)) return;
   try {
     const body = req.body && typeof req.body === 'object' ? req.body as Record<string, unknown> : {};
-    const ctx = await authenticateTenant(req);
+    const ctx = await authenticateTenant(req,undefined,true);
+    const personal= !ctx.organizationId && !ctx.isSuperAdmin && ctx.tenantType==='platform';
+    const personalLearner=personal && ['student','learner','candidate'].includes(String(ctx.profile.role||'student').toLowerCase());
     const collection = ctx.db.collection('prayerRequests');
     const role = String(ctx.profile.role || '');
     const admin = ctx.isSuperAdmin || ['owner','admin'].includes(String(ctx.membership.role || '')) || ['union_admin','conference_admin','district_admin','church_admin'].includes(role);
@@ -27,8 +29,8 @@ export default async function handler(req: Request, res: Response) {
     if (req.method === 'GET') {
       const own = String(req.query?.mine || '') === 'true';
       const ministry = String(req.query?.ministry || '') === 'true';
-      if (own) await requirePermission(ctx, 'prayer', 'read');
-      else await requirePermission(ctx, 'prayer', 'view');
+      if (own && !personalLearner) await requirePermission(ctx, 'prayer', 'read');
+      else if(!own&&!personalLearner) await requirePermission(ctx, 'prayer', 'view');
       if (ministry && !admin) throw new Error('Only authorized ministry administrators can open the ministry inbox.');
 
       let docs = [] as FirebaseFirestore.QueryDocumentSnapshot[];
@@ -65,7 +67,8 @@ export default async function handler(req: Request, res: Response) {
     const action = String(body.action || 'create');
 
     if (action === 'create') {
-      await requirePermission(ctx, 'prayer', 'create');
+      if(!personalLearner)await requirePermission(ctx, 'prayer', 'create');
+      if(personal&&!personalLearner)throw new Error('Only a learner can submit a personal prayer request.');
       const requestText = String(body.requestText || '').trim();
       const category = String(body.category || 'Other');
       if (requestText.length < 5) throw new Error('Prayer request must contain at least 5 characters.');
@@ -81,7 +84,9 @@ export default async function handler(req: Request, res: Response) {
         candidateName: String(ctx.profile.displayName || ctx.auth.name || 'Learner'),
         churchId: String(ctx.profile.churchId || ''),
         category,
-        isPrivate: body.isPrivate === true,
+        // Requests without an organization are always personal/private;
+        // learners never publish them into a global prayer feed.
+        isPrivate: personal ? true : body.isPrivate === true,
         status: 'Received',
         requestText,
         createdAt: now,
@@ -166,13 +171,14 @@ export default async function handler(req: Request, res: Response) {
     }
 
     if (action === 'delete') {
-      await requirePermission(ctx, 'prayer', 'delete');
+      if(!personalLearner)await requirePermission(ctx, 'prayer', 'delete');
       const requestId = id(body.id);
       const ref = collection.doc(requestId);
       const existing = await ref.get();
       if (!existing.exists) return res.status(200).json({ ok:true,id:requestId });
       const data = existing.data() || {};
       if (data.candidateId !== ctx.auth.uid && !admin) throw new Error('You can only delete your own prayer request.');
+      if(personalLearner && data.candidateId !== ctx.auth.uid)throw new Error('You can only delete your own prayer request.');
       if (!ctx.isSuperAdmin && !(ctx.tenantType === 'hierarchy' ? await organizationInHierarchyScope(ctx, String(data.organizationId || '')) : String(data.organizationId || '') === ctx.organizationId)) throw new Error('You cannot delete a prayer request outside your authorized scope.');
       await ref.delete();
       await writeTenantAudit(ctx,'prayer.delete',`prayerRequests/${requestId}`,data,undefined);
