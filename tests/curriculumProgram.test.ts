@@ -75,6 +75,15 @@ test('programme selection never opens an empty page because guides have zero pub
   assert.ok(mobile.includes('!snap.exists||!hasAccess(snap.data()||{},scope)'));
   assert.ok(flutter.includes('No accessible courses are published under this programme.'));
 });
+test('Guide Manager differentiates same-titled tenant records and edits the original',()=>{
+  const source=read('src/pages/GuideManager.tsx');
+  assert.ok(source.includes("organizationId: valueText(value.organizationId || value.ownerOrganizationId)"));
+  assert.ok(source.includes("(record.organizationId || 'platform') + '|'"));
+  assert.ok(source.includes("record.canEdit!==false"));
+  assert.ok(source.includes("record.organizationId===(organizationId||'')"));
+  assert.ok(source.includes("const requestedId=editing.id||'guide-'+crypto.randomUUID()"));
+  assert.ok(source.includes('setEditing(previous=>previous?{...previous,id:requestedId}:previous)'));
+});
 test('saving preserves canonical IDs and programme association does not clone guides',()=>{
   const programmes=read('src/pages/ProgramManager.tsx');
   const guides=read('src/pages/GuideManager.tsx');
