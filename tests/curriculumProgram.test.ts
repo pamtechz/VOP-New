@@ -75,6 +75,26 @@ test('programme selection never opens an empty page because guides have zero pub
   assert.ok(mobile.includes('!snap.exists||!hasAccess(snap.data()||{},scope)'));
   assert.ok(flutter.includes('No accessible courses are published under this programme.'));
 });
+test('saving preserves canonical IDs and programme association does not clone guides',()=>{
+  const programmes=read('src/pages/ProgramManager.tsx');
+  const guides=read('src/pages/GuideManager.tsx');
+  const lesson=read('src/pages/CurriculumManager.tsx');
+  const native=read('native_android/lib/screens/curriculum_lesson_editor_screen.dart');
+  const backend=read('server/programManager.ts');
+  assert.ok(programmes.includes("editing.id||'program-'+crypto.randomUUID()"));
+  assert.ok(programmes.includes("programApi('upsert',organizationId,id,{...editing,id})"));
+  assert.ok(guides.includes("editing.id||'guide-'+crypto.randomUUID()"));
+  assert.ok(guides.includes("guideAdmin('attachGuide'"));
+  assert.doesNotMatch(guides,/guideAdmin\('upsert',[\s\S]{0,80}\.\.\.targetProg/);
+  assert.ok(lesson.includes('pendingLessonId.current'));
+  assert.ok(lesson.includes('published: publish || editor.published'));
+  assert.ok(native.includes('final stableLessonId='));
+  assert.ok(native.includes("'id':stableLessonId"));
+  assert.ok(backend.includes("if(action==='attachGuide')"));
+  assert.ok(backend.includes('transaction.update(programRef,{guideIds,'));
+  assert.ok(backend.includes('if(ids.includes(guideId))return'));
+  assert.ok(backend.includes("const isSharedGuide=value.published===true&&value.sharingScope==='shared'"));
+});
 test('Super Admin curriculum changes retain canonical guide ownership',()=>{
   const handler=read('api_handlers/admin/content.ts');
   const tenant=read('server/tenant.ts');
