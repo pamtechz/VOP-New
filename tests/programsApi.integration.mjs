@@ -188,6 +188,63 @@ const base={title:'Foundations of Faith',description:'A guided study',
   coverImageUrl:'',entryMode:'sections',guideIds:[guideA],
   sharingScope:'organization',published:true,archived:false};
 let programId='';
+let sharedReferenceProgram='';
+await test('one published canonical guide can be reused across tenants without copying content',async()=>{
+  const sharedGuide='program-test-cross-tenant-guide';
+  const source=db.doc('guides/'+sharedGuide);
+  await source.set({
+    id:sharedGuide,title:'Shared Bible studies',language:'en',
+    organizationId:a,ownerOrganizationId:a,ownerUid:author.uid,
+    sharingScope:'shared',published:true,archived:false,canonical:true,
+  });
+  const response=await call(outsider,{collection:'programs',action:'upsert',
+    organizationId:b,data:{
+      ...base,title:'Org B curated studies',guideIds:[sharedGuide],
+      sharingScope:'organization',published:true,
+    }});
+  assert.equal(response.status,200,JSON.stringify(response.value));
+  sharedReferenceProgram=response.value.item.id;
+  const ref=db.doc('programs/'+sharedReferenceProgram);
+  assert.deepEqual((await ref.get()).data()?.guideIds,[sharedGuide]);
+  const original=(await source.get()).data();
+  assert.equal(original?.organizationId,a);
+
+  // Attaching a second shared guide must change only associations, not
+  // publication/owner metadata or the canonical guide itself.
+  const secondGuide='program-test-cross-tenant-shared-two';
+  await db.doc('guides/'+secondGuide).set({
+    id:secondGuide,title:'Prophecy studies',language:'en',
+    organizationId:a,ownerOrganizationId:a,ownerUid:author.uid,
+    sharingScope:'shared',published:true,archived:false,canonical:true,
+  });
+  const append=async(guideId,user=outsider)=>call(user,{
+    collection:'programs',action:'attachGuide',organizationId:b,
+    data:{programId:sharedReferenceProgram,guideId},
+  });
+  const linked=await append(secondGuide);
+  assert.equal(linked.status,200,JSON.stringify(linked.value));
+  const repeat=await append(secondGuide);
+  assert.equal(repeat.status,200,JSON.stringify(repeat.value));
+  assert.equal(repeat.value.alreadyLinked,true);
+  const record=(await ref.get()).data();
+  assert.deepEqual(record.guideIds,[sharedGuide,secondGuide]);
+  assert.equal(record.title,'Org B curated studies');
+  assert.equal(record.organizationId,b);
+  assert.equal(record.published,true);
+  assert.equal(record.sharingScope,'organization');
+  assert.equal((await source.get()).data()?.organizationId,a);
+
+  const privateDenied=await append(guideA);
+  assert.notEqual(privateDenied.status,200);
+  assert.deepEqual((await ref.get()).data()?.guideIds,[sharedGuide,secondGuide]);
+  const foreignEditor=await append(secondGuide,author);
+  assert.notEqual(foreignEditor.status,200);
+
+  const listed=await call(outsideLearner,{collection:'programs',action:'learnerList'});
+  assert.equal(listed.status,200,JSON.stringify(listed.value));
+  assert.ok(listed.value.items.some(item=>item.id===sharedReferenceProgram));
+});
+
 await test('program ownership, tenant scope, and read permissions',async t=>{
   await t.test('contributor creates a published program from owned published guides',async()=>{
     const response=await call(author,{collection:'programs',action:'upsert',data:base,organizationId:a});
@@ -214,7 +271,7 @@ await test('program ownership, tenant scope, and read permissions',async t=>{
       ...base,guideIds:[guideA],
     },organizationId:b});
     assert.notEqual(bad.status,200);
-    assert.match(String(bad.value.error),/another organization|missing|belongs/);
+    assert.match(String(bad.value.error),/another organization|missing|belongs|shared guides/);
   });
   await t.test('co-admin cannot edit the other author program',async()=>{
     const bad=await call(coAdmin,{collection:'programs',action:'upsert',
