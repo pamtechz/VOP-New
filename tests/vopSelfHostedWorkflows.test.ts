@@ -70,8 +70,10 @@ test('Windows npm installations are bounded and serialized across KASAINSTITUTE 
       path+' must use the same cross-process named mutex');
     assert.match(source,/\.WaitOne\(/,path+' must bound lock acquisition');
     assert.match(source,/\.ReleaseMutex\(\)/,path+' must release the installation lock');
-    assert.match(source,/npm ci --no-audit --no-fund --prefer-offline --loglevel=warn --maxsockets=8/,
+    assert.match(source,/npm ci --ignore-scripts --no-audit --no-fund --prefer-offline --loglevel=warn --maxsockets=8/,
       path+' must use the reviewed lockfile with reduced Windows disk contention');
+    assert.match(source,/required build package is missing after the script-free install/,
+      path+' must fail closed when dependency lifecycle scripts are skipped');
     assert.match(source,/\$LASTEXITCODE -ne 0/,path+' must reject a failed installation');
   }
 });
