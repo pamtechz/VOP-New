@@ -3,6 +3,7 @@ import type { CustomHeroSlide, HeroSlideIcon } from '../../types';
 import type { ExtendedAppSettings } from '../../services/adminFirestore';
 import { getTranslation, getUiLocale } from '../../services/i18n';
 import { appConfirm } from '../layout/AppDialog';
+import { ModalLayer } from '../layout/ModalLayer';
 import {
   Sparkles, Plus, Edit2, Copy, Trash2, ArrowUp, ArrowDown, Check,
   BookOpen, HeartHandshake, Radio, Award, Clock3, Target, Bookmark,
@@ -157,6 +158,24 @@ export const HeroSliderManager: React.FC<HeroSliderManagerProps> = ({
   const [templateMenuOpen, setTemplateMenuOpen] = useState(false);
   const [previewActiveIndex, setPreviewActiveIndex] = useState(0);
   const [galleryOpen, setGalleryOpen] = useState(false);
+
+  React.useEffect(() => {
+    if (!isModalOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.stopPropagation();
+      setIsModalOpen(false);
+      setEditingSlide(null);
+    };
+    document.addEventListener('keydown', onEscape);
+    document.getElementById('vop-hsm-editor-close')?.focus();
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('keydown', onEscape);
+    };
+  }, [isModalOpen]);
 
   const toDatetimeLocal = (iso?: string) => {
     if (!iso) return '';
@@ -765,25 +784,29 @@ export const HeroSliderManager: React.FC<HeroSliderManagerProps> = ({
 
       {/* Slide Editor Modal */}
       {isModalOpen && editingSlide && (
-        <div className="vop-hsm-modal-backdrop" onClick={() => setIsModalOpen(false)}>
-          <div className="vop-hsm-modal" onClick={e => e.stopPropagation()}>
-            <form onSubmit={handleSaveModal}>
+        <ModalLayer>
+        <div className="vop-hsm-modal-backdrop">
+          <div className="vop-hsm-modal" role="dialog" aria-modal="true"
+            aria-labelledby="vop-hsm-editor-title">
+            <form className="vop-hsm-editor-form" onSubmit={handleSaveModal}>
               <div className="vop-hsm-modal-head">
-                <h3>
+                <h3 id="vop-hsm-editor-title">
                   <Edit2 size={18} color="var(--vop-blue)" />
                   {slides.some(s => s.id === editingSlide.id) ? 'Edit Hero Slide' : 'Create New Hero Slide'}
                 </h3>
                 <button
                   type="button"
                   className="vop-hsm-icon-btn"
-                  onClick={() => setIsModalOpen(false)}
-                  style={{ border: 'none', background: 'transparent', fontSize: 18, cursor: 'pointer' }}
+                  id="vop-hsm-editor-close"
+                  aria-label="Close hero slide editor"
+                  onClick={() => { setIsModalOpen(false); setEditingSlide(null); }}
+                  style={{ border: 'none', background: 'transparent', cursor: 'pointer' }}
                 >
-                  ✕
+                  <X size={20} />
                 </button>
               </div>
 
-              <div className="vop-hsm-modal-body">
+              <div className="vop-hsm-modal-body" tabIndex={0} aria-label="Hero slide form fields">
                 {/* Real-time In-Modal Preview */}
                 <div
                   className="vop-hsm-modal-preview"
@@ -1156,7 +1179,7 @@ export const HeroSliderManager: React.FC<HeroSliderManagerProps> = ({
               </div>
 
               <div className="vop-hsm-modal-foot">
-                <button type="button" className="vop-secondary" onClick={() => setIsModalOpen(false)}>
+                <button type="button" className="vop-secondary" onClick={() => { setIsModalOpen(false); setEditingSlide(null); }}>
                   Cancel
                 </button>
                 <button type="submit" className="vop-primary">
@@ -1167,6 +1190,7 @@ export const HeroSliderManager: React.FC<HeroSliderManagerProps> = ({
             </form>
           </div>
         </div>
+        </ModalLayer>
       )}
     </div>
   );
