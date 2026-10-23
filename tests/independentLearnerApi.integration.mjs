@@ -131,12 +131,24 @@ test('unaffiliated learners retain private prayer and platform support without t
       });
       assert.equal(learnerReply.statusCode,200,JSON.stringify(learnerReply.body));
     });
-    await t.test('personal certificate history is readable without organization',async()=>{
-      // Reading historical certificates is distinct from issuing new ones.
+    await t.test('historical certificates remain personal across future organization changes',async()=>{
+      // A prior organization's certificate must not disappear on membership
+      // changes, and another signed-in user must never see it.
+      await db.doc('certificates/personal-history-verified').set({
+        id:'personal-history-verified',candidateId:personal.uid,
+        organizationId:'an-earlier-ministry',certificateNumber:'VOP-PRIVATE-TEST',
+        candidateName:'independent',courseName:'Bible Study',status:'Certified',
+      });
       const result=await call(certificates,personal,{},'GET',{action:'mine'});
       assert.equal(result.statusCode,200,JSON.stringify(result.body));
+      assert.ok(result.body.certificates.some(row=>row.id==='personal-history-verified'));
+      await db.doc('users/'+personal.uid).set({organizationId:'personal-test-church',organizationRole:'learner'},{merge:true});
+      const afterJoin=await call(certificates,personal,{},'GET',{action:'mine'});
+      assert.equal(afterJoin.statusCode,200,JSON.stringify(afterJoin.body));
+      assert.ok(afterJoin.body.certificates.some(row=>row.id==='personal-history-verified'));
       const outsiderHistory=await call(certificates,stranger,{},'GET',{action:'mine'});
       assert.equal(outsiderHistory.statusCode,200,JSON.stringify(outsiderHistory.body));
+      assert.ok(!outsiderHistory.body.certificates.some(row=>row.id==='personal-history-verified'));
     });
   }finally{await vite.close();}
 });
