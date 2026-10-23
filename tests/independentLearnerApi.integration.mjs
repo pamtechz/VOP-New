@@ -135,6 +135,37 @@ test('unaffiliated learners retain private prayer and platform support without t
       });
       assert.equal(learnerReply.statusCode,200,JSON.stringify(learnerReply.body));
     });
+    await t.test('personal support retries are idempotent and daily limits are atomic',async()=>{
+      const data={action:'createSupportRequest',subject:'Repeatable private help',
+        message:'Help me understand my next study section.',
+        category:'bible_question',target:'support_team',channel:'in_app',
+        priority:'normal',spiritualInterest:'none'};
+      const first=await call(mentorship,personal,{...data,idempotencyKey:'test-personal-support-00000001'});
+      assert.equal(first.statusCode,201,JSON.stringify(first.body));
+      const duplicate=await call(mentorship,personal,{...data,idempotencyKey:'test-personal-support-00000001'});
+      assert.equal(duplicate.statusCode,200,JSON.stringify(duplicate.body));
+      assert.equal(duplicate.body.item.id,first.body.item.id);
+      const messages=await db.collection('learningSupportRequests/'+first.body.item.id+'/messages').get();
+      assert.equal(messages.size,1,'a retry cannot create a second first message');
+      const changed=await call(mentorship,personal,{...data,idempotencyKey:'test-personal-support-00000001',message:'Changed after first submit'});
+      assert.notEqual(changed.statusCode,200,'a reused key cannot conceal changed content');
+      // The preceding test created one initial request. The first keyed
+      // request above makes two; six more exhaust the eight-request window.
+      for(let i=0;i<6;i++){
+        const created=await call(mentorship,personal,{
+          ...data,subject:'Study question '+i,
+          idempotencyKey:'test-personal-support-'+String(i).padStart(8,'0'),
+        });
+        assert.equal(created.statusCode,201,JSON.stringify(created.body));
+      }
+      const limited=await call(mentorship,personal,{...data,idempotencyKey:'test-personal-support-over-limit'});
+      assert.notEqual(limited.statusCode,201);
+      assert.match(String(limited.body?.error||''),/limit reached/i);
+      const previous=await call(mentorship,personal,{...data,idempotencyKey:'test-personal-support-00000001'});
+      assert.equal(previous.statusCode,200,'idempotent replay is allowed even when quota is full');
+      const quota=(await db.doc('personalSupportRateLimits/'+personal.uid).get()).data();
+      assert.equal(quota?.requestTimes.length,8);
+    });
     await t.test('historical certificates remain personal across future organization changes',async()=>{
       // A prior organization's certificate must not disappear on membership
       // changes, and another signed-in user must never see it.
