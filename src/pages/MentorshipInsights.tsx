@@ -139,7 +139,7 @@ export const MentorshipInsights:React.FC<{guides:DiscoverGuide[]}>=({guides})=>{
         mentoringApi('listMentors'),
         mentoringApi('listAssignments'),
         mentoringApi('questionFailures'),
-        mentoringApi('listSupportRequests'),
+        mentoringApi('listSupportRequests',{supportScope:'platform'}),
         mentoringApi('unreadSummary'),
         mentoringApi('getAutomationSettings'),
       ]);
