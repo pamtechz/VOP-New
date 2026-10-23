@@ -14,7 +14,7 @@ concurrency:
 jobs:
   validate:
     runs-on: [self-hosted, Windows]
-    timeout-minutes: 50
+    timeout-minutes: 90
     steps:
       - name: Verify KASAINSTITUTE runner identity
         shell: powershell
@@ -38,8 +38,26 @@ jobs:
           node-version: 22
           cache: npm
       - name: Install dependencies from the lockfile (bounded)
-        timeout-minutes: 12
-        run: npm ci --no-audit --no-fund --prefer-offline --loglevel=info
+        timeout-minutes: 30
+        shell: powershell
+        run: |
+          # Multiple self-hosted runner services share Windows disk and npm
+          # cache. Serialize only package installation, not the test suites.
+          $lock = New-Object System.Threading.Mutex($false, 'Global\VOP-NPM-CI-WINDOWS')
+          $acquired = $false
+          try {
+            try {
+              $acquired = $lock.WaitOne([TimeSpan]::FromMinutes(18))
+            } catch [System.Threading.AbandonedMutexException] {
+              $acquired = $true
+            }
+            if (-not $acquired) { throw 'Timed out waiting for the shared npm install lock.' }
+            & npm ci --no-audit --no-fund --prefer-offline --loglevel=warn --maxsockets=8
+            if ($LASTEXITCODE -ne 0) { throw "npm ci failed with exit code $LASTEXITCODE" }
+          } finally {
+            if ($acquired) { $lock.ReleaseMutex() }
+            $lock.Dispose()
+          }
       - run: npm audit --omit=dev --audit-level=moderate
       - run: npm run build
       - run: npm run verify:bundle-budget
