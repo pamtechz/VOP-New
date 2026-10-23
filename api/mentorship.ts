@@ -1267,6 +1267,12 @@ export default async function handler(req: Request, res: Response) {
     return res.status(400).json({ error: 'Unsupported mentorship action.' });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Mentorship operation failed.';
+    if(message.includes('Daily personal support request limit reached'))
+      return res.status(429).json({error:message});
+    if(message.includes('already submitted with different content'))
+      return res.status(409).json({error:message});
+    if(message.includes('Invalid support submission identifier'))
+      return res.status(400).json({error:message});
     if (message.includes('Sign in') || message.includes('Administrator privileges') || message.includes('not allowed') || message.includes('not configured') || message.includes('not assigned') || message.includes('not found') || message.includes('cannot manage') || message.includes('only change messages you sent') || message.includes('outside your tenant') || message.includes('outside your hierarchy') || message.includes('subscription')) return res.status(403).json({ error: message });
     console.error('VOP mentorship operation failed', error);
     return res.status(500).json({ error: message });
