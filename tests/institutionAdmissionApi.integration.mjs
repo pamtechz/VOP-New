@@ -17,6 +17,9 @@ test('public institution admission creates only learner memberships and preserve
   const organizationId='org-public-admission',otherOrganizationId='org-private-admission';
   await db.doc('organizations/'+organizationId).set({name:'Public Study Ministry',status:'active',isPublicMinistry:true,plan:'admission-plan',quotas:{},featureEntitlements:{candidates:true},city:'Lusaka'});
   await db.doc('organizations/'+otherOrganizationId).set({name:'Invitation Ministry',status:'active',allowSelfEnrollment:false,plan:'admission-plan'});
+  await db.doc('organizations/org-legacy-closed').set({
+    name:'Legacy without admission settings',status:'active',plan:'admission-plan',
+  });
   async function identity(label,profile={}){
     const result=await fetch('http://'+process.env.FIREBASE_AUTH_EMULATOR_HOST+'/identitytoolkit.googleapis.com/v1/accounts:signUp?key=demo-key',{
       method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:label+'@vop-admission.invalid',password:'local-emulator-only',returnSecureToken:true}),
@@ -43,6 +46,8 @@ test('public institution admission creates only learner memberships and preserve
       assert.equal(result.code,200,JSON.stringify(result.body));
       assert.ok(result.body.items.some(item=>item.id===organizationId&&item.city==='Lusaka'));
       assert.ok(!result.body.items.some(item=>item.id===otherOrganizationId));
+      assert.ok(!result.body.items.some(item=>item.id==='org-legacy-closed'),
+        'Missing opt-in flag must never expose a legacy tenant for public joining');
     });
     await t.test('directory search scans beyond its first Firestore page',async()=>{
       const batch=db.batch();
@@ -84,6 +89,7 @@ test('public institution admission creates only learner memberships and preserve
     await t.test('invitation-only and suspended memberships cannot be bypassed',async()=>{
       const unattached=await identity('invitation-only');
       assert.notEqual((await call(unattached,{action:'joinInstitution',organizationId:otherOrganizationId})).code,200);
+      assert.notEqual((await call(unattached,{action:'joinInstitution',organizationId:'org-legacy-closed'})).code,200);
       await db.doc('organizations/'+organizationId+'/members/'+unattached.uid).set({uid:unattached.uid,role:'learner',active:false});
       assert.notEqual((await call(unattached,{action:'joinInstitution',organizationId})).code,200);
     });
