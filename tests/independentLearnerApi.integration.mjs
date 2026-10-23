@@ -1,0 +1,142 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {initializeApp,getApps} from 'firebase-admin/app';
+import {getFirestore} from 'firebase-admin/firestore';
+import {createServer} from 'vite';
+
+const project='demo-vop-security-rules';
+
+test('unaffiliated learners retain private prayer and platform support without tenant privilege',async t=>{
+  assert.ok(process.env.FIRESTORE_EMULATOR_HOST,'Refuse to test without Firestore emulator.');
+  assert.ok(process.env.FIREBASE_AUTH_EMULATOR_HOST,'Refuse to test without Firebase Auth emulator.');
+  assert.ok(!process.env.FIREBASE_ADMIN_PROJECT_ID||process.env.FIREBASE_ADMIN_PROJECT_ID===project);
+  process.env.FIREBASE_ADMIN_PROJECT_ID=project;
+  const app=getApps()[0]||initializeApp({projectId:project});
+  const db=getFirestore(app);
+  const vite=await createServer({configFile:false,server:{middlewareMode:true,hmr:false},appType:'custom',logLevel:'error'});
+  const register=async(name,profile={})=>{
+    const res=await fetch('http://'+process.env.FIREBASE_AUTH_EMULATOR_HOST+'/identitytoolkit.googleapis.com/v1/accounts:signUp?key=demo-key',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({email:name+'@personal-vop.invalid',password:'emulator-test-only',returnSecureToken:true}),
+    });
+    const value=await res.json();assert.equal(res.status,200,JSON.stringify(value));
+    await db.doc('users/'+value.localId).set({
+      uid:value.localId,role:'student',displayName:name,organizationId:'',
+      organizationRole:'',...profile,
+    });
+    return {uid:value.localId,token:value.idToken};
+  };
+  try{
+    const {default:prayer}=await vite.ssrLoadModule('/api/prayer.ts');
+    const {default:mentorship}=await vite.ssrLoadModule('/api/mentorship.ts');
+    const {default:certificates}=await vite.ssrLoadModule('/api/certificates.ts');
+    const personal=await register('independent');
+    const stranger=await register('outsider');
+    const superAdmin=await register('platform-administrator',{role:'super_admin'});
+    const tenantAdmin=await register('church-administrator',{organizationId:'personal-test-church',organizationRole:'admin'});
+    await db.doc('organizations/personal-test-church').set({status:'active',name:'Test church'});
+    await db.doc('organizations/personal-test-church/members/'+tenantAdmin.uid).set({
+      uid:tenantAdmin.uid,role:'admin',active:true,
+    });
+    const respond=()=>({statusCode:200,body:null,status(code){this.statusCode=code;return this;},json(data){this.body=data;return this;}});
+    async function call(handler,user,body={},method='POST',query={}){
+      const res=respond();
+      await handler({
+        method,headers:user?{authorization:'Bearer '+user.token}:{},
+        ...(method==='GET'?{query}:{body}),
+      },res);
+      return res;
+    }
+    let personalPrayerId='';
+    await t.test('personal prayers are private even when client requests public sharing',async()=>{
+      const unauthorized=await call(prayer,null,{action:'create',requestText:'Not authenticated'});
+      assert.notEqual(unauthorized.statusCode,201);
+      const created=await call(prayer,personal,{
+        action:'create',requestText:'A private personal prayer journal note.',
+        category:'Guidance',isPrivate:false,
+      });
+      assert.equal(created.statusCode,201,JSON.stringify(created.body));
+      personalPrayerId=created.body.item.id;
+      assert.equal(created.body.item.organizationId,'');
+      assert.equal(created.body.item.isPrivate,true);
+      const mine=await call(prayer,personal,{},'GET',{mine:'true'});
+      assert.equal(mine.statusCode,200,JSON.stringify(mine.body));
+      assert.ok(mine.body.items.some(item=>item.id===personalPrayerId));
+      const strangerView=await call(prayer,stranger,{},'GET',{mine:'true'});
+      assert.equal(strangerView.statusCode,200);
+      assert.ok(!strangerView.body.items.some(item=>item.id===personalPrayerId));
+      const community=await call(prayer,stranger,{},'GET',{mine:'false'});
+      assert.equal(community.statusCode,200);
+      assert.ok(!community.body.items.some(item=>item.id===personalPrayerId));
+      const editAttempt=await call(prayer,stranger,{
+        action:'edit',id:personalPrayerId,requestText:'Attempt to read or change another journal.',
+        category:'Guidance',
+      });
+      assert.notEqual(editAttempt.statusCode,200);
+      assert.equal((await db.doc('prayerRequests/'+personalPrayerId).get()).data().requestText,
+        'A private personal prayer journal note.');
+    });
+    await t.test('personal prayer ownership survives church joining',async()=>{
+      await db.doc('users/'+personal.uid).set({
+        organizationId:'personal-test-church',organizationRole:'learner',
+      },{merge:true});
+      await db.doc('organizations/personal-test-church/members/'+personal.uid).set({
+        uid:personal.uid,role:'learner',active:true,
+      });
+      const updated=await call(prayer,personal,{
+        action:'edit',id:personalPrayerId,requestText:'A revised private prayer after joining.',
+        category:'Guidance',isPrivate:true,
+      });
+      assert.equal(updated.statusCode,200,JSON.stringify(updated.body));
+      assert.equal((await db.doc('prayerRequests/'+personalPrayerId).get()).data().organizationId,'');
+      const answered=await call(prayer,personal,{action:'markAnswered',id:personalPrayerId});
+      assert.equal(answered.statusCode,200,JSON.stringify(answered.body));
+      assert.equal((await db.doc('prayerRequests/'+personalPrayerId).get()).data().status,'Answered');
+      // Restore personal mode for the independent support tests.
+      await db.doc('users/'+personal.uid).set({organizationId:'',organizationRole:''},{merge:true});
+      await db.doc('organizations/personal-test-church/members/'+personal.uid).update({active:false});
+    });
+    let supportId='';
+    await t.test('unaffiliated support requests route to a private VOP queue',async()=>{
+      const created=await call(mentorship,personal,{
+        action:'createSupportRequest',subject:'Personal Bible question',
+        message:'Please explain the text in my study guide.',
+        target:'mentor',channel:'whatsapp',category:'bible_question',
+        priority:'normal',spiritualInterest:'none',
+      });
+      assert.equal(created.statusCode,201,JSON.stringify(created.body));
+      supportId=created.body.item.id;
+      assert.equal(created.body.item.organizationId,'');
+      assert.equal(created.body.item.target,'support_team');
+      assert.equal(created.body.item.channel,'in_app');
+      const own=await call(mentorship,personal,{action:'listMySupportRequests'});
+      assert.equal(own.statusCode,200,JSON.stringify(own.body));
+      assert.ok(own.body.items.some(item=>item.id===supportId));
+      const others=await call(mentorship,stranger,{action:'listMySupportRequests'});
+      assert.ok(!others.body.items.some(item=>item.id===supportId));
+      const strangerRead=await call(mentorship,stranger,{action:'supportRequestMessages',requestId:supportId});
+      assert.notEqual(strangerRead.statusCode,200);
+      const foreignAdmin=await call(mentorship,tenantAdmin,{action:'supportRequestMessages',requestId:supportId});
+      assert.notEqual(foreignAdmin.statusCode,200);
+      const platformQueue=await call(mentorship,superAdmin,{action:'listSupportRequests'});
+      assert.equal(platformQueue.statusCode,200,JSON.stringify(platformQueue.body));
+      assert.ok(platformQueue.body.items.some(item=>item.id===supportId));
+      const adminReply=await call(mentorship,superAdmin,{
+        action:'replySupportRequest',requestId:supportId,
+        message:'Your question has reached the VOP support queue.',
+      });
+      assert.equal(adminReply.statusCode,200,JSON.stringify(adminReply.body));
+      const learnerReply=await call(mentorship,personal,{
+        action:'replySupportRequest',requestId:supportId,message:'Thank you.',
+      });
+      assert.equal(learnerReply.statusCode,200,JSON.stringify(learnerReply.body));
+    });
+    await t.test('personal certificate history is readable without organization',async()=>{
+      // Reading historical certificates is distinct from issuing new ones.
+      const result=await call(certificates,personal,{},'GET');
+      assert.equal(result.statusCode,200,JSON.stringify(result.body));
+      const outsiderHistory=await call(certificates,stranger,{},'GET');
+      assert.equal(outsiderHistory.statusCode,200,JSON.stringify(outsiderHistory.body));
+    });
+  }finally{await vite.close();}
+});
