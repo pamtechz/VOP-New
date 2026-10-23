@@ -85,10 +85,11 @@ test('unaffiliated learners retain private prayer and platform support without t
       });
       const updated=await call(prayer,personal,{
         action:'edit',id:personalPrayerId,requestText:'A revised private prayer after joining.',
-        category:'Guidance',isPrivate:true,
+        category:'Guidance',isPrivate:false,
       });
       assert.equal(updated.statusCode,200,JSON.stringify(updated.body));
       assert.equal((await db.doc('prayerRequests/'+personalPrayerId).get()).data().organizationId,'');
+      assert.equal((await db.doc('prayerRequests/'+personalPrayerId).get()).data().isPrivate,true);
       const answered=await call(prayer,personal,{action:'markAnswered',id:personalPrayerId});
       assert.equal(answered.statusCode,200,JSON.stringify(answered.body));
       assert.equal((await db.doc('prayerRequests/'+personalPrayerId).get()).data().status,'Answered');
