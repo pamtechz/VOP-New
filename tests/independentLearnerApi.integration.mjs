@@ -107,6 +107,12 @@ test('unaffiliated learners retain private prayer and platform support without t
       assert.ok(!tenantAudits.docs.some(doc=>
         JSON.stringify(doc.data()).includes('A revised private prayer after joining')),
         'private prayer journal leaked to the organization audit ledger');
+      const removed=await call(prayer,personal,{action:'delete',id:personalPrayerId});
+      assert.equal(removed.statusCode,200,JSON.stringify(removed.body));
+      assert.equal((await db.doc('prayerRequests/'+personalPrayerId).get()).exists,false);
+      const auditsAfterDelete=await db.collection('organizations/personal-test-church/audit').get();
+      assert.ok(!auditsAfterDelete.docs.some(doc=>String(doc.data().target||'').includes(personalPrayerId)),
+        'even private prayer metadata must not appear in a new tenant audit');
       // Restore personal mode for the independent support tests.
       await db.doc('users/'+personal.uid).set({organizationId:'',organizationRole:''},{merge:true});
       await db.doc('organizations/personal-test-church/members/'+personal.uid).update({active:false});
