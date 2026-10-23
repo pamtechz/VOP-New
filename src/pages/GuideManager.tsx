@@ -358,8 +358,12 @@ export default function GuideManager({
     setSaving(true);
     setError('');
     try {
+      // Reserve one canonical ID before the request. Lost HTTP responses and
+      // failed programme attachment must not create additional guide copies.
+      const requestedId=editing.id||'guide-'+crypto.randomUUID().replace(/-/g,'');
+      if(!editing.id)setEditing(previous=>previous?{...previous,id:requestedId}:previous);
       const saved = await guideAdmin('upsertGuide', {
-        id: editing.id || '',
+        id: requestedId,
         discoverNumber: editing.discoverNumber,
         title: editing.title.trim(),
         subtitle: editing.subtitle.trim(),
@@ -379,7 +383,8 @@ export default function GuideManager({
         sharingScope: editing.sharingScope,
       }, organizationId);
 
-      const savedId = saved.item?.id || editing.id || '';
+      const savedId = saved.item?.id || requestedId;
+      if(savedId!==requestedId)throw new Error('Guide identity changed unexpectedly. Reload before saving.');
       if(!savedId)throw new Error('Guide save did not return an ID. Reload before retrying.');
       // Persist the ID immediately: if linking fails after the guide write,
       // Save again must update the SAME guide, not create a duplicate.
