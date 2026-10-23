@@ -119,7 +119,10 @@ export default async function handler(req: Request, res: Response) {
       const data=existing.data()||{};
       if(String(data.candidateId||'')!==ctx.auth.uid)
         return res.status(403).json({error:'Only the person who submitted this prayer request may change it.'});
-      if(!ctx.isSuperAdmin && !(ctx.tenantType==='hierarchy'
+      // Personal requests remain editable by their creator after joining a
+      // church. Never transfer their private journal into the new tenant.
+      const ownPersonal=!String(data.organizationId||'')&&String(data.candidateId||'')===ctx.auth.uid;
+      if(!ownPersonal&&!ctx.isSuperAdmin && !(ctx.tenantType==='hierarchy'
         ?await organizationInHierarchyScope(ctx,String(data.organizationId||''))
         :String(data.organizationId||'')===ctx.organizationId))
         return res.status(403).json({error:'Prayer request belongs to another organization.'});
@@ -179,7 +182,8 @@ export default async function handler(req: Request, res: Response) {
       const data = existing.data() || {};
       if (data.candidateId !== ctx.auth.uid && !admin) throw new Error('You can only delete your own prayer request.');
       if(personalLearner && data.candidateId !== ctx.auth.uid)throw new Error('You can only delete your own prayer request.');
-      if (!ctx.isSuperAdmin && !(ctx.tenantType === 'hierarchy' ? await organizationInHierarchyScope(ctx, String(data.organizationId || '')) : String(data.organizationId || '') === ctx.organizationId)) throw new Error('You cannot delete a prayer request outside your authorized scope.');
+      const ownPersonal=!String(data.organizationId||'')&&String(data.candidateId||'')===ctx.auth.uid;
+      if (!ownPersonal&&!ctx.isSuperAdmin && !(ctx.tenantType === 'hierarchy' ? await organizationInHierarchyScope(ctx, String(data.organizationId || '')) : String(data.organizationId || '') === ctx.organizationId)) throw new Error('You cannot delete a prayer request outside your authorized scope.');
       await ref.delete();
       await writeTenantAudit(ctx,'prayer.delete',`prayerRequests/${requestId}`,data,undefined);
       return res.status(200).json({ ok:true,id:requestId });
