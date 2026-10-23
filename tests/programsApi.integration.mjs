@@ -545,6 +545,29 @@ await test('platform-published curriculum is inherited system-wide by organizati
   assert.equal((await db.doc('courseEnrollments/'+enrollmentId).get()).data()?.status,'active');
 });
 
+await test('lesson Save publishes once, preserves its ID and never forks on repeat',async()=>{
+  const id='program-test-one-step-published-lesson';
+  const document=db.doc('guides/'+guideA+'/lessons/'+id);
+  const payload={lessonId:id,guideId:guideA,language:'en',
+    title:'One published canonical lesson',lessonNumber:'49',
+    type:'Lesson',published:true,sharingScope:'organization'};
+  const first=await call(author,{collection:'curriculum',action:'upsertLesson',
+    id,organizationId:a,data:payload});
+  assert.equal(first.status,200,JSON.stringify(first.value));
+  const before=(await document.get()).data();
+  assert.equal(before?.published,true);
+  assert.ok(before?.publishedAt,'one-step publication must record its timestamp');
+  const second=await call(author,{collection:'curriculum',action:'upsertLesson',
+    id,organizationId:a,data:{...payload,title:'Revised same lesson'}});
+  assert.equal(second.status,200,JSON.stringify(second.value));
+  const after=(await document.get()).data();
+  assert.equal(after?.title,'Revised same lesson');
+  assert.equal(after?.id,id);
+  assert.equal(after?.createdAt,before?.createdAt);
+  const lessons=await db.collection('guides/'+guideA+'/lessons').get();
+  assert.equal(lessons.docs.filter(doc=>doc.id===id).length,1);
+});
+
 const notesGuide='program-test-notes-guide';
 await db.doc('guides/'+notesGuide).set({
   id:notesGuide,organizationId:a,ownerOrganizationId:a,ownerUid:author.uid,
