@@ -189,6 +189,29 @@ const base={title:'Foundations of Faith',description:'A guided study',
   sharingScope:'organization',published:true,archived:false};
 let programId='';
 let sharedReferenceProgram='';
+await test('unpublished platform guides cannot leak lesson metadata to foreign tenants',async()=>{
+  const guideId='program-test-unpublished-platform-guide';
+  const guide=db.doc('guides/'+guideId);
+  await guide.set({
+    id:guideId,title:'Unpublished platform draft',language:'en',
+    organizationId:'',scope:'platform',sharingScope:'shared',
+    published:false,archived:false,canonical:true,ownerUid:superAdmin.uid,
+  });
+  await guide.collection('lessons').doc('unexpected').set({
+    id:'unexpected',title:'Unreleased outline',
+    published:true,archived:false,sharingScope:'shared',type:'Lesson',
+  });
+  const denied=await call(outsider,{
+    collection:'curriculum',action:'listGuideLessons',guideId,organizationId:b,
+  });
+  assert.notEqual(denied.status,200);
+  const owner=await call(superAdmin,{
+    collection:'curriculum',action:'listGuideLessons',guideId,
+  });
+  assert.equal(owner.status,200,JSON.stringify(owner.value));
+  assert.ok(owner.value.items.some(item=>item.id==='unexpected'));
+});
+
 await test('one published canonical guide can be reused across tenants without copying content',async()=>{
   const sharedGuide='program-test-cross-tenant-guide';
   const source=db.doc('guides/'+sharedGuide);
