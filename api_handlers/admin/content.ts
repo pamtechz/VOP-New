@@ -193,8 +193,18 @@ export default async function handler(req: Request, res: Response) {
           ? Boolean(ownerOrganizationId && await organizationInHierarchyScope(ctx, ownerOrganizationId))
           : ownerOrganizationId === ctx.organizationId);
       if (!permitted) throw new Error('This guide is outside your authorized curriculum scope.');
+      const canReadDrafts=ctx.isSuperAdmin ||
+        Boolean(ownerOrganizationId && (ctx.tenantType==='hierarchy'
+          ?await organizationInHierarchyScope(ctx,ownerOrganizationId)
+          :ownerOrganizationId===ctx.organizationId));
       const snap = await guide.ref.collection('lessons').get();
-      const items = await Promise.all(snap.docs.map(async doc => {
+      const visibleLessons=snap.docs.filter(doc=>{
+        if(canReadDrafts)return true;
+        const lesson=doc.data();
+        return lesson.published===true && lesson.archived!==true &&
+          (platformGuide || (isShared && lesson.sharingScope==='shared'));
+      });
+      const items = await Promise.all(visibleLessons.map(async doc => {
         const row = doc.data();
         const canEdit = ctx.isSuperAdmin || (String(row.ownerUid || '') === ctx.auth.uid && !platformStewardedResource(row));
         if (!canEdit) return {
@@ -251,7 +261,7 @@ export default async function handler(req: Request, res: Response) {
           const data=lesson.data();
           return data.archived!==true
             && String(data.type||'Lesson')!=='Test'
-            && (canReadAllChildren||data.sharingScope==='shared');
+            && (canReadAllChildren || (data.published===true && data.sharingScope==='shared'));
         });
         return {
           id: d.id,
