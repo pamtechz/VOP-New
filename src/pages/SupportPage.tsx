@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   BookOpen, ChevronRight, ExternalLink, HeartHandshake, MessageCircle, Send, Tag, UserRound, X,
 } from 'lucide-react';
@@ -69,6 +69,7 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
   const [activeRequest,setActiveRequest]=useState<SupportRequest|null>(null);
   const [requestMessages,setRequestMessages]=useState<SupportMessage[]>([]);
   const [requestReply,setRequestReply]=useState('');
+  const submissionKey=useRef('');
   const [subject,setSubject]=useState('');
   const [question,setQuestion]=useState('');
   const [category,setCategory]=useState('lesson_clarification');
@@ -175,7 +176,9 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
     if(question.trim().length<3)return;
     setSending(true);setError('');setNotice('');setWhatsappHandoff([]);
     try{
+      if(!submissionKey.current)submissionKey.current=crypto.randomUUID();
       const result=await supportApi('createSupportRequest',{
+        idempotencyKey:submissionKey.current,
         subject:subject.trim(),message:question.trim(),category,
         target:currentUser.organizationId?target:'support_team',
         channel:currentUser.organizationId?channel:'in_app',priority,spiritualInterest,
@@ -183,6 +186,7 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
       });
       const item=result.item as SupportRequest;
       setRequests(current=>[item,...current.filter(existing=>existing.id!==item.id)]);
+      submissionKey.current='';
       setQuestion('');setSubject('');setReferenceLabel('');setSelectedAppReference('');setPriority('normal');
       setNotice('Request sent. Reply here to continue.');
       if((channel==='whatsapp'||channel==='both')&&(item.whatsappTargets||[]).length){
