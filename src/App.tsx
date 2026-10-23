@@ -38,6 +38,7 @@ import { RouteShimmer } from './components/layout/Shimmer';
 const loadDiscoverGuideView=()=>import('./components/guide/DiscoverGuideView');
 const loadLessonReaderModal=()=>import('./components/reader/LessonReaderModal');
 const loadQuizModal=()=>import('./components/quiz/QuizModal');
+const InstitutionFinderPage=React.lazy(()=>import('./pages/InstitutionFinderPage'));
 const DiscoverGuideView=React.lazy(()=>loadDiscoverGuideView().then(module=>({default:module.DiscoverGuideView})));
 const LessonReaderModal=React.lazy(()=>loadLessonReaderModal().then(module=>({default:module.LessonReaderModal})));
 const QuizModal=React.lazy(()=>loadQuizModal().then(module=>({default:module.QuizModal})));
@@ -802,7 +803,7 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
     }
     const target=new URL(safe,window.location.origin);
     const knownRoutes=new Set<AppRoute>([
-      'home','guide','lesson','about','profile','personal-settings','localization','resources','lessons',
+      'home','guide','lesson','about','profile','personal-settings','institution-finder','localization','resources','lessons',
       'master-guide','scripture-memory','iron-duels','prayer','radio','announcements','events','notifications',
       'invites','support','mentor','admin','certificates','payments','certificate-verification',
     ]);
@@ -917,6 +918,12 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
         <main className="vop-app-content" style={{ flex: 1, minWidth: 0 }}>
           <React.Suspense fallback={<RouteLoading/>}>
           {currentRoute === 'about' && <AboutPage settings={settings} activeLanguage={activeLanguage} onBack={goBack} />}
+          {currentRoute === 'institution-finder' && <InstitutionFinderPage currentUser={currentUser}
+            onBack={goBack} onContinue={()=>navigate('lessons')} onJoined={async()=>{
+              if(!auth?.currentUser)return;
+              const refreshed=await loadFirestoreUser(auth.currentUser.uid);
+              if(refreshed){setCurrentUser(refreshed);setAllUsers([refreshed]);setLocalizationOrganizationScope(refreshed.organizationId||'');}
+            }}/>}
           {currentRoute === 'personal-settings' && <PersonalSettingsPage onStudyLanguageChange={(language:LanguageCode) => { setActiveLang(language); setActiveLanguage(language); }} currentUser={currentUser} onBack={goBack} onNavigate={navigate} />}
           {currentRoute === 'localization' && ['invited','active'].includes(String(currentUser.localizationAccess?.status||'')) && <LocalizationConsolePage currentUser={currentUser} onBack={goBack}/>} 
           {currentRoute === 'profile' && <ReferenceProfilePage currentUser={currentUser} allUsers={allUsers} guides={guides} unions={unions} conferences={conferences} districts={districts} churches={churches} settings={settings} activeLanguage={activeLanguage} onBack={goBack} onNavigateToCertificates={() => navigate('certificates')} />}
