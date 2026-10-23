@@ -10,7 +10,7 @@ import { ShimmerCards } from '../components/layout/Shimmer';
 interface CertificatesPageProps { currentUser: User; settings: AppSettings; activeLanguage: LanguageCode; onBack: () => void; }
 interface OfficialCertificate {
   id: string; certificateNumber: string; candidateName: string; courseName: string; courseCode?: string;
-  completionDate?: string | null; issuedAt?: string | null; churchName?: string; districtName?: string;
+  completionDate?: string | null; issuedAt?: string | null; certificateTypeName?: string; presentationSnapshot?: CertificateConfig; churchName?: string; districtName?: string;
   conferenceName?: string; unionName?: string; guideTitle?: string; language?: string; status?: string; verificationEnabled?: boolean;
 }
 interface CertificateConfig {
@@ -35,7 +35,7 @@ export const CertificatesPage: React.FC<CertificatesPageProps> = ({ currentUser,
   const [isExporting, setIsExporting] = useState(false);
   const [feedback, setFeedback] = useState('');
   const t = (key: string, fallback: string) => getTranslation(key, getUiLocale(), settings?.customTranslations, fallback, 'CertificatesPage');
-  const title = config.certificateTitle || settings?.certificateTitle || certificate?.courseName || '';
+  const title = config.certificateTitle || certificate?.certificateTypeName || certificate?.courseName || '';
   const reviewPending=Boolean(review&&review.status&&!['approved','rejected'].includes(review.status));
   const reviewApproved=review?.status==='approved';
 
@@ -49,9 +49,12 @@ export const CertificatesPage: React.FC<CertificatesPageProps> = ({ currentUser,
         const body = await response.json().catch(() => ({})) as { certificates?: OfficialCertificate[]; review?: CertificateReview | null; config?: CertificateConfig; error?: string };
         if (!response.ok) throw new Error(body.error || 'Certificates could not be loaded.');
         if (!cancelled) {
-          setCertificate((body.certificates || [])[0] || null);
+          const issued=(body.certificates || [])[0] || null;
+          setCertificate(issued);
           setReview(body.review || null);
-          setConfig(body.config || {});
+          // Issued awards use only their captured presentation, never branding
+          // belonging to the account's current institution.
+          setConfig(issued?.presentationSnapshot || {});
         }
       } catch (error) {
         if (!cancelled) setFeedback(error instanceof Error ? error.message : 'Certificates could not be loaded.');
