@@ -69,7 +69,7 @@
   }
   :is(.vop-admin-editor-modal,.vop-ann-editor-modal,.vop-radio-editor-modal,
       .vop-candidate-modal,.vop-cert-issuer-modal,.vop-user-modal,
-      .vop-cs-modal,.vop-payment-modal) {
+      .vop-cs-modal) {
     width: 100%;
     height: 100dvh;
     max-height: 100dvh;
@@ -79,6 +79,12 @@
   .vop-admin-editor-modal .vop-admin-editor-scroll {
     scrollbar-gutter: auto;
   }
+  .vop-payment-modal {
+    max-height: 100dvh;
+    max-width: 100%;
+    overflow-y: auto;
+  }
+
 }
 
 /* Shared study/account overlays and hierarchy selection dialogs also scroll
