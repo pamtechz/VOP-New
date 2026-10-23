@@ -90,6 +90,9 @@ test('saving preserves canonical IDs and programme association does not clone gu
   assert.ok(lesson.includes('published: publish || editor.published'));
   assert.ok(native.includes('final stableLessonId='));
   assert.ok(native.includes("'id':stableLessonId"));
+  const nativeRecords=read('native_android/lib/screens/workspace_records_screen.dart');
+  assert.ok(nativeRecords.includes('final draftId=newRecordId();'));
+  assert.ok(nativeRecords.includes("widget.collection:draftId"));
   assert.ok(backend.includes("if(action==='attachGuide')"));
   assert.ok(backend.includes('transaction.update(programRef,{guideIds,'));
   assert.ok(backend.includes('if(ids.includes(guideId))return'));
