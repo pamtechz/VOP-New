@@ -256,12 +256,14 @@ export default async function handler(req: Request, res: Response) {
         const lessons = await d.ref.collection('lessons').get();
         const guideOrganizationId=String(guideData.organizationId||guideData.ownerOrganizationId||'');
         const platformGuide=String(guideData.scope||'')==='platform'||!guideOrganizationId;
-        const canReadAllChildren=ctx.isSuperAdmin||platformGuide||organizationIds.includes(guideOrganizationId);
+        const canReadAllChildren=ctx.isSuperAdmin||
+          Boolean(guideOrganizationId&&organizationIds.includes(guideOrganizationId));
         const studyLessons=lessons.docs.filter(lesson => {
           const data=lesson.data();
           return data.archived!==true
             && String(data.type||'Lesson')!=='Test'
-            && (canReadAllChildren || (data.published===true && data.sharingScope==='shared'));
+            && (canReadAllChildren || (data.published===true &&
+              (platformGuide || (guideData.sharingScope==='shared' && data.sharingScope==='shared'))));
         });
         return {
           id: d.id,
