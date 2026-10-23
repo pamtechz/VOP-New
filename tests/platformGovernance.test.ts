@@ -148,6 +148,9 @@ test('Mentoring & Insights is an operational inbox with responsive drill-down an
   assert.match(page,/Unified communications/);
   assert.match(page,/Support & conversations/);
   assert.match(page,/Support requests/);
+  assert.match(page,/Promise\.allSettled\(/);
+  assert.match(page,/Independent VOP learner/);
+  assert.match(page,/independent VOP support/);
   assert.match(page,/Mentor conversations/);
   assert.match(page,/Unread and high priority first/);
   assert.match(page,/vop-mentoring-split/);
