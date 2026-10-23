@@ -29,8 +29,9 @@ export default async function handler(req: Request, res: Response) {
     if (req.method === 'GET') {
       const own = String(req.query?.mine || '') === 'true';
       const ministry = String(req.query?.ministry || '') === 'true';
-      if (own && !personalLearner) await requirePermission(ctx, 'prayer', 'read');
-      else if(!own&&!personalLearner) await requirePermission(ctx, 'prayer', 'view');
+      // Owner-scoped requests are always available to their creator, even
+      // after a future organization disables its own prayer ministry.
+      if(!own&&!personalLearner) await requirePermission(ctx, 'prayer', 'view');
       if (ministry && !admin) throw new Error('Only authorized ministry administrators can open the ministry inbox.');
 
       let docs = [] as FirebaseFirestore.QueryDocumentSnapshot[];
