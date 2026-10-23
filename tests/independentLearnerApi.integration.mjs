@@ -171,12 +171,24 @@ test('unaffiliated learners retain private prayer and platform support without t
       await db.doc('organizations/personal-test-church/members/'+personal.uid).set({
         uid:personal.uid,role:'learner',active:true,
       },{merge:true});
+      const permissionRef=db.doc('system/permissions');
+      const originalPermissions=await permissionRef.get();
+      await permissionRef.set({matrix:{student:{mentoring:[]}}});
       try{
+        const ownList=await call(mentorship,personal,{action:'listMySupportRequests'});
+        assert.equal(ownList.statusCode,200,JSON.stringify(ownList.body));
+        assert.ok(ownList.body.items.some(item=>item.id===supportId));
+        const personalThread=await call(mentorship,personal,{
+          action:'supportRequestMessages',requestId:supportId,
+        });
+        assert.equal(personalThread.statusCode,200,JSON.stringify(personalThread.body));
         const learnerReply=await call(mentorship,personal,{
           action:'replySupportRequest',requestId:supportId,message:'Thank you.',
         });
         assert.equal(learnerReply.statusCode,200,JSON.stringify(learnerReply.body));
       }finally{
+        if(originalPermissions.exists)await permissionRef.set(originalPermissions.data());
+        else await permissionRef.delete();
         await db.doc('users/'+personal.uid).set({organizationId:'',organizationRole:''},{merge:true});
         await db.doc('organizations/personal-test-church/members/'+personal.uid).update({active:false});
       }
