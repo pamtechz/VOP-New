@@ -118,6 +118,9 @@ test('unaffiliated learners retain private prayer and platform support without t
       assert.notEqual(strangerRead.statusCode,200);
       const foreignAdmin=await call(mentorship,tenantAdmin,{action:'supportRequestMessages',requestId:supportId});
       assert.notEqual(foreignAdmin.statusCode,200);
+      const tenantQueue=await call(mentorship,tenantAdmin,{action:'listSupportRequests'});
+      assert.equal(tenantQueue.statusCode,200,JSON.stringify(tenantQueue.body));
+      assert.ok(!tenantQueue.body.items.some(item=>item.id===supportId));
       const platformQueue=await call(mentorship,superAdmin,{action:'listSupportRequests'});
       assert.equal(platformQueue.statusCode,200,JSON.stringify(platformQueue.body));
       assert.ok(platformQueue.body.items.some(item=>item.id===supportId));
