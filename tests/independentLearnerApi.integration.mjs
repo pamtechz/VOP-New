@@ -157,10 +157,23 @@ test('unaffiliated learners retain private prayer and platform support without t
         message:'Your question has reached the VOP support queue.',
       });
       assert.equal(adminReply.statusCode,200,JSON.stringify(adminReply.body));
-      const learnerReply=await call(mentorship,personal,{
-        action:'replySupportRequest',requestId:supportId,message:'Thank you.',
-      });
-      assert.equal(learnerReply.statusCode,200,JSON.stringify(learnerReply.body));
+      // Joining another organization must not retroactively impose its
+      // mentorship subscription on this private platform request.
+      await db.doc('users/'+personal.uid).set({
+        organizationId:'personal-test-church',organizationRole:'learner',
+      },{merge:true});
+      await db.doc('organizations/personal-test-church/members/'+personal.uid).set({
+        uid:personal.uid,role:'learner',active:true,
+      },{merge:true});
+      try{
+        const learnerReply=await call(mentorship,personal,{
+          action:'replySupportRequest',requestId:supportId,message:'Thank you.',
+        });
+        assert.equal(learnerReply.statusCode,200,JSON.stringify(learnerReply.body));
+      }finally{
+        await db.doc('users/'+personal.uid).set({organizationId:'',organizationRole:''},{merge:true});
+        await db.doc('organizations/personal-test-church/members/'+personal.uid).update({active:false});
+      }
     });
     await t.test('independent support stays queued even before a platform administrator is assigned',async()=>{
       const administratorRef=db.doc('users/'+superAdmin.uid);
