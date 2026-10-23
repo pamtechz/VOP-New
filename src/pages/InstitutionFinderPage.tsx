@@ -2,6 +2,7 @@ import {useEffect,useState} from 'react';
 import {ArrowLeft,BookOpen,Building2,Search,ShieldCheck} from 'lucide-react';
 import type {User} from '../types';
 import {auth} from '../lib/firebase';
+import {appConfirm} from '../components/layout/AppDialog';
 import './institution-finder.css';
 
 type Organization={
@@ -65,7 +66,7 @@ export default function InstitutionFinderPage({currentUser,onBack,onJoined,onCon
 
   async function join(org:Organization){
     if(attached||joining)return;
-    if(!window.confirm('Join '+org.name+'? Your personal account and study history will remain yours.'))return;
+    if(!await appConfirm('Join '+org.name+'? Your personal account and study history will remain yours.',{title:'Join organization',confirmLabel:'Join'}))return;
     setJoining(org.id);setError('');setNotice('');
     try{
       await directoryApi('joinInstitution',{organizationId:org.id});
