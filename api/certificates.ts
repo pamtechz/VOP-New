@@ -144,7 +144,7 @@ async function verify(req:Request,res:Response){
  if(data.status==='Revoked')return res.status(200).json({verified:false,state:'revoked',certificate:publicStatus(document.id,data),error:'This certificate has been revoked and is no longer valid.'});
  if(data.status==='Replaced')return res.status(200).json({verified:false,state:'replaced',certificate:publicStatus(document.id,data),replacement:{certificateNumber:String(data.replacedByCertificateNumber||'')},error:'This certificate has been replaced by a newer official credential.'});
  if(data.status!=='Certified')return res.status(200).json({verified:false,state:'unavailable',certificate:publicStatus(document.id,data),error:'This certificate is not currently valid for public verification.'});
- return res.status(200).json({verified:true,state:'valid',certificate:publicCertificate(document.id,data),config:publicConfig(configSnapshot.data()||{})});
+ return res.status(200).json({verified:true,state:'valid',certificate:publicCertificate(document.id,data),config:publicConfig(issuedPresentation(data))});
 }
 
 async function issue(req:Request,res:Response){
