@@ -1,0 +1,23 @@
+.vop-institution-finder{width:min(100% - 28px,980px);margin:0 auto;padding:20px 0 56px;color:var(--text-primary)}
+.vop-institution-back{display:inline-flex;align-items:center;gap:6px;border:0;background:transparent;color:var(--text-primary);padding:8px;margin-bottom:12px;cursor:pointer}
+.vop-institution-intro,.vop-institution-directory{border:1px solid var(--border-color,#b8c9dc);border-radius:20px;padding:clamp(18px,3vw,30px);background:var(--bg-secondary,var(--card-bg,#fff));margin-bottom:18px}
+.vop-institution-intro>span,.vop-institution-item{display:flex;align-items:center;gap:12px}
+.vop-institution-intro>span{font-weight:700;color:var(--text-primary)}
+.vop-institution-intro h1{font-size:clamp(23px,3vw,36px);line-height:1.2;margin:14px 0 8px}
+.vop-institution-intro p,.vop-institution-item p{color:var(--text-muted,#65758a);line-height:1.55}
+.vop-institution-intro .vop-primary{display:inline-flex;align-items:center;gap:9px;margin-top:12px;padding:11px 17px}
+.vop-institution-directory h2{font-size:21px;margin:0 0 15px}
+.vop-institution-directory label{display:block;font-weight:600;margin-bottom:7px}
+.vop-institution-search{display:flex;align-items:center;gap:10px;border:1px solid var(--border-color,#99aec9);border-radius:12px;padding:0 12px;background:var(--bg-primary,#fff)}
+.vop-institution-search input{flex:1;min-width:0;min-height:46px;border:0;outline:0;background:transparent;color:var(--text-primary);font:inherit}
+.vop-institution-item{padding:16px 0;border-bottom:1px solid var(--border-color,#c8d5e2)}
+.vop-institution-item>div:nth-child(2){flex:1;min-width:0}
+.vop-institution-item h3{font-size:16px;margin:0 0 3px}
+.vop-institution-item p{font-size:13px;margin:0}
+.vop-institution-item small{font-size:12px}
+.vop-institution-icon{display:flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:12px;background:var(--bg-primary,#eff4f9)}
+.vop-institution-item button,.vop-institution-more{border:1px solid var(--border-color,#a2b8ce);border-radius:10px;padding:9px 14px;background:var(--bg-primary,#fff);color:var(--text-primary);cursor:pointer;font-weight:650}
+.vop-institution-item button:disabled{opacity:.55;cursor:default}
+.vop-institution-more{margin-top:18px}
+.vop-institution-error{color:var(--danger,#b51b31)}
+@media(max-width:560px){.vop-institution-item{flex-wrap:wrap}.vop-institution-item button{margin-left:52px}.vop-institution-intro,.vop-institution-directory{padding:16px}}
