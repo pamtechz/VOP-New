@@ -176,7 +176,9 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
     setSending(true);setError('');setNotice('');setWhatsappHandoff([]);
     try{
       const result=await supportApi('createSupportRequest',{
-        subject:subject.trim(),message:question.trim(),category,target,channel,priority,spiritualInterest,
+        subject:subject.trim(),message:question.trim(),category,
+        target:currentUser.organizationId?target:'support_team',
+        channel:currentUser.organizationId?channel:'in_app',priority,spiritualInterest,
         references:buildReferences(),
       });
       const item=result.item as SupportRequest;
@@ -280,7 +282,7 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
         <div>
           <span>{t('support.title','Learning & Spiritual Support')}</span>
           <h1>{t('support.ask_for_help','Ask. Understand. Grow.')}</h1>
-          <p>{t('support.subtitle','Ask a mentor or support team for Bible-study help. Attach the relevant lesson.')}</p>
+          <p>{!currentUser.organizationId?'Send a private request to the VOP support team while you study independently. No church membership is needed.':t('support.subtitle','Ask a mentor or support team for Bible-study help. Attach the relevant lesson.')}</p>
         </div>
       </div>
 
@@ -317,7 +319,7 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
                 <option value="one_voice_27">One Voice 27</option>
                 <option value="other">Other</option>
               </select>
-              <select value={target} onChange={e=>setTarget(e.target.value as typeof target)}>
+              {!currentUser.organizationId?<p role="status">Recipient: VOP support team · In-app messages</p>:<><select value={target} onChange={e=>setTarget(e.target.value as typeof target)}>
                 <option value="mentor">{t('support.mentor_target','My assigned mentor')}</option>
                 <option value="support_team">{t('support.organization_target','Organization support team')}</option>
                 <option value="both">{t('support.both_target','Mentor + support team')}</option>
@@ -326,7 +328,7 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
                 <option value="in_app">In-app</option>
                 <option value="whatsapp">WhatsApp + VOP record</option>
                 <option value="both">In-app + WhatsApp</option>
-              </select>
+              </select></>
               <select value={priority} onChange={e=>setPriority(e.target.value as typeof priority)}>
                 <option value="normal">Normal priority</option>
                 <option value="high">Need help soon</option>
