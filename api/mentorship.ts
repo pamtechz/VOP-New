@@ -1,5 +1,5 @@
 import { applyFlutterPreviewCors } from '../server/flutterPreviewCors.js';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { getApps, initializeApp, cert } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
@@ -829,14 +829,6 @@ export default async function handler(req: Request, res: Response) {
       const spiritualInterest=supportInterest(body.spiritualInterest);
       const priority=supportPriority(body.priority);
       const references=messageReferences(body.references);
-      if(personal){
-        // Rate-limit unassigned requests by account, without public queues or
-        // unbounded scans. Other tenants cannot view these documents.
-        const own=await db.collection('learningSupportRequests').where('candidateId','==',candidateId).limit(50).get();
-        const cutoff=Date.now()-24*60*60*1000;
-        if(own.docs.filter(doc=>supportCreatedMillis(doc.data()?.createdAt)>cutoff).length>=8)
-          throw new Error('Daily personal support request limit reached. Reply to an existing request or try again later.');
-      }
       const assignedMentorId=personal?'':(target==='mentor'||target==='both')
         ?await activeMentorFor(db,candidateId,candidateOrganizationId):'';
       if(target==='mentor'&&!assignedMentorId){
@@ -855,12 +847,20 @@ export default async function handler(req: Request, res: Response) {
       ])].filter(uid=>uid!==candidateId);
       if(!recipients.length&&!personal)throw new Error('No support recipient is currently available for this request.');
 
-      const requestRef=db.collection('learningSupportRequests').doc();
+      const submissionKey=String(body.idempotencyKey||'').trim();
+      if(submissionKey&&!/^[A-Za-z0-9_-]{16,80}$/.test(submissionKey))
+        throw new Error('Invalid support submission identifier.');
+      const deterministicId=submissionKey
+        ?'support_'+createHash('sha256').update(candidateId+':'+submissionKey).digest('hex')
+        :'';
+      const requestRef=deterministicId
+        ?db.collection('learningSupportRequests').doc(deterministicId)
+        :db.collection('learningSupportRequests').doc();
       const messageRef=requestRef.collection('messages').doc();
       const createdAt=FieldValue.serverTimestamp();
       const campaignTag=spiritualInterest==='one_voice_27'||category==='one_voice_27'?'one_voice_27':'';
       const followUpStatus=spiritualInterest==='none'?'not_required':'new';
-      await requestRef.set({
+      const requestData={
         organizationId:candidateOrganizationId,candidateId,
         candidateName:String(actor.displayName||actor.email||'Learner'),
         candidateEmail:String(actor.email||decoded.email||''),
@@ -870,12 +870,57 @@ export default async function handler(req: Request, res: Response) {
         initialMessageId:messageRef.id,unreadFor:recipients,
         createdAt,updatedAt:createdAt,lastMessageAt:createdAt,lastMessageSenderId:candidateId,
         createdBy:candidateId,firstResponseAt:null,resolvedAt:null,
-      });
-      await messageRef.set({
+      };
+      const initialMessage={
         senderId:candidateId,senderRole:'candidate',body:message,references,
         createdAt:FieldValue.serverTimestamp(),
-      });
-      await Promise.all(recipients.map(recipientId=>createNotification(db,{
+      };
+      let existingRequest:Record<string,unknown>|null=null;
+      if(personal||submissionKey){
+        // All existence and quota reads precede writes. Firestore retries
+        // concurrent transactions and guarantees one request per key.
+        existingRequest=await db.runTransaction(async transaction=>{
+          const previous=submissionKey?await transaction.get(requestRef):null;
+          if(previous?.exists){
+            const prior=previous.data()||{};
+            if(String(prior.candidateId||'')!==candidateId
+                ||String(prior.message||'')!==message
+                ||String(prior.subject||'')!==subject)
+              throw new Error('This support request was already submitted with different content. Refresh your requests before continuing.');
+            return prior;
+          }
+          let quotaRef:FirebaseFirestore.DocumentReference|null=null;
+          let recent:number[]=[];
+          if(personal){
+            quotaRef=db.collection('personalSupportRateLimits').doc(candidateId);
+            const quota=await transaction.get(quotaRef);
+            const cutoff=Date.now()-24*60*60*1000;
+            recent=(Array.isArray(quota.data()?.requestTimes)?quota.data()!.requestTimes:[])
+              .map(Number).filter((time:number)=>Number.isFinite(time)&&time>cutoff);
+            if(recent.length>=8)
+              throw new Error('Daily personal support request limit reached. Reply to an existing request or try again later.');
+          }
+          transaction.set(requestRef,requestData);
+          transaction.set(messageRef,initialMessage);
+          if(personal&&quotaRef)transaction.set(quotaRef,{
+            requestTimes:[...recent,Date.now()],
+            updatedAt:FieldValue.serverTimestamp(),
+          });
+          return null;
+        });
+      }else{
+        const batch=db.batch();
+        batch.set(requestRef,requestData);
+        batch.set(messageRef,initialMessage);
+        await batch.commit();
+      }
+      // A replay returns the original request without duplicate messages,
+      // notifications or consuming a second rate-limit slot.
+      if(existingRequest)return res.status(200).json({ok:true,item:{
+        id:requestRef.id,...supportRequestPayload({id:requestRef.id,data:()=>existingRequest} as FirebaseFirestore.DocumentSnapshot,candidateId),
+        whatsappTargets:[],whatsappText:'',
+      }});
+      const deliveries=await Promise.allSettled(recipients.map(recipientId=>createNotification(db,{
         organizationId:candidateOrganizationId,recipientId,type:'learning-support',
         title:priority==='high'?'High-priority learning support request':subject,
         body:personal?'An independent learner has requested private VOP support.'
@@ -887,6 +932,8 @@ export default async function handler(req: Request, res: Response) {
         },
         createdBy:candidateId,
       })));
+      if(deliveries.some(result=>result.status==='rejected'))
+        console.warn('VOP learning support saved but some notifications failed',requestRef.id);
       const whatsappTargets=(channel==='whatsapp'||channel==='both')
         ?await supportWhatsAppTargets(db,candidateOrganizationId,assignedMentorId,target):[];
       return res.status(201).json({
