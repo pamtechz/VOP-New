@@ -570,8 +570,16 @@ await test('platform-published curriculum is inherited system-wide by organizati
 
 await test('lesson Save publishes once, preserves its ID and never forks on repeat',async()=>{
   const id='program-test-one-step-published-lesson';
-  const document=db.doc('guides/'+guideA+'/lessons/'+id);
-  const payload={lessonId:id,guideId:guideA,language:'en',
+  const ownedGuide='program-test-one-step-owned-guide';
+  // Other tests adopt guideA into platform stewardship. An organization
+  // correctly cannot edit that shared canonical resource after adoption.
+  await db.doc('guides/'+ownedGuide).set({
+    id:ownedGuide,organizationId:a,ownerOrganizationId:a,
+    ownerUid:author.uid,language:'en',title:'Editable source guide',
+    published:true,archived:false,sharingScope:'organization',canonical:true,
+  });
+  const document=db.doc('guides/'+ownedGuide+'/lessons/'+id);
+  const payload={lessonId:id,guideId:ownedGuide,language:'en',
     title:'One published canonical lesson',lessonNumber:'49',
     type:'Lesson',published:true,sharingScope:'organization'};
   const first=await call(author,{collection:'curriculum',action:'upsertLesson',
@@ -587,7 +595,7 @@ await test('lesson Save publishes once, preserves its ID and never forks on repe
   assert.equal(after?.title,'Revised same lesson');
   assert.equal(after?.id,id);
   assert.equal(after?.createdAt,before?.createdAt);
-  const lessons=await db.collection('guides/'+guideA+'/lessons').get();
+  const lessons=await db.collection('guides/'+ownedGuide+'/lessons').get();
   assert.equal(lessons.docs.filter(doc=>doc.id===id).length,1);
 });
 
