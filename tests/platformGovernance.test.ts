@@ -549,7 +549,8 @@ test('subscription capabilities are enforced server-side and reflected in instit
   assert.match(enrollCandidate,/requireSubscriptionFeature\(ctx,'candidates',organizationId\)/);
   assert.match(candidates,/requireSubscriptionFeature\(ctx,'candidates',organizationId\)/);
   assert.match(candidates,/requireSubscriptionFeature\(ctx,'candidates',candidateOrganizationId\)/);
-  assert.match(mentorship,/requireOrganizationSubscriptionFeature\(db,'mentorship',organizationId\)/);
+  assert.match(mentorship,/billingOrganizationId=String\(storedSupport\.data\(\)\?\.organizationId\|\|''\)\.trim\(\)/);
+  assert.match(mentorship,/if\(billingOrganizationId\)\s*await requireOrganizationSubscriptionFeature\(db,'mentorship',billingOrganizationId\)/);
   assert.match(graduations,/requireSubscriptionFeature\(ctx,'certification',ctx\.organizationId\)/);
   assert.match(graduations,/requireSubscriptionFeature\(ctx,'certification',requestOrganizationId\)/);
   assert.match(graduationAutomation,/organizationSubscriptionFeatureBlockReason\(db,'certification',organizationId\)/);
