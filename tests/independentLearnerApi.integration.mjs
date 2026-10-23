@@ -107,8 +107,19 @@ test('unaffiliated learners retain private prayer and platform support without t
       assert.ok(!tenantAudits.docs.some(doc=>
         JSON.stringify(doc.data()).includes('A revised private prayer after joining')),
         'private prayer journal leaked to the organization audit ledger');
-      const removed=await call(prayer,personal,{action:'delete',id:personalPrayerId});
-      assert.equal(removed.statusCode,200,JSON.stringify(removed.body));
+      const permissionRef=db.doc('system/permissions');
+      const previousPolicy=await permissionRef.get();
+      await permissionRef.set({matrix:{student:{prayer:[]}}});
+      try{
+        const personalHistory=await call(prayer,personal,{},'GET',{mine:'true'});
+        assert.equal(personalHistory.statusCode,200,JSON.stringify(personalHistory.body));
+        assert.ok(personalHistory.body.items.some(row=>row.id===personalPrayerId));
+        const removed=await call(prayer,personal,{action:'delete',id:personalPrayerId});
+        assert.equal(removed.statusCode,200,JSON.stringify(removed.body));
+      }finally{
+        if(previousPolicy.exists)await permissionRef.set(previousPolicy.data());
+        else await permissionRef.delete();
+      }
       assert.equal((await db.doc('prayerRequests/'+personalPrayerId).get()).exists,false);
       const auditsAfterDelete=await db.collection('organizations/personal-test-church/audit').get();
       assert.ok(!auditsAfterDelete.docs.some(doc=>String(doc.data().target||'').includes(personalPrayerId)),
