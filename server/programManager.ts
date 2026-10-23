@@ -101,6 +101,49 @@ export async function handleCurriculumPrograms(ctx:TenantContext,
     }
     return res.status(200).json({ok:true,items:[...known.values()]});
   }
+  if(action==='attachGuide'){
+    await requirePermission(ctx,'curriculum','update');
+    const id=validId(body.id||body.programId);
+    const guideId=validId(body.guideId);
+    const programRef=ctx.db.doc('programs/'+id);
+    const guideRef=ctx.db.doc('guides/'+guideId);
+    // Attach the existing canonical guide by reference. Never copy its lessons
+    // or rewrite other programme fields to update one association.
+    const result=await ctx.db.runTransaction(async transaction=>{
+      const [programSnap,guideSnap]=await Promise.all([
+        transaction.get(programRef),transaction.get(guideRef),
+      ]);
+      if(!programSnap.exists)throw new Error('The selected programme no longer exists.');
+      if(!guideSnap.exists)throw new Error('The selected guide no longer exists.');
+      const program=programSnap.data()||{};
+      const guide=guideSnap.data()||{};
+      if(!(await mayEdit(ctx,program)))
+        throw new Error('Only the owning programme editor or VOP Super Admin can attach a guide.');
+      assertMutableTenantResource(ctx.isSuperAdmin,program,'edit');
+      if(program.archived===true||guide.archived===true)
+        throw new Error('Archived programmes or guides cannot be linked.');
+      const programOrg=String(program.organizationId||'');
+      const guideOrg=String(guide.organizationId||'');
+      const shared=guide.published===true&&guide.sharingScope==='shared';
+      if(programOrg!==guideOrg&&!shared)
+        throw new Error('Only published shared guides may be linked across organizations.');
+      if(program.published===true&&guide.published!==true)
+        throw new Error('Publish the guide before attaching it to a published programme.');
+      if(program.sharingScope==='shared'&&!shared)
+        throw new Error('Publicly shared programmes require publicly shared guides.');
+      const ids=Array.isArray(program.guideIds)
+        ?program.guideIds.filter((value:unknown):value is string=>typeof value==='string')
+        :[];
+      if(ids.includes(guideId))return {id,guideIds:ids,alreadyLinked:true};
+      if(ids.length>=100)throw new Error('A programme cannot contain more than 100 guides.');
+      const guideIds=[...ids,guideId];
+      transaction.update(programRef,{guideIds,updatedAt:FieldValue.serverTimestamp(),updatedBy:ctx.auth.uid});
+      return {id,guideIds,alreadyLinked:false};
+    });
+    if(!result.alreadyLinked)await writeTenantAudit(ctx,'program.guide.attach',programRef.path,
+      undefined,{guideId});
+    return res.status(200).json({ok:true,...result});
+  }
   if(!['upsert','delete'].includes(action))
     throw new Error('Unsupported program action.');
   const raw=body.data&&typeof body.data==='object'&&!Array.isArray(body.data)
@@ -180,22 +223,27 @@ export async function handleCurriculumPrograms(ctx:TenantContext,
     throw new Error('Publish an organization-visible program instead of a private draft.');
   if(input.archived&&input.published)
     throw new Error('An archived program cannot be published.');
-  // Every guide must be in the SAME tenant as its parent program. A shared
-  // public guide cannot silently be adopted or reparented into another tenant.
+  // A programme stores canonical guide references, never copies. Owned
+  // guides can be drafts; cross-tenant guides must be published and shared.
   if(input.guideIds.length){
     const snapshots=await ctx.db.getAll(...input.guideIds.map(guideId=>
       ctx.db.doc('guides/'+guideId)));
     for(const guide of snapshots){
       const value=guide.data()||{};
-      if(!guide.exists||value.archived===true||
-         String(value.organizationId||'')!==programOrganizationId)
-        throw new Error('A selected guide is missing or belongs to another organization.');
+      if(!guide.exists||value.archived===true)
+        throw new Error('A selected guide is missing or archived.');
+      const isOwnGuide=String(value.organizationId||'')===programOrganizationId;
+      const isSharedGuide=value.published===true&&value.sharingScope==='shared';
+      if(!isOwnGuide&&!isSharedGuide)
+        throw new Error('Only published shared guides may be assigned across organizations.');
       if(input.published&&value.published!==true)
         throw new Error('Publish every assigned guide before publishing the program.');
       if(input.published&&input.sharingScope==='shared'&&value.sharingScope!=='shared')
         throw new Error('A publicly shared program may contain only publicly shared guides.');
-      if(!ctx.isSuperAdmin&&!await mayEdit(ctx,value))
-        throw new Error('You cannot assign a guide owned by another contributor.');
+      // Assigning a published shared guide requires view access, not edit
+      // permission to the originating content. Programme edits remain scoped.
+      if(!ctx.isSuperAdmin&&!isSharedGuide&&!isOwnGuide)
+        throw new Error('This guide is not visible to the programme organization.');
     }
   }
   const next={
