@@ -228,6 +228,8 @@ class VopApi {
   }
   Future<Map<String,dynamic>> catalogue()=>_cachedRead('catalog','catalog',
     ()=>read('catalog'));
+  Future<Map<String,dynamic>> programme(String programId) =>
+    read('program', {'programId': programId});
   Future<Map<String, dynamic>> resources() => read('resources');
   Future<Map<String, dynamic>> events() => read('events');
   Future<Map<String, dynamic>> radio() => read('radio');

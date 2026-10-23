@@ -473,6 +473,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
   const [error, setError] = useState('');
   const [editor, setEditor] = useState<EditorState | null>(null);
   const savedEditorSignature=useRef('');
+  const pendingLessonId=useRef('');
   const [editorDirty,setEditorDirty]=useState(false);
   const [plateValidationErrors,setPlateValidationErrors]=useState<Record<string,string>>({});
   const [mediaSourceInput, setMediaSourceInput] = useState('');
@@ -603,17 +604,18 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
       if (!guide.id) continue;
       const id = String(guide.id);
       if (!map.has(id)) {
-        const guideOrg = String((guide as unknown as Record<string, unknown>).organizationId || '');
-        if (scopeOrganizationId && !isSuperAdmin && guideOrg && guideOrg !== scopeOrganizationId) {
-          continue;
-        }
+        const guideOrg = String((guide as unknown as Record<string, unknown>).organizationId
+          || guide.ownerOrganizationId || '');
+        if (scopeOrganizationId && !isSuperAdmin && guideOrg && guideOrg !== scopeOrganizationId
+          && guide.sharingScope !== 'shared') continue;
         map.set(id, {
           id,
           title: guide.title || 'Untitled guide',
           language: guide.language || 'en',
           published: (guide as unknown as Record<string, unknown>).published !== false,
           archived: false,
-          canEdit: true,
+          canEdit: isSuperAdmin || Boolean(guideOrg && guideOrg===scopeOrganizationId
+            && guide.ownerUid===currentUser?.uid),
           lessonCount: guide.lessons?.length || 0,
           lessons: guide.lessons || [],
           organizationId: guideOrg,
@@ -804,6 +806,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
   const currentCollectionCount = tab === 'paths' ? collectionCounts.paths : tab === 'topics' ? collectionCounts.topics : tab === 'seasons' ? collectionCounts.seasons : 0;
 
   const openLesson = (row: LessonRow,sectionId='') => {
+    pendingLessonId.current='';
     const source: RecordItem = row.raw || { id: row.key };
     const organizationId = valueText(source.organizationId || source.ownerOrganizationId);
     if (isSuperAdmin && organizationId && organizationId !== scopeOrganizationId) setScopeOrganizationId(organizationId);
@@ -826,6 +829,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
   };
 
   const openNewLesson = (guideId = selectedGuideId) => {
+    pendingLessonId.current='';
     if (!guideId) {
       setLessonModuleRequiredModalOpen(true);
       return;
@@ -917,7 +921,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
   };
 
   const saveLesson = async (publish: boolean = false) => {
-    if (!editor) return;
+    if (!editor || saving) return;
     if(Object.values(plateValidationErrors).some(Boolean)){
       setError('The Plate document has invalid unsaved content. Correct the page before saving or publishing.');
       setEditorTab('content');
@@ -938,10 +942,17 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
     const existingGuideRecord = editableGuides.find(item => String(item.id) === editor.guideId)
       || guides.find(item => String(item.id) === editor.guideId);
     if (!existingGuideRecord) return setError('Choose an editable guide within your selected organization. Refresh if the guide was recently created.');
+    if ((existingGuideRecord as RecordItem).canEdit === false)
+      return setError('This shared guide is read-only in your organization. Only its owning contributor or Super Admin can save lesson changes.');
     if (String(existingGuideRecord.language).trim().toLowerCase() !== normalizedLanguage) return setError(tx('curriculum.guideLanguageMismatch', 'The selected guide is not available for this language.'));
-    const guideOrganizationId = valueText((existingGuideRecord as unknown as Record<string, unknown>).organizationId);
-    const targetOrganizationId = scopeOrganizationId || guideOrganizationId;
-    if (isSuperAdmin && guideOrganizationId && guideOrganizationId !== scopeOrganizationId) setScopeOrganizationId(guideOrganizationId);
+    const guideMetadata = existingGuideRecord as unknown as Record<string, unknown>;
+    const guideOrganizationId = valueText(guideMetadata.organizationId || guideMetadata.ownerOrganizationId).trim();
+    // The selected guide, not the last organization filter, owns its lessons.
+    // Super Admin may edit any authorized guide, including platform content.
+    const targetOrganizationId = isSuperAdmin
+      ? (guideOrganizationId || (guideMetadata.scope === 'platform' ? '' : scopeOrganizationId))
+      : (scopeOrganizationId || guideOrganizationId);
+    if (isSuperAdmin && targetOrganizationId !== scopeOrganizationId) setScopeOrganizationId(targetOrganizationId);
 
     const guide = existingGuideRecord;
 
@@ -955,7 +966,11 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
     setSaving(true);
     setError('');
     try {
-      const id = editor.id || newId('lesson');
+      // A failed publish, refresh or network acknowledgement must never create
+      // a second lesson on retry. Persist the generated key immediately.
+      const id = editor.id || pendingLessonId.current || newId('lesson');
+      pendingLessonId.current=id;
+      if (!editor.id) setEditor(previous=>previous?{...previous,id}:previous);
       const chapters = editor.chapters.length ? normalizeCurriculumStructure(editor.chapters) : undefined;
       const structuredPages = chapters ? curriculumPages(chapters) : undefined;
       const sourceBlocks = editor.content.trim() ? contentToBlocks(editor.content) : editor.blocks;
@@ -997,14 +1012,16 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
         tags: editor.tags.split(',').map(value => value.trim()).filter(Boolean),
         estimatedMinutes: Math.max(1, Number(editor.estimatedMinutes) || 15),
         type: 'Lesson',
-        published: publish,
+        published: publish || editor.published,
         sharingScope: editor.sharingScope,
       };
 
+      // The authoritative save commits content and publication together.
+      // A second request could fail after a successful first write and make
+      // retrying look like a new/duplicate lesson.
       await adminContent('upsertLesson', 'curriculum', id, payload, targetOrganizationId);
-      if (publish) await adminContent('publishLesson', 'curriculum', id, payload, targetOrganizationId);
       await load();
-      const savedEditor={ ...editor, id, title: resolvedTitle, guideTitle: valueText(guide.title) || editor.guideTitle, published: publish };
+      const savedEditor={ ...editor, id, title: resolvedTitle, guideTitle: valueText(guide.title) || editor.guideTitle, published: publish || editor.published };
       savedEditorSignature.current=JSON.stringify(savedEditor);
       clearLocalDraft(editor.guideId, editor.id);
       if (editor.id !== id) clearLocalDraft(editor.guideId, '');
@@ -1013,7 +1030,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
       setEditor(savedEditor);
       setEditorDirty(false);
       setSelectedGuideId(editor.guideId);
-      notify(publish ? tx('curriculum.lessonPublished', 'Lesson published.') : tx('curriculum.lessonDraftSaved', 'Lesson draft saved.'));
+      notify((publish || editor.published) ? tx('curriculum.lessonPublished', 'Lesson published.') : tx('curriculum.lessonDraftSaved', 'Lesson draft saved.'));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : tx('curriculum.couldNotSaveLesson', 'Could not save lesson.'));
     } finally {
@@ -1053,7 +1070,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
   };
 
   const saveRecord = async (kind: 'paths' | 'topics' | 'seasons') => {
-    if (!editingRecord) return;
+    if (!editingRecord || saving) return;
     if (editingRecord.canEdit === false) {
       setError(tx('curriculum.recordOwnedByAnotherEdit', 'This curriculum record is owned by another contributor and cannot be edited here.'));
       return;
@@ -1063,6 +1080,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
     setSaving(true);
     try {
       const id = editingRecord.id || newId(kind);
+      if(!editingRecord.id)setEditingRecord(previous=>previous?{...previous,id}:previous);
       await adminContent('upsert', COLLECTIONS[kind], id, {
         ...editingRecord,
         id,

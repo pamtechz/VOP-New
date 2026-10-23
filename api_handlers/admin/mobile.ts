@@ -128,7 +128,7 @@ export default async function mobile(req:Request,res:Response){
   res.setHeader?.('X-Content-Type-Options','nosniff');
   if(req.method!=='GET')return res.status(405).json({ok:false,code:'METHOD_NOT_ALLOWED',error:'Use GET for read-only mobile endpoints.'});
   const resource=param(req,'resource');
-  if(!['bootstrap','workspace','catalog','guide','lesson','progress','announcements','resources','events','radio','languages'].includes(resource))
+  if(!['bootstrap','workspace','catalog','program','guide','lesson','progress','announcements','resources','events','radio','languages'].includes(resource))
     return res.status(404).json({ok:false,code:'NOT_FOUND',error:'Unknown mobile API resource.'});
   try{
     const ctx=await authenticateTenant(req,undefined,true);
@@ -197,9 +197,51 @@ export default async function mobile(req:Request,res:Response){
         .filter(doc=>hasAccess(doc.data(),scope)).map(doc=>plainGuide(doc.id,doc.data()));
       const programs=unique(programSets.map(set=>set.docs))
         .filter(doc=>hasAccess(doc.data(),scope)).map(doc=>plainProgram(doc.id,doc.data()));
+      // The catalogue queries are bounded; a programme may reference an
+      // authorized guide beyond those query limits. Resolve its canonical IDs
+      // explicitly, then apply the SAME publication and tenancy checks before
+      // exposing any guide metadata to learners.
+      const knownGuideIds=new Set(guides.map(guide=>guide.id));
+      const missingIds=[...new Set(programs.flatMap(program=>program.guideIds))]
+        .filter(id=>!knownGuideIds.has(id)).slice(0,200);
+      for(let offset=0;offset<missingIds.length;offset+=25){
+        const extra=await db.getAll(...missingIds.slice(offset,offset+25)
+          .map(id=>db.doc('guides/'+id)));
+        for(const doc of extra){
+          if(!doc.exists||!hasAccess(doc.data()||{},scope)||knownGuideIds.has(doc.id))continue;
+          guides.push(plainGuide(doc.id,doc.data()||{}));
+          knownGuideIds.add(doc.id);
+        }
+      }
+      // Do not disclose identifiers of unpublished or inaccessible courses.
+      const visiblePrograms=programs.map(program=>({...program,
+        guideIds:program.guideIds.filter(id=>knownGuideIds.has(id))}));
       guides.sort((a,b)=>a.discoverNumber-b.discoverNumber||a.title.localeCompare(b.title));
-      programs.sort((a,b)=>a.title.localeCompare(b.title));
-      return res.status(200).json({ok:true,guides,programs});
+      visiblePrograms.sort((a,b)=>a.title.localeCompare(b.title));
+      return res.status(200).json({ok:true,guides,programs:visiblePrograms});
+    }
+    if(resource==='program'){
+      const programId=cleanId(param(req,'programId'));
+      const snap=await db.doc('programs/'+programId).get();
+      if(!snap.exists||!hasAccess(snap.data()||{},scope))
+        return res.status(404).json({ok:false,code:'NOT_FOUND',
+          error:'Published programme not found or not available.'});
+      const program=plainProgram(snap.id,snap.data()||{});
+      const guides=[];
+      // A selected programme can have up to 100 ordered references. Resolve
+      // all of them on demand, without depending on bounded catalogue queries.
+      for(let offset=0;offset<program.guideIds.length;offset+=25){
+        const ids=program.guideIds.slice(offset,offset+25);
+        const documents=await db.getAll(...ids.map(id=>db.doc('guides/'+id)));
+        for(const document of documents){
+          if(!document.exists||!hasAccess(document.data()||{},scope))continue;
+          guides.push(plainGuide(document.id,document.data()||{}));
+        }
+      }
+      const visibleIds=new Set(guides.map(guide=>guide.id));
+      return res.status(200).json({ok:true,
+        program:{...program,guideIds:program.guideIds.filter(id=>visibleIds.has(id))},
+        guides});
     }
     if(resource==='announcements'){
       const ref=db.collection('announcements');

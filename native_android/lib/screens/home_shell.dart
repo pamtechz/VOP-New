@@ -500,10 +500,9 @@ class _HomeShellState extends State<HomeShell> {
                 maxLines:2,overflow:TextOverflow.ellipsis),
               trailing:const Icon(Icons.chevron_right),
               onTap:(){
-                final linked=guides.where((g)=>
-                  (p['guideIds'] as List? ?? []).contains(g['id'])).toList();
-                push(_ProgrammeScreen(title:(p['title']??'Programme').toString(),
-                  guides:linked,api:widget.api));
+                push(_ProgrammeScreen(
+                  programId:(p['id']??'').toString(),
+                  title:(p['title']??'Programme').toString(),api:widget.api));
               },
             ))),
           const SizedBox(height:7),
@@ -534,64 +533,106 @@ class _HomeShellState extends State<HomeShell> {
   );
 }
 
-class _ProgrammeScreen extends StatelessWidget {
-  const _ProgrammeScreen({required this.title,required this.guides,required this.api});
+class _ProgrammeScreen extends StatefulWidget {
+  const _ProgrammeScreen({required this.programId,required this.title,required this.api});
+  final String programId;
   final String title;
-  final List<Map<String,dynamic>> guides;
   final VopApi api;
+  @override State<_ProgrammeScreen> createState()=>_ProgrammeScreenState();
+}
+
+class _ProgrammeScreenState extends State<_ProgrammeScreen> {
+  late Future<Map<String,dynamic>> _program;
+  final Map<String,Future<Map<String,dynamic>>> _courseDetails={};
+  @override void initState(){
+    super.initState();
+    _program=widget.api.programme(widget.programId);
+  }
+  Future<void> _refresh()async{
+    _courseDetails.clear();
+    final fresh=widget.api.programme(widget.programId);
+    setState(()=>_program=fresh);
+    await fresh;
+  }
   @override Widget build(BuildContext context)=>Scaffold(
-    appBar:AppBar(title:Text(title)),
-    body:ListView(padding:const EdgeInsets.all(15),children:[
-      VopSectionTitle(title,subtitle:'${guides.length} study guides'),
-      if(guides.isEmpty)const VopEmpty(icon:Icons.menu_book_outlined,
-        message:'No courses have been published under this programme.'),
-      ...guides.map((guide)=>Card(
-        clipBehavior:Clip.antiAlias,
-        margin:const EdgeInsets.only(bottom:10),
-        child:ExpansionTile(
-          leading:const Icon(Icons.auto_stories_outlined),
-          title:Text((guide['title']??'Course').toString(),
-            style:const TextStyle(fontWeight:FontWeight.w800)),
-          subtitle:Text((guide['language']??'').toString().toUpperCase()),
-          children:[FutureBuilder<Map<String,dynamic>>(
-            future:api.guide((guide['id']??'').toString())..ignore(),
-            builder:(context,s){
-              if (s.connectionState != ConnectionState.done) {
-                return const Padding(padding:EdgeInsets.all(16),
-                  child:LinearProgressIndicator());
-              }
-              if (s.hasError) {
-                return Padding(padding:const EdgeInsets.all(14),
-                  child:Text('${s.error}'));
-              }
-              final lessons=asRows(s.data?['lessons']).where((l)=>l['type']!='Test').toList();
-              return Column(children:[
-                if(lessons.isEmpty)const Padding(
-                  padding:EdgeInsets.all(14),
-                  child:Text('No published lessons under this course.')),
-                ...lessons.asMap().entries.map((entry)=>ListTile(
-                  dense:true,
-                  leading:CircleAvatar(radius:16,
-                    child:Text('${entry.key+1}',style:const TextStyle(fontSize:12))),
-                  title:Text((entry.value['title']??'Lesson').toString()),
-                  subtitle:Text('Lesson ${entry.key+1}'),
-                  trailing:const Icon(Icons.chevron_right_rounded),
-                  onTap:()=>Navigator.push(context,MaterialPageRoute<void>(
-                    builder:(_)=>GuideScreen(api:api,
-                      guideId:(guide['id']??'').toString()))),
-                )),
-                TextButton.icon(
-                  onPressed:()=>Navigator.push(context,MaterialPageRoute<void>(
-                    builder:(_)=>GuideScreen(api:api,
-                      guideId:(guide['id']??'').toString()))),
-                  icon:const Icon(Icons.menu_book_outlined),
-                  label:const Text('Open course')),
-              ]);
-            },
-          )],
-        ),
-      )),
-    ]),
+    appBar:AppBar(title:Text(widget.title)),
+    body:FutureBuilder<Map<String,dynamic>>(
+      future:_program,
+      builder:(context,s){
+        if(s.connectionState!=ConnectionState.done){
+          return const Center(child:CircularProgressIndicator());
+        }
+        if(s.hasError){
+          return Center(child:Padding(padding:const EdgeInsets.all(24),
+            child:Column(mainAxisSize:MainAxisSize.min,children:[
+              const Icon(Icons.error_outline,size:36),
+              const SizedBox(height:12),
+              Text('Could not load this programme: ${s.error}',textAlign:TextAlign.center),
+              const SizedBox(height:12),
+              FilledButton.icon(
+                onPressed:()=>setState(()=>
+                  _program=widget.api.programme(widget.programId)),
+                icon:const Icon(Icons.refresh),label:const Text('Retry')),
+            ])));
+        }
+        final guides=asRows(s.data?['guides']);
+        return RefreshIndicator(onRefresh:_refresh,
+          child:ListView(padding:const EdgeInsets.all(15),children:[
+            VopSectionTitle(widget.title,subtitle:'${guides.length} published courses'),
+            if(guides.isEmpty)const VopEmpty(icon:Icons.menu_book_outlined,
+              message:'No accessible courses are published under this programme.'),
+            ...guides.map((guide){
+              final id=(guide['id']??'').toString();
+              return Card(
+                clipBehavior:Clip.antiAlias,
+                margin:const EdgeInsets.only(bottom:10),
+                child:ExpansionTile(
+                  leading:const Icon(Icons.auto_stories_outlined),
+                  title:Text((guide['title']??'Course').toString(),
+                    style:const TextStyle(fontWeight:FontWeight.w800)),
+                  subtitle:Text((guide['language']??'').toString().toUpperCase()),
+                  children:[FutureBuilder<Map<String,dynamic>>(
+                    future:_courseDetails.putIfAbsent(id,()=>widget.api.guide(id)),
+                    builder:(context,lessonState){
+                      if(lessonState.connectionState!=ConnectionState.done){
+                        return const Padding(padding:EdgeInsets.all(16),
+                          child:LinearProgressIndicator());
+                      }
+                      if(lessonState.hasError){
+                        return Padding(padding:const EdgeInsets.all(14),
+                          child:Text('Could not load lessons: ${lessonState.error}'));
+                      }
+                      final lessons=asRows(lessonState.data?['lessons'])
+                        .where((lesson)=>lesson['type']!='Test').toList();
+                      return Column(children:[
+                        if(lessons.isEmpty)const Padding(
+                          padding:EdgeInsets.all(14),
+                          child:Text('No published lessons under this course.')),
+                        ...lessons.asMap().entries.map((entry)=>ListTile(
+                          dense:true,
+                          leading:CircleAvatar(radius:16,
+                            child:Text('${entry.key+1}',
+                              style:const TextStyle(fontSize:12))),
+                          title:Text((entry.value['title']??'Lesson').toString()),
+                          subtitle:Text('Lesson ${entry.key+1}'),
+                          trailing:const Icon(Icons.chevron_right_rounded),
+                          onTap:()=>Navigator.push(context,MaterialPageRoute<void>(
+                            builder:(_)=>GuideScreen(api:widget.api,guideId:id))),
+                        )),
+                        TextButton.icon(
+                          onPressed:()=>Navigator.push(context,MaterialPageRoute<void>(
+                            builder:(_)=>GuideScreen(api:widget.api,guideId:id))),
+                          icon:const Icon(Icons.menu_book_outlined),
+                          label:const Text('Open course')),
+                      ]);
+                    },
+                  )],
+                ),
+              );
+            }),
+          ]));
+      },
+    ),
   );
 }
 class _ProgressScreen extends StatelessWidget{

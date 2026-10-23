@@ -4,6 +4,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../core/vop_api.dart';
 import '../core/vop_i18n.dart';
 import 'offline_studies_screen.dart';
@@ -334,6 +335,16 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         OutlinedButton.icon(onPressed:loading?null:_load,
           icon:const Icon(Icons.refresh_rounded),
           label:const Text('Retry loading settings')),
+      ],
+      if(kIsWeb)...[
+        _heading('Web experience','Choose the VOP interface in your browser.',Icons.swap_horiz),
+        OutlinedButton.icon(
+          onPressed:()=>launchUrl(Uri.base.resolve('/'),
+            webOnlyWindowName:'_self'),
+          icon:const Icon(Icons.open_in_browser),
+          label:const Text('Switch to Legacy'),
+        ),
+        const SizedBox(height:12),
       ],
       _heading('Appearance','Choose how VOP looks on your phone.',Icons.palette_outlined),
       _group([

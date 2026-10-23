@@ -12,8 +12,9 @@ test('programme expands its real courses and published lessons',()=>{
   const shell=source('native_android/lib/screens/home_shell.dart');
   assert.match(shell,/class _ProgrammeScreen/);
   assert.match(shell,/ExpansionTile\(/);
-  assert.match(shell,/future:api\.guide\(/);
-  assert.match(shell,/asRows\(s\.data\?\['lessons'\]\)/);
+  assert.match(shell,/widget\.api\.programme\(widget\.programId\)/);
+  assert.match(shell,/widget\.api\.guide\(id\)/);
+  assert.match(shell,/asRows\(lessonState\.data\?\['lessons'\]\)/);
 });
 test('server decides progression and persists passed quiz completions',()=>{
   const api=source('api_handlers/admin/mobile.ts');

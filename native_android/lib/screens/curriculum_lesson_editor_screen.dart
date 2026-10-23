@@ -56,10 +56,21 @@ class _CurriculumLessonEditorState extends State<CurriculumLessonEditorScreen>{
         ]},
       ]},
     ];
+    // Keep the record identity for the entire editor session, including
+    // retries after a partial network failure.
+    final stableLessonId=(lesson?['id']??newRecordId()).toString();
     await Navigator.push(context,MaterialPageRoute<void>(builder:(_)=>RecordEditor(api:widget.api,
       title:lesson==null?'New lesson':'Edit ${recordTitle(lesson)}',fields:fields,options:recordMap(widget.workspace['options']),initial:initial,
       onSave:(data)async{
-        await widget.api.adminContent('curriculum',action:'upsertLesson',payload:{...payload,'id':lesson?['id']??newRecordId(),'data':data});
+        await widget.api.adminContent('curriculum',action:'upsertLesson',payload:{
+          ...payload,'id':stableLessonId,
+          'data':{
+            ...data,'lessonId':stableLessonId,
+            'guideId':widget.guide['id'],'language':widget.guide['language'],
+            'type':'Lesson',
+            'published':lesson?['published']==true,
+          },
+        });
       })));
     if(mounted)setState(reload);
   }

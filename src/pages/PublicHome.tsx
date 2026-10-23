@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import './public-home.css';
 import {PublicStudyCatalogue} from '../components/home/PublicStudyCatalogue';
+import {ExperienceSwitcher} from '../components/layout/ExperienceSwitcher';
 
 type Props = {
   onSignIn: () => void;
@@ -34,6 +35,7 @@ export const PublicHome: React.FC<Props> = ({onSignIn,onRegister,configurationMi
   const [menuOpen,setMenuOpen]=useState(false);
   const navigate=(hash:string)=>{setMenuOpen(false);document.getElementById(hash)?.scrollIntoView({behavior:'smooth'});};
   return <main className="vop-public">
+    <ExperienceSwitcher />
     <a className="vop-public-skip" href="#main-content">Skip to content</a>
     <header className="vop-public-header">
       <div className="vop-public-header-inner">

@@ -91,8 +91,12 @@ export default function ProgramManager({
     if(!editing||saving)return;
     setSaving(true);setError('');setNotice('');
     try{
-      const result=await programApi('upsert',organizationId,editing.id||undefined,editing);
-      const id=result.item?.id;
+      // Reserve a stable identity before contacting the server: a lost save
+      // acknowledgement must not turn the next click into a new programme.
+      const id=editing.id||'program-'+crypto.randomUUID().replace(/-/g,'');
+      if(!editing.id)setEditing(previous=>previous?{...previous,id}:previous);
+      const result=await programApi('upsert',organizationId,id,{...editing,id});
+      if(result.item?.id!==id)throw new Error('Programme identity mismatch. Reload before making another change.');
       await load();
       if(id)setSelectedId(id);
       setEditing(null);setNotice('Program saved. Published guides remain in their original organization.');

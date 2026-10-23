@@ -10,6 +10,7 @@ import { hasTrustedOfflineDeviceConsent, setTrustedOfflineDeviceConsent } from '
 import { hasAdminPortalAccess } from '../services/portalAccess';
 import './personalSettings.css';
 import { appConfirm } from '../components/layout/AppDialog';
+import { ExperienceSwitcher } from '../components/layout/ExperienceSwitcher';
 import { editableOwnProfile, loadOwnProfile, saveOwnProfile, type EditableOwnProfile, type OwnProfile } from '../services/accountProfile';
 
 const uiT = (key: string, fallback: string) => getTranslation(key, getUiLocale(), undefined, fallback, 'PersonalSettingsPage');
@@ -531,6 +532,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
           <div className="vop-personal-tab-pane">
             <section className="vop-personal-card vop-card">
               <h2><Globe2 size={19}/>{uiT('personal_settings.interface',"Interface")}</h2>
+              <ExperienceSwitcher inline />
               <label>{uiT('personal_settings.theme',"Theme")}<select value={settings.theme || 'light'} onChange={e => { const theme=e.target.value as 'light'|'dark'|'system'; patch('theme',theme); persistThemePreference(theme==='system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light') : theme); }}><option value="light">{uiT('personal_settings.light_default',"Light (default)")}</option><option value="dark">{uiT('personal_settings.dark',"Dark")}</option><option value="system">Use device theme</option></select></label>
               <label>{t('settings.ui_language', 'Interface language')}<select value={settings.uiLocale || getUiLocale()} onChange={e => { patch('uiLocale', e.target.value); setUiLocale(e.target.value); }}>
                 {uiLocales.map(language => <option key={language.code} value={language.code}>{language.name} · {language.nativeName || language.code}</option>)}

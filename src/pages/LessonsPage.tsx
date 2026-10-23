@@ -74,15 +74,14 @@ export const LessonsPage: React.FC<Props> = ({
     return !needle||[guide.title,guide.subtitle,lesson.title,lesson.description,lesson.lessonNumber]
       .join(' ').toLowerCase().includes(needle);
   }),[guides,query,language,kind,scope,currentUser.organizationId]);
+  // Published programmes are navigable even when their first module has not
+  // yet been populated. Do not silently discard them based on lesson counts.
   const availableProgramGuideIds=useMemo(()=>new Map(programs.map(program=>[
     program.id,
-    [...new Set(program.guideIds)].filter(id=>guides.some(guide=>
-      guide.id===id&&guide.lessons.some(lesson=>lesson.type==='Lesson'))),
+    [...new Set(program.guideIds)].filter(id=>guides.some(guide=>guide.id===id)),
   ])),[programs,guides]);
-  const availablePrograms=useMemo(()=>programs.filter(program=>
-    (availableProgramGuideIds.get(program.id)?.length||0)>0),
-  [programs,availableProgramGuideIds]);
-  const activeProgram=availablePrograms.find(program=>program.id===selectedProgramId);
+  const availablePrograms=programs;
+  const activeProgram=programs.find(program=>program.id===selectedProgramId);
   const assignedGuideIds=useMemo(()=>new Set(availablePrograms.flatMap(program=>
     availableProgramGuideIds.get(program.id)||[])),[availablePrograms,availableProgramGuideIds]);
   const standaloneEntries=availablePrograms.length
@@ -160,7 +159,9 @@ export const LessonsPage: React.FC<Props> = ({
                   )}
                 </div>
               );
-            }):<p role="status">This program has no available published guides yet.</p>}
+            }):<p role="status">No accessible published courses are currently linked to this programme. An administrator can check the programme's assigned guides and publication settings.</p>}
+            {programGuides.length>0&&programGuides.every(guide=>!guide.lessons.some(lesson=>lesson.type==='Lesson'))&&
+              <p role="status">{t('lessons.programLessonsUnpublished','These courses are published, but their lessons have not been published yet.')}</p>}
           </div>
         </div>:<>
           <div className="vop-program-catalog-intro"><div>

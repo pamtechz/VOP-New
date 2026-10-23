@@ -46,5 +46,14 @@
 .vop-catalogue-program-card small{display:block;color:var(--theme-muted,#526782);font-size:12px;margin:11px 0 16px}
 .vop-catalogue-program-card button{display:flex;align-items:center;gap:8px;background:transparent;color:#3174b3;border:0;padding:7px 0;font-weight:800;font-size:12px;text-align:left}
 .vop-catalogue-program-card button[aria-pressed=true]{color:var(--theme-title,#10294a)}
+.vop-catalogue-program-courses{border-top:1px solid var(--theme-border,#dce4ee);margin-top:13px;padding-top:10px}
+.vop-catalogue-program-courses ul{list-style:none;margin:0;padding:0}
+.vop-catalogue-program-courses li{display:flex;gap:9px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--theme-border,#dce4ee)}
+.vop-catalogue-program-courses li:last-child{border-bottom:0}
+.vop-catalogue-program-courses li svg{flex-shrink:0;margin-top:3px;color:#3174b3}
+.vop-catalogue-program-courses li strong{display:block;font-size:13px;line-height:1.4;overflow-wrap:anywhere}
+.vop-catalogue-program-courses li small{margin:4px 0 0;font-size:11px}
+.vop-catalogue-program-courses p{font-size:12px;line-height:1.6;margin:2px 0;color:var(--theme-muted,#526782)}
+
 @media(max-width:1000px){.vop-catalogue-program-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:680px){.vop-catalogue-program-grid{grid-template-columns:1fr}}

@@ -33,9 +33,14 @@ test('public discovery stays consistent on old web, Flutter web and Android befo
   assert.match(catalogue,/Sign in to open this course/);
   assert.match(catalogue,/Published programmes/);
   assert.match(catalogue,/publicly browsable/);
+  assert.match(catalogue,/vop-catalogue-program-courses/);
+  assert.match(catalogue,/setProgramme\(program\.id\);setSearch\(''\)/);
   assert.match(publicEntry,/_api\.publicCatalog\(\)/);
   assert.match(publicEntry,/Sign in to study this course/);
   assert.match(publicEntry,/Published study programmes/);
+  assert.match(publicEntry,/Showing this programme/);
+  assert.match(publicEntry,/program\['guideIds'\]/);
+  assert.match(publicEntry,/No course outlines have been published for public browsing/);
   assert.match(publicEntry,/publicly browsable courses/);
   assert.match(publicEntry,/MediaQuery\.sizeOf\(context\)\.width >= 1020/);
   assert.match(app,/if \(!snapshot\.hasData\) return const PublicEntryScreen\(\);/);

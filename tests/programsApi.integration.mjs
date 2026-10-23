@@ -106,10 +106,188 @@ for(const [id,org,uid] of [[guideA,a,author.uid],[guideB,b,outsider.uid]]){
     archived:false,sharingScope:'organization',canonical:true,
   });
 }
+await test('Super Admin curriculum saves survive stale hierarchy metadata and selected organization drift',async()=>{
+  const superProfile=db.doc('users/'+superAdmin.uid);
+  await superProfile.update({adminNodeId:'historic-no-longer-linked-union',adminNodeType:'union'});
+  const lessonId='program-test-super-admin-cross-scope';
+  const ref=db.doc('guides/'+guideA+'/lessons/'+lessonId);
+  try {
+    // The editor can retain the previous organisation while switching guides.
+    // Super Admin must not silently transfer guide A lessons into B.
+    const payload={guideId:guideA,lessonId,language:'en',title:'Cross-scope study',
+      lessonNumber:'82',type:'Lesson',published:false,sharingScope:'organization'};
+    const saved=await call(superAdmin,{collection:'curriculum',action:'upsertLesson',
+      id:lessonId,organizationId:b,data:payload});
+    assert.equal(saved.status,200,JSON.stringify(saved.value));
+    assert.equal((await ref.get()).data()?.organizationId,a);
+    assert.equal((await ref.get()).data()?.ownerOrganizationId,a);
+
+    const published=await call(superAdmin,{collection:'curriculum',action:'publishLesson',
+      id:lessonId,organizationId:b,data:payload});
+    assert.equal(published.status,200,JSON.stringify(published.value));
+    assert.equal((await ref.get()).data()?.organizationId,a);
+    assert.equal((await ref.get()).data()?.published,true);
+
+    const edited=await call(superAdmin,{collection:'curriculum',action:'upsertLesson',
+      id:lessonId,organizationId:b,data:{...payload,title:'Updated across organizations',published:true}});
+    assert.equal(edited.status,200,JSON.stringify(edited.value));
+    assert.equal((await ref.get()).data()?.title,'Updated across organizations');
+    assert.equal((await ref.get()).data()?.organizationId,a);
+
+    const invalid=await call(superAdmin,{collection:'curriculum',action:'upsertLesson',
+      id:'program-test-invalid-lesson',organizationId:a,
+      data:{guideId:guideA,lessonId:'program-test-invalid-lesson',language:''}});
+    assert.equal(invalid.status,400,'missing language is validation, not forbidden');
+    assert.equal(invalid.value.code,'INVALID_REQUEST');
+
+    const rejected=await call(outsider,{collection:'curriculum',action:'upsertLesson',
+      id:'program-test-forbidden-lesson',organizationId:b,
+      data:{...payload,lessonId:'program-test-forbidden-lesson'}});
+    assert.notEqual(rejected.status,200,'B owner cannot edit A guide');
+  }finally{
+    await superProfile.update({adminNodeId:'',adminNodeType:''});
+  }
+});
+
+await test('platform curriculum taxonomy is editable only by the Super Admin',async()=>{
+  for(const collection of ['learningPaths','bibleTopics','seasons']){
+    const id='program-test-global-'+collection;
+    const published=await call(superAdmin,{
+      collection,action:'upsert',id,
+      data:{title:'Platform '+collection,published:true},
+    });
+    assert.equal(published.status,200,JSON.stringify(published.value));
+    const ref=db.doc(collection+'/'+id);
+    assert.equal((await ref.get()).data()?.organizationId,'');
+    assert.equal((await ref.get()).data()?.scope,'platform');
+    assert.equal((await ref.get()).data()?.sharingScope,'shared');
+
+    const updated=await call(superAdmin,{
+      collection,action:'upsert',id,organizationId:b,
+      data:{title:'Updated global '+collection,published:true},
+    });
+    assert.equal(updated.status,200,JSON.stringify(updated.value));
+    assert.equal((await ref.get()).data()?.organizationId,'');
+    assert.equal((await ref.get()).data()?.title,'Updated global '+collection);
+
+    const denied=await call(outsider,{
+      collection,action:'upsert',id,organizationId:b,
+      data:{title:'Unauthorized update',published:true},
+    });
+    assert.notEqual(denied.status,200);
+    assert.equal((await ref.get()).data()?.title,'Updated global '+collection);
+  }
+  const certificate=await call(superAdmin,{
+    collection:'certificates',action:'upsert',id:'program-test-no-platform-certificate',
+    data:{title:'Not an issuance'},
+  });
+  assert.notEqual(certificate.status,200);
+});
+
 const base={title:'Foundations of Faith',description:'A guided study',
   coverImageUrl:'',entryMode:'sections',guideIds:[guideA],
   sharingScope:'organization',published:true,archived:false};
 let programId='';
+let sharedReferenceProgram='';
+await test('unpublished platform guides cannot leak lesson metadata to foreign tenants',async()=>{
+  const guideId='program-test-unpublished-platform-guide';
+  const guide=db.doc('guides/'+guideId);
+  await guide.set({
+    id:guideId,title:'Unpublished platform draft',language:'en',
+    organizationId:'',scope:'platform',sharingScope:'shared',
+    published:false,archived:false,canonical:true,ownerUid:superAdmin.uid,
+  });
+  await guide.collection('lessons').doc('unexpected').set({
+    id:'unexpected',title:'Unreleased outline',
+    published:true,archived:false,sharingScope:'shared',type:'Lesson',
+  });
+  const denied=await call(outsider,{
+    collection:'curriculum',action:'listGuideLessons',guideId,organizationId:b,
+  });
+  assert.notEqual(denied.status,200);
+  const owner=await call(superAdmin,{
+    collection:'curriculum',action:'listGuideLessons',guideId,
+  });
+  assert.equal(owner.status,200,JSON.stringify(owner.value));
+  assert.ok(owner.value.items.some(item=>item.id==='unexpected'));
+});
+
+await test('one published canonical guide can be reused across tenants without copying content',async()=>{
+  const sharedGuide='program-test-cross-tenant-guide';
+  const source=db.doc('guides/'+sharedGuide);
+  await source.set({
+    id:sharedGuide,title:'Shared Bible studies',language:'en',
+    organizationId:a,ownerOrganizationId:a,ownerUid:author.uid,
+    sharingScope:'shared',published:true,archived:false,canonical:true,
+  });
+  const response=await call(outsider,{collection:'programs',action:'upsert',
+    organizationId:b,data:{
+      ...base,title:'Org B curated studies',guideIds:[sharedGuide],
+      sharingScope:'organization',published:true,
+    }});
+  assert.equal(response.status,200,JSON.stringify(response.value));
+  sharedReferenceProgram=response.value.item.id;
+  const ref=db.doc('programs/'+sharedReferenceProgram);
+  assert.deepEqual((await ref.get()).data()?.guideIds,[sharedGuide]);
+  const original=(await source.get()).data();
+  assert.equal(original?.organizationId,a);
+  await source.collection('lessons').doc('public').set({
+    id:'public',title:'Published lesson',published:true,
+    archived:false,sharingScope:'shared',type:'Lesson',language:'en',
+  });
+  await source.collection('lessons').doc('draft').set({
+    id:'draft',title:'Private unfinished lesson',published:false,
+    archived:false,sharingScope:'shared',type:'Lesson',language:'en',
+  });
+  const view=await call(outsider,{
+    collection:'curriculum',action:'listGuideLessons',guideId:sharedGuide,organizationId:b,
+  });
+  assert.equal(view.status,200,JSON.stringify(view.value));
+  assert.ok(view.value.items.some(item=>item.id==='public'));
+  assert.ok(!view.value.items.some(item=>item.id==='draft'),
+    'tenant B cannot enumerate unpublished content from tenant A');
+  const authorView=await call(author,{
+    collection:'curriculum',action:'listGuideLessons',guideId:sharedGuide,organizationId:a,
+  });
+  assert.equal(authorView.status,200,JSON.stringify(authorView.value));
+  assert.ok(authorView.value.items.some(item=>item.id==='draft'));
+
+  // Attaching a second shared guide must change only associations, not
+  // publication/owner metadata or the canonical guide itself.
+  const secondGuide='program-test-cross-tenant-shared-two';
+  await db.doc('guides/'+secondGuide).set({
+    id:secondGuide,title:'Prophecy studies',language:'en',
+    organizationId:a,ownerOrganizationId:a,ownerUid:author.uid,
+    sharingScope:'shared',published:true,archived:false,canonical:true,
+  });
+  const append=async(guideId,user=outsider)=>call(user,{
+    collection:'programs',action:'attachGuide',organizationId:b,
+    data:{programId:sharedReferenceProgram,guideId},
+  });
+  const linked=await append(secondGuide);
+  assert.equal(linked.status,200,JSON.stringify(linked.value));
+  const repeat=await append(secondGuide);
+  assert.equal(repeat.status,200,JSON.stringify(repeat.value));
+  assert.equal(repeat.value.alreadyLinked,true);
+  const record=(await ref.get()).data();
+  assert.deepEqual(record.guideIds,[sharedGuide,secondGuide]);
+  assert.equal(record.title,'Org B curated studies');
+  assert.equal(record.organizationId,b);
+  assert.equal(record.published,true);
+  assert.equal(record.sharingScope,'organization');
+  assert.equal((await source.get()).data()?.organizationId,a);
+
+  const privateDenied=await append(guideA);
+  assert.notEqual(privateDenied.status,200);
+  assert.deepEqual((await ref.get()).data()?.guideIds,[sharedGuide,secondGuide]);
+  const foreignEditor=await append(secondGuide,author);
+  assert.notEqual(foreignEditor.status,200);
+
+  const listed=await call(outsideLearner,{collection:'programs',action:'learnerList'});
+  assert.equal(listed.status,200,JSON.stringify(listed.value));
+  assert.ok(listed.value.items.some(item=>item.id===sharedReferenceProgram));
+});
+
 await test('program ownership, tenant scope, and read permissions',async t=>{
   await t.test('contributor creates a published program from owned published guides',async()=>{
     const response=await call(author,{collection:'programs',action:'upsert',data:base,organizationId:a});
@@ -136,7 +314,7 @@ await test('program ownership, tenant scope, and read permissions',async t=>{
       ...base,guideIds:[guideA],
     },organizationId:b});
     assert.notEqual(bad.status,200);
-    assert.match(String(bad.value.error),/another organization|missing|belongs/);
+    assert.match(String(bad.value.error),/another organization|missing|belongs|shared guides/);
   });
   await t.test('co-admin cannot edit the other author program',async()=>{
     const bad=await call(coAdmin,{collection:'programs',action:'upsert',
@@ -388,6 +566,37 @@ await test('platform-published curriculum is inherited system-wide by organizati
   assert.equal(enrollment.value.candidate.guideId,platformGuide);
   const enrollmentId=b+'_'+enrollment.value.candidate.uid+'_'+platformGuide;
   assert.equal((await db.doc('courseEnrollments/'+enrollmentId).get()).data()?.status,'active');
+});
+
+await test('lesson Save publishes once, preserves its ID and never forks on repeat',async()=>{
+  const id='program-test-one-step-published-lesson';
+  const ownedGuide='program-test-one-step-owned-guide';
+  // Other tests adopt guideA into platform stewardship. An organization
+  // correctly cannot edit that shared canonical resource after adoption.
+  await db.doc('guides/'+ownedGuide).set({
+    id:ownedGuide,organizationId:a,ownerOrganizationId:a,
+    ownerUid:author.uid,language:'en',title:'Editable source guide',
+    published:true,archived:false,sharingScope:'organization',canonical:true,
+  });
+  const document=db.doc('guides/'+ownedGuide+'/lessons/'+id);
+  const payload={lessonId:id,guideId:ownedGuide,language:'en',
+    title:'One published canonical lesson',lessonNumber:'49',
+    type:'Lesson',published:true,sharingScope:'organization'};
+  const first=await call(author,{collection:'curriculum',action:'upsertLesson',
+    id,organizationId:a,data:payload});
+  assert.equal(first.status,200,JSON.stringify(first.value));
+  const before=(await document.get()).data();
+  assert.equal(before?.published,true);
+  assert.ok(before?.publishedAt,'one-step publication must record its timestamp');
+  const second=await call(author,{collection:'curriculum',action:'upsertLesson',
+    id,organizationId:a,data:{...payload,title:'Revised same lesson'}});
+  assert.equal(second.status,200,JSON.stringify(second.value));
+  const after=(await document.get()).data();
+  assert.equal(after?.title,'Revised same lesson');
+  assert.equal(after?.id,id);
+  assert.equal(after?.createdAt,before?.createdAt);
+  const lessons=await db.collection('guides/'+ownedGuide+'/lessons').get();
+  assert.equal(lessons.docs.filter(doc=>doc.id===id).length,1);
 });
 
 const notesGuide='program-test-notes-guide';

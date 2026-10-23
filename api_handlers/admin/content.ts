@@ -186,15 +186,29 @@ export default async function handler(req: Request, res: Response) {
       const ownerOrganizationId = String(guide.data()?.organizationId || guide.data()?.ownerOrganizationId || '').trim();
       const platformGuide = String(guide.data()?.scope || '') === 'platform' || !ownerOrganizationId;
       const isShared = guide.data()?.sharingScope === 'shared' && guide.data()?.published === true;
+      // Public/platform ownership does not make an unpublished guide public.
+      // A foreign tenant may only inspect a published, non-archived guide.
+      const publicGuide = guide.data()?.published === true && guide.data()?.archived !== true
+        && (platformGuide || isShared);
       const permitted = ctx.isSuperAdmin
-        || platformGuide
-        || isShared
+        || publicGuide
         || (ctx.tenantType === 'hierarchy'
           ? Boolean(ownerOrganizationId && await organizationInHierarchyScope(ctx, ownerOrganizationId))
-          : ownerOrganizationId === ctx.organizationId);
+          : Boolean(ownerOrganizationId && ownerOrganizationId === ctx.organizationId));
       if (!permitted) throw new Error('This guide is outside your authorized curriculum scope.');
+      const canReadDrafts=ctx.isSuperAdmin ||
+        Boolean(ownerOrganizationId && (ctx.tenantType==='hierarchy'
+          ?await organizationInHierarchyScope(ctx,ownerOrganizationId)
+          :ownerOrganizationId===ctx.organizationId));
       const snap = await guide.ref.collection('lessons').get();
-      const items = await Promise.all(snap.docs.map(async doc => {
+      const visibleLessons=snap.docs.filter(doc=>{
+        if(canReadDrafts)return true;
+        const lesson=doc.data();
+        return lesson.published===true && lesson.archived!==true
+          && lesson.type!=='Test' &&
+          (platformGuide || (isShared && lesson.sharingScope==='shared'));
+      });
+      const items = await Promise.all(visibleLessons.map(async doc => {
         const row = doc.data();
         const canEdit = ctx.isSuperAdmin || (String(row.ownerUid || '') === ctx.auth.uid && !platformStewardedResource(row));
         if (!canEdit) return {
@@ -246,12 +260,14 @@ export default async function handler(req: Request, res: Response) {
         const lessons = await d.ref.collection('lessons').get();
         const guideOrganizationId=String(guideData.organizationId||guideData.ownerOrganizationId||'');
         const platformGuide=String(guideData.scope||'')==='platform'||!guideOrganizationId;
-        const canReadAllChildren=ctx.isSuperAdmin||platformGuide||organizationIds.includes(guideOrganizationId);
+        const canReadAllChildren=ctx.isSuperAdmin||
+          Boolean(guideOrganizationId&&organizationIds.includes(guideOrganizationId));
         const studyLessons=lessons.docs.filter(lesson => {
           const data=lesson.data();
           return data.archived!==true
             && String(data.type||'Lesson')!=='Test'
-            && (canReadAllChildren||data.sharingScope==='shared');
+            && (canReadAllChildren || (data.published===true &&
+              (platformGuide || (guideData.sharingScope==='shared' && data.sharingScope==='shared'))));
         });
         return {
           id: d.id,
@@ -277,14 +293,29 @@ export default async function handler(req: Request, res: Response) {
       const data = body.data && typeof body.data === 'object' ? body.data as Record<string, unknown> : {};
       const lang = String(data.language || '').trim().toLowerCase();
       if (!isLanguageCode(lang)) throw new Error('A valid language code is required for a guide.');
+      const title = String(data.title || '').trim();
+      if (!title) throw new Error('Guide title is required.');
+      const id = data.id ? safeId(data.id) : safeId(`guide-${randomUUID().replace(/-/g, '').slice(0,24)}`);
+      const ref = ctx.db.doc(`guides/${id}`);
+      const existing = await ref.get();
+      const current = existing.exists ? existing.data() || {} : {};
+      const ownerOrganizationId = String(current.scope === 'platform'
+        ? '' : current.organizationId || current.ownerOrganizationId || '').trim();
+      // Preserve the existing owner even when Super Admin switches between
+      // organisation and platform records before the selector catches up.
+      const guideOrganizationId = ctx.isSuperAdmin && existing.exists
+        ? ownerOrganizationId : effectiveOrganizationId;
+      if (existing.exists && ownerOrganizationId !== guideOrganizationId) {
+        throw new Error('Moving a guide to another organization is not allowed. Copy it into the destination tenant instead.');
+      }
       if (!isEnglishLocale(lang)) {
         // A tenant cannot claim another organization's private language simply
         // by submitting its code. The global or own organization registry
         // must contain an enabled entry before a guide can use the language.
         const [globalLanguage, tenantLanguage] = await Promise.all([
           ctx.db.doc('languages/' + lang).get(),
-          effectiveOrganizationId
-            ? ctx.db.doc('organizations/' + effectiveOrganizationId + '/languages/' + lang).get()
+          guideOrganizationId
+            ? ctx.db.doc('organizations/' + guideOrganizationId + '/languages/' + lang).get()
             : Promise.resolve(null),
         ]);
         if (!(globalLanguage.exists && globalLanguage.data()?.enabled !== false)
@@ -292,15 +323,7 @@ export default async function handler(req: Request, res: Response) {
           throw new Error('Choose an enabled platform language or a language registered by your organization.');
         }
       }
-      const title = String(data.title || '').trim();
-      if (!title) throw new Error('Guide title is required.');
-      const id = data.id ? safeId(data.id) : safeId(`guide-${randomUUID().replace(/-/g, '').slice(0,24)}`);
-      const ref = ctx.db.doc(`guides/${id}`);
-      const existing = await ref.get();
-      const current = existing.exists ? existing.data() || {} : {};
-      if (existing.exists && String(current.organizationId || '').trim() !== effectiveOrganizationId) {
-        throw new Error('Moving a guide to another organization is not allowed. Copy it into the destination tenant instead.');
-      }
+
       if (!existing.exists && !ctx.isSuperAdmin) await enforceOwnedQuota('guides','maxGuides');
       await requirePermission(ctx,'curriculum',existing.exists?'update':'create');
       if(data.published===true)await requirePermission(ctx,'curriculum','publish');
@@ -319,24 +342,24 @@ export default async function handler(req: Request, res: Response) {
           const requirementOrg=String(value.organizationId||'');
           const platformRequirement=!requirementOrg&&String(value.scope||'')==='platform';
           if(!requirement.exists||value.status!=='published'||
-            (!platformRequirement&&requirementOrg!==effectiveOrganizationId)){
+            (!platformRequirement&&requirementOrg!==guideOrganizationId)){
             throw new Error('Every certification requirement must be published and available to the guide organization.');
           }
         }
       }
       const nextGuide = {
         id,
-        organizationId: effectiveOrganizationId,
-        ownerOrganizationId: current.ownerOrganizationId || effectiveOrganizationId,
+        organizationId: guideOrganizationId,
+        ownerOrganizationId: current.ownerOrganizationId || guideOrganizationId,
         ownerTenantId: current.ownerTenantId || tenantOwnerKey(ctx),
         ownerUid: current.ownerUid || ctx.auth.uid,
-        scope: effectiveOrganizationId ? 'organization' : 'platform',
+        scope: guideOrganizationId ? 'organization' : 'platform',
         canonical: true,
-        sharingScope: !effectiveOrganizationId && data.published === true
+        sharingScope: !guideOrganizationId && data.published === true
           ? 'shared'
           : data.sharingScope === 'shared' ? 'shared'
           : data.sharingScope === 'private' ? 'private'
-          : (effectiveOrganizationId ? 'organization' : 'shared'),
+          : (guideOrganizationId ? 'organization' : 'shared'),
         curriculumId: 'discover',
         discoverNumber: Math.max(1, Number(data.discoverNumber ?? 1) || 1),
         title,
@@ -365,7 +388,7 @@ export default async function handler(req: Request, res: Response) {
         updatedAt: FieldValue.serverTimestamp(),
         updatedBy: ctx.auth.uid,
       };
-      const isSharedPublication = Boolean(effectiveOrganizationId &&
+      const isSharedPublication = Boolean(guideOrganizationId &&
         data.published===true && data.sharingScope==='shared');
       if (isSharedPublication) {
         // Cross-tenant visibility implies platform language stewardship.
@@ -374,12 +397,12 @@ export default async function handler(req: Request, res: Response) {
           const currentSnapshot=await transaction.get(ref);
           if(currentSnapshot.exists){
             const now=currentSnapshot.data()||{};
-            if(String(now.organizationId||'')!==effectiveOrganizationId ||
+            if(String(now.organizationId||now.ownerOrganizationId||'')!==guideOrganizationId ||
               !(await canManageOrganizationContent(ctx,now)))
               throw new Error('The guide is no longer editable in this organization.');
             assertMutableTenantResource(ctx.isSuperAdmin,now,'edit');
           }
-          await adoptOrganizationLanguage(ctx,transaction,effectiveOrganizationId,lang);
+          await adoptOrganizationLanguage(ctx,transaction,guideOrganizationId,lang);
           transaction.set(ref,nextGuide,{merge:true});
         });
         // A system-wide guide is an atomic learner-facing unit: every published
@@ -590,7 +613,11 @@ export default async function handler(req: Request, res: Response) {
       const guideRef = ctx.db.doc(`guides/${guideId}`);
       const guide = await guideRef.get();
       const guideData = guide.data() || {};
-      const guideOrgId = String(guideData.organizationId || '');
+      const guideOrgId = String(guideData.scope === 'platform'
+        ? '' : guideData.organizationId || guideData.ownerOrganizationId || '').trim();
+      // The guide record is authoritative for Super Admin lesson ownership.
+      // A stale organization selected in the UI must never reparent a lesson.
+      const lessonOrganizationId = ctx.isSuperAdmin ? guideOrgId : effectiveOrganizationId;
       const guideMatchesTenant = ctx.isSuperAdmin
         || guideOrgId === effectiveOrganizationId
         || (!guideOrgId && guideData.sharingScope === 'shared');
@@ -638,6 +665,8 @@ export default async function handler(req: Request, res: Response) {
           throw new Error('Lesson media must be an approved public HTTPS embed or direct media file.');
         }
       }
+      await requirePermission(ctx,'curriculum',existing.exists?'update':'create');
+      if(data.published===true)await requirePermission(ctx,'curriculum','publish');
       if (existing.exists && !(ctx.tenantType === 'hierarchy' ? await canManageOrganizationContent(ctx, existing.data()) : canEditCanonicalContent(ctx, existing.data()))) throw new Error('Only an authorized tenant administrator or VOP Super Admin can edit this lesson.');
       if (existing.exists) assertMutableTenantResource(ctx.isSuperAdmin, existing.data(), 'edit');
       const { teacherNotes: _incomingNotes, ...publicData }=data;
@@ -667,8 +696,8 @@ export default async function handler(req: Request, res: Response) {
         } : {}),
         id: lessonId,
         lessonId,
-        organizationId: effectiveOrganizationId || guideOrgId,
-        ownerOrganizationId: existing.data()?.ownerOrganizationId || effectiveOrganizationId || guideOrgId,
+        organizationId: lessonOrganizationId,
+        ownerOrganizationId: existing.data()?.ownerOrganizationId || lessonOrganizationId,
         ownerTenantId: existing.data()?.ownerTenantId || guideData.ownerTenantId || tenantOwnerKey(ctx),
         ownerUid: existing.data()?.ownerUid || ctx.auth.uid,
         canonical: true,
@@ -678,6 +707,8 @@ export default async function handler(req: Request, res: Response) {
           : data.sharingScope === 'private' ? 'private'
           : 'organization',
         published: data.published === true,
+        ...(data.published===true&&existing.data()?.published!==true
+          ?{publishedAt:FieldValue.serverTimestamp(),publishedBy:ctx.auth.uid}:{}),
         createdAt: existing.data()?.createdAt || new Date().toISOString(),
         updatedAt: FieldValue.serverTimestamp(),
         updatedBy: ctx.auth.uid,
@@ -685,7 +716,7 @@ export default async function handler(req: Request, res: Response) {
       if(notesIncluded||historicalNotes){
         batch.set(privateNotesRef,{
           text:savedNotes,guideId,lessonId,
-          ownerOrganizationId:existing.data()?.ownerOrganizationId || effectiveOrganizationId,
+          ownerOrganizationId:existing.data()?.ownerOrganizationId || lessonOrganizationId,
           ownerTenantId:existing.data()?.ownerTenantId || guideData.ownerTenantId || tenantOwnerKey(ctx),
           ownerUid:existing.data()?.ownerUid || ctx.auth.uid,
           updatedAt:FieldValue.serverTimestamp(),updatedBy:ctx.auth.uid,
@@ -709,7 +740,9 @@ export default async function handler(req: Request, res: Response) {
       const requestedGuideId = safeId(data.guideId);
       const guide = await ctx.db.doc(`guides/${requestedGuideId}`).get();
       const guideData = guide.data() || {};
-      const guideOrgId = String(guideData.organizationId || '');
+      const guideOrgId = String(guideData.scope === 'platform'
+        ? '' : guideData.organizationId || guideData.ownerOrganizationId || '').trim();
+      const lessonOrganizationId = ctx.isSuperAdmin ? guideOrgId : effectiveOrganizationId;
       const guideMatchesTenant = ctx.isSuperAdmin
         || guideOrgId === effectiveOrganizationId
         || (!guideOrgId && guideData.sharingScope === 'shared');
@@ -737,8 +770,8 @@ export default async function handler(req: Request, res: Response) {
       await ref.set({
         id: lessonId,
         lessonId,
-        organizationId: effectiveOrganizationId || guideOrgId,
-        ownerOrganizationId: current.data()?.ownerOrganizationId || effectiveOrganizationId || guideOrgId,
+        organizationId: lessonOrganizationId,
+        ownerOrganizationId: current.data()?.ownerOrganizationId || lessonOrganizationId,
         ownerUid: current.data()?.ownerUid || ctx.auth.uid,
         canonical: true,
         sharingScope: guideSystemWide
@@ -1397,10 +1430,21 @@ export default async function handler(req: Request, res: Response) {
     }
 
     if (ORG_COLLECTIONS.has(collection)) {
-      if (!effectiveOrganizationId) throw new Error('Select an organization within your authorized scope before managing content.');
+      // A platform Super Admin may maintain global curriculum taxonomy without
+      // selecting an organization. Other organization-only resources remain scoped.
+      const platformCurriculum=ctx.isSuperAdmin &&
+        ['learningPaths','bibleTopics','seasons'].includes(collection);
+      if (!effectiveOrganizationId && !platformCurriculum)
+        throw new Error('Select an organization within your authorized scope before managing content.');
       if (ctx.tenantType === 'hierarchy' && !(await organizationInHierarchyScope(ctx, effectiveOrganizationId))) throw new Error('The organization is outside your hierarchy scope.');
       const ref = ctx.db.doc(`${collection}/${id}`);
       const existing = await ref.get();
+      const current=existing.data()||{};
+      const contentOrganizationId=ctx.isSuperAdmin&&existing.exists
+        ?String(current.scope==='platform'?'':current.organizationId||current.ownerOrganizationId||'').trim()
+        :effectiveOrganizationId;
+      if(!contentOrganizationId&&!platformCurriculum)
+        throw new Error('Organization-owned content requires its original organization.');
 
       // Official certificates are issued only by /api/certificates.
       // This generic endpoint may never create, replace, revoke, or rewrite
@@ -1468,10 +1512,15 @@ export default async function handler(req: Request, res: Response) {
           ...incoming,
           id,
           ...(Object.prototype.hasOwnProperty.call(incoming, 'published') ? { published: incoming.published === true } : {}),
-          organizationId: effectiveOrganizationId,
-          ownerOrganizationId: existing.data()?.ownerOrganizationId || effectiveOrganizationId,
+          organizationId: contentOrganizationId,
+          ownerOrganizationId: existing.data()?.ownerOrganizationId || contentOrganizationId,
           ownerUid: existing.data()?.ownerUid || ctx.auth.uid,
-          scope: 'organization',
+          scope: contentOrganizationId?'organization':'platform',
+          // Do not alter organization-level sharing decisions from the
+          // submitted content. Only platform taxonomy has mandatory visibility.
+          ...(!contentOrganizationId ? {
+            sharingScope:incoming.published===true?'shared':'private',
+          } : {}),
           canonical: true,
           createdAt: existing.data()?.createdAt || new Date().toISOString(),
           updatedAt: FieldValue.serverTimestamp(),
@@ -1495,7 +1544,7 @@ export default async function handler(req: Request, res: Response) {
           try {
             const notificationType = collection === 'events' ? 'event' : 'announcement';
             delivery = await notifyOrganizationMembers(ctx.db, {
-              organizationId: effectiveOrganizationId,
+              organizationId: contentOrganizationId,
               sourceId: id,
               title: String(incoming.title || (collection === 'events' ? 'New event' : 'New announcement')),
               body: String(incoming.description || '').trim() || (collection === 'events' ? 'A new ministry event has been published.' : 'A new announcement has been published.'),
@@ -1586,7 +1635,13 @@ export default async function handler(req: Request, res: Response) {
     return res.status(400).json({ error:'Unsupported content action.' });
   } catch (error) {
     const message=error instanceof Error ? error.message : 'Content operation failed.';
-    const status=/Sign in first/.test(message)?401:/permission|Only|membership|Select|available|required|subscription|organization/.test(message)?403:400;
-    return res.status(status).json({error:message});
+    // Validation errors must not masquerade as authorization failures.
+    // In particular "A valid guide ... is required" is a 400, not a 403.
+    const status=/Sign in first|session has expired|id.token|token.expired|token.revoked/i.test(message)
+      ?401
+      :/\bpermission\b|\bunauthori[sz]ed\b|^Only\b|^You (?:cannot|do not have|are not)\b|\boutside your (?:authorized|curriculum|tenant)\b|\bnot a member\b|\bsubscription\b|\bquota\b/i.test(message)
+      ?403:400;
+    return res.status(status).json({error:message,
+      code:status===401?'UNAUTHENTICATED':status===403?'PERMISSION_DENIED':'INVALID_REQUEST'});
   }
 }

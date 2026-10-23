@@ -4,3 +4,5 @@
 .vop-experience-switch a:hover{background:#f1f7fd}
 .vop-experience-switch a:focus-visible{outline:3px solid #f6c76c;outline-offset:3px}
 @media(max-width:520px){.vop-experience-switch{right:9px;bottom:9px;font-size:11px}.vop-experience-switch a{padding:9px 11px}}
+
+.vop-experience-switch-inline{position:static;right:auto;bottom:auto;display:inline-flex;z-index:auto;box-shadow:none;margin:8px 0 12px}

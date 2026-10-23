@@ -81,9 +81,21 @@ export function PublicStudyCatalogue({onSignIn}:{onSignIn:()=>void}){
                 <h4>{program.title}</h4>
                 {program.description&&<p>{program.description}</p>}
                 <small>{program.guideIds.length} publicly browsable {program.guideIds.length===1?t('public.catalogue.course','course'):t('public.catalogue.courses','courses')}</small>
-                <button type="button" onClick={()=>setProgramme(program.id)} aria-pressed={programme===program.id}>
+                <button type="button" onClick={()=>{setProgramme(program.id);setSearch('');}} aria-pressed={programme===program.id}
+                  aria-expanded={programme===program.id} aria-controls={`vop-programme-courses-${program.id}`}>
                   {programme===program.id?t('public.catalogue.showingProgramme','Showing this programme'):t('public.catalogue.viewCourses','View published courses')} <ArrowRight size={15} aria-hidden="true"/>
                 </button>
+                {programme===program.id&&<div id={`vop-programme-courses-${program.id}`} className="vop-catalogue-program-courses" role="region" aria-label={`Published courses in ${program.title}`}>
+                  {data!.guides.filter(guide=>program.guideIds.includes(guide.id)).length===0
+                    ?<p>{t('public.catalogue.noPublishedCourseOutlines','No course outlines have been published for public browsing in this programme.')}</p>
+                    :<ul>{data!.guides.filter(guide=>program.guideIds.includes(guide.id)).map(guide=>
+                      <li key={guide.id}>
+                        <BookOpen size={15} aria-hidden="true"/>
+                        <span><strong>{guide.title}</strong>
+                          <small>{guide.lessons.length} published {guide.lessons.length===1?'lesson':'lessons'}</small>
+                        </span>
+                      </li>)}</ul>}
+                </div>}
               </article>)}
           </div>
         </div>}

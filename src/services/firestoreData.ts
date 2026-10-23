@@ -208,7 +208,9 @@ export async function loadFirestoreGuides(_language?: LanguageCode, scopeUser?: 
       if (!withinScope && data.sharingScope !== 'shared') continue;
     }
 
-    const id = String(data.id ?? item.id).trim();
+    // Programme references use canonical Firestore document IDs, not an old
+    // embedded `id` field that may survive a migration or content fork.
+    const id = legacy ? String(data.id || item.id).trim() : item.id;
     const guide: DiscoverGuide = {
       id,
       ownerOrganizationId: String(data.ownerOrganizationId ?? data.organizationId ?? '').trim() || undefined,
@@ -294,7 +296,6 @@ export async function loadFirestoreGuides(_language?: LanguageCode, scopeUser?: 
         a.lessonNumber.localeCompare(b.lessonNumber, undefined, { numeric: true }) || a.title.localeCompare(b.title),
       ),
     }))
-    .filter(guide => guide.lessons.length > 0)
     .sort((a, b) => a.discoverNumber - b.discoverNumber || a.language.localeCompare(b.language));
 }
 

@@ -33,6 +33,7 @@ type GuideRecord = {
   updatedAt?: string;
   updatedBy?: string;
   ownerUid?: string;
+  organizationId?: string;
   canEdit?: boolean;
 };
 
@@ -68,7 +69,7 @@ type Props = {
 };
 
 async function guideAdmin(
-  action: 'listGuides' | 'upsertGuide' | 'archiveGuide' | 'forkGuide' | 'deleteGuide' | 'upsert' | 'list',
+  action: 'listGuides' | 'upsertGuide' | 'archiveGuide' | 'forkGuide' | 'deleteGuide' | 'attachGuide' | 'list',
   data?: Record<string, unknown>,
   organizationId?: string,
   collection: 'guides' | 'programs' = 'guides',
@@ -140,6 +141,7 @@ function makeRecord(value: Record<string, unknown>, fallbackLessons = 0): GuideR
     sharingScope: value.sharingScope === 'shared' ? 'shared' : value.sharingScope === 'private' ? 'private' : 'organization',
     lessonCount: Number(value.lessonCount ?? fallbackLessons) || 0,
     ownerUid: valueText(value.ownerUid),
+    organizationId: valueText(value.organizationId || value.ownerOrganizationId),
     canEdit: value.canEdit !== false,
     updatedAt: timestampText(value.updatedAt),
     updatedBy: valueText(value.updatedBy),
@@ -150,7 +152,10 @@ function groupGuides(records: GuideRecord[]): GuideGroup[] {
   const groups = new Map<string, GuideGroup>();
 
   for (const record of records) {
-    const key = String(record.discoverNumber) + '|' + record.title.trim().toLowerCase();
+    // Distinct tenant records must never collapse into one apparent guide.
+    // Multiple language variants of the SAME tenant guide may still group.
+    const key = (record.organizationId || 'platform') + '|' +
+      String(record.discoverNumber) + '|' + record.title.trim().toLowerCase();
     const existing = groups.get(key);
     if (!existing) {
       groups.set(key, {
@@ -329,8 +334,11 @@ export default function GuideManager({
   };
 
   const openEdit = (group: GuideGroup) => {
-    const preferred = group.records.find(record => record.published && !record.archived)
-      || group.records.find(record => !record.archived)
+    const preferred = group.records.find(record=>record.canEdit!==false
+        && record.organizationId===(organizationId||'') && !record.archived)
+      || group.records.find(record=>record.canEdit!==false && record.published && !record.archived)
+      || group.records.find(record=>record.canEdit!==false && !record.archived)
+      || group.records.find(record=>record.published && !record.archived)
       || group.records[0];
     if (!preferred || preferred.canEdit === false) {
       setError('This guide is owned by another contributor. Copy a shared guide into your organization before editing it.');
@@ -341,7 +349,7 @@ export default function GuideManager({
   };
 
   const save = async () => {
-    if (!editing) return;
+    if (!editing || saving) return;
     if (!editing.programId) {
       setError('A parent study track (program) is required. Please select a study track for this guide.');
       return;
@@ -358,8 +366,12 @@ export default function GuideManager({
     setSaving(true);
     setError('');
     try {
+      // Reserve one canonical ID before the request. Lost HTTP responses and
+      // failed programme attachment must not create additional guide copies.
+      const requestedId=editing.id||'guide-'+crypto.randomUUID().replace(/-/g,'');
+      if(!editing.id)setEditing(previous=>previous?{...previous,id:requestedId}:previous);
       const saved = await guideAdmin('upsertGuide', {
-        id: editing.id || '',
+        id: requestedId,
         discoverNumber: editing.discoverNumber,
         title: editing.title.trim(),
         subtitle: editing.subtitle.trim(),
@@ -379,14 +391,20 @@ export default function GuideManager({
         sharingScope: editing.sharingScope,
       }, organizationId);
 
-      const savedId = saved.item?.id || editing.id || '';
-      if (editing.programId && savedId) {
+      const savedId = saved.item?.id || requestedId;
+      if(savedId!==requestedId)throw new Error('Guide identity changed unexpectedly. Reload before saving.');
+      if(!savedId)throw new Error('Guide save did not return an ID. Reload before retrying.');
+      // Persist the ID immediately: if linking fails after the guide write,
+      // Save again must update the SAME guide, not create a duplicate.
+      setEditing(previous=>previous?{...previous,id:savedId}:previous);
+      if (editing.programId) {
         const targetProg = availablePrograms.find(p => p.id === editing.programId);
-        if (targetProg && !targetProg.guideIds.includes(savedId)) {
-          await guideAdmin('upsert', {
-            ...targetProg,
-            guideIds: [...targetProg.guideIds, savedId],
-          }, organizationId, 'programs').catch(() => {});
+        if (!targetProg) throw new Error('Guide saved, but its programme was not found. Refresh and attach it again.');
+        if (!targetProg.guideIds.includes(savedId)) {
+          await guideAdmin('attachGuide', {
+            programId: editing.programId,
+            guideId: savedId,
+          }, organizationId, 'programs');
         }
       }
 

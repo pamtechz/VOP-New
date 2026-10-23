@@ -101,6 +101,51 @@ export async function handleCurriculumPrograms(ctx:TenantContext,
     }
     return res.status(200).json({ok:true,items:[...known.values()]});
   }
+  if(action==='attachGuide'){
+    await requirePermission(ctx,'curriculum','update');
+    const requested=body.data&&typeof body.data==='object'
+      ?body.data as Record<string,unknown>:{};
+    const id=validId(body.id||body.programId||requested.programId);
+    const guideId=validId(body.guideId||requested.guideId);
+    const programRef=ctx.db.doc('programs/'+id);
+    const guideRef=ctx.db.doc('guides/'+guideId);
+    // Attach the existing canonical guide by reference. Never copy its lessons
+    // or rewrite other programme fields to update one association.
+    const result=await ctx.db.runTransaction(async transaction=>{
+      const [programSnap,guideSnap]=await Promise.all([
+        transaction.get(programRef),transaction.get(guideRef),
+      ]);
+      if(!programSnap.exists)throw new Error('The selected programme no longer exists.');
+      if(!guideSnap.exists)throw new Error('The selected guide no longer exists.');
+      const program=programSnap.data()||{};
+      const guide=guideSnap.data()||{};
+      if(!(await mayEdit(ctx,program)))
+        throw new Error('Only the owning programme editor or VOP Super Admin can attach a guide.');
+      assertMutableTenantResource(ctx.isSuperAdmin,program,'edit');
+      if(program.archived===true||guide.archived===true)
+        throw new Error('Archived programmes or guides cannot be linked.');
+      const programOrg=String(program.organizationId||'');
+      const guideOrg=String(guide.organizationId||'');
+      const shared=guide.published===true&&guide.sharingScope==='shared';
+      if(programOrg!==guideOrg&&!shared)
+        throw new Error('Only published shared guides may be linked across organizations.');
+      if(program.published===true&&guide.published!==true)
+        throw new Error('Publish the guide before attaching it to a published programme.');
+      if(program.sharingScope==='shared'&&!shared)
+        throw new Error('Publicly shared programmes require publicly shared guides.');
+      const ids=Array.isArray(program.guideIds)
+        ?program.guideIds.filter((value:unknown):value is string=>typeof value==='string')
+        :[];
+      if(ids.includes(guideId))return {id,guideIds:ids,alreadyLinked:true};
+      if(ids.length>=100)throw new Error('A programme cannot contain more than 100 guides.');
+      const guideIds=[...ids,guideId];
+      transaction.update(programRef,{guideIds,updatedAt:FieldValue.serverTimestamp(),updatedBy:ctx.auth.uid});
+      return {id,guideIds,alreadyLinked:false};
+    });
+    if(!result.alreadyLinked)await writeTenantAudit(ctx,'program.guide.attach',programRef.path,
+      undefined,{guideId});
+    return res.status(200).json({ok:true,...result});
+  }
   if(!['upsert','delete'].includes(action))
     throw new Error('Unsupported program action.');
   const raw=body.data&&typeof body.data==='object'&&!Array.isArray(body.data)
@@ -111,19 +156,24 @@ export async function handleCurriculumPrograms(ctx:TenantContext,
   const ref=ctx.db.doc('programs/'+id);
   const previous=await ref.get();
   const current=previous.data()||{};
+  // Existing programme ownership is immutable. A Super Admin editing a
+  // programme after changing the UI tenant filter must retain its source.
+  const programOrganizationId=ctx.isSuperAdmin&&previous.exists
+    ?String(current.scope==='platform'?'':current.organizationId||current.ownerOrganizationId||'').trim()
+    :targetOrganizationId;
   await requirePermission(ctx,'curriculum',
     action==='delete'?'delete':previous.exists?'update':'create');
-  if(!ctx.isSuperAdmin&&targetOrganizationId&&action!=='delete'){
+  if(!ctx.isSuperAdmin&&programOrganizationId&&action!=='delete'){
     if(ctx.tenantType==='hierarchy')await requireSubscriptionFeature(ctx,'curriculum','');
-    else await requireOrganizationSubscriptionFeature(ctx.db,'curriculum',targetOrganizationId);
+    else await requireOrganizationSubscriptionFeature(ctx.db,'curriculum',programOrganizationId);
   }
-  if(!ctx.isSuperAdmin&&targetOrganizationId&&action==='upsert'&&!previous.exists){
+  if(!ctx.isSuperAdmin&&programOrganizationId&&action==='upsert'&&!previous.exists){
     if(ctx.tenantType==='hierarchy'){
       const billingTarget=billingTenantFromContext(ctx);
       if(!billingTarget)throw new Error('This hierarchy administrator is not linked to a billing tenant.');
       await enforceBillingTenantQuota(ctx.db,billingTarget.type,billingTarget.id,'programs','maxPrograms');
     }else{
-      await enforceOrganizationQuota(ctx.db,targetOrganizationId,'programs','maxPrograms');
+      await enforceOrganizationQuota(ctx.db,programOrganizationId,'programs','maxPrograms');
     }
   }
   if(previous.exists){
@@ -146,62 +196,67 @@ export async function handleCurriculumPrograms(ctx:TenantContext,
     await writeTenantAudit(ctx,'program.archive',ref.path,current,{...current,archived:true,published:false});
     return res.status(200).json({ok:true,id,archived:true});
   }
-  if(previous.exists&&String(current.organizationId||'')!==targetOrganizationId)
+  if(previous.exists&&String(current.organizationId||'')!==programOrganizationId)
     throw new Error('A program cannot be transferred between tenant scopes by editing.');
   if(!ctx.isSuperAdmin){
     if(ctx.tenantType==='hierarchy'){
-      if(!targetOrganizationId||
-         !(await organizationInHierarchyScope(ctx,targetOrganizationId)))
+      if(!programOrganizationId||
+         !(await organizationInHierarchyScope(ctx,programOrganizationId)))
         throw new Error('Choose an organization in your authorized hierarchy for this program.');
-    }else if(!ownScope(ctx,targetOrganizationId)||!targetOrganizationId){
+    }else if(!ownScope(ctx,programOrganizationId)||!programOrganizationId){
       throw new Error('The selected organization is outside your curriculum scope.');
     }
   }
-  if(targetOrganizationId){
-    const organization=await ctx.db.doc('organizations/'+targetOrganizationId).get();
+  if(programOrganizationId){
+    const organization=await ctx.db.doc('organizations/'+programOrganizationId).get();
     if(!organization.exists||organization.data()?.status!=='active')
       throw new Error('The selected organization is not active.');
   }
   const input=normalizeProgramDraft(raw);
   // A published platform program is, by definition, system-wide. Do not
   // permit a platform publication whose visibility contradicts its scope.
-  if(!targetOrganizationId&&input.published)input.sharingScope='shared';
+  if(!programOrganizationId&&input.published)input.sharingScope='shared';
   if(input.sharingScope==='shared'&&!ctx.isSuperAdmin)
     throw new Error('Only VOP Super Admin may publish a cross-organization program.');
-  if(!targetOrganizationId&&input.sharingScope==='organization')
+  if(!programOrganizationId&&input.sharingScope==='organization')
     throw new Error('Platform-wide programs must be private or shared.');
-  if(targetOrganizationId && !ctx.isSuperAdmin && input.published &&
+  if(programOrganizationId && !ctx.isSuperAdmin && input.published &&
      input.sharingScope==='private')
     throw new Error('Publish an organization-visible program instead of a private draft.');
   if(input.archived&&input.published)
     throw new Error('An archived program cannot be published.');
-  // Every guide must be in the SAME tenant as its parent program. A shared
-  // public guide cannot silently be adopted or reparented into another tenant.
+  // A programme stores canonical guide references, never copies. Owned
+  // guides can be drafts; cross-tenant guides must be published and shared.
   if(input.guideIds.length){
     const snapshots=await ctx.db.getAll(...input.guideIds.map(guideId=>
       ctx.db.doc('guides/'+guideId)));
     for(const guide of snapshots){
       const value=guide.data()||{};
-      if(!guide.exists||value.archived===true||
-         String(value.organizationId||'')!==targetOrganizationId)
-        throw new Error('A selected guide is missing or belongs to another organization.');
+      if(!guide.exists||value.archived===true)
+        throw new Error('A selected guide is missing or archived.');
+      const isOwnGuide=String(value.organizationId||'')===programOrganizationId;
+      const isSharedGuide=value.published===true&&value.sharingScope==='shared';
+      if(!isOwnGuide&&!isSharedGuide)
+        throw new Error('Only published shared guides may be assigned across organizations.');
       if(input.published&&value.published!==true)
         throw new Error('Publish every assigned guide before publishing the program.');
       if(input.published&&input.sharingScope==='shared'&&value.sharingScope!=='shared')
         throw new Error('A publicly shared program may contain only publicly shared guides.');
-      if(!ctx.isSuperAdmin&&!await mayEdit(ctx,value))
-        throw new Error('You cannot assign a guide owned by another contributor.');
+      // Assigning a published shared guide requires view access, not edit
+      // permission to the originating content. Programme edits remain scoped.
+      if(!ctx.isSuperAdmin&&!isSharedGuide&&!isOwnGuide)
+        throw new Error('This guide is not visible to the programme organization.');
     }
   }
   const next={
-    ...input,id,organizationId:targetOrganizationId,
+    ...input,id,organizationId:programOrganizationId,
     ownerOrganizationId:previous.exists
-      ?String(current.ownerOrganizationId||''):targetOrganizationId,
+      ?String(current.ownerOrganizationId||''):programOrganizationId,
     ownerTenantId:previous.exists
       ?String(current.ownerTenantId||''):tenantOwnerKey(ctx),
     ownerUid:previous.exists
       ?String(current.ownerUid||''):ctx.auth.uid,
-    scope:targetOrganizationId?'organization':'platform',
+    scope:programOrganizationId?'organization':'platform',
     canonical:true,
     // Adoption remains permanent even after unpublishing or archiving. An
     // organization must never regain control over publicly adopted material.
@@ -214,5 +269,5 @@ export async function handleCurriculumPrograms(ctx:TenantContext,
   await writeTenantAudit(ctx,previous.exists?'program.update':'program.create',
     ref.path,previous.exists?current:undefined,next);
   return res.status(200).json({ok:true,item:{...input,id,
-    organizationId:targetOrganizationId,canEdit:true}});
+    organizationId:programOrganizationId,canEdit:true}});
 }

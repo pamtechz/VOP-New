@@ -28,12 +28,14 @@ class _WorkspaceRecordsState extends State<WorkspaceRecordsScreen>{
   Future<void> edit(Map<String,dynamic> schema,Map<String,dynamic> workspace,Map<String,dynamic>? record) async {
     final fields=recordRows(schema['fields']);
     final original=record??<String,dynamic>{};
+    // Preserve one identity across repeated Save attempts in the same editor.
+    final draftId=newRecordId();
     await Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>RecordEditor(
       api:widget.api,title:record==null?'New ${schema['title']}':'Edit ${recordTitle(original)}',
       fields:fields,options:recordMap(workspace['options']),initial:original,
       onSave:(value)async{
         final id=(original['id']??(widget.collection=='languages'?value['code']:null)??
-          (schema['singleton']==true?widget.collection:newRecordId())).toString();
+          (schema['singleton']==true?widget.collection:draftId)).toString();
         await widget.api.saveRecord(widget.collection,id,value,payload:scope);
       })));
     if(mounted)setState(reload);

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../core/vop_api.dart';
 import '../widgets/vop_ui.dart';
@@ -85,6 +87,15 @@ class _PublicEntryScreenState extends State<PublicEntryScreen> {
             child: const Text('Browse studies',
               style: TextStyle(color: Colors.white)),
           ),
+        if(kIsWeb)...[
+          TextButton.icon(
+            onPressed:()=>launchUrl(Uri.base.resolve('/'),
+              webOnlyWindowName:'_self'),
+            icon:const Icon(Icons.swap_horiz,color:Colors.white,size:17),
+            label:const Text('Legacy',style:TextStyle(color:Colors.white)),
+          ),
+          const SizedBox(width:8),
+        ],
         const SizedBox(width: 12),
         FilledButton(
           onPressed: () => setState(() => _signIn = true),
@@ -312,11 +323,39 @@ class _PublicEntryScreenState extends State<PublicEntryScreen> {
                                 style: Theme.of(context).textTheme.bodySmall),
                               const SizedBox(height: 8),
                               OutlinedButton.icon(
-                                onPressed: () => setState(() =>
-                                  _selectedProgram = program['id']?.toString() ?? ''),
+                                onPressed: () => setState(() {
+                                  _selectedProgram = program['id']?.toString() ?? '';
+                                  _search.clear();
+                                }),
                                 icon: const Icon(Icons.arrow_forward, size: 17),
-                                label: const Text('View published courses'),
+                                label: Text(_selectedProgram == program['id']
+                                  ? 'Showing this programme' : 'View published courses'),
                               ),
+                              if (_selectedProgram == program['id']) ...[
+                                const Divider(height: 24),
+                                if (all.where((guide) =>
+                                  (program['guideIds'] as List? ?? []).contains(guide['id'])).isEmpty)
+                                  const Text('No course outlines have been published for public browsing in this programme.'),
+                                ...all.where((guide) =>
+                                  (program['guideIds'] as List? ?? []).contains(guide['id'])).map(
+                                  (guide) => Padding(
+                                    padding: const EdgeInsets.symmetric(vertical: 7),
+                                    child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                      const Icon(Icons.menu_book_outlined, size: 17),
+                                      const SizedBox(width: 9),
+                                      Expanded(child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text((guide['title'] ?? '').toString(),
+                                            style: const TextStyle(fontWeight: FontWeight.w700)),
+                                          Text('${_items(guide['lessons']).length} published lessons',
+                                            style: Theme.of(context).textTheme.bodySmall),
+                                        ],
+                                      )),
+                                    ]),
+                                  ),
+                                ),
+                              ],
                             ])),
                       )),
                   ]);
