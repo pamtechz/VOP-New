@@ -133,9 +133,9 @@ test('unaffiliated learners retain private prayer and platform support without t
     });
     await t.test('personal certificate history is readable without organization',async()=>{
       // Reading historical certificates is distinct from issuing new ones.
-      const result=await call(certificates,personal,{},'GET');
+      const result=await call(certificates,personal,{},'GET',{action:'mine'});
       assert.equal(result.statusCode,200,JSON.stringify(result.body));
-      const outsiderHistory=await call(certificates,stranger,{},'GET');
+      const outsiderHistory=await call(certificates,stranger,{},'GET',{action:'mine'});
       assert.equal(outsiderHistory.statusCode,200,JSON.stringify(outsiderHistory.body));
     });
   }finally{await vite.close();}
