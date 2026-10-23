@@ -162,7 +162,7 @@ test('unaffiliated learners retain private prayer and platform support without t
       for(let i=0;i<6;i++){
         const created=await call(mentorship,personal,{
           ...data,subject:'Study question '+i,
-          idempotencyKey:'test-personal-support-'+String(i).padStart(8,'0'),
+          idempotencyKey:'test-personal-followup-'+String(i).padStart(8,'0'),
         });
         assert.equal(created.statusCode,201,JSON.stringify(created.body));
       }
