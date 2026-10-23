@@ -604,17 +604,18 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
       if (!guide.id) continue;
       const id = String(guide.id);
       if (!map.has(id)) {
-        const guideOrg = String((guide as unknown as Record<string, unknown>).organizationId || '');
-        if (scopeOrganizationId && !isSuperAdmin && guideOrg && guideOrg !== scopeOrganizationId) {
-          continue;
-        }
+        const guideOrg = String((guide as unknown as Record<string, unknown>).organizationId
+          || guide.ownerOrganizationId || '');
+        if (scopeOrganizationId && !isSuperAdmin && guideOrg && guideOrg !== scopeOrganizationId
+          && guide.sharingScope !== 'shared') continue;
         map.set(id, {
           id,
           title: guide.title || 'Untitled guide',
           language: guide.language || 'en',
           published: (guide as unknown as Record<string, unknown>).published !== false,
           archived: false,
-          canEdit: true,
+          canEdit: isSuperAdmin || Boolean(guideOrg && guideOrg===scopeOrganizationId
+            && guide.ownerUid===currentUser?.uid),
           lessonCount: guide.lessons?.length || 0,
           lessons: guide.lessons || [],
           organizationId: guideOrg,
@@ -941,6 +942,8 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
     const existingGuideRecord = editableGuides.find(item => String(item.id) === editor.guideId)
       || guides.find(item => String(item.id) === editor.guideId);
     if (!existingGuideRecord) return setError('Choose an editable guide within your selected organization. Refresh if the guide was recently created.');
+    if ((existingGuideRecord as RecordItem).canEdit === false)
+      return setError('This shared guide is read-only in your organization. Only its owning contributor or Super Admin can save lesson changes.');
     if (String(existingGuideRecord.language).trim().toLowerCase() !== normalizedLanguage) return setError(tx('curriculum.guideLanguageMismatch', 'The selected guide is not available for this language.'));
     const guideMetadata = existingGuideRecord as unknown as Record<string, unknown>;
     const guideOrganizationId = valueText(guideMetadata.organizationId || guideMetadata.ownerOrganizationId).trim();
