@@ -484,8 +484,19 @@ export default async function handler(req: Request, res: Response) {
     // Never infer it from a stale organization attached to the admin profile.
     if(action==='listSupportRequests'&&body.supportScope==='platform'
        &&String(actor.role||'')==='super_admin')organizationId='';
-    if(permissionAction&&!['view','read'].includes(permissionAction)&&organizationId&&String(actor.role||'')!=='super_admin'){
-      await requireOrganizationSubscriptionFeature(db,'mentorship',organizationId);
+    if(permissionAction&&!['view','read'].includes(permissionAction)&&String(actor.role||'')!=='super_admin'){
+      // A previously created personal support case stays platform-scoped even
+      // when its learner later joins a subscription-restricted organization.
+      const existingSupportAction=['replySupportRequest','editSupportMessage',
+        'deleteSupportMessage','updateSupportRequest'].includes(action);
+      let billingOrganizationId=organizationId;
+      if(existingSupportAction){
+        const requestId=id(body.requestId);
+        const original=await db.doc('learningSupportRequests/'+requestId).get();
+        if(original.exists)billingOrganizationId=String(original.data()?.organizationId||'').trim();
+      }
+      if(billingOrganizationId)
+        await requireOrganizationSubscriptionFeature(db,'mentorship',billingOrganizationId);
     }
 
     if (['listStudents','listMentors','listAssignments','questionFailures','createDraft','sendDraft','getAutomationSettings','saveAutomationSettings'].includes(action)) {
