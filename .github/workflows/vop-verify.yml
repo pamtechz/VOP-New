@@ -47,7 +47,7 @@ jobs:
         run: |
           # Multiple self-hosted runner services share Windows disk and npm
           # cache. Serialize only package installation, not the test suites.
-          $lock = New-Object System.Threading.Mutex($false, 'Global\VOP-NPM-CI-WINDOWS')
+          $lock = [System.Threading.Mutex]::new($false, 'Global\VOP-NPM-CI-WINDOWS')
           $acquired = $false
           try {
             try {
