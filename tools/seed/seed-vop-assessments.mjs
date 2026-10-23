@@ -180,6 +180,20 @@ export async function planAssessments(reader,bundle){
   return {summary,guideReports,bundleHash,writes,reused};
 }
 
+export async function connectAssessmentDatabase(){
+  need(process.env.FIREBASE_ADMIN_PROJECT_ID===TARGET_PROJECT,'The existing backend credential must name the authorized Firebase project.');
+  const [{cert,initializeApp},{getFirestore}]=await Promise.all([import('firebase-admin/app'),import('firebase-admin/firestore')]);
+  need(process.env.FIREBASE_ADMIN_CLIENT_EMAIL&&process.env.FIREBASE_ADMIN_PRIVATE_KEY,'The existing backend administration configuration is required.');
+  const app=initializeApp({projectId:TARGET_PROJECT,credential:cert({projectId:TARGET_PROJECT,
+    clientEmail:process.env.FIREBASE_ADMIN_CLIENT_EMAIL,privateKey:process.env.FIREBASE_ADMIN_PRIVATE_KEY.replace(/\\n/g,'\n')})});
+  const {access_token:token}=await app.options.credential.getAccessToken();
+  const response=await fetch(`https://firestore.googleapis.com/v1/projects/${TARGET_PROJECT}/databases/(default)`,{headers:{Authorization:`Bearer ${token}`},signal:AbortSignal.timeout(30000)});
+  need(response.ok,'Could not verify the database edition.');
+  const edition=await response.json();
+  need(edition.type==='FIRESTORE_NATIVE'&&edition.databaseEdition==='STANDARD','This import requires the established Standard Native database.');
+  return {db:getFirestore(app,'(default)'),edition};
+}
+
 async function main(){
   const args=process.argv.slice(2);
   const option=name=>{const at=args.indexOf(name);return at<0?undefined:args[at+1];};
@@ -195,17 +209,7 @@ async function main(){
     need(process.env.VERCEL_ENV!=='production'&&process.env.VERCEL_TARGET_ENV!=='production','Do not execute this import in a production app deployment.');
     need(!process.env.VERCEL_PROJECT_ID||process.env.VERCEL_PROJECT_ID==='prj_zxOpr6AsBlSI0PuzQtflJmL2RPrU','Unexpected Vercel project.');
   }
-  need(process.env.FIREBASE_ADMIN_PROJECT_ID===TARGET_PROJECT,'The existing backend credential must name the authorized Firebase project.');
-  const [{cert,initializeApp},{getFirestore}]=await Promise.all([import('firebase-admin/app'),import('firebase-admin/firestore')]);
-  need(process.env.FIREBASE_ADMIN_CLIENT_EMAIL&&process.env.FIREBASE_ADMIN_PRIVATE_KEY,'The existing backend administration configuration is required.');
-  const app=initializeApp({projectId:TARGET_PROJECT,credential:cert({projectId:TARGET_PROJECT,
-    clientEmail:process.env.FIREBASE_ADMIN_CLIENT_EMAIL,privateKey:process.env.FIREBASE_ADMIN_PRIVATE_KEY.replace(/\\n/g,'\n')})});
-  const {access_token:token}=await app.options.credential.getAccessToken();
-  const response=await fetch(`https://firestore.googleapis.com/v1/projects/${TARGET_PROJECT}/databases/(default)`,{headers:{Authorization:`Bearer ${token}`},signal:AbortSignal.timeout(30000)});
-  need(response.ok,'Could not verify the database edition.');
-  const edition=await response.json();
-  need(edition.type==='FIRESTORE_NATIVE'&&edition.databaseEdition==='STANDARD','This import requires the established Standard Native database.');
-  const db=getFirestore(app,'(default)');
+  const {db,edition}=await connectAssessmentDatabase();
   const wrap=s=>({id:s.id,exists:s.exists,data:s.exists?s.data():null});
   const reader={get:async path=>wrap(await db.doc(path).get()),lessons:async id=>(await db.collection(`guides/${id}/lessons`).get()).docs.map(wrap)};
   const plan=await planAssessments(reader,bundle);
