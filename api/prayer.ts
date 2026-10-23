@@ -53,6 +53,9 @@ export default async function handler(req: Request, res: Response) {
         .map(doc => ({ id: doc.id, ...doc.data() } as Record<string,unknown>&{id:string}))
         .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')))
         .filter(item => {
+          // Personal prayer journals are owner-only. An organization or VOP
+          // ministry inbox does not imply consent to view the journal.
+          if(!String(item.organizationId||''))return item.candidateId===ctx.auth.uid;
           if (item.candidateId === ctx.auth.uid) return true;
           if (!ctx.isSuperAdmin && ctx.tenantType !== 'hierarchy' && item.organizationId !== ctx.organizationId) return false;
           if (ctx.tenantType === 'hierarchy' && !ctx.isSuperAdmin) return true;
@@ -156,6 +159,7 @@ export default async function handler(req: Request, res: Response) {
       const existing = await ref.get();
       if (!existing.exists) throw new Error('Prayer request not found.');
       const data = existing.data() || {};
+      if(!String(data.organizationId||''))throw new Error('Personal prayer journals are not part of a ministry inbox.');
       if (!ctx.isSuperAdmin && !(ctx.tenantType === 'hierarchy' ? await organizationInHierarchyScope(ctx, String(data.organizationId || '')) : String(data.organizationId || '') === ctx.organizationId)) throw new Error('You cannot manage a prayer request outside your authorized scope.');
       await ref.update({ status, updatedAt: new Date().toISOString(), updatedBy: ctx.auth.uid });
       await writeTenantAudit(ctx,'prayer.status',`prayerRequests/${requestId}`,data,{...data,status});
