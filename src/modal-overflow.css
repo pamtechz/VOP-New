@@ -80,3 +80,18 @@
     scrollbar-gutter: auto;
   }
 }
+
+/* Shared study/account overlays and hierarchy selection dialogs also scroll
+   on short viewports, without changing full-page lesson-reader behavior. */
+.modal-overlay:not(.vop-lesson-page-root),
+.vop-dialog-overlay {
+  max-height: 100dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.vop-dialog-box {
+  min-height: 0;
+  max-height: calc(100dvh - 28px) !important;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
