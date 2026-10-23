@@ -371,7 +371,12 @@ async function assertSupportRequestAccess(
   request:Record<string,unknown>,
 ){
   const organizationId=String(request.organizationId||'').trim();
-  if(!organizationId)throw new Error('This support request is missing its organization scope.');
+  if(!organizationId){
+    // Platform support for an independent learner is visible only to that
+    // learner and VOP Super Admin, never to an unrelated tenant admin/mentor.
+    if(String(request.candidateId||'')===uid||String(actor.role||'')==='super_admin')return;
+    throw new Error('You are not allowed to access another learner\'s personal support request.');
+  }
   if(String(request.candidateId||'')===uid)return;
   if(isAdmin(actor)){
     await assertOrganizationScope(db,{...actor,uid},organizationId);
@@ -811,24 +816,36 @@ export default async function handler(req: Request, res: Response) {
       if(!isCandidate(actor))throw new Error('Only a learner or candidate can open a learning support request.');
       const candidateId=decoded.uid;
       const candidateOrganizationId=String(actor.organizationId||'').trim();
-      if(!candidateOrganizationId)throw new Error('Your account is not linked to an organization.');
+      const personal=!candidateOrganizationId;
       const message=String(body.message||'').trim();
       if(message.length<3||message.length>10000)throw new Error('Describe the question or support need in 3 to 10,000 characters.');
       const subject=String(body.subject||'').trim().slice(0,180)
         ||(supportCategory(body.category)==='doctrine'?'Doctrine question':'Learning support request');
-      const target=supportTarget(body.target);
-      const channel=supportChannel(body.channel);
+      // Independently enrolled learners always use the private VOP help
+      // queue. Mentor/WhatsApp destinations require a real assigned team.
+      const target=personal?'support_team':supportTarget(body.target);
+      const channel=personal?'in_app':supportChannel(body.channel);
       const category=supportCategory(body.category);
       const spiritualInterest=supportInterest(body.spiritualInterest);
       const priority=supportPriority(body.priority);
       const references=messageReferences(body.references);
-      const assignedMentorId=(target==='mentor'||target==='both')
+      if(personal){
+        // Rate-limit unassigned requests by account, without public queues or
+        // unbounded scans. Other tenants cannot view these documents.
+        const own=await db.collection('learningSupportRequests').where('candidateId','==',candidateId).limit(50).get();
+        const cutoff=Date.now()-24*60*60*1000;
+        if(own.docs.filter(doc=>supportCreatedMillis(doc.data()?.createdAt)>cutoff).length>=8)
+          throw new Error('Daily personal support request limit reached. Reply to an existing request or try again later.');
+      }
+      const assignedMentorId=personal?'':(target==='mentor'||target==='both')
         ?await activeMentorFor(db,candidateId,candidateOrganizationId):'';
       if(target==='mentor'&&!assignedMentorId){
         throw new Error('No active mentor is assigned yet. Choose Organization support team or ask your administrator to assign a mentor.');
       }
-      const teamRecipients=(target==='support_team'||target==='both')
-        ?await supportTeamRecipients(db,candidateOrganizationId):[];
+      const teamRecipients=personal
+        ?(await db.collection('users').where('role','==','super_admin').limit(20).get()).docs.map(doc=>doc.id)
+        :(target==='support_team'||target==='both')
+          ?await supportTeamRecipients(db,candidateOrganizationId):[];
       if(target==='support_team'&&!teamRecipients.length){
         throw new Error('The organization support team is not configured yet.');
       }
@@ -836,7 +853,7 @@ export default async function handler(req: Request, res: Response) {
         ...(assignedMentorId?[assignedMentorId]:[]),
         ...teamRecipients,
       ])].filter(uid=>uid!==candidateId);
-      if(!recipients.length)throw new Error('No support recipient is currently available for this request.');
+      if(!recipients.length&&!personal)throw new Error('No support recipient is currently available for this request.');
 
       const requestRef=db.collection('learningSupportRequests').doc();
       const messageRef=requestRef.collection('messages').doc();
@@ -861,7 +878,8 @@ export default async function handler(req: Request, res: Response) {
       await Promise.all(recipients.map(recipientId=>createNotification(db,{
         organizationId:candidateOrganizationId,recipientId,type:'learning-support',
         title:priority==='high'?'High-priority learning support request':subject,
-        body:`${String(actor.displayName||actor.email||'A learner')} asked for help: ${message.slice(0,240)}`,
+        body:personal?'An independent learner has requested private VOP support.'
+          :`${String(actor.displayName||actor.email||'A learner')} asked for help: ${message.slice(0,240)}`,
         actionUrl:recipientId===assignedMentorId?'/mentor':'/admin/mentorship',
         metadata:{
           source:'candidate-support-request',requestId:requestRef.id,candidateId,
@@ -902,7 +920,11 @@ export default async function handler(req: Request, res: Response) {
         for(const doc of snapshot.docs){
           const data=doc.data()||{};
           const requestOrganizationId=String(data.organizationId||'').trim();
-          if(!requestOrganizationId)continue;
+          if(!requestOrganizationId){
+            if(String(actor.role||'')==='super_admin'&&!organizationId)
+              allowed.push(supportRequestPayload(doc,decoded.uid));
+            continue;
+          }
           try{
             await assertOrganizationScope(db,{...actor,uid:decoded.uid},requestOrganizationId);
             if(organizationId&&requestOrganizationId!==organizationId)continue;
