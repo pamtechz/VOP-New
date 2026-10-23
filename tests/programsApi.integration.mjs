@@ -208,6 +208,26 @@ await test('one published canonical guide can be reused across tenants without c
   assert.deepEqual((await ref.get()).data()?.guideIds,[sharedGuide]);
   const original=(await source.get()).data();
   assert.equal(original?.organizationId,a);
+  await source.collection('lessons').doc('public').set({
+    id:'public',title:'Published lesson',published:true,
+    archived:false,sharingScope:'shared',type:'Lesson',language:'en',
+  });
+  await source.collection('lessons').doc('draft').set({
+    id:'draft',title:'Private unfinished lesson',published:false,
+    archived:false,sharingScope:'shared',type:'Lesson',language:'en',
+  });
+  const view=await call(outsider,{
+    collection:'curriculum',action:'listGuideLessons',guideId:sharedGuide,organizationId:b,
+  });
+  assert.equal(view.status,200,JSON.stringify(view.value));
+  assert.ok(view.value.items.some(item=>item.id==='public'));
+  assert.ok(!view.value.items.some(item=>item.id==='draft'),
+    'tenant B cannot enumerate unpublished content from tenant A');
+  const authorView=await call(author,{
+    collection:'curriculum',action:'listGuideLessons',guideId:sharedGuide,organizationId:a,
+  });
+  assert.equal(authorView.status,200,JSON.stringify(authorView.value));
+  assert.ok(authorView.value.items.some(item=>item.id==='draft'));
 
   // Attaching a second shared guide must change only associations, not
   // publication/owner metadata or the canonical guide itself.
