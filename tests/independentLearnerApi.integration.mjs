@@ -101,6 +101,12 @@ test('unaffiliated learners retain private prayer and platform support without t
       const answered=await call(prayer,personal,{action:'markAnswered',id:personalPrayerId});
       assert.equal(answered.statusCode,200,JSON.stringify(answered.body));
       assert.equal((await db.doc('prayerRequests/'+personalPrayerId).get()).data().status,'Answered');
+      // The learner joined a church after writing a personal prayer, but the
+      // church must never receive the private text in its immutable audit log.
+      const tenantAudits=await db.collection('organizations/personal-test-church/audit').get();
+      assert.ok(!tenantAudits.docs.some(doc=>
+        JSON.stringify(doc.data()).includes('A revised private prayer after joining')),
+        'private prayer journal leaked to the organization audit ledger');
       // Restore personal mode for the independent support tests.
       await db.doc('users/'+personal.uid).set({organizationId:'',organizationRole:''},{merge:true});
       await db.doc('organizations/personal-test-church/members/'+personal.uid).update({active:false});
@@ -213,14 +219,26 @@ test('unaffiliated learners retain private prayer and platform support without t
         id:'personal-history-verified',candidateId:personal.uid,
         organizationId:'an-earlier-ministry',certificateNumber:'VOP-PRIVATE-TEST',
         candidateName:'independent',courseName:'Bible Study',status:'Certified',
+        issuer:{name:'Original VOP Ministry'},
+        presentationSnapshot:{
+          certificateTitle:'Original Award',issuerName:'Original VOP Ministry',
+          logoUrl:'https://example.invalid/original-logo.png',
+          signatureUrl:'https://example.invalid/original-signature.png',
+        },
       });
       const result=await call(certificates,personal,{},'GET',{action:'mine'});
       assert.equal(result.statusCode,200,JSON.stringify(result.body));
       assert.ok(result.body.certificates.some(row=>row.id==='personal-history-verified'));
+      const historical=result.body.certificates.find(row=>row.id==='personal-history-verified');
+      assert.equal(historical.presentationSnapshot.issuerName,'Original VOP Ministry');
+      assert.equal(historical.presentationSnapshot.logoUrl,'https://example.invalid/original-logo.png');
+      assert.equal(historical.presentationSnapshot.signatureUrl,'https://example.invalid/original-signature.png');
       await db.doc('users/'+personal.uid).set({organizationId:'personal-test-church',organizationRole:'learner'},{merge:true});
       const afterJoin=await call(certificates,personal,{},'GET',{action:'mine'});
       assert.equal(afterJoin.statusCode,200,JSON.stringify(afterJoin.body));
       assert.ok(afterJoin.body.certificates.some(row=>row.id==='personal-history-verified'));
+      assert.equal(afterJoin.body.certificates.find(row=>row.id==='personal-history-verified')
+        .presentationSnapshot.issuerName,'Original VOP Ministry');
       const outsiderHistory=await call(certificates,stranger,{},'GET',{action:'mine'});
       assert.equal(outsiderHistory.statusCode,200,JSON.stringify(outsiderHistory.body));
       assert.ok(!outsiderHistory.body.certificates.some(row=>row.id==='personal-history-verified'));
