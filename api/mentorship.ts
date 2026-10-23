@@ -477,7 +477,27 @@ export default async function handler(req: Request, res: Response) {
       action === 'updateSupportRequest' ? 'update' :
       ['sendMessage','createSupportRequest','replySupportRequest','editMessage','deleteMessage','editSupportMessage','deleteSupportMessage'].includes(action) ? 'create' :
       ['performance','questionFailures','listConversations','listMyConversations','listMyAssignments','messages','listMySupportRequests','supportRequestMessages','markConversationRead','markSupportRequestRead','unreadSummary'].includes(action) ? 'read' : '';
-    if (permissionAction) await requirePermissionForProfile(db, actor as Record<string, unknown>, 'mentoring', permissionAction);
+    // Personal VOP support belongs to its creator regardless of whether the
+    // learner later joins a ministry with a restricted permission matrix.
+    // Every request-specific operation still checks its stored ACL below.
+    const existingSupportAction=[
+      'replySupportRequest','editSupportMessage','deleteSupportMessage',
+      'updateSupportRequest','supportRequestMessages','markSupportRequestRead',
+    ].includes(action);
+    let storedSupport:FirebaseFirestore.DocumentSnapshot|undefined;
+    if(existingSupportAction&&/^[A-Za-z0-9_-]{8,120}$/.test(String(body.requestId||''))){
+      storedSupport=await db.doc('learningSupportRequests/'+String(body.requestId)).get();
+    }
+    const ownPersonalSupport=Boolean(storedSupport?.exists
+      &&!String(storedSupport.data()?.organizationId||'').trim()
+      &&String(storedSupport.data()?.candidateId||'')===decoded.uid);
+    const personalSupportWorkspace=isCandidate(actor)&&(
+      action==='listMySupportRequests'
+      ||(action==='createSupportRequest'&&!String(actor.organizationId||'').trim())
+      ||ownPersonalSupport
+    );
+    if(permissionAction&&!personalSupportWorkspace)
+      await requirePermissionForProfile(db, actor as Record<string, unknown>, 'mentoring', permissionAction);
     let organizationId = String(body.organizationId || actor.organizationId || '').trim();
     if (isAdmin(actor)) organizationId = await assertOrganizationScope(db, { ...actor, uid: decoded.uid }, organizationId);
     // Only Super Admin may explicitly select the independent-learner queue.
@@ -487,13 +507,9 @@ export default async function handler(req: Request, res: Response) {
     if(permissionAction&&!['view','read'].includes(permissionAction)&&String(actor.role||'')!=='super_admin'){
       // A previously created personal support case stays platform-scoped even
       // when its learner later joins a subscription-restricted organization.
-      const existingSupportAction=['replySupportRequest','editSupportMessage',
-        'deleteSupportMessage','updateSupportRequest'].includes(action);
       let billingOrganizationId=organizationId;
-      if(existingSupportAction){
-        const requestId=id(body.requestId);
-        const original=await db.doc('learningSupportRequests/'+requestId).get();
-        if(original.exists)billingOrganizationId=String(original.data()?.organizationId||'').trim();
+      if(existingSupportAction&&storedSupport?.exists){
+        billingOrganizationId=String(storedSupport.data()?.organizationId||'').trim();
       }
       if(billingOrganizationId)
         await requireOrganizationSubscriptionFeature(db,'mentorship',billingOrganizationId);
