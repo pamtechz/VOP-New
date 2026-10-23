@@ -47,9 +47,6 @@ async function mine(req:Request,res:Response){
    }));
  }
  const organizationId=String(profileData.organizationId||'').trim();
- const profileRole=String(profileData.role||'');
- const adminNodeId=String(profileData.adminNodeId||'').trim();
- const hierarchyField=hierarchyScopeField(profileRole);
  // Certificate history belongs to the learner, including after leaving an
  // organization. New certificate issuance still follows its separate
  // organization/platform authorization and graduation review policies.
