@@ -798,7 +798,7 @@ export const HeroSliderManager: React.FC<HeroSliderManagerProps> = ({
                   type="button"
                   className="vop-hsm-icon-btn"
                   id="vop-hsm-editor-close"
-                  aria-label="Close hero slide editor"
+                  aria-label={uiT('admin.hero_slider.close_editor','Close hero slide editor')}
                   onClick={() => { setIsModalOpen(false); setEditingSlide(null); }}
                   style={{ border: 'none', background: 'transparent', cursor: 'pointer' }}
                 >
@@ -806,7 +806,7 @@ export const HeroSliderManager: React.FC<HeroSliderManagerProps> = ({
                 </button>
               </div>
 
-              <div className="vop-hsm-modal-body" tabIndex={0} aria-label="Hero slide form fields">
+              <div className="vop-hsm-modal-body" tabIndex={0} aria-label={uiT('admin.hero_slider.form_fields','Hero slide form fields')}>
                 {/* Real-time In-Modal Preview */}
                 <div
                   className="vop-hsm-modal-preview"
