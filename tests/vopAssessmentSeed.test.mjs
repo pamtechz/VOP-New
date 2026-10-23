@@ -107,12 +107,14 @@ test('the privately supplied real payload has complete matching source coverage'
     const docs=documentsForGuide(g,{organizationId:''},fingerprint(b));
     assert.ok(docs.filter(d=>d.path.startsWith('guides/')).every(d=>!containsAnswerKey(d.data)));
   }
-  const corrected=correctedBundle(b);
+  const isBaseline=fingerprint(b)==='f30bc0d91e62c41ba93491bb6ee765a4e3695a54092c8b06abba6d829c6d28c6';
+  const corrected=isBaseline?correctedBundle(b):b;
   const oldQuestions=b.guides.flatMap(g=>g.lessons.flatMap(l=>l.questions));
   const newQuestions=corrected.guides.flatMap(g=>g.lessons.flatMap(l=>l.questions));
-  assert.equal(newQuestions.filter((q,i)=>q.question!==oldQuestions[i].question).length,1);
+  assert.equal(newQuestions.filter((q,i)=>q.question!==oldQuestions[i].question).length,isBaseline?1:0);
   assert.deepEqual(newQuestions.map(q=>[q.sourceQuestionId,q.correctOptionIndex]),oldQuestions.map(q=>[q.sourceQuestionId,q.correctOptionIndex]));
   assert.equal(corrected.guides.find(g=>g.language==='bem').lessons[0].reflection.includes('lyakwafwa'),true);
+  assert.equal(corrected.guides.find(g=>g.language==='bem').lessons[2].questions.find(q=>q.sourceQuestionId==='D03-010').question,'Satana ewatalile ukubembuka.');
 });
 test('wording repair rejects a payload outside the exact verified baseline',()=>{
   assert.throws(()=>correctedBundle(fixture()),/exact verified original bundle/);

@@ -68,5 +68,46 @@ payload can be validated locally with `VOP_ASSESSMENT_TEST_PAYLOAD` without
 including that payload in the repository. Existing quiz grading, attachment and
 management visibility regression tests also apply.
 
-Live execution and verification results will be appended after the controlled
-import completes.
+## Verified live result — 23 October 2026
+
+| Guide | Language | Lesson quizzes | Lesson question pool | Final exam |
+| --- | --- | ---: | ---: | ---: |
+| Discover | English | 26 | 456 | 52 questions |
+| UKUSANGA | Bemba | 26 | 456 | 52 questions |
+| Kojana | Tonga | 26 | 456 | 52 questions |
+
+The controlled import created 81 private banks and 81 public attachments. All
+162 documents passed exact-field read-back; both the immediate repeat plan and
+a separate read-only deployment required **zero writes**. The current inherited
+pass mark is 80%. The administration library displayed all 81 new published
+assessments, 27 per guide, alongside two pre-existing unrelated records. English,
+Bemba and Tonga lesson 1 editors each showed the correct guide and lesson target
+and the translated prompts/options. Each guide final displayed 52 questions.
+
+Execution evidence:
+
+- Reviewed initial importer commit: `04334b4768308c6ae67351398426eb625b569d87`.
+- Read-only preview: `dpl_66U4mP3dkbp28T66rbMrdej3fcRM`.
+- Apply: `dpl_DQDJsuft1hXTbmQ3RdAXdEXDGinF`.
+- Separate zero-write check: `dpl_4ZTiuvdHnqLGv6JEcxeLS3pqiFgB`.
+- Initial receipt: `curriculumImports/31abee295dab36a2a68de62197013b971e6c8e3b3c9e9fbbf46dd78cc4a73796`.
+
+The final wording review corrected `lyakufwa` to `lyakwafwa` in the Bemba lesson 1
+reflection, and `ukulubembu` to `ukubembuka` in Bemba source question `D03-010`.
+The latter also appears in the Bemba final. `correct-vop-assessment-wording.mjs`
+permits exactly these edits against the previously verified bundle fingerprint,
+checks the existing baseline in full, preserves all IDs, keys and scoring
+policies, saves before snapshots for the six affected body documents, and
+updates source provenance. It is an explicit corrective mode; the ordinary
+importer still refuses changed existing records.
+
+- Reviewed correction commit: `74eb50edf31361a266e81b4317d517599b2c97c7`.
+- Correction: `dpl_9geyB9soqT3yhdeBcDjVah2acabh`.
+- Correction receipt: `curriculumImports/7019d05de7b6f9d06c5305f3ab4c1d0be7c115b31b93e655a2b1c1291167c829`.
+- Final private bundle SHA-256: `856db0db55cf62e44a2c3e0b40f309bfcd952a9366f0ad49e4df661e6ae2a51d`.
+- Final read-back: 162 matching documents; repeat writes 0; grading keys changed 0.
+
+Validation passed: 13 focused importer/correction tests with the supplied real
+payload, 15 existing quiz grading/attachment/visibility tests, focused lint and
+whitespace checks. No reading lessons, learner results or certificates changed.
+The application production deployment was not replaced or promoted.
