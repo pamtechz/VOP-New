@@ -178,7 +178,6 @@ export default async function handler(req: Request, res: Response) {
     }
 
     if (action === 'delete') {
-      if(!personalLearner)await requirePermission(ctx, 'prayer', 'delete');
       const requestId = id(body.id);
       const ref = collection.doc(requestId);
       const existing = await ref.get();
@@ -187,6 +186,7 @@ export default async function handler(req: Request, res: Response) {
       if (data.candidateId !== ctx.auth.uid && !admin) throw new Error('You can only delete your own prayer request.');
       if(personalLearner && data.candidateId !== ctx.auth.uid)throw new Error('You can only delete your own prayer request.');
       const ownPersonal=!String(data.organizationId||'')&&String(data.candidateId||'')===ctx.auth.uid;
+      if(!ownPersonal)await requirePermission(ctx, 'prayer', 'delete');
       if (!ownPersonal&&!ctx.isSuperAdmin && !(ctx.tenantType === 'hierarchy' ? await organizationInHierarchyScope(ctx, String(data.organizationId || '')) : String(data.organizationId || '') === ctx.organizationId)) throw new Error('You cannot delete a prayer request outside your authorized scope.');
       await ref.delete();
       if(!ownPersonal)await writeTenantAudit(ctx,'prayer.delete',`prayerRequests/${requestId}`,data,undefined);
