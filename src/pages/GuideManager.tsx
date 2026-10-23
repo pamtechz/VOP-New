@@ -33,6 +33,7 @@ type GuideRecord = {
   updatedAt?: string;
   updatedBy?: string;
   ownerUid?: string;
+  organizationId?: string;
   canEdit?: boolean;
 };
 
@@ -140,6 +141,7 @@ function makeRecord(value: Record<string, unknown>, fallbackLessons = 0): GuideR
     sharingScope: value.sharingScope === 'shared' ? 'shared' : value.sharingScope === 'private' ? 'private' : 'organization',
     lessonCount: Number(value.lessonCount ?? fallbackLessons) || 0,
     ownerUid: valueText(value.ownerUid),
+    organizationId: valueText(value.organizationId || value.ownerOrganizationId),
     canEdit: value.canEdit !== false,
     updatedAt: timestampText(value.updatedAt),
     updatedBy: valueText(value.updatedBy),
@@ -150,7 +152,10 @@ function groupGuides(records: GuideRecord[]): GuideGroup[] {
   const groups = new Map<string, GuideGroup>();
 
   for (const record of records) {
-    const key = String(record.discoverNumber) + '|' + record.title.trim().toLowerCase();
+    // Distinct tenant records must never collapse into one apparent guide.
+    // Multiple language variants of the SAME tenant guide may still group.
+    const key = (record.organizationId || 'platform') + '|' +
+      String(record.discoverNumber) + '|' + record.title.trim().toLowerCase();
     const existing = groups.get(key);
     if (!existing) {
       groups.set(key, {
@@ -329,8 +334,11 @@ export default function GuideManager({
   };
 
   const openEdit = (group: GuideGroup) => {
-    const preferred = group.records.find(record => record.published && !record.archived)
-      || group.records.find(record => !record.archived)
+    const preferred = group.records.find(record=>record.canEdit!==false
+        && record.organizationId===(organizationId||'') && !record.archived)
+      || group.records.find(record=>record.canEdit!==false && record.published && !record.archived)
+      || group.records.find(record=>record.canEdit!==false && !record.archived)
+      || group.records.find(record=>record.published && !record.archived)
       || group.records[0];
     if (!preferred || preferred.canEdit === false) {
       setError('This guide is owned by another contributor. Copy a shared guide into your organization before editing it.');
