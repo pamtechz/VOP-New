@@ -17,7 +17,8 @@ if(process.env.VERCEL&&mode==='apply'){
     throw new Error('Unexpected Vercel project for this controlled import.');
 }
 const args=[join(here,'seed-vop-guides.mjs'),'--connect','--project-id','voiceofprophecy',
-  '--program-id','program-8f8ef60d94fa4c16b8236a678fbf5e76','--publish'];
+  '--program-id','program-8f8ef60d94fa4c16b8236a678fbf5e76','--publish',
+  '--english-master',join(here,'../../content/discover-english-supplied.master.json'),'--authorized-english'];
 if(mode==='apply')args.push('--apply','--confirm-project','voiceofprophecy',
   '--backup-file',join(tmpdir(),`vop-guide-import-before-${Date.now()}-${process.pid}.json`));
 execFileSync(process.execPath,args,{cwd:resolve(here,'../..'),stdio:'inherit',timeout:180000});

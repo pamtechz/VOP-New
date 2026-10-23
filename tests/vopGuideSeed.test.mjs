@@ -8,10 +8,48 @@ import {validateMaster,buildLesson,existingLessonFor,planImport,applySourceOverr
 const archive=JSON.parse(readFileSync(new URL('../content/lessons.master.json',import.meta.url),'utf8'));
 const supplied=JSON.parse(readFileSync(new URL('../content/ukusanga-supplied-lessons.json',import.meta.url),'utf8'));
 const master=applySourceOverrides(archive,supplied);
+const englishMaster=JSON.parse(readFileSync(new URL('../content/discover-english-supplied.master.json',import.meta.url),'utf8'));
+const englishManifest=JSON.parse(readFileSync(new URL('../content/discover-english-source-manifest.json',import.meta.url),'utf8'));
 const vite=await createServer({configFile:false,server:{middlewareMode:true,hmr:false},appType:'custom',logLevel:'error'});
 after(async()=>vite.close());
 const {normalizeCurriculumStructure}=await vite.ssrLoadModule('/shared/curriculumStructure.ts');
 const inventory=validateMaster(master);
+const englishLessons=validateMaster(englishMaster,['en']).get('en');
+
+test('the supplied English PDF becomes 26 canonical lessons with 184 numbered-topic and introduction sections',()=>{
+  assert.equal(englishManifest.sourceSha256,'7111161fbb65eefe004aaee8d48ad18b3bc1decaa699d1821593a7e7bf510019');
+  assert.equal(englishLessons.length,26);
+  assert.equal(englishManifest.sectionCount,184);
+  assert.equal(englishManifest.answerSheetsImportedAsPublicContent,0);
+  let sections=0;
+  for(const [index,source] of englishLessons.entries()){
+    const lesson=buildLesson(source,{guideId:'discover-english',published:true});
+    assert.deepEqual(normalizeCurriculumStructure(lesson.chapters),lesson.chapters);
+    const expected=englishManifest.lessons[index];
+    assert.deepEqual(source.pages.map(page=>page.title),expected.sectionTitles);
+    const reading=source.pages.map((page,index)=>(index===0?'':page.title)+page.blocks.map(block=>block.text).join('')).join('').replace(/\s+/g,'');
+    assert.equal(createHash('sha256').update(reading).digest('hex'),expected.readingSha256,source.lessonId);
+    assert.equal(lesson.source.sha256,englishManifest.sourceSha256);
+    assert.equal(lesson.source.pdfPageStart,index*4+1);
+    assert.equal(lesson.source.pdfPageEnd,index*4+3);
+    assert.match(lesson.attribution,/Copyrights©2000 by the Voice of Prophecy/);
+    assert.equal(lesson.published,true);
+    assert.ok(!/DISCOVER\s*-\s*Answer Sheet|Your Name:|Email adress for E-Lessons/.test(reading));
+    sections+=lesson.pages.length;
+  }
+  assert.equal(sections,184);
+});
+
+test('English sections follow numbered topics across columns and pages, including split headings and printed source errors',()=>{
+  const first=englishLessons[0];
+  assert.match(first.pages[0].blocks[0].text,/^Jim once asked an atheist/);
+  assert.ok(first.pages[1].blocks.some(block=>block.text.includes('one chance in ten billion')));
+  assert.ok(first.pages[2].blocks.some(block=>block.text.includes('dictionary resulting from an explosion in a print shop')));
+  assert.equal(englishLessons[16].pages[5].title,'WE SHARE CHRIST BY THE WAY WE ACT');
+  assert.deepEqual(englishManifest.lessons[3].printedSectionNumbers,[1,2,3,4,5,5]);
+  assert.equal(englishLessons[3].pages.length,7);
+  assert.equal(englishLessons[25].pages.at(-1).title,'THE TWO HARVESTS');
+});
 
 test('all supplied lessons remain readable in the canonical app schema, with original text and section order',()=>{
   let pages=0;
@@ -90,6 +128,28 @@ test('a disabled language or an archived guide blocks the complete plan before a
   records.get('guides/ukusanga').archived=false;
   await assert.rejects(()=>planImport(fakeDb(records),inventory,options),/Enable toi/);
   assert.equal(records.has('guides/ukusanga/lessons/lesson-01'),false);
+});
+
+test('adding English preserves both live translations and attaches only one Discover guide, with no changes on repeat',async()=>{
+  const records=new Map([
+    ['programs/vop',{title:'VOP',published:true,sharingScope:'shared',organizationId:'',guideIds:[]}],
+    ['guides/ukusanga',{title:'UKUSANGA',published:true,language:'bem',sharingScope:'shared',organizationId:''}],
+    ['languages/BEM',{enabled:true}],['languages/TOI',{enabled:true}],['languages/ENG',{enabled:true}],
+  ]);
+  const options={programTitle:'VOP',origin:'https://vopafrica.vercel.app',publish:true,now:'2026-10-23T12:00:00Z'};
+  const db=fakeDb(records);
+  const save=plan=>{for(const write of plan.writes)records.set(write.path,write.create?write.data:{...records.get(write.path),...write.data});};
+  save(await planImport(db,inventory,options));
+  const originalGuideIds=[...records.get('programs/vop').guideIds];
+  const withEnglish=new Map([...inventory,['en',englishLessons]]);
+  const plan=await planImport(db,withEnglish,options);
+  assert.equal(plan.writes.length,28);
+  assert.equal(plan.writes.filter(write=>write.path.includes('/lessons/')).length,26);
+  assert.equal(plan.guides.find(guide=>guide.language==='bem').reusedLessons,26);
+  assert.equal(plan.guides.find(guide=>guide.language==='toi').reusedLessons,26);
+  assert.deepEqual(plan.writes.find(write=>write.path==='programs/vop').data.guideIds,[...originalGuideIds,'vop-vop-en']);
+  save(plan);
+  assert.equal((await planImport(db,withEnglish,options)).writes.length,0);
 });
 
 test('all 26 supplied Bemba lessons preserve source reading checksums, original attribution and deduplicated numbering',()=>{

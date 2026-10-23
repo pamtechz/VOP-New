@@ -3,7 +3,8 @@
 Completed on 22 October 2026: 26 Bemba and 26 Tonga lessons are published and
 linked to the existing VOP program. Every written field was read back and
 verified, and a second connected preview reused all 52 lessons with zero writes.
-English Discover remains pending authorized lesson files.
+The user supplied the full English PDF on 23 October 2026. Its 26 reading
+guides are prepared as lessons under the English Discover guide.
 
 The atomic import updated 55 lesson/parent documents and created receipt
 `curriculumImports/e96dfe54e062e7a5235f8450975f9bfa7aedd556341a854f879323b6ab9192cd`.
@@ -22,7 +23,7 @@ writing and refuses conflicts.
 | Guide | Language code | Prepared full lessons | Status |
 | --- | --- | ---: | --- |
 | Ukusanga | bem | 26 | Published; supplied text files and pasted closing lessons verified |
-| Discover | en | 0 | Needs authorized user-supplied lesson files |
+| Discover | en | 26 | Prepared from the user-supplied English PDF |
 | Kojana | toi | 26 | Published from the supplied archive |
 
 The 52 supplied translations contain 368 reading sections and reference 170
@@ -51,15 +52,24 @@ Numbered lists within a section remain reading content.
 - Tonga: https://languages.bibleschools.com/tonga/
 - English: https://bibleschools.com/en/courses/1/lessons/1/steps/9
 
-The English site is marked all rights reserved and links to the publisher's
-legal notice at https://www.nadadventist.org/legal-notice/. The importer does
-not scrape or republish its full lesson bodies. An English import requires a
-user-supplied, authorized schemaVersion 2 master with all 26 lessons. Each
-lesson must include its actual source URL, attribution and checksum. Deploy
-any new authorized illustration files under `/lessons/assets/` before import.
-If authorization is unavailable, use links to the publisher instead of copying
-the full text. No empty Discover guide is silently presented as a finished
-English course.
+The English source is `English VOP-Guide-Soft-Copies.pdf`, supplied by the user,
+SHA-256 `7111161fbb65eefe004aaee8d48ad18b3bc1decaa699d1821593a7e7bf510019`.
+The original PDF is read-only and is not committed or uploaded by this importer.
+`content/discover-english-supplied.master.json` contains 26 full reading lessons,
+with 184 sections. Together the three languages contain 78 lessons and 552
+sections. The publisher's Guide 1..26 is the VOP lesson number; DISCOVER is
+the single parent guide. Topic text continues across PDF columns and physical
+page breaks until the next main numbered heading, not the next physical page.
+
+`tools/seed/import-english-pdf.py` uses the PDF text geometry and typography.
+It excludes the right-hand answer-sheet column on each third sheet, checks that
+each fourth sheet contains no reading text, joins printed drop capitals, and
+verifies every extracted reading character. The source manifest records the
+PDF reading-page range and section checksum for each lesson. No assessment
+questions or answers are imported into learner-readable text. Source guide 4
+prints two successive section headings as number 5. Both topics are retained
+in source order with distinct stable VOP section IDs. Source attributions from
+the supplied PDF are preserved.
 
 ## Preview without any credentials or network
 
@@ -69,8 +79,9 @@ Run from the repository or extracted package root:
 node tools/seed/seed-vop-guides.mjs
 ```
 
-Expected: 26 Bemba lessons, 26 Tonga lessons, 368 sections; English marked
-`needs_authorized_source`. Bemba files 11 and 12 show the number 10 inside the
+Without English flags: 26 Bemba lessons, 26 Tonga lessons, 368 sections.
+Add `--english-master content/discover-english-supplied.master.json --authorized-english`
+to include all 78 lessons and 552 sections. Bemba files 11 and 12 show the number 10 inside the
 original source documents. The import keeps filename order 11 and 12 and does
 not silently rewrite their prose.
 
@@ -128,12 +139,11 @@ preparing drafts under an unpublished program. Existing guides retain their
 publication and sharing settings; archived or conflicting records require
 deliberate review.
 
-When the authorized English master is available, add
-`--english-master /private/english.master.json --authorized-english` to the
-same preview and apply commands. This also creates/reuses **Discover** in
-English and adds it to VOP. The offline source file format is the same as
-`content/lessons.master.json`; it must contain exactly lessons 01 through 26
-for `lang: "en"`.
+The isolated execution entry point now explicitly includes the supplied English
+master with `--authorized-english`. It creates/reuses **Discover** in English
+and adds it to VOP while reusing the 52 existing Bemba/Tonga lessons unchanged.
+The offline source file format matches `content/lessons.master.json` and contains
+exactly lessons 01 through 26 for `lang: "en"`.
 
 ## Verification
 

@@ -1,0 +1,887 @@
+{
+  "schemaVersion": 1,
+  "sourceFile": "English VOP-Guide-Soft-Copies.pdf",
+  "sourceSha256": "7111161fbb65eefe004aaee8d48ad18b3bc1decaa699d1821593a7e7bf510019",
+  "pdfPages": 104,
+  "lessonCount": 26,
+  "sectionCount": 184,
+  "answerSheetsImportedAsPublicContent": 0,
+  "warnings": [
+    {
+      "guide": 4,
+      "printedSectionNumbers": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        5
+      ],
+      "action": "Preserve the source headings and order; use stable sequential VOP section IDs."
+    }
+  ],
+  "lessons": [
+    {
+      "lessonId": "lesson-01",
+      "title": "We Can Believe In God",
+      "pdfPages": [
+        1,
+        2,
+        3
+      ],
+      "excludedAnswerSheetColumn": {
+        "pdfPage": 3,
+        "xFrom": 306
+      },
+      "printedSectionNumbers": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "sections": 6,
+      "readingCharacters": 9388,
+      "readingSha256": "47fffe241c0c27ae77e638a697f27b44deca7d50eb12bf9d2853a1e5a6632dca",
+      "sectionTitles": [
+        "We Can Believe In God",
+        "EVERYTHING DESIGNED HAS A DESIGNER",
+        "EVERYTHING MADE HAS A MAKER",
+        "GOD COMES INTO PERSONAL RELATIONSHIPS WITH PEOPLE",
+        "WHAT KIND OF GOD IS HE?",
+        "HOW JESUS REVEALS WHAT GOD IS LIKE"
+      ]
+    },
+    {
+      "lessonId": "lesson-02",
+      "title": "We Can Believe the Bible",
+      "pdfPages": [
+        5,
+        6,
+        7
+      ],
+      "excludedAnswerSheetColumn": {
+        "pdfPage": 7,
+        "xFrom": 306
+      },
+      "printedSectionNumbers": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "sections": 7,
+      "readingCharacters": 10605,
+      "readingSha256": "8dc5005b66903df27b7dd66568d6929fba5656db2227958470144289df1d5ab6",
+      "sectionTitles": [
+        "We Can Believe the Bible",
+        "HOW GOD SPEAKS TO US THROUGH THE BIBLE",
+        "WHO WROTE THE BIBLE?",
+        "THE UNITY OF THE BIBLE",
+        "YOU CAN TRUST THE BIBLE",
+        "HOW TO UNDERSTAND THE BIBLE",
+        "THE BIBLE CAN CHANGE YOUR LIFE"
+      ]
+    },
+    {
+      "lessonId": "lesson-03",
+      "title": "Does My Life Really Matter to God?",
+      "pdfPages": [
+        9,
+        10,
+        11
+      ],
+      "excludedAnswerSheetColumn": {
+        "pdfPage": 11,
+        "xFrom": 306
+      },
+      "printedSectionNumbers": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ],
+      "sections": 9,
+      "readingCharacters": 11658,
+      "readingSha256": "5a4c630a2c45e270ddcfc81a7ccb1b0280a9acd9f25a585cd85f1da068d98c35",
+      "sectionTitles": [
+        "Does My Life Really Matter to God?",
+        "GOD CREATED A PERFECT WORLD",
+        "SIX DAYS TO MAKE OUR WORLD",
+        "EVIL COMES TO A PERFECT WORLD",
+        "WHO IS THE DEVIL WHO INFECTED OUR WORLD WITH SIN?",
+        "DID GOD CREATE THE DEVIL?",
+        "WHY DID LUCIFER, THIS PERFECT ANGEL, SIN?",
+        "WHO IS RESPONSIBLE FOR SIN?",
+        "THE CROSS MAKES POSSIBLE THE DESTRUCTION OF SIN"
+      ]
+    },
+    {
+      "lessonId": "lesson-04",
+      "title": "A Plan for Your Life",
+      "pdfPages": [
+        13,
+        14,
+        15
+      ],
+      "excludedAnswerSheetColumn": {
+        "pdfPage": 15,
+        "xFrom": 306
+      },
+      "printedSectionNumbers": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        5
+      ],
+      "sections": 7,
+      "readingCharacters": 10380,
+      "readingSha256": "cfd454ab36dbcfafea499e93cc79e8c141051bf82c4ddc99dc7975a69caf3e2e",
+      "sectionTitles": [
+        "A Plan for Your Life",
+        "CHRIST EXISTED FROM ETERNITY",
+        "CHRIST, THE HEART OF HISTORY AND PROPHECY",
+        "CHRIST’S LIFE A FULFILMENT OF PROPHECY",
+        "A GOD-PLANNED LIFE",
+        "THE GUIDES MUST HARMONIZE",
+        "SUBMITTING TO GOD’S PLAN"
+      ]
+    },
+    {
+      "lessonId": "lesson-05",
+      "title": "Bridge to a Satisfying Life",
+      "pdfPages": [
+        17,
+        18,
+        19
+      ],
+      "excludedAnswerSheetColumn": {
+        "pdfPage": 19,
+        "xFrom": 306
+      },
+      "printedSectionNumbers": [
+        1,
+        2,
+        3
+      ],
+      "sections": 4,
+      "readingCharacters": 10764,
+      "readingSha256": "b8d7cf15c5179f63c27f6b1cb30efcc63cfc9bc808f6bbf0f83920aa896ffa07",
+      "sectionTitles": [
+        "Bridge to a Satisfying Life",
+        "SATISFYING OUR HIDDEN HUNGER",
+        "BRIDGING THE CHASM OF SIN AND DEATH",
+        "SEVEN ESSENTIAL FACTS YOU SHOULD KNOW ABOUT JESUS"
+      ]
+    },
+    {
+      "lessonId": "lesson-06",
+      "title": "A Second Chance at Life",
+      "pdfPages": [
+        21,
+        22,
+        23
+      ],
+      "excludedAnswerSheetColumn": {
+        "pdfPage": 23,
+        "xFrom": 306
+      },
+      "printedSectionNumbers": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "sections": 6,
+      "readingCharacters": 10883,
+      "readingSha256": "ad92994dd4bf305cad652b5d3a9761a12f032660d0b134d09a7975a25765212c",
+      "sectionTitles": [
+        "A Second Chance at Life",
+        "WHAT IT MEANS FOR THE LOST TO BE SAVED",
+        "FROM WHAT DO WE NEED TO BE SAVED",
+        "WHO CAN SAVE US?",
+        "FROM WHAT DO WE NEED TO BE SAVED",
+        "THE JOY OF THE SECOND CHANCE"
+      ]
+    },
+    {
+      "lessonId": "lesson-07",
+      "title": "About Your Future",
+      "pdfPages": [
+        25,
+        26,
+        27
+      ],
+      "excludedAnswerSheetColumn": {
+        "pdfPage": 27,
+        "xFrom": 306
+      },
+      "printedSectionNumbers": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "sections": 6,
+      "readingCharacters": 9531,
+      "readingSha256": "3026433d080fdfbd8750faa7176df54f11b9f0d85d85b99fffe66fe2cefedb09",
+      "sectionTitles": [
+        "About Your Future",
+        "AN AMAZING BIBLE PROPHECY",
+        "THE PROPHECY INTERPRETED",
+        "OUR DAY IN BIBLE PROPHECY",
+        "A LOOK INTO THE FUTURE",
+        "THE KING’S DREAM AND YOU"
+      ]
+    },
+    {
+      "lessonId": "lesson-08",
+      "title": "When Jesus Comes for You",
+      "pdfPages": [
+        29,
+        30,
+        31
+      ],
+      "excludedAnswerSheetColumn": {
+        "pdfPage": 31,
+        "xFrom": 306
+      },
+      "printedSectionNumbers": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "sections": 5,
+      "readingCharacters": 11201,
+      "readingSha256": "51e8ddac4bec275bd932229af5f0d940d90cdf5a7349c4f13a1084772a23c465",
+      "sectionTitles": [
+        "When Jesus Comes for You",
+        "THE PROMISE",
+        "HOW WILL JESUS COME?",
+        "WHAT WILL JESUS DO WHEN HE COMES AGAIN?",
+        "ARE YOU READY FOR JESUS TO COME?"
+      ]
+    },
+    {
+      "lessonId": "lesson-09",
+      "title": "Your Home in Heaven",
+      "pdfPages": [
+        33,
+        34,
+        35
+      ],
+      "excludedAnswerSheetColumn": {
+        "pdfPage": 35,
+        "xFrom": 306
+      },
+      "printedSectionNumbers": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "sections": 7,
+      "readingCharacters": 10955,
+      "readingSha256": "fa6a7beeba0a7c7463982d0a97db53f39c1db6349de62b1255ea89a38ef543de",
+      "sectionTitles": [
+        "Your Home in Heaven",
+        "IS HEAVEN A REAL PLACE?",
+        "WILL WE HAVE REAL BODIES IN HEAVEN?",
+        "WHAT WILL WE DO IN HEAVEN?",
+        "WILL EVIL THREATEN HEAVEN AGAIN?",
+        "WHAT IS HEAVEN’S GREATEST THRILL?",
+        "WE MUST BE THERE!"
+      ]
+    },
+    {
+      "lessonId": "lesson-10",
+      "title": "How Soon Will Jesus Return?",
+      "pdfPages": [
+        37,
+        38,
+        39
+      ],
+      "excludedAnswerSheetColumn": {
+        "pdfPage": 39,
+        "xFrom": 306
+      },
+      "printedSectionNumbers": [
+        1,
+        2,
+        3
+      ],
+      "sections": 4,
+      "readingCharacters": 10962,
+      "readingSha256": "a4fa74e4f99ec2e5a762799736214d0cb859b744ef24b45fbfd1a998e0d780b1",
+      "sectionTitles": [
+        "How Soon Will Jesus Return?",
+        "SIGNS THAT CHRIST WILL RETURN IN OUR DAY",
+        "HOW SOON WILL JESUS COME?",
+        "JESUS, THE WORLD’S ONLY HOPE"
+      ]
+    },
+    {
+      "lessonId": "lesson-11",
+      "title": "Mysterious Power in My Life",
+      "pdfPages": [
+        41,
+        42,
+        43
+      ],
+      "excludedAnswerSheetColumn": {
+        "pdfPage": 43,
+        "xFrom": 306
+      },
+      "printedSectionNumbers": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ],
+      "sections": 9,
+      "readingCharacters": 10758,
+      "readingSha256": "63bf71fdd41431e94282ca8c2eaa7c55b0754d2a471c2a5dd48ecc7804d6ca64",
+      "sectionTitles": [
+        "Mysterious Power in My Life",
+        "CHRIST’S REPRESENTATIVE IN THE WORLD",
+        "WHO IS THE HOLY SPIRIT?",
+        "THE ACTIVITIES OF THE THE HOLY SPIRIT",
+        "THE GIFT OF THE SPIRIT",
+        "THE FULLNESS OF THE SPIRIT AT PENTECOST",
+        "THE LATTER RAIN OF THE SPIRIT",
+        "CONDITIONS FOR RECEIVING THE HOLY SPIRIT",
+        "THE SPIRIT FILLED–LIFE"
+      ]
+    },
+    {
+      "lessonId": "lesson-12",
+      "title": "An Ever-Present Savior",
+      "pdfPages": [
+        45,
+        46,
+        47
+      ],
+      "excludedAnswerSheetColumn": {
+        "pdfPage": 47,
+        "xFrom": 306
+      },
+      "printedSectionNumbers": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "sections": 7,
+      "readingCharacters": 11234,
+      "readingSha256": "bb160a44c5a4221dfee1856d29d13aba5f8bdb4822b363bf802415ec9ba34b94",
+      "sectionTitles": [
+        "An Ever-Present Savior",
+        "UNLIMITED ACCESS TO JESUS",
+        "THE GOSPEL IN THE OLD TESTAMENT",
+        "JESUS’ MINISTRY FOR US REVEALED IN THE SANCTUARY",
+        "A REVELATION OF CHRIST DYING TO SAVE US",
+        "WHY THE BLOOD?",
+        "A REVELATION OF JESUS LIVING TO SAVE US"
+      ]
+    },
+    {
+      "lessonId": "lesson-13",
+      "title": "From Guilty Sinner to Forgiven Saint",
+      "pdfPages": [
+        49,
+        50,
+        51
+      ],
+      "excludedAnswerSheetColumn": {
+        "pdfPage": 51,
+        "xFrom": 306
+      },
+      "printedSectionNumbers": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "sections": 7,
+      "readingCharacters": 11483,
+      "readingSha256": "b56752f8e4084d7f29caa6a98f1cbe6cca1112c0b239e65a0f02d406a9551fb3",
+      "sectionTitles": [
+        "From Guilty Sinner to Forgiven Saint",
+        "HOW YOU CAN FACE THE THE JUDGEMENT UNAFRAID",
+        "CHRIST CAME ON TIME",
+        "THE ASSURANCE OF SINS FORGIVEN",
+        "THE TIME FOR THE JUDGEMENT TO BEGIN",
+        "THE HEAVENLY SANCTUARY CLEANSED – A JUDGEMENT",
+        "FACING YOUR LIFE RECORD IN THE JUDGEMENT"
+      ]
+    },
+    {
+      "lessonId": "lesson-14",
+      "title": "The Secret of Answered Prayer",
+      "pdfPages": [
+        53,
+        54,
+        55
+      ],
+      "excludedAnswerSheetColumn": {
+        "pdfPage": 55,
+        "xFrom": 306
+      },
+      "printedSectionNumbers": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "sections": 8,
+      "readingCharacters": 10868,
+      "readingSha256": "ccd5487392b5b4ba2c5a40f58ba92ffbcbe7940dddf26fea46043b518932899b",
+      "sectionTitles": [
+        "The Secret of Answered Prayer",
+        "CONVERSATION WITH GOD",
+        "HOW TO PRAY",
+        "PRIVATE PRAYER",
+        "PUBLIC PRAYER",
+        "SEVEN SECRETS OF ANSWERED PRAYER",
+        "ANGELS MINISTER TO THE NEEDS OF THOSE WHO PRAY",
+        "THE CHRISTIAN LIFESTYLE"
+      ]
+    },
+    {
+      "lessonId": "lesson-15",
+      "title": "The Secret to Happiness",
+      "pdfPages": [
+        57,
+        58,
+        59
+      ],
+      "excludedAnswerSheetColumn": {
+        "pdfPage": 59,
+        "xFrom": 306
+      },
+      "printedSectionNumbers": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "sections": 10,
+      "readingCharacters": 10515,
+      "readingSha256": "95a91a16f3a0c0ae70f1348c3de87a2ae41ed5725624d10cf3b3e8f47b376001",
+      "sectionTitles": [
+        "The Secret to Happiness",
+        "THE GUIDEBOOK TO THE CHRISTIAN LIFESTYLE",
+        "A TRANSFORMING FRIENDSHIP",
+        "GUIDELINES FOR LIVING IN THE BIBLE AND THE TEN COMMANDMENTS",
+        "WHAT JESUS SAID ABOUT THE TEN COMMANDMENTS",
+        "GUIDE TO A HAPPY LIFE",
+        "THE TEN COMMANDMENTS AN INDISPENSABLE NEW TESTAMENT GUIDE",
+        "POWER TO OBEY",
+        "LOVING OBEDIENCE TO THE TEN COMMANDMENTS",
+        "GOD’S GRACE AND OBEDIENCE TO THE LAW"
+      ]
+    },
+    {
+      "lessonId": "lesson-16",
+      "title": "The Secret to Heavenly Rest",
+      "pdfPages": [
+        61,
+        62,
+        63
+      ],
+      "excludedAnswerSheetColumn": {
+        "pdfPage": 63,
+        "xFrom": 306
+      },
+      "printedSectionNumbers": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "sections": 6,
+      "readingCharacters": 11095,
+      "readingSha256": "43d99c644689b5c3f58b08bb5800963098a9a5d343d2ca1ea54a62ef33cd1028",
+      "sectionTitles": [
+        "The Secret to Heavenly Rest",
+        "THE REMEDY FOR HIGH- TENSION LIVING",
+        "A DAILY LINK WITH JESUS",
+        "A WEEKLY LINK WITH JESUS",
+        "THE BENEFITS OF SABBATH- REST",
+        "A FORETASTE OF HEAVENLY REST"
+      ]
+    },
+    {
+      "lessonId": "lesson-17",
+      "title": "The Secret of Growth Through Sharing",
+      "pdfPages": [
+        65,
+        66,
+        67
+      ],
+      "excludedAnswerSheetColumn": {
+        "pdfPage": 67,
+        "xFrom": 306
+      },
+      "printedSectionNumbers": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "sections": 7,
+      "readingCharacters": 10929,
+      "readingSha256": "b8b3f78b33774c1363295252d018dc5de11ff8e41086d334077597ca9c851a26",
+      "sectionTitles": [
+        "The Secret of Growth Through Sharing",
+        "JESUS CHALLENGES US TO GROW BY SHARING",
+        "WE SHARE CHRIST BY THE WAY WE LIVE",
+        "WE SHARE CHRIST BECAUSE OF THE WAY WE THINK",
+        "WE SHARE CHRIST BY THE WAY WE LOOK",
+        "WE SHARE CHRIST BY THE WAY WE ACT",
+        "WE SHARE CHRIST BY THE WAY WE GIVE"
+      ]
+    },
+    {
+      "lessonId": "lesson-18",
+      "title": "The Secret of a Healthy Lifestyle",
+      "pdfPages": [
+        69,
+        70,
+        71
+      ],
+      "excludedAnswerSheetColumn": {
+        "pdfPage": 71,
+        "xFrom": 306
+      },
+      "printedSectionNumbers": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ],
+      "sections": 9,
+      "readingCharacters": 10885,
+      "readingSha256": "7c2dd81ff09963b73f497eea695384e56672913960726f936af2ee8c8536b2e4",
+      "sectionTitles": [
+        "The Secret of a Healthy Lifestyle",
+        "PURE AIR",
+        "SUNLIGHT",
+        "REST",
+        "EXERCISE",
+        "WATER",
+        "PROPER DIET",
+        "AVOID THINGS HARMFUL",
+        "TRUST IN DIVINE POWER"
+      ]
+    },
+    {
+      "lessonId": "lesson-19",
+      "title": "Entering the Christian Life",
+      "pdfPages": [
+        73,
+        74,
+        75
+      ],
+      "excludedAnswerSheetColumn": {
+        "pdfPage": 75,
+        "xFrom": 306
+      },
+      "printedSectionNumbers": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "sections": 8,
+      "readingCharacters": 10858,
+      "readingSha256": "d93abd3d4557e09b03f622eaf97db320bf0e9e41be7370cfd94f43821effbd10",
+      "sectionTitles": [
+        "Entering the Christian Life",
+        "WHAT IS THE MEANING OF BAPTISM?",
+        "WHY SHOULD I BE BAPTISED?",
+        "WHY WAS JESUS BAPTISED?",
+        "WHY SHOULD I BE IMMERSED?",
+        "WHY IS IT IMPORTANT TO BE BAPTISED?",
+        "BAPTISM IS ONLY THE BEGINNING",
+        "A CAUSE FOR REJOICING"
+      ]
+    },
+    {
+      "lessonId": "lesson-20",
+      "title": "The Secret of Growth Through Fellowship",
+      "pdfPages": [
+        77,
+        78,
+        79
+      ],
+      "excludedAnswerSheetColumn": {
+        "pdfPage": 79,
+        "xFrom": 306
+      },
+      "printedSectionNumbers": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "sections": 8,
+      "readingCharacters": 10725,
+      "readingSha256": "73a9c5011a7a0228f0e80dbea5690c7ccb9df7684fd5bc87c15c15e6cd1387ba",
+      "sectionTitles": [
+        "The Secret of Growth Through Fellowship",
+        "THE CHURCH CREATED FOR FELLOWSHIP",
+        "THE CHURCH CHRIST ESTABLISHED",
+        "A CHURCH WITH PURPOSE",
+        "ORGANISED FOR STRENGTH",
+        "THE JOY OF WORSHIP",
+        "WHAT’S RIGHT WITH THE CHURCH?",
+        "FINDING A CHURCH"
+      ]
+    },
+    {
+      "lessonId": "lesson-21",
+      "title": "Can the Majority Be Wrong?",
+      "pdfPages": [
+        81,
+        82,
+        83
+      ],
+      "excludedAnswerSheetColumn": {
+        "pdfPage": 83,
+        "xFrom": 306
+      },
+      "printedSectionNumbers": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ],
+      "sections": 9,
+      "readingCharacters": 11686,
+      "readingSha256": "f198092ec6d60415796e7e2dfeb9d8465fbd6a10ea8bf92863e2a22cad4c2a6c",
+      "sectionTitles": [
+        "Can the Majority Be Wrong?",
+        "A PUZZLING QUESTION",
+        "DID GOD CHANGE THE DAY?",
+        "DID JESUS CHANGE THE SABBATH?",
+        "DID THE APOSTLES CHANGE THE SABBATH?",
+        "WHERE DID SUNDAY COME FROM?",
+        "WHO MADE THE CHANGE?",
+        "WHAT DO SOME PROTESTANT CHURCHES SAY?",
+        "WHAT IS THE REAL ISSUE?"
+      ]
+    },
+    {
+      "lessonId": "lesson-22",
+      "title": "Is God Fair?",
+      "pdfPages": [
+        85,
+        86,
+        87
+      ],
+      "excludedAnswerSheetColumn": {
+        "pdfPage": 87,
+        "xFrom": 306
+      },
+      "printedSectionNumbers": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ],
+      "sections": 9,
+      "readingCharacters": 11302,
+      "readingSha256": "115fe8eb71ba28f459a047422f4d6bf8acc646dea0b66cb0e87a64b4cbc19b8a",
+      "sectionTitles": [
+        "Is God Fair?",
+        "THE ONE THOUSAND YEARS UNVEILED",
+        "RESURRECTED AT CHRIST’S COMING",
+        "SATAN CHAINED TO EARTH FOR ONE THOUSAND YEARS",
+        "THE RIGHTEOUS JUDGE THE WICKED",
+        "SATAN UNCHANGED WHEN THE ONE THOUSAND YEARS END",
+        "THE FINAL JUDGEMENT SCENE",
+        "SIN MEETS ITS FINAL END",
+        "THE EARTH CLEANSED AND MADE NEW"
+      ]
+    },
+    {
+      "lessonId": "lesson-23",
+      "title": "What and Where Is Hell?",
+      "pdfPages": [
+        89,
+        90,
+        91
+      ],
+      "excludedAnswerSheetColumn": {
+        "pdfPage": 91,
+        "xFrom": 306
+      },
+      "printedSectionNumbers": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "sections": 7,
+      "readingCharacters": 11004,
+      "readingSha256": "948afea00f5d46c7f388b95bccd23485a721462ce2090085971281e1ee8ba4a6",
+      "sectionTitles": [
+        "What and Where Is Hell?",
+        "JESUS’ FINAL HEARTBREAK",
+        "WHERE AND WHEN WILL HELL BURN?",
+        "HOW LONG WILL HELL BURN?",
+        "“FOR EVER” IN SCRIPTURE",
+        "WHY MUST THERE BE A HELL AT ALL?",
+        "WHAT WILL IT COST TO BE LOST?"
+      ]
+    },
+    {
+      "lessonId": "lesson-24",
+      "title": "When a Person Dies, What Then?",
+      "pdfPages": [
+        93,
+        94,
+        95
+      ],
+      "excludedAnswerSheetColumn": {
+        "pdfPage": 95,
+        "xFrom": 306
+      },
+      "printedSectionNumbers": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ],
+      "sections": 9,
+      "readingCharacters": 10300,
+      "readingSha256": "c3db7fb3bf14030482a60a84dcc895cd07ff39c54171747b9f5cf4d135439578",
+      "sectionTitles": [
+        "When a Person Dies, What Then?",
+        "FACING DEATHUNAFRAID",
+        "HOW GOD MADE US",
+        "WHAT HAPPENS WHEN A PERSON DIES?",
+        "HOW MUCH DOES A DEAD PERSON KNOW?",
+        "DOES GOD FORGET THOSE WHO SLEEP IN DEATH?",
+        "ARE WE IMMORTAL NOW?",
+        "FACING THE DEATH OF A LOVE ONE",
+        "FACING DEATH UNAFRAID"
+      ]
+    },
+    {
+      "lessonId": "lesson-25",
+      "title": "Can I Find God’s Church Today?",
+      "pdfPages": [
+        97,
+        98,
+        99
+      ],
+      "excludedAnswerSheetColumn": {
+        "pdfPage": 99,
+        "xFrom": 306
+      },
+      "printedSectionNumbers": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "sections": 5,
+      "readingCharacters": 11840,
+      "readingSha256": "05e2342bddb31271c37d8bf998d45fbc3f9d68f3873aac9ba91a15a4f8e2656a",
+      "sectionTitles": [
+        "Can I Find God’s Church Today?",
+        "THE CHURCH ESTABLISHED BY JESUS",
+        "THE DRAMA OF SATAN’S DEFEAT",
+        "THE CHRISTIAN CHURCH IN CONFLICT WITH SATAN",
+        "GOD’S CHURCH IN OUR DAY"
+      ]
+    },
+    {
+      "lessonId": "lesson-26",
+      "title": "Does God Have a Special Message for our Day?",
+      "pdfPages": [
+        101,
+        102,
+        103
+      ],
+      "excludedAnswerSheetColumn": {
+        "pdfPage": 103,
+        "xFrom": 306
+      },
+      "printedSectionNumbers": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "sections": 5,
+      "readingCharacters": 12039,
+      "readingSha256": "a7e6b1e49cc7a781c763ef4ed96c51193280c2c2ae7fbbd1694f90ee541e9a35",
+      "sectionTitles": [
+        "Does God Have a Special Message for our Day?",
+        "WHICH RELIGION SAVES?",
+        "DOES GOD HAVE A SPECIAL MESSAGE FOR LAST DAY CHRISTIANS?",
+        "CHRIST’S LAST-DAY CHURCH",
+        "THE TWO HARVESTS"
+      ]
+    }
+  ]
+}

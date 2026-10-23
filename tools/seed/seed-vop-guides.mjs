@@ -112,6 +112,9 @@ export function buildLesson(source,{guideId,origin='https://vopafrica.vercel.app
     attribution:source.attribution,source:{
       file:String(source.source.file||''),sha256:source.source.sha256,
       ...(Number.isInteger(source.source.reportedLessonNumber)?{reportedLessonNumber:source.source.reportedLessonNumber}:{}),
+      ...(Number.isInteger(source.source.pdfPageStart)&&Number.isInteger(source.source.pdfPageEnd)?{
+        pdfPageStart:source.source.pdfPageStart,pdfPageEnd:source.source.pdfPageEnd,
+      }:{}),
       url:source.source.url||sourceUrl(config,number),
     },
     canonical:true,published,archived:false,
