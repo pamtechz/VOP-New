@@ -64,7 +64,7 @@ jobs:
         working-directory: vop-rules-${{ github.run_id }}-${{ github.run_attempt }}
         shell: powershell
         run: |
-          $lock = New-Object System.Threading.Mutex($false, 'Global\VOP-NPM-CI-WINDOWS')
+          $lock = [System.Threading.Mutex]::new($false, 'Global\VOP-NPM-CI-WINDOWS')
           $acquired = $false
           try {
             try {
