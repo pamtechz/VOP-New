@@ -68,7 +68,7 @@ type Props = {
 };
 
 async function guideAdmin(
-  action: 'listGuides' | 'upsertGuide' | 'archiveGuide' | 'forkGuide' | 'deleteGuide' | 'upsert' | 'list',
+  action: 'listGuides' | 'upsertGuide' | 'archiveGuide' | 'forkGuide' | 'deleteGuide' | 'attachGuide' | 'list',
   data?: Record<string, unknown>,
   organizationId?: string,
   collection: 'guides' | 'programs' = 'guides',
@@ -341,7 +341,7 @@ export default function GuideManager({
   };
 
   const save = async () => {
-    if (!editing) return;
+    if (!editing || saving) return;
     if (!editing.programId) {
       setError('A parent study track (program) is required. Please select a study track for this guide.');
       return;
@@ -380,13 +380,18 @@ export default function GuideManager({
       }, organizationId);
 
       const savedId = saved.item?.id || editing.id || '';
-      if (editing.programId && savedId) {
+      if(!savedId)throw new Error('Guide save did not return an ID. Reload before retrying.');
+      // Persist the ID immediately: if linking fails after the guide write,
+      // Save again must update the SAME guide, not create a duplicate.
+      setEditing(previous=>previous?{...previous,id:savedId}:previous);
+      if (editing.programId) {
         const targetProg = availablePrograms.find(p => p.id === editing.programId);
-        if (targetProg && !targetProg.guideIds.includes(savedId)) {
-          await guideAdmin('upsert', {
-            ...targetProg,
-            guideIds: [...targetProg.guideIds, savedId],
-          }, organizationId, 'programs').catch(() => {});
+        if (!targetProg) throw new Error('Guide saved, but its programme was not found. Refresh and attach it again.');
+        if (!targetProg.guideIds.includes(savedId)) {
+          await guideAdmin('attachGuide', {
+            programId: editing.programId,
+            guideId: savedId,
+          }, organizationId, 'programs');
         }
       }
 
