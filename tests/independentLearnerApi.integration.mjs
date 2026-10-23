@@ -130,9 +130,22 @@ test('unaffiliated learners retain private prayer and platform support without t
       const tenantQueue=await call(mentorship,tenantAdmin,{action:'listSupportRequests'});
       assert.equal(tenantQueue.statusCode,200,JSON.stringify(tenantQueue.body));
       assert.ok(!tenantQueue.body.items.some(item=>item.id===supportId));
-      const platformQueue=await call(mentorship,superAdmin,{action:'listSupportRequests'});
+      // Stale organization metadata must not redirect Super Admin away from
+      // the independent learner support queue.
+      await db.doc('users/'+superAdmin.uid).set({
+        organizationId:'personal-test-church',organizationRole:'admin',
+      },{merge:true});
+      const platformQueue=await call(mentorship,superAdmin,{
+        action:'listSupportRequests',supportScope:'platform',
+      });
       assert.equal(platformQueue.statusCode,200,JSON.stringify(platformQueue.body));
       assert.ok(platformQueue.body.items.some(item=>item.id===supportId));
+      const staleTenantQueue=await call(mentorship,superAdmin,{action:'listSupportRequests'});
+      assert.equal(staleTenantQueue.statusCode,200,JSON.stringify(staleTenantQueue.body));
+      assert.ok(!staleTenantQueue.body.items.some(item=>item.id===supportId));
+      await db.doc('users/'+superAdmin.uid).set({
+        organizationId:'',organizationRole:'',
+      },{merge:true});
       const adminReply=await call(mentorship,superAdmin,{
         action:'replySupportRequest',requestId:supportId,
         message:'Your question has reached the VOP support queue.',
