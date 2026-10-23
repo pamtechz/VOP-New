@@ -201,7 +201,8 @@ export default async function handler(req: Request, res: Response) {
       const visibleLessons=snap.docs.filter(doc=>{
         if(canReadDrafts)return true;
         const lesson=doc.data();
-        return lesson.published===true && lesson.archived!==true &&
+        return lesson.published===true && lesson.archived!==true
+          && lesson.type!=='Test' &&
           (platformGuide || (isShared && lesson.sharingScope==='shared'));
       });
       const items = await Promise.all(visibleLessons.map(async doc => {
