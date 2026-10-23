@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import test from 'node:test';
-import vm from 'node:vm';
 
 const read=(path:string)=>readFileSync(path,'utf8');
 test('Legacy and Classic share one Vercel project without altering existing API routes',()=>{
@@ -33,41 +32,30 @@ test('Vercel build includes Flutter under /classic and keeps locked dependencies
   assert.match(flutter,/flutter pub get --enforce-lockfile/);
   assert.match(flutter,/flutter_sha=/);
 });
-test('the two UIs offer a shared-origin mode switch without external redirects',()=>{
+test('web experience switch is confined to landing pages and account settings',()=>{
   const legacy=read('src/components/layout/ExperienceSwitcher.tsx');
   const main=read('src/main.tsx');
-  const classic=read('native_android/lib/main.dart');
+  const landing=read('src/pages/PublicHome.tsx');
+  const settings=read('src/pages/PersonalSettingsPage.tsx');
+  const classicLanding=read('native_android/lib/screens/public_entry_screen.dart');
+  const classicSettings=read('native_android/lib/screens/account_settings_screen.dart');
   const classicWeb=read('native_android/web/index.html');
+  const classicMain=read('native_android/lib/main.dart');
   assert.match(legacy,/href="\/classic\/"/);
-  assert.match(main,/<ExperienceSwitcher \/>/);
-  assert.match(classicWeb,/<a href="\/" aria-label="Switch to Legacy web">Legacy<\/a>/);
-  assert.match(classicWeb,/<nav id="vop-experience-switch" aria-label="Choose VOP experience" hidden>/);
-  assert.doesNotMatch(classic,/legacyNavigation|Text\('Legacy'\)/,
-    'Do not mount the web switch above Navigator: view focus can arrive before layout');
+  assert.doesNotMatch(main,/<ExperienceSwitcher \/>/);
+  assert.match(landing,/<ExperienceSwitcher \/>/);
+  assert.match(settings,/<ExperienceSwitcher inline \/>/);
+  assert.doesNotMatch(classicWeb,/id="vop-experience-switch"/);
+  assert.match(classicLanding,/kIsWeb/);
+  assert.match(classicLanding,/launchUrl\(Uri\.base\.resolve\('\/'\)/);
+  assert.match(classicSettings,/kIsWeb/);
+  assert.match(classicSettings,/launchUrl\(Uri\.base\.resolve\('\/'\)/);
+  assert.doesNotMatch(classicMain,/legacyNavigation|Text\('Legacy'\)/);
   const config=read('native_android/lib/core/config.dart');
   assert.match(config,/if \(isWeb && page\.path\.startsWith\('\/classic\/'\)\) return page\.origin/);
   assert.match(config,/isWeb: kIsWeb/);
   assert.match(config,/page: Uri\.base/);
   assert.match(config,/String\.fromEnvironment\('VOP_API_BASE_URL'\)/);
-});
-test('Classic shell switch appears on nested Classic routes and stays hidden on standalone paths',()=>{
-  const shell=read('native_android/web/index.html');
-  const script=/<script id="vop-experience-init">([\s\S]*?)<\/script>/.exec(shell)?.[1];
-  assert.ok(script);
-  for(const [pathname,visible] of [
-    ['/classic/',true],['/classic/programmes',true],
-    ['/classic/guide/one',true],['/',false],['/classic-other/',false],
-  ] as const){
-    const control={hidden:true};
-    vm.runInNewContext(script,{
-      document:{getElementById:(id:string)=>{
-        assert.equal(id,'vop-experience-switch');
-        return control;
-      }},
-      window:{location:{pathname}},
-    });
-    assert.equal(control.hidden,!visible,pathname);
-  }
 });
 test('the old app service worker never returns the Legacy shell for Flutter Classic routes',()=>{
   const sw=read('public/sw.js');
