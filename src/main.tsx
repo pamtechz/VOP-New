@@ -1,7 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Root } from './Root';
-import { ExperienceSwitcher } from './components/layout/ExperienceSwitcher';
 import { installNativeDeepLinkBridge } from './services/nativeDeepLinks';
 import './index.css';
 import './reference.css';
@@ -40,5 +39,5 @@ const container = document.getElementById('root');
 if (!container) throw new Error('Voice of Prophecy root element is missing.');
 
 createRoot(container).render(
-  <StrictMode><Root /><ExperienceSwitcher /></StrictMode>,
+  <StrictMode><Root /></StrictMode>,
 );
