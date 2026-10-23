@@ -134,7 +134,7 @@ export const MentorshipInsights:React.FC<{guides:DiscoverGuide[]}>=({guides})=>{
   const loadCore=async()=>{
     setLoading(true);
     try{
-      const [studentResult,mentorResult,assignmentResult,failureResult,supportResult,unreadResult,automationResult]=await Promise.all([
+      const results=await Promise.allSettled([
         mentoringApi('listStudents'),
         mentoringApi('listMentors'),
         mentoringApi('listAssignments'),
@@ -143,17 +143,19 @@ export const MentorshipInsights:React.FC<{guides:DiscoverGuide[]}>=({guides})=>{
         mentoringApi('unreadSummary'),
         mentoringApi('getAutomationSettings'),
       ]);
-      setStudents(studentResult.items||[]);
-      setMentors(mentorResult.items||[]);
-      setAssignments(assignmentResult.items||[]);
-      setFailures(failureResult.items||[]);
-      setSupportRequests(supportResult.items||[]);
-      if(unreadResult.item)setUnreadSummary({
+      const values=results.map(result=>result.status==='fulfilled'?result.value:null);
+      const [studentResult,mentorResult,assignmentResult,failureResult,supportResult,unreadResult,automationResult]=values;
+      if(studentResult)setStudents(studentResult.items||[]);
+      if(mentorResult)setMentors(mentorResult.items||[]);
+      if(assignmentResult)setAssignments(assignmentResult.items||[]);
+      if(failureResult)setFailures(failureResult.items||[]);
+      if(supportResult)setSupportRequests(supportResult.items||[]);
+      if(unreadResult?.item)setUnreadSummary({
         total:Number(unreadResult.item.total||0),
         conversations:Number(unreadResult.item.conversations||0),
         supportRequests:Number(unreadResult.item.supportRequests||0),
       });
-      if(automationResult.item)setAutomation({
+      if(automationResult?.item)setAutomation({
         enabled:automationResult.item.enabled===true,
         channel:automationResult.item.channel==='email'?'email':'in_app',
         minAverageScore:Number(automationResult.item.minAverageScore||0),
@@ -161,7 +163,10 @@ export const MentorshipInsights:React.FC<{guides:DiscoverGuide[]}>=({guides})=>{
         cooldownDays:Number(automationResult.item.cooldownDays||7),
       });
       setLastRefreshedAt(new Date());
-      setError('');
+      const unavailable=results.filter(result=>result.status==='rejected').length;
+      setError(unavailable
+        ?'Some mentorship information could not be loaded. Available support requests remain accessible; refresh to retry the other sections.'
+        :'');
     }catch(reason){
       setError(reason instanceof Error?reason.message:'Could not load mentorship data.');
     }finally{setLoading(false);}
@@ -645,7 +650,7 @@ export const MentorshipInsights:React.FC<{guides:DiscoverGuide[]}>=({guides})=>{
             <div className="vop-queue-list">
               {filteredSupport.map(item=><button key={item.id} type="button" className={selectedSupportRequest?.id===item.id?'selected':''} onClick={()=>void openSupportRequest(item)}>
                 <span className={'vop-inbox-dot '+(item.unread?'unread':'')}/>
-                <div><strong>{item.candidateName||studentMap.get(item.candidateId)?.displayName||'Candidate'}</strong><span>{item.subject||statusLabel(item.category)}</span><small>Support · {statusLabel(item.status)} · {dateTime(item.lastMessageAt||item.createdAt)}</small></div>
+                <div><strong>{item.candidateName||studentMap.get(item.candidateId)?.displayName||'Candidate'}</strong><span>{item.subject||statusLabel(item.category)}</span><small>{item.organizationId?'Organization':'Independent VOP learner'} · {statusLabel(item.status)} · {dateTime(item.lastMessageAt||item.createdAt)}</small></div>
                 <span className={'vop-priority-chip '+String(item.priority||'normal')}>{String(item.priority||'normal')}</span>
               </button>)}
               {!filteredSupport.length&&!loading&&<div className="vop-empty-state compact"><HeartHandshake size={24}/><strong>No support requests match</strong><span>Try another status, priority or search term.</span></div>}
@@ -654,7 +659,7 @@ export const MentorshipInsights:React.FC<{guides:DiscoverGuide[]}>=({guides})=>{
           <div className="vop-mentoring-detail">
             {!selectedSupportRequest?<div className="vop-empty-state large"><Inbox size={34}/><strong>Select a support request</strong><span>Support requests are formal cases with status, priority, context and follow-up controls.</span></div>:<>
               <div className="vop-detail-head">
-                <div><span className="vop-section-kicker">Support request · {selectedSupportRequest.candidateName||studentMap.get(selectedSupportRequest.candidateId)?.displayName||'Candidate'}</span><h3>{selectedSupportRequest.subject||'Support request'}</h3><div className="vop-detail-chips"><span>support</span><span>{statusLabel(selectedSupportRequest.category)}</span><span className={String(selectedSupportRequest.priority)==='high'?'danger':''}>{String(selectedSupportRequest.priority||'normal')} priority</span><span>{statusLabel(selectedSupportRequest.status)}</span></div></div>
+                <div><span className="vop-section-kicker">Support request · {selectedSupportRequest.candidateName||studentMap.get(selectedSupportRequest.candidateId)?.displayName||'Candidate'}</span><h3>{selectedSupportRequest.subject||'Support request'}</h3><div className="vop-detail-chips"><span>{selectedSupportRequest.organizationId?'organization support':'independent VOP support'}</span><span>{statusLabel(selectedSupportRequest.category)}</span><span className={String(selectedSupportRequest.priority)==='high'?'danger':''}>{String(selectedSupportRequest.priority||'normal')} priority</span><span>{statusLabel(selectedSupportRequest.status)}</span></div></div>
                 <div className="vop-performance-actions"><button className="vop-secondary" type="button" onClick={()=>void updateSupportStatus('in_progress')}>Mark in progress</button><button className="vop-primary" type="button" onClick={()=>void updateSupportStatus('resolved')}><CheckCircle2 size={15}/>Resolve</button></div>
               </div>
               {(selectedSupportRequest.references||[]).length>0&&<div className="vop-reference-strip">{selectedSupportRequest.references.map((ref:any)=><span key={ref.type+ref.id}><Tag size={13}/><b>{ref.label}</b><small>{ref.type}</small></span>)}</div>}
