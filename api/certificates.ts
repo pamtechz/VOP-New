@@ -50,12 +50,15 @@ async function mine(req:Request,res:Response){
  const profileRole=String(profileData.role||'');
  const adminNodeId=String(profileData.adminNodeId||'').trim();
  const hierarchyField=hierarchyScopeField(profileRole);
- if (!organizationId && profileRole !== 'super_admin' && !hierarchyField) return res.status(403).json({error:'Your account is not linked to an organization or hierarchy tenant.'});
+ // Certificate history belongs to the learner, including after leaving an
+ // organization. New certificate issuance still follows its separate
+ // organization/platform authorization and graduation review policies.
  const certificateQuery=db.collection('certificates').where('candidateId','==',decoded.uid);
  let certificateDocs: FirebaseFirestore.QueryDocumentSnapshot[] = [];
  if (organizationId) {
    certificateDocs=(await certificateQuery.where('organizationId','==',organizationId).limit(20).get()).docs;
- } else if (profileRole === 'super_admin') {
+ } else if (profileRole === 'super_admin' || !hierarchyField) {
+   // The query is already restricted to the authenticated candidate ID.
    certificateDocs=(await certificateQuery.limit(20).get()).docs;
  } else if (hierarchyField) {
    // Hierarchy records may use either the legacy flat field or the canonical
