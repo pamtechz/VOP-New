@@ -328,7 +328,7 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
                 <option value="in_app">In-app</option>
                 <option value="whatsapp">WhatsApp + VOP record</option>
                 <option value="both">In-app + WhatsApp</option>
-              </select></>
+              </select></>}
               <select value={priority} onChange={e=>setPriority(e.target.value as typeof priority)}>
                 <option value="normal">Normal priority</option>
                 <option value="high">Need help soon</option>
