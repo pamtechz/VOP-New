@@ -4,6 +4,7 @@ on:
     branches:
       - main
       - 'prod/**'
+      - 'feature/independent-learners-20261023'
     paths:
       - firestore.rules
       - firebase.json
