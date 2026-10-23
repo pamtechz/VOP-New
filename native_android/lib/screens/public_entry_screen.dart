@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../core/vop_api.dart';
 import '../widgets/vop_ui.dart';
@@ -85,6 +87,15 @@ class _PublicEntryScreenState extends State<PublicEntryScreen> {
             child: const Text('Browse studies',
               style: TextStyle(color: Colors.white)),
           ),
+        if(kIsWeb)...[
+          TextButton.icon(
+            onPressed:()=>launchUrl(Uri.base.resolve('/'),
+              webOnlyWindowName:'_self'),
+            icon:const Icon(Icons.swap_horiz,color:Colors.white,size:17),
+            label:const Text('Legacy',style:TextStyle(color:Colors.white)),
+          ),
+          const SizedBox(width:8),
+        ],
         const SizedBox(width: 12),
         FilledButton(
           onPressed: () => setState(() => _signIn = true),
