@@ -140,7 +140,7 @@ export default async function handler(req: Request, res: Response) {
         return res.status(400).json({error:'Prayer request must be between 5 and 3000 characters.'});
       if(!categories.has(category))
         return res.status(400).json({error:'Choose a valid prayer category.'});
-      const changes={requestText,category,isPrivate:body.isPrivate===true,updatedAt:now};
+      const changes={requestText,category,isPrivate:!String(data.organizationId||'')||body.isPrivate===true,updatedAt:now};
       await ref.update(changes);
       await writeTenantAudit(ctx,'prayer.edit',ref.path,data,{...data,...changes});
       return res.status(200).json({ok:true,item:{...data,...changes}});
