@@ -30,7 +30,7 @@ concurrency:
 jobs:
   rules:
     runs-on: [self-hosted, Windows]
-    timeout-minutes: 30
+    timeout-minutes: 70
     steps:
       - name: Verify KASAINSTITUTE runner identity
         shell: powershell
@@ -60,9 +60,25 @@ jobs:
           distribution: temurin
           java-version: '21'
       - name: Install the exact locked security test tree
-        timeout-minutes: 12
+        timeout-minutes: 30
         working-directory: vop-rules-${{ github.run_id }}-${{ github.run_attempt }}
-        run: npm ci --no-audit --no-fund --prefer-offline --loglevel=info
+        shell: powershell
+        run: |
+          $lock = New-Object System.Threading.Mutex($false, 'Global\VOP-NPM-CI-WINDOWS')
+          $acquired = $false
+          try {
+            try {
+              $acquired = $lock.WaitOne([TimeSpan]::FromMinutes(18))
+            } catch [System.Threading.AbandonedMutexException] {
+              $acquired = $true
+            }
+            if (-not $acquired) { throw 'Timed out waiting for the shared npm install lock.' }
+            & npm ci --no-audit --no-fund --prefer-offline --loglevel=warn --maxsockets=8
+            if ($LASTEXITCODE -ne 0) { throw "npm ci failed with exit code $LASTEXITCODE" }
+          } finally {
+            if ($acquired) { $lock.ReleaseMutex() }
+            $lock.Dispose()
+          }
       - name: Run isolated owner and default-deny proof
         working-directory: vop-rules-${{ github.run_id }}-${{ github.run_attempt }}
         shell: powershell
