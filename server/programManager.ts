@@ -103,8 +103,10 @@ export async function handleCurriculumPrograms(ctx:TenantContext,
   }
   if(action==='attachGuide'){
     await requirePermission(ctx,'curriculum','update');
-    const id=validId(body.id||body.programId);
-    const guideId=validId(body.guideId);
+    const requested=body.data&&typeof body.data==='object'
+      ?body.data as Record<string,unknown>:{};
+    const id=validId(body.id||body.programId||requested.programId);
+    const guideId=validId(body.guideId||requested.guideId);
     const programRef=ctx.db.doc('programs/'+id);
     const guideRef=ctx.db.doc('guides/'+guideId);
     // Attach the existing canonical guide by reference. Never copy its lessons
