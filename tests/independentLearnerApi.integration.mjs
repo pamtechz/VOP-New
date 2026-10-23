@@ -156,6 +156,25 @@ test('unaffiliated learners retain private prayer and platform support without t
       });
       assert.equal(learnerReply.statusCode,200,JSON.stringify(learnerReply.body));
     });
+    await t.test('independent support stays queued even before a platform administrator is assigned',async()=>{
+      const administratorRef=db.doc('users/'+superAdmin.uid);
+      await administratorRef.update({role:'student'});
+      try{
+        const created=await call(mentorship,stranger,{
+          action:'createSupportRequest',subject:'Platform support needed',
+          message:'Please help with my independent Bible study.',
+          target:'support_team',channel:'in_app',category:'bible_question',
+          idempotencyKey:'independent-no-admin-request-001',
+        });
+        assert.equal(created.statusCode,201,JSON.stringify(created.body));
+        const request=(await db.doc('learningSupportRequests/'+created.body.item.id).get()).data();
+        assert.equal(request?.organizationId,'');
+        assert.deepEqual(request?.recipientIds,[]);
+        assert.equal(request?.candidateId,stranger.uid);
+      }finally{
+        await administratorRef.update({role:'super_admin'});
+      }
+    });
     await t.test('personal support retries are idempotent and daily limits are atomic',async()=>{
       const data={action:'createSupportRequest',subject:'Repeatable private help',
         message:'Help me understand my next study section.',
