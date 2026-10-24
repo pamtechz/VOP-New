@@ -602,6 +602,8 @@ class _CurriculumStudioState extends State<CurriculumStudioScreen> {
           if (lessons.isEmpty) return const Padding(
             padding: EdgeInsets.all(22), child: Text('No lessons match this guide and filter.'),
           );
+          final mayUpdate = (recordMap(workspace['permissions'])['lessons'] as List? ?? [])
+            .contains('update');
           return _cards([
             for (final lesson in lessons)
               Card(child: ListTile(
@@ -611,9 +613,11 @@ class _CurriculumStudioState extends State<CurriculumStudioScreen> {
                   lesson['published'] == true ? 'Published' : 'Draft',
                   (lesson['chapters'] as List? ?? []).length.toString() + ' chapters',
                 ].join(' · ')),
-                trailing: const Icon(Icons.edit_note),
-                onTap: () => _openLessonEditor(workspace, guide,
-                  lessonId: lesson['id'].toString()),
+                trailing: Icon(mayUpdate && lesson['canEdit']==true
+                  ? Icons.edit_note : Icons.lock_outline),
+                onTap: mayUpdate && lesson['canEdit']==true
+                  ? () => _openLessonEditor(workspace, guide,
+                      lessonId: lesson['id'].toString()) : null,
               )),
           ]);
         },
