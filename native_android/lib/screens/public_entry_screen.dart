@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -21,6 +22,16 @@ class _PublicEntryScreenState extends State<PublicEntryScreen> {
   String _selectedProgram = '';
   bool _signIn = false;
   final Set<String> _expanded = {};
+  Timer? _searchDebounce;
+  String _appliedSearch = '';
+  int _visibleLimit = 12;
+  void _searchChanged(String value) {
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 180), () {
+      if (mounted) setState(() { _appliedSearch = value.trim().toLowerCase(); _visibleLimit = 12; });
+    });
+  }
+  void _chooseProgram(String id) => setState(() { _selectedProgram = id; _visibleLimit = 12; });
 
   @override
   void initState() {
@@ -31,6 +42,7 @@ class _PublicEntryScreenState extends State<PublicEntryScreen> {
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _search.dispose();
     _api.dispose();
     super.dispose();
@@ -235,7 +247,7 @@ class _PublicEntryScreenState extends State<PublicEntryScreen> {
             final data = snapshot.data ?? {};
             final programs = _items(data['programs']);
             final all = _items(data['guides']);
-            final terms = _search.text.toLowerCase().trim();
+            final terms = _appliedSearch;
             final selected = programs.where((p) => p['id'] == _selectedProgram).toList();
             final selectedIds = selected.isEmpty ? null
               : (selected.first['guideIds'] as List? ?? []).map((id) => id.toString()).toSet();
@@ -249,36 +261,46 @@ class _PublicEntryScreenState extends State<PublicEntryScreen> {
               return terms.isEmpty || searchable.contains(terms);
             }).toList();
             return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              LayoutBuilder(builder: (context, constraints) {
-                final wide = constraints.maxWidth >= 700;
-                final search = TextField(
-                  controller: _search,
-                  onChanged: (_) => setState(() {}),
-                  decoration: const InputDecoration(
-                    prefixIcon: Icon(Icons.search),
-                    labelText: 'Search courses, topics and lessons',
-                    border: OutlineInputBorder(),
+              TextField(
+                controller: _search,
+                onChanged: _searchChanged,
+                decoration: InputDecoration(
+                  prefixIcon: const Icon(Icons.search_rounded),
+                  labelText: 'Find a study, topic or lesson',
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                  suffixIcon: _appliedSearch.isEmpty ? null : IconButton(
+                    tooltip: 'Clear search',
+                    icon: const Icon(Icons.close),
+                    onPressed: () { _search.clear(); _searchChanged(''); },
                   ),
-                );
-                final filter = DropdownButtonFormField<String>(
-                  value: _selectedProgram,
-                  isExpanded: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Programme', border: OutlineInputBorder()),
-                  items: [
-                    const DropdownMenuItem(value: '', child: Text('All published programmes')),
+                ),
+              ),
+              if (programs.isNotEmpty) ...[
+                const SizedBox(height: 14),
+                Text('Choose a learning path',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800)),
+                const SizedBox(height: 8),
+                SizedBox(height: 48, child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  children: [
+                    Padding(padding: const EdgeInsets.only(right: 8),
+                      child: ChoiceChip(
+                        avatar: const Icon(Icons.apps_rounded, size: 17),
+                        label: const Text('All studies'),
+                        selected: _selectedProgram.isEmpty,
+                        onSelected: (_) => _chooseProgram(''),
+                      )),
                     for (final program in programs)
-                      DropdownMenuItem(value: program['id'].toString(),
-                        child: Text(program['title'].toString(), overflow: TextOverflow.ellipsis)),
+                      Padding(padding: const EdgeInsets.only(right: 8),
+                        child: ChoiceChip(
+                          avatar: const Icon(Icons.school_outlined, size: 17),
+                          label: Text((program['title'] ?? 'Programme').toString()),
+                          selected: _selectedProgram == program['id'].toString(),
+                          onSelected: (_) => _chooseProgram(program['id'].toString()),
+                        )),
                   ],
-                  onChanged: (value) => setState(() => _selectedProgram = value ?? ''),
-                );
-                return wide ? Row(children: [
-                  Expanded(flex: 2, child: search),
-                  const SizedBox(width: 14),
-                  Expanded(child: filter),
-                ]) : Column(children: [search, const SizedBox(height: 12), filter]);
-              }),
+                )),
+              ],
               if (programs.isNotEmpty) ...[
                 const SizedBox(height: 27),
                 Text('Published study programmes',
@@ -325,6 +347,9 @@ class _PublicEntryScreenState extends State<PublicEntryScreen> {
                               OutlinedButton.icon(
                                 onPressed: () => setState(() {
                                   _selectedProgram = program['id']?.toString() ?? '';
+                                  _visibleLimit = 12;
+                                  _appliedSearch = '';
+                                  _searchDebounce?.cancel();
                                   _search.clear();
                                 }),
                                 icon: const Icon(Icons.arrow_forward, size: 17),
@@ -373,10 +398,17 @@ class _PublicEntryScreenState extends State<PublicEntryScreen> {
                   : layout.maxWidth >= 650 ? 2 : 1;
                 final cardWidth = (layout.maxWidth - (columns - 1) * 16) / columns;
                 return Wrap(spacing: 16, runSpacing: 16, children: [
-                  for (final guide in guides)
+                  for (final guide in guides.take(_visibleLimit))
                     SizedBox(width: cardWidth, child: _guideCard(guide, programs)),
                 ]);
               }),
+              if (guides.length > _visibleLimit)
+                Center(child: Padding(padding: const EdgeInsets.only(top: 20),
+                  child: OutlinedButton.icon(
+                    onPressed: () => setState(() => _visibleLimit += 12),
+                    icon: const Icon(Icons.expand_more_rounded),
+                    label: Text('Show more courses (${guides.length - _visibleLimit} remaining)'),
+                  ))),
             ]);
           },
         ),
