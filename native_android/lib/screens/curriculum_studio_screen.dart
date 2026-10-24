@@ -40,6 +40,7 @@ class _CurriculumStudioState extends State<CurriculumStudioScreen> {
   String _organizationId = '';
   String _selectedProgram = '';
   String _selectedGuide = '';
+  final Set<String> _expandedPrograms = <String>{};
 
   @override
   void initState() {
@@ -203,6 +204,7 @@ class _CurriculumStudioState extends State<CurriculumStudioScreen> {
         _selectedProgram = '';
         _requests.clear();
         _counts.clear();
+        _expandedPrograms.clear();
       });
     }
   }
@@ -392,67 +394,88 @@ class _CurriculumStudioState extends State<CurriculumStudioScreen> {
 
   Widget _programs(Map<String, dynamic> workspace,
       List<Map<String, dynamic>> rows, Map<String, dynamic> schema) {
-    return FutureBuilder<Map<String, dynamic>>(
-      future: _list('guides'),
-      builder: (context, snapshot) {
-        final guides = recordRows(snapshot.data?['items']);
-        final byId = {for (final guide in guides) guide['id'].toString(): guide};
-        final matches = rows.where(_visible).toList();
-        return _cards([
-          for (final program in matches)
-            Card(clipBehavior: Clip.antiAlias, margin: EdgeInsets.zero,
-              child: Padding(padding: const EdgeInsets.all(15),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                  Row(children: [
-                    const Icon(Icons.route_outlined, size: 20),
-                    const SizedBox(width: 9),
-                    Expanded(child: Text(recordTitle(program),
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800))),
-                    _statusBadge(program),
-                  ]),
-                  const SizedBox(height: 8),
-                  if ((program['description'] ?? '').toString().isNotEmpty)
-                    Text((program['description'] ?? '').toString(), maxLines: 3,
-                      overflow: TextOverflow.ellipsis),
-                  const SizedBox(height: 12),
-                  Text('Published guide relationships',
-                    style: Theme.of(context).textTheme.labelLarge),
-                  const SizedBox(height: 6),
-                  if (snapshot.connectionState != ConnectionState.done)
-                    const LinearProgressIndicator(),
-                  for (final id in (program['guideIds'] as List? ?? []))
-                    if (byId.containsKey(id.toString()))
-                      ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: const Icon(Icons.menu_book_outlined),
-                        title: Text(recordTitle(byId[id.toString()]!)),
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap: () => _openGuide(id.toString(),
-                          programId: program['id'].toString()),
-                      ),
-                  if (snapshot.hasError)
-                    Text('Guide links could not be loaded. Refresh to retry.',
-                      style: TextStyle(color: Theme.of(context).colorScheme.error)),
-                  if (snapshot.connectionState == ConnectionState.done &&
-                      (program['guideIds'] as List? ?? []).isEmpty)
-                    const Text('No guides linked yet. Use Edit to assign published guides.'),
-                  const SizedBox(height: 8),
-                  Wrap(spacing: 8, children: [
-                    if (_editable(schema, program)) OutlinedButton.icon(
-                      onPressed: () => _edit(workspace, 'programs', program),
-                      icon: const Icon(Icons.edit_outlined, size: 16),
-                      label: const Text('Edit track')),
-                    if (_may(schema, 'delete') && program['canEdit'] != false)
-                      IconButton(
-                        tooltip: 'Delete track',
-                        icon: const Icon(Icons.delete_outline),
-                        onPressed: () => _remove(workspace, 'programs', program)),
-                  ]),
-                ]))),
-        ]);
-      },
-    );
+    final matches = rows.where(_visible).toList();
+    return _cards([
+      for (final program in matches)
+        Card(clipBehavior: Clip.antiAlias, margin: EdgeInsets.zero,
+          child: Padding(padding: const EdgeInsets.all(15),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              Row(children: [
+                const Icon(Icons.route_outlined, size: 20),
+                const SizedBox(width: 9),
+                Expanded(child: Text(recordTitle(program),
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800))),
+                _statusBadge(program),
+              ]),
+              const SizedBox(height: 8),
+              if ((program['description'] ?? '').toString().isNotEmpty)
+                Text((program['description'] ?? '').toString(), maxLines: 3,
+                  overflow: TextOverflow.ellipsis),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: () => setState(() {
+                  final id = program['id'].toString();
+                  if (!_expandedPrograms.remove(id)) _expandedPrograms.add(id);
+                }),
+                icon: Icon(_expandedPrograms.contains(program['id'].toString())
+                  ? Icons.expand_less : Icons.expand_more),
+                label: Text(_expandedPrograms.contains(program['id'].toString())
+                  ? 'Hide linked guides'
+                  : 'View linked guides (' + (program['guideIds'] as List? ?? []).length.toString() + ')'),
+              ),
+              if (_expandedPrograms.contains(program['id'].toString())) ...[
+                const SizedBox(height: 10),
+                FutureBuilder<Map<String, dynamic>>(
+                  future: _list('guides'),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState != ConnectionState.done) {
+                      return const LinearProgressIndicator();
+                    }
+                    if (snapshot.hasError) {
+                      return Column(children: [
+                        Text('Guide links could not be loaded.',
+                          style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                        TextButton(onPressed: () => _refresh('guides'),
+                          child: const Text('Retry')),
+                      ]);
+                    }
+                    final links = (program['guideIds'] as List? ?? [])
+                      .map((id) => id.toString()).toList();
+                    final guides = recordRows(snapshot.data?['items']);
+                    final byId = {for (final guide in guides)
+                      guide['id'].toString(): guide};
+                    if (links.isEmpty) return const Text(
+                      'No guides linked yet. Use Edit to assign guides.');
+                    return Column(children: [
+                      for (final id in links)
+                        if (byId.containsKey(id))
+                          ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: const Icon(Icons.menu_book_outlined),
+                            title: Text(recordTitle(byId[id]!)),
+                            trailing: const Icon(Icons.chevron_right),
+                            onTap: () => _openGuide(id,
+                              programId: program['id'].toString()),
+                          ),
+                    ]);
+                  },
+                ),
+              ],
+              const SizedBox(height: 8),
+              Wrap(spacing: 8, children: [
+                if (_editable(schema, program)) OutlinedButton.icon(
+                  onPressed: () => _edit(workspace, 'programs', program),
+                  icon: const Icon(Icons.edit_outlined, size: 16),
+                  label: const Text('Edit track')),
+                if (_may(schema, 'delete') && program['canEdit'] != false)
+                  IconButton(
+                    tooltip: 'Delete track',
+                    icon: const Icon(Icons.delete_outline),
+                    onPressed: () => _remove(workspace, 'programs', program)),
+              ]),
+            ]))),
+    ]);
   }
 
   Widget _guideCards(Map<String, dynamic> workspace,
