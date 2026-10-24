@@ -72,7 +72,7 @@ export function PublicStudyCatalogue({onSignIn}:{onSignIn:()=>void}){
             <GraduationCap size={16} aria-hidden="true"/>{program.title}
           </button>)}
         </div>
-      </div>
+      </div>}
       <div className="vop-catalogue-search-helper" aria-live="polite">
         {loading?'Preparing the published learning library':data?matches.length+' study paths match your selection' : ''}
       </div>
