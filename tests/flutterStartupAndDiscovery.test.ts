@@ -30,6 +30,8 @@ test('Flutter and Legacy study browsing use non-dropdown, bounded results', () =
   assert.match(flutter, /guides\.take\(_visibleLimit\)/);
   assert.doesNotMatch(flutter, /DropdownButtonFormField/);
   assert.match(learner, /selectedStudyProgram/);
+  assert.doesNotMatch(learner, /widget\.api\.personalSettings\(\)/);
+  assert.match(text('native_android/lib/main.dart'), /api\.personalSettings\(\)/);
   assert.match(learner, /visible\.take\(visibleGuideCount\)/);
   assert.match(legacy, /vop-catalogue-pathway/);
   assert.match(legacy, /aria-pressed=\{programme===program\.id\}/);
