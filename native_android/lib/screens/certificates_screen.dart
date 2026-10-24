@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../core/vop_api.dart';
 import '../theme/vop_theme.dart';
 import '../widgets/vop_ui.dart';
+import '../widgets/vop_desktop_layout.dart';
 
 class CertificatesScreen extends StatefulWidget {
   const CertificatesScreen({required this.api,super.key});
@@ -31,7 +32,8 @@ class _CertificatesScreenState extends State<CertificatesScreen>{
         final items=rows(s.data?['certificates']);
         final review=s.data?['review'] is Map
           ?Map<String,dynamic>.from(s.data!['review'] as Map):<String,dynamic>{};
-        return ListView(padding:const EdgeInsets.all(18),children:[
+        return VopDesktopContent(maxWidth:1080,
+          child:ListView(padding:const EdgeInsets.all(24),children:[
           const VopHeroCard(title:'Your learning milestones',
             kicker:'OFFICIAL VOP CREDENTIALS',
             description:'Every certificate is approved, issued and verified through your organisation.',
@@ -84,7 +86,7 @@ class _CertificatesScreenState extends State<CertificatesScreen>{
                   style:TextStyle(fontSize:11.5,height:1.5,
                     color:Theme.of(context).colorScheme.onSurfaceVariant)),
               ])))),
-        ]);
+        ]));
       }),
   );
 }
