@@ -8,7 +8,7 @@ class VopBrand extends StatelessWidget {
     ClipRRect(borderRadius: BorderRadius.circular(11),
       child: Container(width: compact?36:44,height: compact?36:44,
         color:VopColors.navy,
-        child: Image.network('https://vopafrica.vercel.app/assets/vop_logo_2.png',
+        child: Image.asset('assets/brand/vop_logo.png',
           fit:BoxFit.contain,
           errorBuilder:(_,error,stack)=>const Icon(Icons.auto_stories,
             color:VopColors.goldLight,size:23)))),
@@ -242,6 +242,10 @@ class VopCourseCard extends StatelessWidget {
         SizedBox(width:76,height:86,
           child:imageUrl.startsWith('https://')
             ?Image.network(imageUrl,fit:BoxFit.cover,
+              cacheWidth:(76*MediaQuery.devicePixelRatioOf(context)).round().clamp(76,400),
+              filterQuality:FilterQuality.low,
+              frameBuilder:(_,child,frame,loaded)=>loaded||frame!=null
+                ? child : const _CoursePlaceholder(),
               errorBuilder:(_,error,stack)=>const _CoursePlaceholder())
             :const _CoursePlaceholder()),
         Expanded(child:Padding(
