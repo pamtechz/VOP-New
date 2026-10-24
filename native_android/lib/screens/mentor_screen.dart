@@ -58,19 +58,51 @@ class _MentorScreenState extends State<MentorScreen> {
     });
 
   @override
-  Widget build(BuildContext context) => DefaultTabController(
-    length: 2,
-    child: Column(children: [
-      const TabBar(tabs: [
-        Tab(text: 'Mentor conversations'),
-        Tab(text: 'Support requests'),
+  Widget build(BuildContext context) => LayoutBuilder(builder:(context,size){
+    if(size.maxWidth>=1150) {
+      final theme=Theme.of(context);
+      return Row(children:[
+        Expanded(child:Column(children:[
+          Padding(padding:const EdgeInsets.fromLTRB(20,18,20,12),
+            child:Row(children:[
+              const Icon(Icons.forum_outlined),
+              const SizedBox(width:10),
+              Text('Mentor conversations',
+                style:theme.textTheme.titleLarge?.copyWith(
+                  fontWeight:FontWeight.w800)),
+            ])),
+          const Divider(height:1),
+          Expanded(child:_mentorList(context)),
+        ])),
+        const VerticalDivider(width:1),
+        Expanded(child:Column(children:[
+          Padding(padding:const EdgeInsets.fromLTRB(20,18,20,12),
+            child:Row(children:[
+              const Icon(Icons.support_agent_outlined),
+              const SizedBox(width:10),
+              Text('Support requests',
+                style:theme.textTheme.titleLarge?.copyWith(
+                  fontWeight:FontWeight.w800)),
+            ])),
+          const Divider(height:1),
+          Expanded(child:LearnerSupportScreen(api:widget.api,embedded:true)),
+        ])),
+      ]);
+    }
+    return DefaultTabController(
+      length:2,
+      child:Column(children:[
+        const TabBar(tabs:[
+          Tab(text:'Mentor conversations'),
+          Tab(text:'Support requests'),
+        ]),
+        Expanded(child:TabBarView(children:[
+          _mentorList(context),
+          LearnerSupportScreen(api:widget.api,embedded:true),
+        ])),
       ]),
-      Expanded(child: TabBarView(children: [
-        _mentorList(context),
-        LearnerSupportScreen(api: widget.api, embedded: true),
-      ])),
-    ]),
-  );
+    );
+  });
 }
 
 class MentorConversation extends StatefulWidget {
