@@ -63,8 +63,22 @@ class _VopContentScreenState extends State<VopContentScreen> {
         final filtered=items.where((item)=>item.values
           .whereType<String>().join(' ').toLowerCase()
           .contains(filter.toLowerCase())).toList();
-        return RefreshIndicator(onRefresh:()async{setState(reload);await content.catchError((_) => <String, dynamic>{});},
-          child:ListView(padding:const EdgeInsets.all(18),children:[
+        return LayoutBuilder(builder:(context,layout){
+          final columns=layout.maxWidth>=1020?3:
+            layout.maxWidth>=630?2:1;
+          final rowCount=(filtered.length+columns-1)~/columns;
+          return RefreshIndicator(
+            onRefresh:()async{
+              setState(reload);
+              await content.catchError((_) => <String, dynamic>{});
+            },
+            child:ListView.builder(
+              padding:const EdgeInsets.all(18),
+              itemCount:rowCount+1,
+              itemBuilder:(context,row){
+                if(row==0) return Column(
+                  crossAxisAlignment:CrossAxisAlignment.stretch,
+                  children:[
             VopHeroCard(title:widget.kind.title,
               description:widget.kind.subtitle,
               kicker:'VOICE OF PROPHECY',
@@ -111,19 +125,27 @@ class _VopContentScreenState extends State<VopContentScreen> {
                 ))),
               VopSectionTitle('Programmes',subtitle:'Audio and video'),
             ],
-            LayoutBuilder(builder:(context,layout){
-              final columns=layout.maxWidth>=1020?3:
-                layout.maxWidth>=630?2:1;
-              final spacing=14.0;
-              final width=(layout.maxWidth-spacing*(columns-1))/columns;
-              return Wrap(spacing:spacing,runSpacing:spacing,
-                children:[
-                  for(final item in filtered)
-                    SizedBox(width:width,child:_item(item,items)),
-                ]);
-            }),
-            const SizedBox(height:30),
-          ]));
+
+                    const SizedBox(height:16),
+                  ],
+                );
+                final offset=(row-1)*columns;
+                return Row(
+                  crossAxisAlignment:CrossAxisAlignment.start,
+                  children:[
+                    for(var column=0;column<columns;column++)
+                      Expanded(child:Padding(
+                        padding:EdgeInsets.only(right:column==columns-1?0:14),
+                        child:offset+column<filtered.length
+                          ?_item(filtered[offset+column],items)
+                          :const SizedBox.shrink(),
+                      )),
+                  ],
+                );
+              },
+            ),
+          );
+        });
       });
     return widget.embedded?body:Scaffold(
       appBar:AppBar(title:Text(widget.kind.title)),body:body);
