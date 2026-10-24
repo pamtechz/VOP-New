@@ -57,3 +57,23 @@
 
 @media(max-width:1000px){.vop-catalogue-program-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:680px){.vop-catalogue-program-grid{grid-template-columns:1fr}}
+
+/* Scrollable, thumb-friendly course pathways replace the device-native select. */
+.vop-catalogue-pathways{margin:-7px 0 12px}
+.vop-catalogue-pathways-label{display:block;font-size:12px;font-weight:800;
+  letter-spacing:.035em;margin:0 0 10px;color:var(--theme-muted,#526782)}
+.vop-catalogue-pathway-scroll{display:flex;gap:9px;overflow-x:auto;scrollbar-width:thin;
+  overscroll-behavior-x:contain;padding:3px 2px 10px;scroll-snap-type:x proximity}
+.vop-catalogue-pathway{display:inline-flex;align-items:center;gap:8px;flex:0 0 auto;
+  max-width:min(360px,80vw);border:1px solid var(--theme-border,#dce4ee);
+  background:var(--theme-surface,#fff);color:var(--theme-title,#10294a);
+  padding:11px 16px;border-radius:999px;font-size:13px;font-weight:750;
+  cursor:pointer;scroll-snap-align:start;min-height:44px;
+  transition:background .18s ease,border-color .18s ease,transform .18s ease}
+.vop-catalogue-pathway:hover{border-color:#3278b9;transform:translateY(-1px)}
+.vop-catalogue-pathway[aria-pressed=true]{background:#164e91;color:#fff;border-color:#164e91;
+  box-shadow:0 4px 14px rgba(22,78,145,.2)}
+.vop-catalogue-pathway:focus-visible{outline:3px solid #f3b84a;outline-offset:3px}
+.vop-catalogue-search-helper{color:var(--theme-muted,#526782);font-size:12px;margin:5px 0 14px}
+@media(max-width:680px){.vop-catalogue-pathway{font-size:12px;padding:10px 13px}}
+@media(prefers-reduced-motion:reduce){.vop-catalogue-pathway{transition:none}}
