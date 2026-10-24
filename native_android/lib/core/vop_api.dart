@@ -44,6 +44,13 @@ class VopApi {
     _snapshotWrites = _snapshotWrites.then((_) =>
       _offline.save(uid,kind,id,response,title:id)).catchError((Object _) {});
   }
+  Future<void> _afterSnapshotWrites(Future<void> Function() mutation) {
+    // A clear/delete must run after already-scheduled snapshot persistence.
+    // Also put the mutation into the queue so later saves cannot overtake it.
+    final operation = _snapshotWrites.then((_) => mutation());
+    _snapshotWrites = operation.catchError((Object _) {});
+    return operation;
+  }
   bool _syncing=false;
   String get _uid=>_auth.currentUser?.uid??'';
   bool _networkFailure(Object error)=>isVopSocketError(error) ||
@@ -623,9 +630,14 @@ class VopApi {
     _offline.list(_uid);
   Future<List<Map<String,dynamic>>> pendingOfflineChanges()=>
     _offline.pending(_uid);
-  Future<void> removeOfflineStudy(String kind,String id)=>
-    _offline.delete(_uid,kind,id);
-  Future<void> clearOfflineStudies()=>_offline.clear(_uid);
+  Future<void> removeOfflineStudy(String kind,String id) {
+    final uid = _uid;
+    return _afterSnapshotWrites(() => _offline.delete(uid,kind,id));
+  }
+  Future<void> clearOfflineStudies() {
+    final uid = _uid;
+    return _afterSnapshotWrites(() => _offline.clear(uid));
+  }
   Future<void> saveQuizDraft(String language,String guideId,String lessonId,
       String sessionId,Map<String,Object?> answers,
       {DateTime? expiresAt})async{
