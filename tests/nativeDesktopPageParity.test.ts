@@ -70,3 +70,32 @@ test('Users and organizations use lazy desktop column listings',()=>{
   assert.match(users,/VopAdaptiveManagementList\(/);
   assert.match(organizations,/VopAdaptiveManagementList\(/);
 });
+
+
+test('Study guide and lesson reader expose dual pane desktop views while retaining mobile',()=>{
+  const guide=read('screens/guide_screen.dart');
+  const lesson=read('screens/lesson_screen.dart');
+  assert.match(guide,/layout\.maxWidth>=1100/);
+  assert.match(guide,/Your study journey/);
+  assert.match(guide,/Expanded\(child:Center\(child:ConstrainedBox\(/);
+  assert.match(guide,/ListView\(padding:const EdgeInsets\.all\(16\),children:/);
+  assert.match(lesson,/layout\.maxWidth>=1180/);
+  assert.match(lesson,/STUDY NAVIGATION/);
+  assert.match(lesson,/ListView\.builder\(/);
+  assert.match(lesson,/onTap:selected\|\|busy\?null:\(\)=>_save\(index\)/);
+  assert.match(lesson,/PlatePageView\(page: pages\[safePage\]\)/);
+  assert.match(lesson,/maxWidth:desktop\?1080:double\.infinity/);
+});
+
+test('Quiz and mentor areas are true responsive desktop workspaces',()=>{
+  const quiz=read('screens/quiz_screen.dart');
+  const mentor=read('screens/mentor_screen.dart');
+  assert.match(quiz,/layout\.maxWidth>=1100/);
+  assert.match(quiz,/Question \$\{index\+1\}/);
+  assert.match(quiz,/itemCount:questions\.length/);
+  assert.match(quiz,/maxWidth:desktop\?1020:double\.infinity/);
+  assert.match(mentor,/size\.maxWidth>=1150/);
+  assert.match(mentor,/Expanded\(child:_mentorList\(context\)\)/);
+  assert.match(mentor,/Expanded\(child:LearnerSupportScreen\(api:widget\.api,embedded:true\)\)/);
+  assert.match(mentor,/DefaultTabController\(/);
+});
