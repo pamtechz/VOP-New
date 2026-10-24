@@ -17,7 +17,7 @@ class VopAdaptiveManagementList extends StatelessWidget {
   final String Function(Map<String,dynamic>) title;
   final String Function(Map<String,dynamic>) description;
   final String Function(Map<String,dynamic>) status;
-  final VoidCallback Function(Map<String,dynamic>) onOpen;
+  final VoidCallback? Function(Map<String,dynamic>) onOpen;
   final Widget Function(Map<String,dynamic>) actions;
   final IconData Function(Map<String,dynamic>)? icon;
 
