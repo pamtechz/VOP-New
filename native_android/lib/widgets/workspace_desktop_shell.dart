@@ -27,7 +27,7 @@ class WorkspaceDesktopShell extends StatelessWidget {
     final theme = Theme.of(context);
     return Row(children: [
       SizedBox(
-        width: 295,
+        width: 258,
         child: Material(
           color: theme.colorScheme.surface,
           child: Column(children: [
@@ -52,7 +52,7 @@ class WorkspaceDesktopShell extends StatelessWidget {
               padding: const EdgeInsets.symmetric(
                 horizontal: 10, vertical: 12),
               children: [
-                WorkspaceNavigation(api: api),
+                WorkspaceNavigation(api: api, compact: true),
               ],
             )),
           ]),
