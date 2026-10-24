@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../core/vop_api.dart';
 import '../theme/vop_theme.dart';
 import '../widgets/vop_ui.dart';
+import '../widgets/vop_desktop_layout.dart';
 
 class GraduationsScreen extends StatefulWidget {
   const GraduationsScreen({required this.api, this.organizationId, super.key});
@@ -58,7 +59,7 @@ class _GraduationsScreenState extends State<GraduationsScreen> {
           const SizedBox(width: 6),
         ],
       ),
-      body: Column(
+      body: VopDesktopWorkspaceFrame(api: widget.api, child: Column(
         children: [
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
@@ -398,7 +399,7 @@ class _ReviewGraduationSheetState extends State<_ReviewGraduationSheet> {
             ),
           ],
         ),
-      ),
+      )),
     );
   }
 
