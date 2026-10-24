@@ -213,9 +213,13 @@ class VopApi {
       Future<Map<String,dynamic>> Function() request)async{
     try{
       final response=await request();
-      if(_uid.isNotEmpty){
-        try{await _offline.save(_uid,kind,id,response,
-          title:id);}catch(_){}
+      // Persist snapshots after returning the live response. Awaiting a large
+      // browser storage or Android disk write made every catalogue load appear
+      // slower even though the API request had already finished.
+      final owner = _uid;
+      if(owner.isNotEmpty){
+        unawaited(_offline.save(owner,kind,id,response,title:id)
+          .catchError((Object _) {}));
       }
       return response;
     }catch(error){
