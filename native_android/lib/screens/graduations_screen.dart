@@ -242,7 +242,7 @@ class _GraduationsScreenState extends State<GraduationsScreen> {
           ),
         ],
       ),
-    );
+    ));
   }
 
   Widget _filterChip(String key, String label) {
