@@ -399,7 +399,7 @@ class _ReviewGraduationSheetState extends State<_ReviewGraduationSheet> {
             ),
           ],
         ),
-      )),
+      ),
     );
   }
 
