@@ -111,7 +111,17 @@ class _VopContentScreenState extends State<VopContentScreen> {
                 ))),
               VopSectionTitle('Programmes',subtitle:'Audio and video'),
             ],
-            ...filtered.map((item)=>_item(item,items)),
+            LayoutBuilder(builder:(context,layout){
+              final columns=layout.maxWidth>=1020?3:
+                layout.maxWidth>=630?2:1;
+              final spacing=14.0;
+              final width=(layout.maxWidth-spacing*(columns-1))/columns;
+              return Wrap(spacing:spacing,runSpacing:spacing,
+                children:[
+                  for(final item in filtered)
+                    SizedBox(width:width,child:_item(item,items)),
+                ]);
+            }),
             const SizedBox(height:30),
           ]));
       });
