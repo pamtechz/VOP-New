@@ -42,6 +42,15 @@ class HomeShell extends StatefulWidget {
 class _HomeShellState extends State<HomeShell> {
   int tab=0;
   String search='';
+  String selectedStudyProgram='';
+  int visibleGuideCount=12;
+  Timer? _studySearchDebounce;
+  void _onStudySearch(String value) {
+    _studySearchDebounce?.cancel();
+    _studySearchDebounce=Timer(const Duration(milliseconds: 180), () {
+      if(mounted) setState(() { search=value.trim().toLowerCase(); visibleGuideCount=12; });
+    });
+  }
   late Future<Map<String,dynamic>> profile,catalog,progress;
   @override void initState(){super.initState();reload();unawaited(_restoreAppearance().catchError((_) {}));}
   Future<void> _restoreAppearance()async{
@@ -68,7 +77,7 @@ class _HomeShellState extends State<HomeShell> {
     catalog=widget.api.catalogue()..ignore();
     progress=widget.api.progress()..ignore();
   }
-  @override void dispose(){super.dispose();}
+  @override void dispose(){_studySearchDebounce?.cancel();super.dispose();}
   void selectTab(int next)=>setState(()=>tab=next);
   void push(Widget page)=>Navigator.push(context,
     MaterialPageRoute<void>(builder:(_)=>page));
@@ -468,9 +477,14 @@ class _HomeShellState extends State<HomeShell> {
   Widget study()=>asyncView(catalog,(data){
     final guides=asRows(data['guides']);
     final programs=asRows(data['programs']);
+    final activeProgram=programs.where((p)=>p['id'].toString()==selectedStudyProgram).toList();
+    final allowedGuideIds=activeProgram.isEmpty ? null :
+      (activeProgram.first['guideIds'] as List? ?? [])
+        .map((id)=>id.toString()).toSet();
     final visible=guides.where((guide){
+      if (allowedGuideIds != null && !allowedGuideIds.contains(guide['id'].toString())) return false;
       final text='${guide['title']??''} ${guide['description']??''} ${guide['language']??''}';
-      return text.toLowerCase().contains(search.toLowerCase());
+      return text.toLowerCase().contains(search);
     }).toList();
     return RefreshIndicator(onRefresh:()async{setState(reload);await catalog.catchError((_) => <String, dynamic>{});},
       child:ListView(key:const PageStorageKey<String>('vop-lessons-scroll'),
@@ -480,31 +494,45 @@ class _HomeShellState extends State<HomeShell> {
           description:'Explore the Bible at your own pace and continue your learning journey.',
           icon:Icons.auto_stories_rounded,kicker:'STUDY WITH PURPOSE'),
         const SizedBox(height:12),
-        TextField(onChanged:(value)=>setState(()=>search=value),
+        TextField(onChanged:_onStudySearch,
           decoration:const InputDecoration(
             hintText:'Find courses, topics and languages',
             prefixIcon:Icon(Icons.search_rounded))),
         const SizedBox(height:10),
         if(programs.isNotEmpty)...[
           VopSectionTitle('Study programmes',
-            subtitle:'Explore structured learning paths'),
-          ...programs.map((p)=>Card(
-            margin:const EdgeInsets.only(bottom:10),
-            clipBehavior:Clip.antiAlias,
-            child:ListTile(
-              dense:true,visualDensity:VisualDensity.compact,
-              leading:const Icon(Icons.school_outlined),
-              title:Text((p['title']??'').toString(),
-                style:const TextStyle(fontWeight:FontWeight.w800)),
-              subtitle:Text((p['description']??'').toString(),
-                maxLines:2,overflow:TextOverflow.ellipsis),
-              trailing:const Icon(Icons.chevron_right),
-              onTap:(){
-                push(_ProgrammeScreen(
-                  programId:(p['id']??'').toString(),
-                  title:(p['title']??'Programme').toString(),api:widget.api));
-              },
-            ))),
+            subtitle:'Select a pathway to browse its published guides'),
+          const SizedBox(height:5),
+          SizedBox(height:52, child:ListView(scrollDirection:Axis.horizontal,children:[
+            Padding(padding:const EdgeInsets.only(right:8),
+              child:ChoiceChip(
+                avatar:const Icon(Icons.apps_rounded,size:18),
+                label:const Text('All guides'),
+                selected:selectedStudyProgram.isEmpty,
+                onSelected:(_)=>setState((){
+                  selectedStudyProgram='';visibleGuideCount=12;
+                }),
+              )),
+            for(final p in programs)
+              Padding(padding:const EdgeInsets.only(right:8),
+                child:ChoiceChip(
+                  avatar:const Icon(Icons.school_outlined,size:18),
+                  label:Text((p['title']??'Programme').toString()),
+                  selected:selectedStudyProgram==p['id'].toString(),
+                  onSelected:(_)=>setState((){
+                    selectedStudyProgram=p['id'].toString();visibleGuideCount=12;
+                  }),
+                )),
+          ])),
+          if(activeProgram.isNotEmpty)
+            Padding(padding:const EdgeInsets.only(bottom:9),
+              child:TextButton.icon(
+                icon:const Icon(Icons.open_in_new_rounded,size:18),
+                label:Text('Explore ${(activeProgram.first['title']??'programme').toString()} details'),
+                onPressed:()=>push(_ProgrammeScreen(
+                  programId:(activeProgram.first['id']??'').toString(),
+                  title:(activeProgram.first['title']??'Programme').toString(),api:widget.api)),
+              )),
           const SizedBox(height:7),
         ],
         VopSectionTitle('Study guides',
@@ -517,9 +545,16 @@ class _HomeShellState extends State<HomeShell> {
             constraints.maxWidth>=650?2:1;
           final width=(constraints.maxWidth-(cols-1)*14)/cols;
           return Wrap(spacing:14,runSpacing:14,
-            children:visible.map((guide)=>SizedBox(width:width,
+            children:visible.take(visibleGuideCount).map((guide)=>SizedBox(width:width,
               child:guideCard(guide))).toList());
         }),
+        if(visible.length>visibleGuideCount)
+          Center(child:Padding(padding:const EdgeInsets.only(top:12),
+            child:OutlinedButton.icon(
+              onPressed:()=>setState(()=>visibleGuideCount+=12),
+              icon:const Icon(Icons.expand_more),
+              label:Text('Show more guides (${visible.length-visibleGuideCount} remaining)'),
+            ))),
         const SizedBox(height:20),
       ]));
   });
