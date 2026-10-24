@@ -44,6 +44,7 @@ test('Roster and records have true adaptive desktop layouts without breaking mob
   assert.match(candidates,/itemBuilder: \(context, index\) => candidateCard\(index\)/);
   assert.match(records,/tableOverride \?\? VopDesktopWorkspaceFrame\.isDesktop\(context\)/);
   assert.match(records,/DataTable\(columns:/);
+  assert.match(records,/onTap:\(\)=>_details\(item,schema,workspace,actions\)/);
   assert.match(records,/ListView\.separated/);
 });
 
@@ -51,8 +52,21 @@ test('Classic library and account setting panels adapt for desktop instead of ph
   const content=read('screens/content_screen.dart');
   const account=read('screens/account_settings_screen.dart');
   assert.match(content,/layout\.maxWidth>=1020\?3:/);
-  assert.match(content,/SizedBox\(width:width,child:_item\(item,items\)\)/);
+  assert.match(content,/final rowCount=\(filtered\.length\+columns-1\)~\/columns/);
+  assert.match(content,/ListView\.builder\(/);
+  assert.match(content,/filtered\[offset\+column\]/);
   assert.match(account,/NavigationRail\(/);
   assert.match(account,/MediaQuery\.sizeOf\(context\)\.width<1000/);
   assert.match(account,/onDestinationSelected:\(index\)=>setState\(\(\)=>page=index\)/);
+});
+
+test('Users and organizations use lazy desktop column listings',()=>{
+  const list=read('widgets/vop_management_list.dart');
+  const users=read('screens/user_management_screen.dart');
+  const organizations=read('screens/organizations_screen.dart');
+  assert.match(list,/layout.maxWidth>=820/);
+  assert.match(list,/ListView.builder\(/);
+  assert.match(list,/ListView.separated\(/);
+  assert.match(users,/VopAdaptiveManagementList\(/);
+  assert.match(organizations,/VopAdaptiveManagementList\(/);
 });
