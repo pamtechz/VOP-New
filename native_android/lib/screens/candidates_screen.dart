@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../core/vop_api.dart';
 import '../theme/vop_theme.dart';
 import '../widgets/vop_ui.dart';
+import '../widgets/vop_desktop_layout.dart';
 
 class CandidatesScreen extends StatefulWidget {
   const CandidatesScreen({required this.api, this.organizationId, super.key});
@@ -93,7 +94,7 @@ class _CandidatesScreenState extends State<CandidatesScreen> {
           );
         },
       ),
-      body: Column(
+      body: VopDesktopWorkspaceFrame(api: widget.api, child: Column(
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
@@ -204,12 +205,8 @@ class _CandidatesScreenState extends State<CandidatesScreen> {
                   );
                 }
 
-                return ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 90),
-                  itemCount: candidates.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 8),
-                  itemBuilder: (context, index) {
-                    final c = candidates[index];
+                Widget candidateCard(int index) {
+                  final c = candidates[index];
                     final displayName = (c['displayName'] ?? c['name'] ?? 'Unnamed Candidate').toString();
                     final email = (c['email'] ?? '').toString();
                     final phone = (c['phoneNumber'] ?? '').toString();
@@ -255,13 +252,34 @@ class _CandidatesScreenState extends State<CandidatesScreen> {
                         onTap: () => _openCandidateDetails(c),
                       ),
                     );
-                  },
-                );
+
+                }
+                return LayoutBuilder(builder: (context, size) {
+                  final desktop = size.maxWidth >= 760;
+                  if (desktop) {
+                    final columns = size.maxWidth >= 1150 ? 3 : 2;
+                    return GridView.builder(
+                      padding: const EdgeInsets.fromLTRB(20, 12, 20, 100),
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: columns,
+                        crossAxisSpacing: 12, mainAxisSpacing: 12,
+                        mainAxisExtent: 130),
+                      itemCount: candidates.length,
+                      itemBuilder: (context, index) => candidateCard(index),
+                    );
+                  }
+                  return ListView.separated(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 90),
+                    itemCount: candidates.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    itemBuilder: (context, index) => candidateCard(index),
+                  );
+                });
               },
             ),
           ),
         ],
-      ),
+      )),
     );
   }
 
