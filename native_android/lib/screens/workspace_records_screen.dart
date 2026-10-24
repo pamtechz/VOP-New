@@ -72,7 +72,7 @@ class _WorkspaceRecordsState extends State<WorkspaceRecordsScreen>{
           Expanded(child:filtered.isEmpty?const VopEmpty(icon:Icons.inbox_outlined,message:'No records found.'):
             useTable?SingleChildScrollView(scrollDirection:Axis.horizontal,child:SingleChildScrollView(child:DataTable(columns:const[
               DataColumn(label:Text('Name')),DataColumn(label:Text('Status')),DataColumn(label:Text('Actions'))],
-              rows:filtered.map((item)=>DataRow(cells:[DataCell(SizedBox(width:260,child:Text(recordTitle(item)))),
+              rows:filtered.map((item)=>DataRow(cells:[DataCell(SizedBox(width:260,child:Text(recordTitle(item))),onTap:()=>_details(item,schema,workspace,actions)),
                 DataCell(Text(item['published']==true?'Published':item['published']==false?'Draft':'${item['status']??''}')),
                 DataCell(_actions(item,schema,workspace,actions))])).toList()))):
             ListView.separated(padding:const EdgeInsets.fromLTRB(16,0,16,96),itemCount:filtered.length,
