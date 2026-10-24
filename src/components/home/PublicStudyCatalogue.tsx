@@ -57,13 +57,26 @@ export function PublicStudyCatalogue({onSignIn}:{onSignIn:()=>void}){
           <input type="search" value={search} onChange={event=>setSearch(event.target.value)}
             placeholder={t('public.catalogue.searchPlaceholder','Search topics, courses or lesson names')}/>
         </label>
-        <label className="vop-catalogue-select"><span>{t('public.catalogue.programme','Programme')}</span>
-          <select value={programme} onChange={event=>setProgramme(event.target.value)}>
-            <option value="all">{t('public.catalogue.allStudies','All published studies')}</option>
-            {(data?.programs??[]).map(program=><option key={program.id} value={program.id}>{program.title}</option>)}
-          </select>
-        </label>
       </div>
+      {(data?.programs.length??0)>0&&<div className="vop-catalogue-pathways" role="group"
+        aria-label={t('public.catalogue.programme','Programme')}>
+        <span className="vop-catalogue-pathways-label">{t('public.catalogue.programme','Choose a learning path')}</span>
+        <div className="vop-catalogue-pathway-scroll">
+          <button type="button" className="vop-catalogue-pathway"
+            aria-pressed={programme==='all'} onClick={()=>setProgramme('all')}>
+            {t('public.catalogue.allStudies','All published studies')}
+          </button>
+          {data!.programs.map(program=><button key={program.id} type="button"
+            className="vop-catalogue-pathway" aria-pressed={programme===program.id}
+            onClick={()=>setProgramme(program.id)}>
+            <GraduationCap size={16} aria-hidden="true"/>{program.title}
+          </button>)}
+        </div>
+      </div>
+      <div className="vop-catalogue-search-helper" aria-live="polite">
+        {loading?'Preparing the published learning library':data?matches.length+' study paths match your selection' : ''}
+      </div>
+
       {loading&&<div className="vop-catalogue-status" role="status">{t('public.catalogue.loading','Loading published studies…')}</div>}
       {!loading&&error&&<div className="vop-catalogue-status" role="status">{error} You can still sign in to VOP.</div>}
       {!loading&&!error&&(data?.programs.length??0)>0&&
