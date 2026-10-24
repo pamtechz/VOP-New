@@ -253,7 +253,28 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     body:loading?const VopSkeleton(rows:4):
       error!=null&&profile.isEmpty
         ?VopEmpty(icon:Icons.wifi_off,message:error!,onRetry:_load)
-        :Column(children:[
+        :Row(children:[
+          if(MediaQuery.sizeOf(context).width>=1000)
+            NavigationRail(
+              backgroundColor:Theme.of(context).colorScheme.surface,
+              extended:MediaQuery.sizeOf(context).width>=1300,
+              selectedIndex:page,
+              labelType:MediaQuery.sizeOf(context).width>=1300
+                ?NavigationRailLabelType.none:NavigationRailLabelType.all,
+              onDestinationSelected:(index)=>setState(()=>page=index),
+              destinations:const [
+                NavigationRailDestination(icon:Icon(Icons.person_outline),
+                  selectedIcon:Icon(Icons.person),label:Text('Profile')),
+                NavigationRailDestination(icon:Icon(Icons.tune_outlined),
+                  selectedIcon:Icon(Icons.tune),label:Text('Settings')),
+                NavigationRailDestination(icon:Icon(Icons.shield_outlined),
+                  selectedIcon:Icon(Icons.shield),label:Text('Security')),
+              ],
+            ),
+          if(MediaQuery.sizeOf(context).width>=1000)
+            const VerticalDivider(width:1),
+          Expanded(child:Column(children:[
+          if(MediaQuery.sizeOf(context).width<1000)
           Padding(padding:const EdgeInsets.fromLTRB(14,12,14,3),
             child:LayoutBuilder(builder:(context,constraints){
               final compact=constraints.maxWidth<410;
@@ -276,7 +297,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
             children:[if(page==0)..._profile(),if(page==1)..._preferences(),
               if(page==2)..._security()],
           )),
-        ]),
+        ]))]),
   );
   List<Widget> _profile()=>[
     const SizedBox(height:9),
