@@ -4,6 +4,7 @@ on:
     branches:
       - main
       - 'prod/**'
+      - 'feature/independent-learners-20261023'
   pull_request_target:
     branches:
       - main
@@ -16,7 +17,7 @@ permissions:
 jobs:
   verify:
     runs-on: [self-hosted, Windows]
-    timeout-minutes: 20
+    timeout-minutes: 65
     steps:
       - name: Verify KASAINSTITUTE runner identity
         shell: powershell
@@ -41,9 +42,31 @@ jobs:
         with:
           node-version: '22'
       - name: Install locked dependencies
-        timeout-minutes: 10
+        timeout-minutes: 30
         working-directory: vop-verify-${{ github.run_id }}-${{ github.run_attempt }}
-        run: npm ci --no-audit --no-fund --prefer-offline --loglevel=info
+        shell: powershell
+        run: |
+          # Multiple self-hosted runner services share Windows disk and npm
+          # cache. Serialize only package installation, not the test suites.
+          $lock = [System.Threading.Mutex]::new($false, 'Global\VOP-NPM-CI-WINDOWS')
+          $acquired = $false
+          try {
+            try {
+              $acquired = $lock.WaitOne([TimeSpan]::FromMinutes(18))
+            } catch [System.Threading.AbandonedMutexException] {
+              $acquired = $true
+            }
+            if (-not $acquired) { throw 'Timed out waiting for the shared npm install lock.' }
+            & npm ci --ignore-scripts --no-audit --no-fund --prefer-offline --loglevel=warn --maxsockets=8
+            if ($LASTEXITCODE -ne 0) { throw "npm ci failed with exit code $LASTEXITCODE" }
+            # The reviewed build, lint and emulator gates still execute normally.
+            # Validate the native Windows build-tool binaries explicitly.
+            & node -e "for(const mod of ['typescript','vite','rolldown','@rolldown/binding-win32-x64-msvc']){require.resolve(mod);}"
+            if ($LASTEXITCODE -ne 0) { throw 'A required build package is missing after the script-free install.' }
+          } finally {
+            if ($acquired) { $lock.ReleaseMutex() }
+            $lock.Dispose()
+          }
       - name: Regenerate and verify source-derived offline lessons
         working-directory: vop-verify-${{ github.run_id }}-${{ github.run_attempt }}
         run: npm run verify:content

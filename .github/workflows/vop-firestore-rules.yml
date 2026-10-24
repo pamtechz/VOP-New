@@ -4,6 +4,7 @@ on:
     branches:
       - main
       - 'prod/**'
+      - 'feature/independent-learners-20261023'
     paths:
       - firestore.rules
       - firebase.json
@@ -30,7 +31,7 @@ concurrency:
 jobs:
   rules:
     runs-on: [self-hosted, Windows]
-    timeout-minutes: 30
+    timeout-minutes: 70
     steps:
       - name: Verify KASAINSTITUTE runner identity
         shell: powershell
@@ -60,9 +61,29 @@ jobs:
           distribution: temurin
           java-version: '21'
       - name: Install the exact locked security test tree
-        timeout-minutes: 12
+        timeout-minutes: 30
         working-directory: vop-rules-${{ github.run_id }}-${{ github.run_attempt }}
-        run: npm ci --no-audit --no-fund --prefer-offline --loglevel=info
+        shell: powershell
+        run: |
+          $lock = [System.Threading.Mutex]::new($false, 'Global\VOP-NPM-CI-WINDOWS')
+          $acquired = $false
+          try {
+            try {
+              $acquired = $lock.WaitOne([TimeSpan]::FromMinutes(18))
+            } catch [System.Threading.AbandonedMutexException] {
+              $acquired = $true
+            }
+            if (-not $acquired) { throw 'Timed out waiting for the shared npm install lock.' }
+            & npm ci --ignore-scripts --no-audit --no-fund --prefer-offline --loglevel=warn --maxsockets=8
+            if ($LASTEXITCODE -ne 0) { throw "npm ci failed with exit code $LASTEXITCODE" }
+            # The reviewed build, lint and emulator gates still execute normally.
+            # Validate the native Windows build-tool binaries explicitly.
+            & node -e "for(const mod of ['typescript','vite','rolldown','@rolldown/binding-win32-x64-msvc']){require.resolve(mod);}"
+            if ($LASTEXITCODE -ne 0) { throw 'A required build package is missing after the script-free install.' }
+          } finally {
+            if ($acquired) { $lock.ReleaseMutex() }
+            $lock.Dispose()
+          }
       - name: Run isolated owner and default-deny proof
         working-directory: vop-rules-${{ github.run_id }}-${{ github.run_attempt }}
         shell: powershell

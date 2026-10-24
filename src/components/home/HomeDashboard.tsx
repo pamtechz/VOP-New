@@ -339,6 +339,11 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
 
   return (
     <main className="vop-home">
+      {!currentUser.organizationId&&<section className="vop-card" style={{margin:'12px 0',padding:18}} aria-label="Independent Bible study">
+        <h2 style={{margin:'0 0 8px'}}>Your personal Bible study</h2>
+        <p>Continue learning without a church membership. You can connect with a participating church or VOP ministry whenever you choose.</p>
+        <button type="button" className="vop-primary" onClick={()=>onNavigate?.('institution-finder')}>Find a church or ministry (optional)</button>
+      </section>}
       {/* Hero Slider */}
       <section
         className="vop-hero-slider"

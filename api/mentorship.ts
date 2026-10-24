@@ -1,5 +1,5 @@
 import { applyFlutterPreviewCors } from '../server/flutterPreviewCors.js';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { getApps, initializeApp, cert } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
@@ -371,7 +371,12 @@ async function assertSupportRequestAccess(
   request:Record<string,unknown>,
 ){
   const organizationId=String(request.organizationId||'').trim();
-  if(!organizationId)throw new Error('This support request is missing its organization scope.');
+  if(!organizationId){
+    // Platform support for an independent learner is visible only to that
+    // learner and VOP Super Admin, never to an unrelated tenant admin/mentor.
+    if(String(request.candidateId||'')===uid||String(actor.role||'')==='super_admin')return;
+    throw new Error('You are not allowed to access another learner\'s personal support request.');
+  }
   if(String(request.candidateId||'')===uid)return;
   if(isAdmin(actor)){
     await assertOrganizationScope(db,{...actor,uid},organizationId);
@@ -472,11 +477,42 @@ export default async function handler(req: Request, res: Response) {
       action === 'updateSupportRequest' ? 'update' :
       ['sendMessage','createSupportRequest','replySupportRequest','editMessage','deleteMessage','editSupportMessage','deleteSupportMessage'].includes(action) ? 'create' :
       ['performance','questionFailures','listConversations','listMyConversations','listMyAssignments','messages','listMySupportRequests','supportRequestMessages','markConversationRead','markSupportRequestRead','unreadSummary'].includes(action) ? 'read' : '';
-    if (permissionAction) await requirePermissionForProfile(db, actor as Record<string, unknown>, 'mentoring', permissionAction);
+    // Personal VOP support belongs to its creator regardless of whether the
+    // learner later joins a ministry with a restricted permission matrix.
+    // Every request-specific operation still checks its stored ACL below.
+    const existingSupportAction=[
+      'replySupportRequest','editSupportMessage','deleteSupportMessage',
+      'updateSupportRequest','supportRequestMessages','markSupportRequestRead',
+    ].includes(action);
+    let storedSupport:FirebaseFirestore.DocumentSnapshot|undefined;
+    if(existingSupportAction&&/^[A-Za-z0-9_-]{8,120}$/.test(String(body.requestId||''))){
+      storedSupport=await db.doc('learningSupportRequests/'+String(body.requestId)).get();
+    }
+    const ownPersonalSupport=Boolean(storedSupport?.exists
+      &&!String(storedSupport.data()?.organizationId||'').trim()
+      &&String(storedSupport.data()?.candidateId||'')===decoded.uid);
+    const personalSupportWorkspace=isCandidate(actor)&&(
+      action==='listMySupportRequests'
+      ||(action==='createSupportRequest'&&!String(actor.organizationId||'').trim())
+      ||ownPersonalSupport
+    );
+    if(permissionAction&&!personalSupportWorkspace)
+      await requirePermissionForProfile(db, actor as Record<string, unknown>, 'mentoring', permissionAction);
     let organizationId = String(body.organizationId || actor.organizationId || '').trim();
     if (isAdmin(actor)) organizationId = await assertOrganizationScope(db, { ...actor, uid: decoded.uid }, organizationId);
-    if(permissionAction&&!['view','read'].includes(permissionAction)&&organizationId&&String(actor.role||'')!=='super_admin'){
-      await requireOrganizationSubscriptionFeature(db,'mentorship',organizationId);
+    // Only Super Admin may explicitly select the independent-learner queue.
+    // Never infer it from a stale organization attached to the admin profile.
+    if(action==='listSupportRequests'&&body.supportScope==='platform'
+       &&String(actor.role||'')==='super_admin')organizationId='';
+    if(permissionAction&&!['view','read'].includes(permissionAction)&&String(actor.role||'')!=='super_admin'){
+      // A previously created personal support case stays platform-scoped even
+      // when its learner later joins a subscription-restricted organization.
+      let billingOrganizationId=organizationId;
+      if(existingSupportAction&&storedSupport?.exists){
+        billingOrganizationId=String(storedSupport.data()?.organizationId||'').trim();
+      }
+      if(billingOrganizationId)
+        await requireOrganizationSubscriptionFeature(db,'mentorship',billingOrganizationId);
     }
 
     if (['listStudents','listMentors','listAssignments','questionFailures','createDraft','sendDraft','getAutomationSettings','saveAutomationSettings'].includes(action)) {
@@ -811,39 +847,51 @@ export default async function handler(req: Request, res: Response) {
       if(!isCandidate(actor))throw new Error('Only a learner or candidate can open a learning support request.');
       const candidateId=decoded.uid;
       const candidateOrganizationId=String(actor.organizationId||'').trim();
-      if(!candidateOrganizationId)throw new Error('Your account is not linked to an organization.');
+      const personal=!candidateOrganizationId;
       const message=String(body.message||'').trim();
       if(message.length<3||message.length>10000)throw new Error('Describe the question or support need in 3 to 10,000 characters.');
       const subject=String(body.subject||'').trim().slice(0,180)
         ||(supportCategory(body.category)==='doctrine'?'Doctrine question':'Learning support request');
-      const target=supportTarget(body.target);
-      const channel=supportChannel(body.channel);
+      // Independently enrolled learners always use the private VOP help
+      // queue. Mentor/WhatsApp destinations require a real assigned team.
+      const target=personal?'support_team':supportTarget(body.target);
+      const channel=personal?'in_app':supportChannel(body.channel);
       const category=supportCategory(body.category);
       const spiritualInterest=supportInterest(body.spiritualInterest);
       const priority=supportPriority(body.priority);
       const references=messageReferences(body.references);
-      const assignedMentorId=(target==='mentor'||target==='both')
+      const assignedMentorId=personal?'':(target==='mentor'||target==='both')
         ?await activeMentorFor(db,candidateId,candidateOrganizationId):'';
       if(target==='mentor'&&!assignedMentorId){
         throw new Error('No active mentor is assigned yet. Choose Organization support team or ask your administrator to assign a mentor.');
       }
-      const teamRecipients=(target==='support_team'||target==='both')
-        ?await supportTeamRecipients(db,candidateOrganizationId):[];
-      if(target==='support_team'&&!teamRecipients.length){
+      const teamRecipients=personal
+        ?(await db.collection('users').where('role','==','super_admin').limit(20).get()).docs.map(doc=>doc.id)
+        :(target==='support_team'||target==='both')
+          ?await supportTeamRecipients(db,candidateOrganizationId):[];
+      if(target==='support_team'&&!teamRecipients.length&&!personal){
         throw new Error('The organization support team is not configured yet.');
       }
       const recipients=[...new Set([
         ...(assignedMentorId?[assignedMentorId]:[]),
         ...teamRecipients,
       ])].filter(uid=>uid!==candidateId);
-      if(!recipients.length)throw new Error('No support recipient is currently available for this request.');
+      if(!recipients.length&&!personal)throw new Error('No support recipient is currently available for this request.');
 
-      const requestRef=db.collection('learningSupportRequests').doc();
+      const submissionKey=String(body.idempotencyKey||'').trim();
+      if(submissionKey&&!/^[A-Za-z0-9_-]{16,80}$/.test(submissionKey))
+        throw new Error('Invalid support submission identifier.');
+      const deterministicId=submissionKey
+        ?'support_'+createHash('sha256').update(candidateId+':'+submissionKey).digest('hex')
+        :'';
+      const requestRef=deterministicId
+        ?db.collection('learningSupportRequests').doc(deterministicId)
+        :db.collection('learningSupportRequests').doc();
       const messageRef=requestRef.collection('messages').doc();
       const createdAt=FieldValue.serverTimestamp();
       const campaignTag=spiritualInterest==='one_voice_27'||category==='one_voice_27'?'one_voice_27':'';
       const followUpStatus=spiritualInterest==='none'?'not_required':'new';
-      await requestRef.set({
+      const requestData={
         organizationId:candidateOrganizationId,candidateId,
         candidateName:String(actor.displayName||actor.email||'Learner'),
         candidateEmail:String(actor.email||decoded.email||''),
@@ -853,15 +901,61 @@ export default async function handler(req: Request, res: Response) {
         initialMessageId:messageRef.id,unreadFor:recipients,
         createdAt,updatedAt:createdAt,lastMessageAt:createdAt,lastMessageSenderId:candidateId,
         createdBy:candidateId,firstResponseAt:null,resolvedAt:null,
-      });
-      await messageRef.set({
+      };
+      const initialMessage={
         senderId:candidateId,senderRole:'candidate',body:message,references,
         createdAt:FieldValue.serverTimestamp(),
-      });
-      await Promise.all(recipients.map(recipientId=>createNotification(db,{
+      };
+      let existingRequest:Record<string,unknown>|null=null;
+      if(personal||submissionKey){
+        // All existence and quota reads precede writes. Firestore retries
+        // concurrent transactions and guarantees one request per key.
+        existingRequest=await db.runTransaction(async transaction=>{
+          const previous=submissionKey?await transaction.get(requestRef):null;
+          if(previous?.exists){
+            const prior=previous.data()||{};
+            if(String(prior.candidateId||'')!==candidateId
+                ||String(prior.message||'')!==message
+                ||String(prior.subject||'')!==subject)
+              throw new Error('This support request was already submitted with different content. Refresh your requests before continuing.');
+            return prior;
+          }
+          let quotaRef:FirebaseFirestore.DocumentReference|null=null;
+          let recent:number[]=[];
+          if(personal){
+            quotaRef=db.collection('personalSupportRateLimits').doc(candidateId);
+            const quota=await transaction.get(quotaRef);
+            const cutoff=Date.now()-24*60*60*1000;
+            recent=(Array.isArray(quota.data()?.requestTimes)?quota.data()!.requestTimes:[])
+              .map(Number).filter((time:number)=>Number.isFinite(time)&&time>cutoff);
+            if(recent.length>=8)
+              throw new Error('Daily personal support request limit reached. Reply to an existing request or try again later.');
+          }
+          transaction.set(requestRef,requestData);
+          transaction.set(messageRef,initialMessage);
+          if(personal&&quotaRef)transaction.set(quotaRef,{
+            requestTimes:[...recent,Date.now()],
+            updatedAt:FieldValue.serverTimestamp(),
+          });
+          return null;
+        });
+      }else{
+        const batch=db.batch();
+        batch.set(requestRef,requestData);
+        batch.set(messageRef,initialMessage);
+        await batch.commit();
+      }
+      // A replay returns the original request without duplicate messages,
+      // notifications or consuming a second rate-limit slot.
+      if(existingRequest)return res.status(200).json({ok:true,item:{
+        id:requestRef.id,...supportRequestPayload({id:requestRef.id,data:()=>existingRequest} as FirebaseFirestore.DocumentSnapshot,candidateId),
+        whatsappTargets:[],whatsappText:'',
+      }});
+      const deliveries=await Promise.allSettled(recipients.map(recipientId=>createNotification(db,{
         organizationId:candidateOrganizationId,recipientId,type:'learning-support',
         title:priority==='high'?'High-priority learning support request':subject,
-        body:`${String(actor.displayName||actor.email||'A learner')} asked for help: ${message.slice(0,240)}`,
+        body:personal?'An independent learner has requested private VOP support.'
+          :`${String(actor.displayName||actor.email||'A learner')} asked for help: ${message.slice(0,240)}`,
         actionUrl:recipientId===assignedMentorId?'/mentor':'/admin/mentorship',
         metadata:{
           source:'candidate-support-request',requestId:requestRef.id,candidateId,
@@ -869,6 +963,8 @@ export default async function handler(req: Request, res: Response) {
         },
         createdBy:candidateId,
       })));
+      if(deliveries.some(result=>result.status==='rejected'))
+        console.warn('VOP learning support saved but some notifications failed',requestRef.id);
       const whatsappTargets=(channel==='whatsapp'||channel==='both')
         ?await supportWhatsAppTargets(db,candidateOrganizationId,assignedMentorId,target):[];
       return res.status(201).json({
@@ -894,15 +990,29 @@ export default async function handler(req: Request, res: Response) {
     if (action === 'listSupportRequests') {
       let items:Record<string,unknown>[]=[];
       if(isAdmin(actor)){
-        const supportQuery=organizationId
-          ?db.collection('learningSupportRequests').where('organizationId','==',organizationId).limit(200)
-          :db.collection('learningSupportRequests').limit(300);
+        // Read only the relevant tenant queue. Without a selected scope,
+        // Super Admin gets the independent-learner (platform) queue; local
+        // organization administrators get their own tenant's requests.
+        const platformSelection=body.supportScope==='platform'
+          &&String(actor.role||'')==='super_admin';
+        const scope=platformSelection?'':organizationId||(
+          String(actor.role||'')==='super_admin'?'':String(actor.organizationId||'').trim()
+        );
+        const supportQuery=scope
+          ?db.collection('learningSupportRequests').where('organizationId','==',scope).limit(200)
+          :String(actor.role||'')==='super_admin'
+            ?db.collection('learningSupportRequests').where('organizationId','==','').limit(200)
+            :db.collection('learningSupportRequests').limit(300);
         const snapshot=await supportQuery.get();
         const allowed:Record<string,unknown>[]=[];
         for(const doc of snapshot.docs){
           const data=doc.data()||{};
           const requestOrganizationId=String(data.organizationId||'').trim();
-          if(!requestOrganizationId)continue;
+          if(!requestOrganizationId){
+            if(String(actor.role||'')==='super_admin'&&!organizationId)
+              allowed.push(supportRequestPayload(doc,decoded.uid));
+            continue;
+          }
           try{
             await assertOrganizationScope(db,{...actor,uid:decoded.uid},requestOrganizationId);
             if(organizationId&&requestOrganizationId!==organizationId)continue;
@@ -1190,6 +1300,12 @@ export default async function handler(req: Request, res: Response) {
     return res.status(400).json({ error: 'Unsupported mentorship action.' });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Mentorship operation failed.';
+    if(message.includes('Daily personal support request limit reached'))
+      return res.status(429).json({error:message});
+    if(message.includes('already submitted with different content'))
+      return res.status(409).json({error:message});
+    if(message.includes('Invalid support submission identifier'))
+      return res.status(400).json({error:message});
     if (message.includes('Sign in') || message.includes('Administrator privileges') || message.includes('not allowed') || message.includes('not configured') || message.includes('not assigned') || message.includes('not found') || message.includes('cannot manage') || message.includes('only change messages you sent') || message.includes('outside your tenant') || message.includes('outside your hierarchy') || message.includes('subscription')) return res.status(403).json({ error: message });
     console.error('VOP mentorship operation failed', error);
     return res.status(500).json({ error: message });

@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:math';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
@@ -274,6 +277,25 @@ Future<StudySupportReference?> pickStudySupportReference(
   MaterialPageRoute(builder: (_) => _ReferenceLibrary(api: api)),
 );
 
+// Reuse the same request key after an ambiguous network failure. A changed
+// payload gets a new key, so the server can reject duplicate retries without
+// treating an edited request as a conflicting replay.
+class SupportSubmissionIdempotency {
+  String? _payload;
+  String? _key;
+
+  String keyFor(Map<String, dynamic> request) {
+    final payload = jsonEncode(request);
+    if (_key == null || _payload != payload) {
+      final random = Random.secure();
+      final bytes = List<int>.generate(16, (_) => random.nextInt(256));
+      _key = bytes.map((byte) => byte.toRadixString(16).padLeft(2, '0')).join();
+      _payload = payload;
+    }
+    return _key!;
+  }
+}
+
 class _SupportComposer extends StatefulWidget {
   const _SupportComposer({required this.api, this.initialReference});
   final VopApi api;
@@ -287,6 +309,7 @@ class _SupportComposerState extends State<_SupportComposer> {
   final subject = TextEditingController();
   final message = TextEditingController();
   final references = <StudySupportReference>[];
+  final submissionKeys = SupportSubmissionIdempotency();
   String target = 'both';
   String category = 'lesson_clarification';
   bool sending = false;
@@ -338,7 +361,7 @@ class _SupportComposerState extends State<_SupportComposer> {
     }
     setState(() { sending = true; error = null; });
     try {
-      await widget.api.action('/api/mentorship', {
+      final request = <String, dynamic>{
         'action': 'createSupportRequest',
         'subject': subject.text.trim(),
         'message': message.text.trim(),
@@ -346,6 +369,10 @@ class _SupportComposerState extends State<_SupportComposer> {
         'channel': 'in_app',
         'category': category,
         'references': references.map((ref) => ref.toJson()).toList(),
+      };
+      await widget.api.action('/api/mentorship', {
+        ...request,
+        'idempotencyKey': submissionKeys.keyFor(request),
       });
       if (mounted) Navigator.pop(context, true);
     } catch (problem) {

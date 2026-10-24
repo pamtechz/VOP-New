@@ -128,13 +128,19 @@ async function resolveManagedOrganization(ctx: Awaited<ReturnType<typeof authent
   return requestedOrg;
 }
 
+// Public self-enrolment is opt-in. An omitted field on a legacy institution
+// must not accidentally expose that tenant to unsolicited memberships.
+function allowsDirectoryJoin(data:Record<string,unknown>){
+  return data.allowSelfEnrollment===true ||
+    (data.isPublicMinistry===true && data.allowSelfEnrollment!==false);
+}
 const CANDIDATE_ROLES=new Set(['learner','student','candidate']);
 function organizationDirectoryDetails(data:Record<string,any>){
   return {
     city:String(data.city||data.profile?.city||''),description:String(data.description||''),
     billingCountry:String(data.billingCountry||data.billingProfile?.countryName||''),
     countryCode:String(data.countryCode||data.billingProfile?.countryCode||''),
-    allowSelfEnrollment:data.allowSelfEnrollment!==false,
+    allowSelfEnrollment:allowsDirectoryJoin(data),
     churchId:String(data.churchId||data.hierarchy?.churchId||(data.hierarchyType==='church'?data.hierarchyId:'')||''),
   };
 }
@@ -208,7 +214,7 @@ export default async function handler(req: Request, res: Response) {
           position = doc.id;
           examined += 1;
           const d = doc.data() || {};
-          if (d.allowSelfEnrollment === false) continue;
+          if (!allowsDirectoryJoin(d)) continue;
           const item = {
             id: doc.id,
             name: String(d.name || doc.id),
@@ -255,7 +261,7 @@ export default async function handler(req: Request, res: Response) {
         throw new Error('The selected institution is not active or available.');
       }
       const orgData = orgSnap.data() || {};
-      if (orgData.allowSelfEnrollment === false) throw new Error('This institution accepts learners by invitation only.');
+      if (!allowsDirectoryJoin(orgData)) throw new Error('This institution accepts learners by invitation only.');
       const orgName = String(orgData.name || targetOrgId);
       const now = new Date().toISOString();
       const userRef = bootstrapDb.doc('users/' + ctx.auth.uid);
@@ -269,7 +275,7 @@ export default async function handler(req: Request, res: Response) {
         const previousOrgId = String(userData.organizationId || '').trim();
         const previousMember = previousOrgId && previousOrgId !== targetOrgId
           ? await tx.get(bootstrapDb.doc('organizations/' + previousOrgId + '/members/' + ctx.auth.uid)) : null;
-        if (!currentOrg.exists || currentOrg.data()?.status !== 'active' || currentOrg.data()?.allowSelfEnrollment === false) {
+        if (!currentOrg.exists || currentOrg.data()?.status !== 'active' || !allowsDirectoryJoin(currentOrg.data()||{})) {
           throw new Error('The selected institution is no longer accepting learners.');
         }
         if (previousMember?.data()?.active === true) throw new Error('Your institution changed. Refresh your account before joining.');
@@ -332,7 +338,7 @@ export default async function handler(req: Request, res: Response) {
       if (!orgSnap.exists) throw new Error('The organization does not exist.');
       await orgRef.set({
         isPublicMinistry: isPublic,
-        ...(isPublic ? {allowSelfEnrollment:true} : {}),
+        ...(isPublic ? {allowSelfEnrollment:true} : orgSnap.data()?.isPublicMinistry===true ? {allowSelfEnrollment:false} : {}),
         updatedAt: new Date().toISOString(),
       }, { merge: true });
       return res.status(200).json({ ok: true, organizationId: targetOrgId, isPublicMinistry: isPublic });
@@ -378,7 +384,7 @@ function sanitizeOrgType(rawType: unknown, rawCustom: unknown): { organizationTy
         organizationType,customOrganizationType,
         isPublicMinistry: Boolean(body.isPublicMinistry),
         city:String(body.city||'').trim().slice(0,160),description:String(body.description||'').trim().slice(0,2500),
-        allowSelfEnrollment:body.allowSelfEnrollment!==false,
+        allowSelfEnrollment:body.allowSelfEnrollment===true||body.isPublicMinistry===true,
         billingCountry,countryCode:billingProfile.countryCode,billingProfile,
         plan:'unsubscribed',quotas:{},featureEntitlements:{},billingAccessSuspended:false,
         createdAt:now,updatedAt:now,

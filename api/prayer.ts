@@ -19,7 +19,9 @@ export default async function handler(req: Request, res: Response) {
   if (applyFlutterPreviewCors(req, res)) return;
   try {
     const body = req.body && typeof req.body === 'object' ? req.body as Record<string, unknown> : {};
-    const ctx = await authenticateTenant(req);
+    const ctx = await authenticateTenant(req,undefined,true);
+    const personal= !ctx.organizationId && !ctx.isSuperAdmin && ctx.tenantType==='platform';
+    const personalLearner=personal && ['student','learner','candidate'].includes(String(ctx.profile.role||'student').toLowerCase());
     const collection = ctx.db.collection('prayerRequests');
     const role = String(ctx.profile.role || '');
     const admin = ctx.isSuperAdmin || ['owner','admin'].includes(String(ctx.membership.role || '')) || ['union_admin','conference_admin','district_admin','church_admin'].includes(role);
@@ -27,8 +29,9 @@ export default async function handler(req: Request, res: Response) {
     if (req.method === 'GET') {
       const own = String(req.query?.mine || '') === 'true';
       const ministry = String(req.query?.ministry || '') === 'true';
-      if (own) await requirePermission(ctx, 'prayer', 'read');
-      else await requirePermission(ctx, 'prayer', 'view');
+      // Owner-scoped requests are always available to their creator, even
+      // after a future organization disables its own prayer ministry.
+      if(!own&&!personalLearner) await requirePermission(ctx, 'prayer', 'view');
       if (ministry && !admin) throw new Error('Only authorized ministry administrators can open the ministry inbox.');
 
       let docs = [] as FirebaseFirestore.QueryDocumentSnapshot[];
@@ -51,6 +54,9 @@ export default async function handler(req: Request, res: Response) {
         .map(doc => ({ id: doc.id, ...doc.data() } as Record<string,unknown>&{id:string}))
         .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')))
         .filter(item => {
+          // Personal prayer journals are owner-only. An organization or VOP
+          // ministry inbox does not imply consent to view the journal.
+          if(!String(item.organizationId||''))return item.candidateId===ctx.auth.uid;
           if (item.candidateId === ctx.auth.uid) return true;
           if (!ctx.isSuperAdmin && ctx.tenantType !== 'hierarchy' && item.organizationId !== ctx.organizationId) return false;
           if (ctx.tenantType === 'hierarchy' && !ctx.isSuperAdmin) return true;
@@ -65,7 +71,8 @@ export default async function handler(req: Request, res: Response) {
     const action = String(body.action || 'create');
 
     if (action === 'create') {
-      await requirePermission(ctx, 'prayer', 'create');
+      if(!personalLearner)await requirePermission(ctx, 'prayer', 'create');
+      if(personal&&!personalLearner)throw new Error('Only a learner can submit a personal prayer request.');
       const requestText = String(body.requestText || '').trim();
       const category = String(body.category || 'Other');
       if (requestText.length < 5) throw new Error('Prayer request must contain at least 5 characters.');
@@ -81,14 +88,16 @@ export default async function handler(req: Request, res: Response) {
         candidateName: String(ctx.profile.displayName || ctx.auth.name || 'Learner'),
         churchId: String(ctx.profile.churchId || ''),
         category,
-        isPrivate: body.isPrivate === true,
+        // Requests without an organization are always personal/private;
+        // learners never publish them into a global prayer feed.
+        isPrivate: personal ? true : body.isPrivate === true,
         status: 'Received',
         requestText,
         createdAt: now,
         updatedAt: now,
       };
       await ref.set(record);
-      await writeTenantAudit(ctx,'prayer.create',`prayerRequests/${ref.id}`,undefined,record);
+      if(record.organizationId)await writeTenantAudit(ctx,'prayer.create',`prayerRequests/${ref.id}`,undefined,record);
       if(ctx.organizationId){
         const members=await ctx.db.collection(`organizations/${ctx.organizationId}/members`).where('active','==',true).get();
         const recipients=members.docs
@@ -114,14 +123,17 @@ export default async function handler(req: Request, res: Response) {
       const data=existing.data()||{};
       if(String(data.candidateId||'')!==ctx.auth.uid)
         return res.status(403).json({error:'Only the person who submitted this prayer request may change it.'});
-      if(!ctx.isSuperAdmin && !(ctx.tenantType==='hierarchy'
+      // Personal requests remain editable by their creator after joining a
+      // church. Never transfer their private journal into the new tenant.
+      const ownPersonal=!String(data.organizationId||'')&&String(data.candidateId||'')===ctx.auth.uid;
+      if(!ownPersonal&&!ctx.isSuperAdmin && !(ctx.tenantType==='hierarchy'
         ?await organizationInHierarchyScope(ctx,String(data.organizationId||''))
         :String(data.organizationId||'')===ctx.organizationId))
         return res.status(403).json({error:'Prayer request belongs to another organization.'});
       const now=new Date().toISOString();
       if(action==='markAnswered'){
         await ref.update({status:'Answered',updatedAt:now,answeredAt:now,answeredBy:ctx.auth.uid});
-        await writeTenantAudit(ctx,'prayer.answered',ref.path,data,{...data,status:'Answered'});
+        if(!ownPersonal)await writeTenantAudit(ctx,'prayer.answered',ref.path,data,{...data,status:'Answered'});
         return res.status(200).json({ok:true,item:{...data,status:'Answered',updatedAt:now,answeredAt:now}});
       }
       if(String(data.status||'')==='Answered')
@@ -132,9 +144,9 @@ export default async function handler(req: Request, res: Response) {
         return res.status(400).json({error:'Prayer request must be between 5 and 3000 characters.'});
       if(!categories.has(category))
         return res.status(400).json({error:'Choose a valid prayer category.'});
-      const changes={requestText,category,isPrivate:body.isPrivate===true,updatedAt:now};
+      const changes={requestText,category,isPrivate:!String(data.organizationId||'')||body.isPrivate===true,updatedAt:now};
       await ref.update(changes);
-      await writeTenantAudit(ctx,'prayer.edit',ref.path,data,{...data,...changes});
+      if(!ownPersonal)await writeTenantAudit(ctx,'prayer.edit',ref.path,data,{...data,...changes});
       return res.status(200).json({ok:true,item:{...data,...changes}});
     }
 
@@ -148,6 +160,7 @@ export default async function handler(req: Request, res: Response) {
       const existing = await ref.get();
       if (!existing.exists) throw new Error('Prayer request not found.');
       const data = existing.data() || {};
+      if(!String(data.organizationId||''))throw new Error('Personal prayer journals are not part of a ministry inbox.');
       if (!ctx.isSuperAdmin && !(ctx.tenantType === 'hierarchy' ? await organizationInHierarchyScope(ctx, String(data.organizationId || '')) : String(data.organizationId || '') === ctx.organizationId)) throw new Error('You cannot manage a prayer request outside your authorized scope.');
       await ref.update({ status, updatedAt: new Date().toISOString(), updatedBy: ctx.auth.uid });
       await writeTenantAudit(ctx,'prayer.status',`prayerRequests/${requestId}`,data,{...data,status});
@@ -166,16 +179,18 @@ export default async function handler(req: Request, res: Response) {
     }
 
     if (action === 'delete') {
-      await requirePermission(ctx, 'prayer', 'delete');
       const requestId = id(body.id);
       const ref = collection.doc(requestId);
       const existing = await ref.get();
       if (!existing.exists) return res.status(200).json({ ok:true,id:requestId });
       const data = existing.data() || {};
       if (data.candidateId !== ctx.auth.uid && !admin) throw new Error('You can only delete your own prayer request.');
-      if (!ctx.isSuperAdmin && !(ctx.tenantType === 'hierarchy' ? await organizationInHierarchyScope(ctx, String(data.organizationId || '')) : String(data.organizationId || '') === ctx.organizationId)) throw new Error('You cannot delete a prayer request outside your authorized scope.');
+      if(personalLearner && data.candidateId !== ctx.auth.uid)throw new Error('You can only delete your own prayer request.');
+      const ownPersonal=!String(data.organizationId||'')&&String(data.candidateId||'')===ctx.auth.uid;
+      if(!ownPersonal)await requirePermission(ctx, 'prayer', 'delete');
+      if (!ownPersonal&&!ctx.isSuperAdmin && !(ctx.tenantType === 'hierarchy' ? await organizationInHierarchyScope(ctx, String(data.organizationId || '')) : String(data.organizationId || '') === ctx.organizationId)) throw new Error('You cannot delete a prayer request outside your authorized scope.');
       await ref.delete();
-      await writeTenantAudit(ctx,'prayer.delete',`prayerRequests/${requestId}`,data,undefined);
+      if(!ownPersonal)await writeTenantAudit(ctx,'prayer.delete',`prayerRequests/${requestId}`,data,undefined);
       return res.status(200).json({ ok:true,id:requestId });
     }
 

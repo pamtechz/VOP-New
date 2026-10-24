@@ -7,6 +7,7 @@ import './reference.css';
 import './radio-responsive.css';
 import './admin-layout-overrides.css';
 import './theme.css';
+import './modal-overflow.css';
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', () => {

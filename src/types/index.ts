@@ -548,6 +548,7 @@ export type AppRoute =
   | 'about' 
   | 'profile' 
   | 'personal-settings'
+  | 'institution-finder'
   | 'localization'
   | 'resources' 
   | 'lessons'

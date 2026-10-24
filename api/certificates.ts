@@ -13,7 +13,27 @@ type Response = { status:(code:number)=>Response; json:(body:unknown)=>void };
 function header(req:Request,name:string){const v=req.headers?.[name]??req.headers?.[name.toLowerCase()];return Array.isArray(v)?v[0]??'':v??'';}
 function admin(){if(getApps().length)return getApps()[0];const projectId=process.env.FIREBASE_ADMIN_PROJECT_ID||process.env.FIREBASE_PROJECT_ID;const clientEmail=process.env.FIREBASE_ADMIN_CLIENT_EMAIL;const privateKey=process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(/\\n/g,'\n');if(!projectId||!clientEmail||!privateKey)throw new Error('Server-side Firebase administration is not configured.');return initializeApp({credential:cert({projectId,clientEmail,privateKey})});}
 function dateValue(value:unknown):string|null{if(!value)return null;if(typeof value==='string')return value;if(typeof value==='number')return new Date(value).toISOString();if(typeof value==='object'&&value!==null){const x=value as {toDate?:()=>Date;_seconds?:number;seconds?:number};if(typeof x.toDate==='function')return x.toDate().toISOString();const s=Number(x._seconds??x.seconds);if(Number.isFinite(s))return new Date(s*1000).toISOString();}return null;}
-function safe(data:Record<string,unknown>){return {id:String(data.id??''),certificateNumber:String(data.certificateNumber??''),candidateName:String(data.candidateName??''),courseName:String(data.courseName??''),courseCode:String(data.courseCode??''),documentType:String(data.documentType??'course'),certificateTypeName:String(data.certificateTypeName??''),completionDate:dateValue(data.completionDate),issuedAt:dateValue(data.issuedAt),churchName:String(data.churchName??''),districtName:String(data.districtName??''),conferenceName:String(data.conferenceName??''),unionName:String(data.unionName??''),guideTitle:String(data.guideTitle??''),programId:String(data.programId??''),programTitle:String(data.programTitle??''),targetKind:String(data.targetKind??'guide'),language:String(data.language??''),status:String(data.status??''),replacedByCertificateNumber:String(data.replacedByCertificateNumber??''),verificationEnabled:data.verificationEnabled===true};}
+function issuedPresentation(data:Record<string,unknown>){
+ // Certificate artwork must come from the immutable award. Never substitute
+ // the learner's current organization's branding for an earlier credential.
+ const snapshot=data.presentationSnapshot&&typeof data.presentationSnapshot==='object'
+   ?data.presentationSnapshot as Record<string,unknown>:null;
+ const issuer=data.issuer&&typeof data.issuer==='object'
+   ?data.issuer as Record<string,unknown>:{};
+ const from=(key:string)=>String(snapshot?.[key]??'');
+ return {
+   certificateTitle:from('certificateTitle')||String(data.certificateTypeName||''),
+   certificateBodyText:from('certificateBodyText'),
+   issuerName:from('issuerName')||String(issuer.name||''),
+   issuerSubtitle:from('issuerSubtitle')||String(issuer.subtitle||''),
+   directorName:from('directorName'),directorTitle:from('directorTitle'),
+   signatureUrl:from('signatureUrl'),sealUrl:from('sealUrl'),
+   logoUrl:from('logoUrl'),backgroundUrl:from('backgroundUrl'),
+   verificationEnabled:data.verificationEnabled===true,
+   template:snapshot?.template&&typeof snapshot.template==='object'?snapshot.template:null,
+ };
+}
+function safe(data:Record<string,unknown>){return {id:String(data.id??''),certificateNumber:String(data.certificateNumber??''),candidateName:String(data.candidateName??''),courseName:String(data.courseName??''),courseCode:String(data.courseCode??''),documentType:String(data.documentType??'course'),certificateTypeName:String(data.certificateTypeName??''),completionDate:dateValue(data.completionDate),issuedAt:dateValue(data.issuedAt),churchName:String(data.churchName??''),districtName:String(data.districtName??''),conferenceName:String(data.conferenceName??''),unionName:String(data.unionName??''),guideTitle:String(data.guideTitle??''),programId:String(data.programId??''),programTitle:String(data.programTitle??''),targetKind:String(data.targetKind??'guide'),language:String(data.language??''),status:String(data.status??''),replacedByCertificateNumber:String(data.replacedByCertificateNumber??''),verificationEnabled:data.verificationEnabled===true,presentationSnapshot:issuedPresentation(data)};}
 function publicStatus(id:string,data:Record<string,unknown>){return {id,certificateNumber:String(data.certificateNumber??''),status:String(data.status??''),documentType:String(data.documentType??'course'),certificateTypeName:String(data.certificateTypeName??''),replacedByCertificateNumber:String(data.replacedByCertificateNumber??'')};}
 function publicConfig(data:Record<string,unknown>){return {certificateTitle:String(data.certificateTitle??''),certificateBodyText:String(data.certificateBodyText??''),issuerName:String(data.issuerName??''),issuerSubtitle:String(data.issuerSubtitle??''),courseName:String(data.courseName??''),directorName:String(data.directorName??''),directorTitle:String(data.directorTitle??''),signatureUrl:String(data.signatureUrl??''),sealUrl:String(data.sealUrl??''),logoUrl:String(data.logoUrl??''),backgroundUrl:String(data.backgroundUrl??''),verificationEnabled:data.verificationEnabled===true,verificationBaseUrl:String(data.verificationBaseUrl??''),template:data.template&&typeof data.template==='object'?data.template:null};}
 function queryValue(req:Request,key:string){const v=req.query?.[key];return Array.isArray(v)?v[0]??'':v??'';}
@@ -47,38 +67,34 @@ async function mine(req:Request,res:Response){
    }));
  }
  const organizationId=String(profileData.organizationId||'').trim();
- const profileRole=String(profileData.role||'');
- const adminNodeId=String(profileData.adminNodeId||'').trim();
- const hierarchyField=hierarchyScopeField(profileRole);
- if (!organizationId && profileRole !== 'super_admin' && !hierarchyField) return res.status(403).json({error:'Your account is not linked to an organization or hierarchy tenant.'});
+ // Certificate history belongs to the learner, including after leaving an
+ // organization. New certificate issuance still follows its separate
+ // organization/platform authorization and graduation review policies.
  const certificateQuery=db.collection('certificates').where('candidateId','==',decoded.uid);
- let certificateDocs: FirebaseFirestore.QueryDocumentSnapshot[] = [];
- if (organizationId) {
-   certificateDocs=(await certificateQuery.where('organizationId','==',organizationId).limit(20).get()).docs;
- } else if (profileRole === 'super_admin') {
-   certificateDocs=(await certificateQuery.limit(20).get()).docs;
- } else if (hierarchyField) {
-   // Hierarchy records may use either the legacy flat field or the canonical
-   // nested hierarchy object. Read both forms and deduplicate by certificate ID.
-   const [flat,nested]=await Promise.all([
-     certificateQuery.where(hierarchyField,'==',adminNodeId).limit(20).get(),
-     certificateQuery.where('hierarchy.'+hierarchyField,'==',adminNodeId).limit(20).get(),
-   ]);
-   const byId=new Map<string,FirebaseFirestore.QueryDocumentSnapshot>();
-   [...flat.docs,...nested.docs].forEach(doc=>byId.set(doc.id,doc));
-   certificateDocs=[...byId.values()];
- } else {
-   certificateDocs=(await certificateQuery.limit(20).get()).docs;
- }
+ // This endpoint is "mine", so candidateId is the authorization boundary.
+ // Retain historical certificates when a learner moves between ministries.
+ // Issuance permissions remain scoped to the issuing authority.
+ const certificateDocs=(await certificateQuery.limit(40).get()).docs;
  const reviewSnapshot=await db.collection('graduationRequests').where('candidateId','==',decoded.uid).limit(100).get();
  const reviews=reviewSnapshot.docs.map(document=>({id:document.id,...document.data()} as Record<string,unknown>&{id:string}))
-   .filter(record=>!organizationId||String(record.organizationId||'')===organizationId)
+   // Reviews are also the candidate's own history, independent of their
+   // present church membership.
    .sort((a,b)=>Date.parse(String(dateValue(b.submittedAt)||''))-Date.parse(String(dateValue(a.submittedAt)||'')));
  const latestReview=reviews[0]||null;
  let automaticallyAwarded:Record<string,unknown>|null=null;
- const alreadyCertified=certificateDocs.some(document=>document.data()?.status==='Certified');
- if(!alreadyCertified){
-   for(const review of reviews.filter(record=>record.status==='approved')){
+ // Self-heal only awards missing for the learner's current organization.
+ // Historical awards (or other guides) cannot suppress a newly approved guide.
+ if(organizationId){
+   for(const review of reviews.filter(record=>record.status==='approved'
+     &&String(record.organizationId||'')===organizationId
+     &&Boolean(String(record.guideId||'').trim())
+     &&String(record.targetKind||'guide')!=='program')){
+     const hasCurrentAward=certificateDocs.some(document=>{
+       const award=document.data()||{};
+       return award.status==='Certified'&&String(award.organizationId||'')===organizationId
+         &&String(award.guideId||'')===String(review.guideId||'');
+     });
+     if(hasCurrentAward)continue;
      try{
        const award=await awardApprovedCertificate(db,decoded.uid,'system:auto',String(review.guideId||''));
        automaticallyAwarded=award.certificate as Record<string,unknown>;
@@ -128,7 +144,7 @@ async function verify(req:Request,res:Response){
  if(data.status==='Revoked')return res.status(200).json({verified:false,state:'revoked',certificate:publicStatus(document.id,data),error:'This certificate has been revoked and is no longer valid.'});
  if(data.status==='Replaced')return res.status(200).json({verified:false,state:'replaced',certificate:publicStatus(document.id,data),replacement:{certificateNumber:String(data.replacedByCertificateNumber||'')},error:'This certificate has been replaced by a newer official credential.'});
  if(data.status!=='Certified')return res.status(200).json({verified:false,state:'unavailable',certificate:publicStatus(document.id,data),error:'This certificate is not currently valid for public verification.'});
- return res.status(200).json({verified:true,state:'valid',certificate:publicCertificate(document.id,data),config:publicConfig(configSnapshot.data()||{})});
+ return res.status(200).json({verified:true,state:'valid',certificate:publicCertificate(document.id,data),config:publicConfig(issuedPresentation(data))});
 }
 
 async function issue(req:Request,res:Response){

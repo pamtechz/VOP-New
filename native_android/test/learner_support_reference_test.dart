@@ -2,6 +2,26 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:vop/screens/learner_support_screen.dart';
 
 void main() {
+  test('support retries reuse their idempotency key until the payload changes', () {
+    final keys = SupportSubmissionIdempotency();
+    final request = <String, dynamic>{
+      'action': 'createSupportRequest',
+      'subject': 'Bible question',
+      'message': 'Please explain this lesson',
+      'references': <Map<String, String>>[],
+    };
+    final first = keys.keyFor(request);
+    expect(first, matches(RegExp(r'^[a-f0-9]{32}$')));
+    expect(keys.keyFor(Map<String, dynamic>.from(request)), first);
+
+    final edited = Map<String, dynamic>.from(request)
+      ..['message'] = 'Please explain this lesson in more detail';
+    final next = keys.keyFor(edited);
+    expect(next, matches(RegExp(r'^[a-f0-9]{32}$')));
+    expect(next, isNot(first));
+    expect(keys.keyFor(edited), next);
+  });
+
   test('lesson references retain canonical server-supported attachment keys', () {
     const reference = StudySupportReference(
       type: 'lesson',

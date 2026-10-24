@@ -10,7 +10,7 @@ import { ShimmerCards } from '../components/layout/Shimmer';
 interface CertificatesPageProps { currentUser: User; settings: AppSettings; activeLanguage: LanguageCode; onBack: () => void; }
 interface OfficialCertificate {
   id: string; certificateNumber: string; candidateName: string; courseName: string; courseCode?: string;
-  completionDate?: string | null; issuedAt?: string | null; churchName?: string; districtName?: string;
+  completionDate?: string | null; issuedAt?: string | null; certificateTypeName?: string; presentationSnapshot?: CertificateConfig; churchName?: string; districtName?: string;
   conferenceName?: string; unionName?: string; guideTitle?: string; language?: string; status?: string; verificationEnabled?: boolean;
 }
 interface CertificateConfig {
@@ -29,13 +29,14 @@ function dateText(value?: string | null) {
 export const CertificatesPage: React.FC<CertificatesPageProps> = ({ currentUser, settings, activeLanguage, onBack }) => {
   const certificateRef = useRef<HTMLDivElement>(null);
   const [certificate, setCertificate] = useState<OfficialCertificate | null>(null);
+  const [certificateRecords, setCertificateRecords] = useState<OfficialCertificate[]>([]);
   const [config, setConfig] = useState<CertificateConfig>({});
   const [review, setReview] = useState<CertificateReview | null>(null);
   const [loading, setLoading] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
   const [feedback, setFeedback] = useState('');
   const t = (key: string, fallback: string) => getTranslation(key, getUiLocale(), settings?.customTranslations, fallback, 'CertificatesPage');
-  const title = config.certificateTitle || settings?.certificateTitle || certificate?.courseName || '';
+  const title = config.certificateTitle || certificate?.certificateTypeName || certificate?.courseName || '';
   const reviewPending=Boolean(review&&review.status&&!['approved','rejected'].includes(review.status));
   const reviewApproved=review?.status==='approved';
 
@@ -49,9 +50,17 @@ export const CertificatesPage: React.FC<CertificatesPageProps> = ({ currentUser,
         const body = await response.json().catch(() => ({})) as { certificates?: OfficialCertificate[]; review?: CertificateReview | null; config?: CertificateConfig; error?: string };
         if (!response.ok) throw new Error(body.error || 'Certificates could not be loaded.');
         if (!cancelled) {
-          setCertificate((body.certificates || [])[0] || null);
+          const history=[...(body.certificates || [])].sort((a,b)=>{
+            const when=(value?:string|null)=>value?Date.parse(value)||0:0;
+            return when(b.issuedAt)-when(a.issuedAt)||a.certificateNumber.localeCompare(b.certificateNumber);
+          });
+          const issued=history[0] || null;
+          setCertificateRecords(history);
+          setCertificate(issued);
           setReview(body.review || null);
-          setConfig(body.config || {});
+          // Issued awards use only their captured presentation, never branding
+          // belonging to the account's current institution.
+          setConfig(issued?.presentationSnapshot || {});
         }
       } catch (error) {
         if (!cancelled) setFeedback(error instanceof Error ? error.message : 'Certificates could not be loaded.');
@@ -111,6 +120,24 @@ export const CertificatesPage: React.FC<CertificatesPageProps> = ({ currentUser,
         {loading && <ShimmerCards cards={1} label={t('loading','Loading certificate')}/>}
         {!loading && certificate && (
           <>
+            {certificateRecords.length>1 && (
+              <div className="vop-official-certificate-meta">
+                <label htmlFor="vop-certificate-history"><strong>{t('certificate_history','My issued certificates')}</strong></label>
+                <select id="vop-certificate-history" value={certificate.id} onChange={event=>{
+                  const selected=certificateRecords.find(item=>item.id===event.target.value);
+                  if(!selected)return;
+                  setCertificate(selected);
+                  setConfig(selected.presentationSnapshot||{});
+                  setFeedback('');
+                }}>
+                  {certificateRecords.map(item=>(
+                    <option key={item.id} value={item.id}>
+                      {item.courseName||item.certificateTypeName||t('my_certificate','Certificate')} — {item.certificateNumber}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div className="vop-official-certificate-wrap" ref={certificateRef}>
               <CertificateArtwork
                 certificate={certificate}

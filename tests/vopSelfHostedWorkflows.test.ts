@@ -60,12 +60,29 @@ test('fork PRs must fail on trusted runner before any checkout; they must never 
   }
 });
 
-test('dependency installation has bounded time on the dedicated Windows runner',()=>{
-  for (const path of ['.github/workflows/vop-validate.yml','.github/workflows/vop-verify.yml','.github/workflows/vop-firestore-rules.yml']) {
+test('Windows npm installations are bounded and serialized across KASAINSTITUTE runner services',()=>{
+  const locked=JSON.parse(readFileSync('package-lock.json','utf8'));
+  for(const modulePath of ['typescript','vite','rolldown','@rolldown/binding-win32-x64-msvc']){
+    assert.ok(locked.packages['node_modules/'+modulePath],modulePath+' must actually exist in the reviewed lockfile');
+  }
+  for(const path of ['.github/workflows/vop-validate.yml','.github/workflows/vop-verify.yml','.github/workflows/vop-firestore-rules.yml']){
     const source=readFileSync(path,'utf8').replace(/\r\n/g,'\n');
-    const matches=[...source.matchAll(/timeout-minutes: (\d+)\n(?:[ \t]+[^\n]*\n){0,2}[ \t]+run: npm ci --no-audit --no-fund --prefer-offline --loglevel=info/g)];
-    assert.equal(matches.length,1,path+' must bound a lockfile install and retain npm audit separately');
-    assert.ok(Number(matches[0][1])>=5&&Number(matches[0][1])<=15,path+' must fail promptly if package installation hangs');
+    assert.match(source,/timeout-minutes: 30\n\s+working-directory:|timeout-minutes: 30\n\s+shell: powershell/,
+      path+' must bound the dependency install step');
+    assert.match(source,/System\.Threading\.Mutex/,path+' must synchronize npm installs between runners');
+    assert.match(source,/Global\\VOP-NPM-CI-WINDOWS/,
+      path+' must use the same cross-process named mutex');
+    assert.match(source,/\.WaitOne\(/,path+' must bound lock acquisition');
+    assert.match(source,/\.ReleaseMutex\(\)/,path+' must release the installation lock');
+    assert.match(source,/npm ci --ignore-scripts --no-audit --no-fund --prefer-offline --loglevel=warn --maxsockets=8/,
+      path+' must use the reviewed lockfile with reduced Windows disk contention');
+    assert.match(source,/required build package is missing after the script-free install/,
+      path+' must fail closed when dependency lifecycle scripts are skipped');
+    assert.ok(source.includes("['typescript','vite','rolldown','@rolldown/binding-win32-x64-msvc']"),
+      path+' must check only real, lockfile-backed dependencies including the native Windows compiler');
+    assert.ok(!source.includes("['typescript','vite','esbuild','rollup']"),
+      path+' must not fail CI for build packages removed from Vite 8');
+    assert.match(source,/\$LASTEXITCODE -ne 0/,path+' must reject a failed installation');
   }
 });
 

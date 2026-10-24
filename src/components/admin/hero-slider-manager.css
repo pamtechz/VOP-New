@@ -620,3 +620,78 @@
   gap: 12px;
 }
 
+
+
+/* The Hero Slide editor is a scrollable popup page rather than a short form
+   squeezed into a traditional dialog. Headers/actions remain reachable. */
+.vop-hsm-modal-backdrop {
+  height: 100dvh;
+  max-height: 100dvh;
+  overflow: hidden;
+  padding: clamp(8px, 2vw, 24px);
+}
+.vop-hsm-modal {
+  width: min(1180px, 100%);
+  max-width: none;
+  height: min(940px, calc(100dvh - 32px));
+  max-height: calc(100dvh - 16px);
+  min-height: 0;
+  overflow: hidden;
+}
+.vop-hsm-editor-form {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  flex-direction: column;
+}
+.vop-hsm-modal-head,
+.vop-hsm-modal-foot {
+  flex: 0 0 auto;
+}
+.vop-hsm-modal-head {
+  background: var(--vop-card);
+  gap: 12px;
+}
+.vop-hsm-modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  -webkit-overflow-scrolling: touch;
+}
+.vop-hsm-modal-foot {
+  position: relative;
+  z-index: 2;
+}
+.vop-hsm-modal-body:focus-visible {
+  outline: 2px solid var(--vop-blue);
+  outline-offset: -3px;
+}
+@media (max-width: 700px), (max-height: 570px) {
+  .vop-hsm-modal-backdrop {
+    padding: 0;
+    align-items: stretch;
+  }
+  .vop-hsm-modal {
+    width: 100%;
+    height: 100dvh;
+    max-height: 100dvh;
+    border-radius: 0;
+    border: 0;
+  }
+  .vop-hsm-modal-head { padding: 14px 16px; }
+  .vop-hsm-modal-head h3 { font-size: 16px; }
+  .vop-hsm-modal-body {
+    padding: 16px;
+    scrollbar-gutter: auto;
+  }
+  .vop-hsm-modal-foot {
+    padding: 12px 16px max(12px, env(safe-area-inset-bottom));
+  }
+  .vop-hsm-modal-foot button { min-height: 44px; }
+}

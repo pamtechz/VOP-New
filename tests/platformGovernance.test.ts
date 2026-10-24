@@ -148,6 +148,9 @@ test('Mentoring & Insights is an operational inbox with responsive drill-down an
   assert.match(page,/Unified communications/);
   assert.match(page,/Support & conversations/);
   assert.match(page,/Support requests/);
+  assert.match(page,/Promise\.allSettled\(/);
+  assert.match(page,/Independent VOP learner/);
+  assert.match(page,/independent VOP support/);
   assert.match(page,/Mentor conversations/);
   assert.match(page,/Unread and high priority first/);
   assert.match(page,/vop-mentoring-split/);
@@ -159,7 +162,8 @@ test('Mentoring & Insights is an operational inbox with responsive drill-down an
 
   assert.match(api,/collection\('mentorAssignments'\)\.where\('organizationId','==',organizationId\)\.limit\(500\)/);
   assert.match(api,/collection\('mentorConversations'\)\.where\('organizationId','==',organizationId\)\.limit\(300\)/);
-  assert.match(api,/collection\('learningSupportRequests'\)\.where\('organizationId','==',organizationId\)\.limit\(200\)/);
+  assert.match(api,/collection\('learningSupportRequests'\)\.where\('organizationId','==',scope\)\.limit\(200\)/);
+  assert.match(api,/collection\('learningSupportRequests'\)\.where\('organizationId','==',''\)\.limit\(200\)/);
   assert.match(api,/const studentIds=\[\.\.\.new Set/);
 
   assert.match(css,/\.vop-mentoring-overview\{display:grid/);
@@ -545,7 +549,8 @@ test('subscription capabilities are enforced server-side and reflected in instit
   assert.match(enrollCandidate,/requireSubscriptionFeature\(ctx,'candidates',organizationId\)/);
   assert.match(candidates,/requireSubscriptionFeature\(ctx,'candidates',organizationId\)/);
   assert.match(candidates,/requireSubscriptionFeature\(ctx,'candidates',candidateOrganizationId\)/);
-  assert.match(mentorship,/requireOrganizationSubscriptionFeature\(db,'mentorship',organizationId\)/);
+  assert.match(mentorship,/billingOrganizationId=String\(storedSupport\.data\(\)\?\.organizationId\|\|''\)\.trim\(\)/);
+  assert.match(mentorship,/if\(billingOrganizationId\)\s*await requireOrganizationSubscriptionFeature\(db,'mentorship',billingOrganizationId\)/);
   assert.match(graduations,/requireSubscriptionFeature\(ctx,'certification',ctx\.organizationId\)/);
   assert.match(graduations,/requireSubscriptionFeature\(ctx,'certification',requestOrganizationId\)/);
   assert.match(graduationAutomation,/organizationSubscriptionFeatureBlockReason\(db,'certification',organizationId\)/);
