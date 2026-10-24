@@ -24,7 +24,9 @@ test('Flutter Curriculum Studio exposes seven Legacy-equivalent authoring areas'
 
 test('Curriculum Studio is tenant scoped and server permission aware',()=>{
   assert.match(studio,/workspace\['organizationId'\]/);
-  assert.match(studio,/workspace\['isSuperAdmin'\] != true/);
+  assert.match(studio,/workspace\['isSuperAdmin'\] == true/);
+  assert.match(studio,/workspace\['tenantType'\] == 'hierarchy'/);
+  assert.match(studio,/recordMap\(workspace\['options'\]\)\['organizations'\]/);
   assert.match(studio,/workspace\['schemas'\]/);
   assert.match(studio,/schema\['actions'\]/);
   assert.match(studio,/record\['canEdit'\] != false/);
