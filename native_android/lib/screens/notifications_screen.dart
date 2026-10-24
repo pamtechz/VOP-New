@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../core/vop_api.dart';
 import '../theme/vop_theme.dart';
 import '../widgets/vop_ui.dart';
+import '../widgets/vop_desktop_layout.dart';
 
 class VopNotifications extends StatefulWidget {
   const VopNotifications({required this.api,super.key});
@@ -39,7 +40,7 @@ class _VopNotificationsState extends State<VopNotifications>{
           message:'${s.error}',onRetry:()=>setState(reload));
       }
       final notifications=rows(s.data?['items']);
-      return RefreshIndicator(onRefresh:()async{setState(reload);await inbox;},
+      return VopDesktopContent(maxWidth:1000,child:RefreshIndicator(onRefresh:()async{setState(reload);await inbox;},
         child:ListView(padding:const EdgeInsets.all(16),children:[
           VopSectionTitle('Updates and messages',
             subtitle:'${s.data?['unread']??0} unread'),
@@ -92,7 +93,7 @@ class _VopNotificationsState extends State<VopNotifications>{
                     ]),
                 ]))),
           )),
-        ]));
+        ])));
     }),
   );
 }
