@@ -245,6 +245,14 @@ class _CurriculumStudioState extends State<CurriculumStudioScreen> {
       }
     }
     collect(recordRows(schema['fields']));
+    if (collection == 'quizzes' &&
+        !recordMap(workspace['schemas']).containsKey('guides')) {
+      // Quiz contributors can edit questions without curriculum:view. Keep
+      // existing attachments but do not request unauthorized lookups.
+      choices['guides'] = <Map<String, dynamic>>[];
+      choices['programs'] = <Map<String, dynamic>>[];
+      sources.clear();
+    }
     try {
       for (final source in sources) {
         final available = recordRows((await _list(source))['items']);
