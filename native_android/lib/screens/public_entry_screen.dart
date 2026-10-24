@@ -209,7 +209,11 @@ class _PublicEntryScreenState extends State<PublicEntryScreen> {
                 Expanded(flex: 6, child: copy), const SizedBox(width: 50),
                 Expanded(flex: 4, child: visual),
               ])
-            : copy,
+            : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                copy,
+                const SizedBox(height: 26),
+                visual,
+              ]),
         );
       }),
     )),
