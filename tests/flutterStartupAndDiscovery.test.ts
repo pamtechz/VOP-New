@@ -16,9 +16,14 @@ test('Flutter paints the startup route before the Firebase network initializatio
 
 test('the published catalogue does not block display on local offline snapshot writes', () => {
   const api = text('native_android/lib/core/vop_api.dart');
-  assert.match(api, /_queueSnapshot\(owner,kind,id,response\)/);
+  const cachedRead = api.split('Future<Map<String,dynamic>> _cachedRead(')[1]
+    ?.split('Future<Map<String,dynamic>> catalogue()')[0] ?? '';
+  assert.ok(cachedRead, 'the catalogue cache implementation must be present');
+  assert.match(cachedRead, /_queueSnapshot\(owner,kind,id,response\)/);
+  assert.doesNotMatch(cachedRead, /await _offline\.save\(/);
   assert.match(api, /_snapshotWrites = _snapshotWrites\.then/);
-  assert.doesNotMatch(api, /await _offline\.save\(/);
+  assert.match(api, /_afterSnapshotWrites\(\(\) => _offline\.clear\(uid\)\)/);
+  assert.match(api, /_afterSnapshotWrites\(\(\) => _offline\.delete\(uid,kind,id\)\)/);
 });
 
 test('Flutter and Legacy study browsing use non-dropdown, bounded results', () => {
