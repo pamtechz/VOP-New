@@ -34,6 +34,10 @@ test('Flutter and Legacy study browsing use non-dropdown, bounded results', () =
   assert.match(legacy, /vop-catalogue-pathway/);
   assert.match(legacy, /aria-pressed=\{programme===program\.id\}/);
   assert.doesNotMatch(legacy, /<select/);
+  const signedIn = text('src/components/home/HomeDashboard.tsx');
+  assert.match(signedIn, /vop-home-language-paths/);
+  assert.match(signedIn, /aria-pressed=\{languageFilter===language.code\}/);
+  assert.doesNotMatch(signedIn, /<select/);
 });
 
 test('installed VOP branding icons are included in both Flutter platforms', () => {
@@ -48,6 +52,11 @@ test('installed VOP branding icons are included in both Flutter platforms', () =
     assert.ok(existsSync(name), name + ' must be included in the app source');
     assert.ok(readFileSync(name).subarray(0,8).equals(pngSignature), name + ' must be a real PNG');
   }
+  assert.ok(existsSync('native_android/assets/brand/vop_logo.png'));
+  const packageConfig = text('native_android/pubspec.yaml');
+  assert.match(packageConfig, /assets\/brand\/vop_logo\.png/);
+  const entry = text('native_android/lib/screens/public_entry_screen.dart');
+  assert.match(entry, /Image\.asset\('assets\/brand\/vop_logo\.png'/);
   const android = text('native_android/android/app/src/main/AndroidManifest.xml');
   assert.match(android, /android:icon="@mipmap\/ic_launcher"/);
   const html = text('native_android/web/index.html');
