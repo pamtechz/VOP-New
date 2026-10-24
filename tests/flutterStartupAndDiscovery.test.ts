@@ -59,6 +59,11 @@ test('installed VOP branding icons are included in both Flutter platforms', () =
   assert.match(packageConfig, /assets\/brand\/vop_logo\.png/);
   const entry = text('native_android/lib/screens/public_entry_screen.dart');
   assert.match(entry, /Image\.asset\('assets\/brand\/vop_logo\.png'/);
+  const cards = text('native_android/lib/widgets/vop_ui.dart');
+  assert.match(cards, /Image\.asset\('assets\/brand\/vop_logo\.png'/);
+  assert.match(cards, /cacheWidth:/);
+  assert.doesNotMatch(cards, /Image\.network\('https:\/\/vopafrica\.vercel\.app\/assets\/vop_logo_2\.png'/);
+
   const android = text('native_android/android/app/src/main/AndroidManifest.xml');
   assert.match(android, /android:icon="@mipmap\/ic_launcher"/);
   const html = text('native_android/web/index.html');
