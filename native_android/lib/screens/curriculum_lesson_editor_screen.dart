@@ -7,14 +7,32 @@ import 'quiz_screen.dart';
 import 'workspace_records_screen.dart';
 
 class CurriculumLessonEditorScreen extends StatefulWidget{
-  const CurriculumLessonEditorScreen({required this.api,required this.guide,required this.workspace,super.key});
+  const CurriculumLessonEditorScreen({required this.api,required this.guide,required this.workspace,
+    this.initialLessonId='',this.createOnOpen=false,super.key});
   final VopApi api;
   final Map<String,dynamic> guide,workspace;
+  final String initialLessonId;
+  final bool createOnOpen;
   @override State<CurriculumLessonEditorScreen> createState()=>_CurriculumLessonEditorState();
 }
 class _CurriculumLessonEditorState extends State<CurriculumLessonEditorScreen>{
   late Future<Map<String,dynamic>> future;
-  @override void initState(){super.initState();reload();}
+  @override void initState(){
+    super.initState();
+    reload();
+    if(widget.createOnOpen || widget.initialLessonId.isNotEmpty){
+      future.then((result){
+        if(!mounted)return;
+        final items=recordRows(result['items']);
+        final target=items.where((item)=>item['id'].toString()==widget.initialLessonId).toList();
+        if(widget.createOnOpen || target.isNotEmpty){
+          WidgetsBinding.instance.addPostFrameCallback((_){
+            if(mounted)edit(widget.createOnOpen?null:target.first);
+          });
+        }
+      },onError:(Object _){});
+    }
+  }
   Map<String,dynamic> get payload=>{'guideId':widget.guide['id'],if('${widget.guide['organizationId']??''}'.isNotEmpty)'organizationId':widget.guide['organizationId']};
   void reload(){future=widget.api.adminContent('curriculum',action:'listGuideLessons',payload:payload);}
   List<Map<String,dynamic>> legacyDocument(dynamic blocks)=>recordRows(blocks).map((block){
@@ -113,7 +131,8 @@ class _CurriculumLessonEditorState extends State<CurriculumLessonEditorScreen>{
             final pageCount=pages.isNotEmpty?pages.length:chapters.fold<int>(0,
               (sum,chapter)=>sum+((chapter is Map&&chapter['sections'] is List)
                 ?(chapter['sections'] as List).length:0));
-            return VopSectionStudyCard(
+            return Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+              VopSectionStudyCard(
               title:recordTitle(item),
               description:(item['description']??'').toString(),
               number:(item['lessonNumber']??i+1).toString(),
@@ -138,7 +157,26 @@ class _CurriculumLessonEditorState extends State<CurriculumLessonEditorScreen>{
                   builder:(_)=>WorkspaceRecordsScreen(api:widget.api,
                     collection:'quizzes',
                     organizationId:widget.guide['organizationId']?.toString()))):null,
-            );
+              ),
+              Padding(padding:const EdgeInsets.fromLTRB(12,0,12,12),child:Wrap(
+                spacing:9,runSpacing:6,crossAxisAlignment:WrapCrossAlignment.center,
+                children:[
+                  Chip(label:Text(item['published']==true?'Published':'Draft'),
+                    avatar:Icon(item['published']==true?Icons.public:Icons.edit_note,size:17)),
+                  if(editable)OutlinedButton.icon(
+                    icon:const Icon(Icons.edit_outlined,size:17),
+                    label:const Text('Edit chapters & sections'),
+                    onPressed:()=>edit(item)),
+                  if(item['canEdit']==true&&actions.contains('publish'))
+                    OutlinedButton.icon(
+                      icon:Icon(item['published']==true?Icons.unpublished_outlined:Icons.publish,size:17),
+                      label:Text(item['published']==true?'Unpublish':'Publish'),
+                      onPressed:()=>publish(item)),
+                  if(item['canEdit']==true&&actions.contains('delete'))
+                    IconButton(tooltip:'Delete lesson',
+                      icon:const Icon(Icons.delete_outline),onPressed:()=>remove(item)),
+                ])),
+            ]);
           }
           return ListTile(
           title:Text(recordTitle(item)),subtitle:Text('${item['type']??'Lesson'} · ${item['published']==true?'Published':'Draft'}'),
