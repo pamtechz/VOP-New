@@ -85,10 +85,13 @@ class _PublicEntryScreenState extends State<PublicEntryScreen> {
     child: Center(child: ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 1240),
       child: Row(children: [
-        const Expanded(child:Row(children:[
-          Icon(Icons.auto_stories,color:Color(0xFFF6C76C),size:29),
-          SizedBox(width:11),
-          Flexible(child:Text('Voice of Prophecy',
+        Expanded(child:Row(children:[
+          Image.asset('assets/brand/vop_logo.png',width:36,height:36,
+            fit:BoxFit.contain,
+            errorBuilder:(_,__,___)=>const Icon(Icons.auto_stories,
+              color:Color(0xFFF6C76C),size:29)),
+          const SizedBox(width:11),
+          const Flexible(child:Text('Voice of Prophecy',
             overflow:TextOverflow.ellipsis,
             style:TextStyle(color:Colors.white,
               fontSize:18,fontWeight:FontWeight.w900))),
