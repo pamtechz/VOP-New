@@ -292,11 +292,13 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
             child:Text(error!,style:TextStyle(color:Theme.of(context).colorScheme.error))),
           if(message!=null)Padding(padding:const EdgeInsets.symmetric(horizontal:18,vertical:5),
             child:Text(message!,style:const TextStyle(color:VopColors.success))),
-          Expanded(child:ListView(
-            key:ValueKey(page),padding:const EdgeInsets.fromLTRB(17,12,17,28),
-            children:[if(page==0)..._profile(),if(page==1)..._preferences(),
-              if(page==2)..._security()],
-          )),
+          Expanded(child:Center(child:ConstrainedBox(
+            constraints:const BoxConstraints(maxWidth:980),
+            child:ListView(
+              key:ValueKey(page),padding:const EdgeInsets.fromLTRB(25,18,25,45),
+              children:[if(page==0)..._profile(),if(page==1)..._preferences(),
+                if(page==2)..._security()],
+            )))),
         ]))]),
   );
   List<Widget> _profile()=>[
