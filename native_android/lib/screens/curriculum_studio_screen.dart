@@ -79,6 +79,20 @@ class _CurriculumStudioState extends State<CurriculumStudioScreen> {
     });
   }
 
+  List<Map<String, dynamic>> _guidesForTarget(
+      Map<String, dynamic> workspace, List<Map<String, dynamic>> guides) {
+    if (workspace['isSuperAdmin'] != true || _organizationId.isEmpty) {
+      return guides;
+    }
+    // The API returns all guides to Super Admin. Restrict this page's
+    // authoring options to the chosen organisation and approved shared guides.
+    return guides.where((guide) {
+      final owner = (guide['organizationId'] ?? guide['ownerOrganizationId'] ?? '').toString();
+      return owner == _organizationId ||
+        (guide['sharingScope'] == 'shared' && guide['published'] == true);
+    }).toList();
+  }
+
   Future<Map<String, dynamic>> _lessons(String guideId) {
     final key = _key('guideLessons:' + guideId);
     return _requests.putIfAbsent(key, () => widget.api.adminContent(
@@ -233,7 +247,9 @@ class _CurriculumStudioState extends State<CurriculumStudioScreen> {
     collect(recordRows(schema['fields']));
     try {
       for (final source in sources) {
-        final rows = recordRows((await _list(source))['items']);
+        final available = recordRows((await _list(source))['items']);
+        final rows = source == 'guides'
+          ? _guidesForTarget(workspace, available) : available;
         choices[source] = [
           for (final item in rows)
             {'value': item['id'], 'label': recordTitle(item)},
@@ -442,7 +458,8 @@ class _CurriculumStudioState extends State<CurriculumStudioScreen> {
                     }
                     final links = (program['guideIds'] as List? ?? [])
                       .map((id) => id.toString()).toList();
-                    final guides = recordRows(snapshot.data?['items']);
+                    final guides = _guidesForTarget(workspace,
+                      recordRows(snapshot.data?['items']));
                     final byId = {for (final guide in guides)
                       guide['id'].toString(): guide};
                     if (links.isEmpty) return const Text(
@@ -623,7 +640,9 @@ class _CurriculumStudioState extends State<CurriculumStudioScreen> {
           icon: Icons.cloud_off,
           message: snapshot.error.toString(),
           onRetry: () => _refresh(collection));
-        final records = recordRows(snapshot.data?['items']);
+        final all = recordRows(snapshot.data?['items']);
+        final records = collection == 'guides'
+          ? _guidesForTarget(workspace, all) : all;
         return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Row(children: [
             Expanded(child: Text(
