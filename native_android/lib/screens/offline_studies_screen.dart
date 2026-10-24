@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../core/vop_api.dart';
 import '../theme/vop_theme.dart';
 import '../widgets/vop_ui.dart';
+import '../widgets/vop_desktop_layout.dart';
 
 class OfflineStudiesScreen extends StatefulWidget {
   const OfflineStudiesScreen({required this.api,super.key});
@@ -38,7 +39,7 @@ class _OfflineStudiesScreenState extends State<OfflineStudiesScreen>{
   }
   @override Widget build(BuildContext context)=>Scaffold(
     appBar:AppBar(title:const Text('Offline study')),
-    body:RefreshIndicator(
+    body:VopDesktopContent(maxWidth:1120,child:RefreshIndicator(
       onRefresh:()async{setState(_refresh);await Future.wait([content,pending]);},
       child:ListView(padding:const EdgeInsets.all(17),children:[
         const VopHeroCard(
@@ -98,6 +99,6 @@ class _OfflineStudiesScreenState extends State<OfflineStudiesScreen>{
           }),
         const SizedBox(height:25),
       ]),
-    ),
+    )),
   );
 }
