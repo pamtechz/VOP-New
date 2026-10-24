@@ -37,6 +37,13 @@ class VopApi {
   final OfflineStudy _offline;
   final String _apiBaseUrl;
   StreamSubscription<List<ConnectivityResult>>? _connection;
+  // Serialize snapshot writes: the offline index is a read/modify/write store.
+  // UI responses do not need to wait for its disk/encrypted-storage writes.
+  Future<void> _snapshotWrites = Future<void>.value();
+  void _queueSnapshot(String uid,String kind,String id,Map<String,dynamic> response) {
+    _snapshotWrites = _snapshotWrites.then((_) =>
+      _offline.save(uid,kind,id,response,title:id)).catchError((Object _) {});
+  }
   bool _syncing=false;
   String get _uid=>_auth.currentUser?.uid??'';
   bool _networkFailure(Object error)=>isVopSocketError(error) ||
@@ -218,8 +225,7 @@ class VopApi {
       // slower even though the API request had already finished.
       final owner = _uid;
       if(owner.isNotEmpty){
-        unawaited(_offline.save(owner,kind,id,response,title:id)
-          .catchError((Object _) {}));
+        _queueSnapshot(owner,kind,id,response);
       }
       return response;
     }catch(error){
