@@ -82,7 +82,7 @@ test('Study guide and lesson reader expose dual pane desktop views while retaini
   assert.match(lesson,/layout\.maxWidth>=1180/);
   assert.match(lesson,/STUDY NAVIGATION/);
   assert.match(lesson,/ListView\.builder\(/);
-  assert.match(lesson,/onTap:selected\|\|busy\?null:\(\)=>_save\(index\)/);
+  assert.match(lesson,/onTap:selected\|\|busy\|\|index>safePage\?null:\(\)=>_save\(index\)/);
   assert.match(lesson,/PlatePageView\(page: pages\[safePage\]\)/);
   assert.match(lesson,/maxWidth:desktop\?1080:double\.infinity/);
 });
