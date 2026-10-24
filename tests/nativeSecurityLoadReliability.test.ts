@@ -30,5 +30,8 @@ test('device verification fails closed, and theme selection saves before slow se
   assert.match(account,/if\(!await verifier.isDeviceSupported\(\)\)\{/);
   assert.match(account,/if\(uid!=null\)VopAppearance.persistTheme\(uid,v\)/);
   assert.match(account,/key:ValueKey\('\$section:\$key:\$current'\)/);
-  assert.match(shell,/VopAppearance.restoreTheme\(uid\)/);
+  const root=readFileSync('native_android/lib/main.dart','utf8');
+  assert.match(root,/VopAppearance\.restoreTheme\(uid\)/);
+  assert.match(root,/VopAppearance\.apply\(settings\)/);
+  assert.doesNotMatch(shell,/VopAppearance\.restoreTheme\(uid\)/);
 });

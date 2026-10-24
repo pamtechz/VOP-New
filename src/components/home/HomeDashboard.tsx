@@ -588,7 +588,16 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
       <section className="vop-home-guides">
         <div className="vop-home-section-head">
           <div><span className="vop-home-eyebrow">{uiT('home.dashboard.bible_study_library',"Bible study library")}</span><h2>{uiT('home.dashboard.discover_guides',"Discover guides")}</h2></div>
-          <label className="vop-home-language"><Languages size={15}/><select value={languageFilter} onChange={e=>setLanguageFilter(e.target.value)}><option value="all">{uiT('home.dashboard.all_languages',"All languages")}</option>{languageOptions.map(language=><option key={language.code} value={language.code}>{language.nativeName || language.name}</option>)}</select></label>
+        </div>
+        <div className="vop-home-language-paths" role="group" aria-label={uiT('home.dashboard.all_languages',"Study languages")}>
+          <button type="button" aria-pressed={languageFilter==='all'} onClick={()=>setLanguageFilter('all')}>
+            <Languages size={16}/>{uiT('home.dashboard.all_languages',"All languages")}
+          </button>
+          {languageOptions.map(language=><button type="button" key={language.code}
+            aria-pressed={languageFilter===language.code}
+            onClick={()=>setLanguageFilter(language.code)}>
+            {language.nativeName || language.name}
+          </button>)}
         </div>
         {filteredGuides.length ? <div className="vop-home-guide-grid">{filteredGuides.map(guide => {
           const done = guide.lessons.filter(lesson => isCompleted(guide,lesson)).length;

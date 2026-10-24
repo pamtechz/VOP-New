@@ -34,7 +34,12 @@ test('the Android language pack uses canonical published web locales',()=>{
   assert.match(shell,/navigation\.discover/);
   assert.match(shell,/navigation\.lessons/);
   assert.match(shell,/navigation\.library/);
-  assert.match(shell,/VopI18n\.apply/);
+  // The authenticated root owns language restoration; learner shell must not
+  // fetch the same localization pack again during its first frame.
+  const root=source('native_android/lib/main.dart');
+  assert.match(root,/VopI18n\.apply/);
+  assert.match(root,/api\.languagePack\(locale\)/);
+  assert.doesNotMatch(shell,/VopI18n\.apply/);
   assert.match(code,/translations\[key\]/);
   assert.match(source('native_android/lib/main.dart'),/VopI18n\.revision/);
 });

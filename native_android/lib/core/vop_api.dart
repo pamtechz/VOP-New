@@ -37,6 +37,20 @@ class VopApi {
   final OfflineStudy _offline;
   final String _apiBaseUrl;
   StreamSubscription<List<ConnectivityResult>>? _connection;
+  // Serialize snapshot writes: the offline index is a read/modify/write store.
+  // UI responses do not need to wait for its disk/encrypted-storage writes.
+  Future<void> _snapshotWrites = Future<void>.value();
+  void _queueSnapshot(String uid,String kind,String id,Map<String,dynamic> response) {
+    _snapshotWrites = _snapshotWrites.then((_) =>
+      _offline.save(uid,kind,id,response,title:id)).catchError((Object _) {});
+  }
+  Future<void> _afterSnapshotWrites(Future<void> Function() mutation) {
+    // A clear/delete must run after already-scheduled snapshot persistence.
+    // Also put the mutation into the queue so later saves cannot overtake it.
+    final operation = _snapshotWrites.then((_) => mutation());
+    _snapshotWrites = operation.catchError((Object _) {});
+    return operation;
+  }
   bool _syncing=false;
   String get _uid=>_auth.currentUser?.uid??'';
   bool _networkFailure(Object error)=>isVopSocketError(error) ||
@@ -213,9 +227,12 @@ class VopApi {
       Future<Map<String,dynamic>> Function() request)async{
     try{
       final response=await request();
-      if(_uid.isNotEmpty){
-        try{await _offline.save(_uid,kind,id,response,
-          title:id);}catch(_){}
+      // Persist snapshots after returning the live response. Awaiting a large
+      // browser storage or Android disk write made every catalogue load appear
+      // slower even though the API request had already finished.
+      final owner = _uid;
+      if(owner.isNotEmpty){
+        _queueSnapshot(owner,kind,id,response);
       }
       return response;
     }catch(error){
@@ -613,9 +630,14 @@ class VopApi {
     _offline.list(_uid);
   Future<List<Map<String,dynamic>>> pendingOfflineChanges()=>
     _offline.pending(_uid);
-  Future<void> removeOfflineStudy(String kind,String id)=>
-    _offline.delete(_uid,kind,id);
-  Future<void> clearOfflineStudies()=>_offline.clear(_uid);
+  Future<void> removeOfflineStudy(String kind,String id) {
+    final uid = _uid;
+    return _afterSnapshotWrites(() => _offline.delete(uid,kind,id));
+  }
+  Future<void> clearOfflineStudies() {
+    final uid = _uid;
+    return _afterSnapshotWrites(() => _offline.clear(uid));
+  }
   Future<void> saveQuizDraft(String language,String guideId,String lessonId,
       String sessionId,Map<String,Object?> answers,
       {DateTime? expiresAt})async{
