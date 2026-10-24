@@ -76,7 +76,8 @@ class _UserManagementState extends State<UserManagementScreen> {
               description:(user)=>'${user['email']??''} · ${user['roleLabel']??user['role']??''}',
               status:(user)=>'${user['status']??(user['disabled']==true?'Disabled':'Active')}',
               icon:(_)=>Icons.person_outline,
-              onOpen:(user)=>()=>edit(workspace,user),
+              onOpen:(user)=>actions.contains('update')
+                ?()=>edit(workspace,user):null,
               actions:(user)=>Wrap(children:[
                 if(actions.contains('update'))IconButton(tooltip:'Edit account',
                   onPressed:()=>edit(workspace,user),icon:const Icon(Icons.edit_outlined)),
