@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import '../core/vop_api.dart';
 import '../core/vop_i18n.dart';
 import '../theme/vop_theme.dart';
@@ -52,26 +51,9 @@ class _HomeShellState extends State<HomeShell> {
     });
   }
   late Future<Map<String,dynamic>> profile,catalog,progress;
-  @override void initState(){super.initState();reload();unawaited(_restoreAppearance().catchError((_) {}));}
-  Future<void> _restoreAppearance()async{
-    try{
-      final uid=FirebaseAuth.instance.currentUser?.uid;
-      if(uid==null)return;
-      await VopAppearance.restoreTheme(uid);
-      final initialRevision=VopAppearance.revision;
-      final result=await widget.api.personalSettings();
-      if (mounted && initialRevision == VopAppearance.revision) {
-        VopAppearance.apply(asMap(result['settings']));
-      }
-      final locale=(asMap(result['settings'])['uiLocale']??'en').toString().trim().toLowerCase();
-      if(locale.isNotEmpty){
-        try{
-          final published=await widget.api.languagePack(locale);
-          if(mounted)VopI18n.apply(locale,published);
-        }catch(_){}
-      }
-    }catch(_){}
-  }
+  @override void initState(){super.initState();reload();}
+  // The authenticated root loads appearance and language once. Repeating those
+  // requests inside the learner shell delayed the first home view.
   void reload(){
     profile=widget.api.bootstrap()..ignore();
     catalog=widget.api.catalogue()..ignore();
