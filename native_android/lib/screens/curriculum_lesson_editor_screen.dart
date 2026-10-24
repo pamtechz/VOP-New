@@ -25,7 +25,13 @@ class _CurriculumLessonEditorState extends State<CurriculumLessonEditorScreen>{
         if(!mounted)return;
         final items=recordRows(result['items']);
         final target=items.where((item)=>item['id'].toString()==widget.initialLessonId).toList();
-        if(widget.createOnOpen || target.isNotEmpty){
+        final permissions=recordMap(widget.workspace['permissions']);
+        final actions=permissions['lessons'] as List? ?? [];
+        final mayEdit=target.isNotEmpty &&
+          actions.contains('update') && target.first['canEdit']==true;
+        final mayCreate=actions.contains('create') && widget.guide['canEdit']!=false;
+        if((widget.createOnOpen && mayCreate) ||
+            (!widget.createOnOpen && mayEdit)){
           WidgetsBinding.instance.addPostFrameCallback((_){
             if(mounted)edit(widget.createOnOpen?null:target.first);
           });
@@ -40,6 +46,9 @@ class _CurriculumLessonEditorState extends State<CurriculumLessonEditorScreen>{
     return <String,dynamic>{'id':block['id']??newRecordId(),'type':type,if(['img','video','audio'].contains(type))'url':block['src'],'children':[{'text':['img','video','audio'].contains(type)?'':'${block['text']??''}'}]};
   }).toList();
   Future<void> edit(Map<String,dynamic>? lesson)async{
+    final actions=recordMap(widget.workspace['permissions'])['lessons'] as List? ?? [];
+    if(lesson==null && !(actions.contains('create') && widget.guide['canEdit']!=false))return;
+    if(lesson!=null && !(actions.contains('update') && lesson['canEdit']==true))return;
     if(lesson?['type']=='Test'){
       await Navigator.push(context,MaterialPageRoute<void>(builder:(_)=>WorkspaceRecordsScreen(api:widget.api,collection:'quizzes',organizationId:widget.guide['organizationId']?.toString())));return;
     }
