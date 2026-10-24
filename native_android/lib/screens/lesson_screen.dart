@@ -519,7 +519,55 @@ class _LessonScreenState extends State<LessonScreen> {
         }
 
         final progressPercent = ((safePage + 1) * 100 / totalSteps).round();
-        return Column(children: [
+        return LayoutBuilder(builder:(context,layout){
+          final desktop=layout.maxWidth>=1180;
+          final scheme=Theme.of(context).colorScheme;
+          return Row(children:[
+            if(desktop) SizedBox(width:264,child:Material(
+              color:scheme.surface,
+              child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+                Padding(padding:const EdgeInsets.fromLTRB(18,21,16,12),
+                  child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+                    Text('STUDY NAVIGATION',
+                      style:Theme.of(context).textTheme.labelSmall?.copyWith(
+                        fontWeight:FontWeight.w900,letterSpacing:1)),
+                    const SizedBox(height:9),
+                    Text(widget.title,maxLines:3,overflow:TextOverflow.ellipsis,
+                      style:Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight:FontWeight.w800)),
+                    const SizedBox(height:6),
+                    Text('$progressPercent% read',
+                      style:Theme.of(context).textTheme.bodySmall),
+                  ])),
+                const Divider(height:1),
+                Expanded(child:ListView.builder(
+                  padding:const EdgeInsets.symmetric(horizontal:10,vertical:10),
+                  itemCount:pages.length,
+                  itemBuilder:(context,index){
+                    final selected=index==safePage;
+                    final entry=pages[index];
+                    final label=(entry['title']??entry['sectionTitle']??
+                      entry['chapterTitle']??'Page ${index+1}').toString();
+                    return Padding(padding:const EdgeInsets.only(bottom:5),
+                      child:ListTile(
+                        dense:true,
+                        selected:selected,
+                        selectedTileColor:scheme.primaryContainer,
+                        shape:RoundedRectangleBorder(
+                          borderRadius:BorderRadius.circular(10)),
+                        leading:CircleAvatar(radius:14,
+                          child:Text('${index+1}',style:const TextStyle(fontSize:11))),
+                        title:Text(label,maxLines:2,overflow:TextOverflow.ellipsis),
+                        onTap:selected||busy?null:()=>_save(index),
+                      ));
+                  },
+                )),
+              ]),
+            )),
+            if(desktop) const VerticalDivider(width:1),
+            Expanded(child:Center(child:ConstrainedBox(
+              constraints:BoxConstraints(maxWidth:desktop?1080:double.infinity),
+              child:Column(children:[
           Container(
             margin: const EdgeInsets.fromLTRB(16, 12, 16, 6),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -807,7 +855,9 @@ class _LessonScreenState extends State<LessonScreen> {
                           : 'Complete lesson'))
                   : 'Next page')),
             ]))),
-        ]);
+        ])))),
+          ]);
+        });
       },
     ),
   );
