@@ -266,10 +266,11 @@ class _CurriculumStudioState extends State<CurriculumStudioScreen> {
   }
 
   Future<void> _openLessonEditor(Map<String, dynamic> workspace,
-      Map<String, dynamic> guide) async {
+      Map<String, dynamic> guide, {String lessonId = '', bool create = false}) async {
     await Navigator.push<void>(context, MaterialPageRoute<void>(
       builder: (_) => CurriculumLessonEditorScreen(
-        api: widget.api, guide: guide, workspace: workspace),
+        api: widget.api, guide: guide, workspace: workspace,
+        initialLessonId: lessonId, createOnOpen: create),
     ));
     if (mounted) {
       setState(() => _requests.remove(_key('guideLessons:' + guide['id'].toString())));
@@ -495,6 +496,13 @@ class _CurriculumStudioState extends State<CurriculumStudioScreen> {
             icon: const Icon(Icons.edit_note),
             label: const Text('Open lesson editor'),
           ),
+          if ((recordMap(workspace['permissions'])['lessons'] as List? ?? []).contains('create')
+              && guide['canEdit'] != false)
+            OutlinedButton.icon(
+              onPressed: () => _openLessonEditor(workspace, guide, create: true),
+              icon: const Icon(Icons.add),
+              label: const Text('New lesson'),
+            ),
           OutlinedButton.icon(
             onPressed: () { setState(() => _area = 'quizzes'); },
             icon: const Icon(Icons.fact_check_outlined),
@@ -527,7 +535,8 @@ class _CurriculumStudioState extends State<CurriculumStudioScreen> {
                   (lesson['chapters'] as List? ?? []).length.toString() + ' chapters',
                 ].join(' · ')),
                 trailing: const Icon(Icons.edit_note),
-                onTap: () => _openLessonEditor(workspace, guide),
+                onTap: () => _openLessonEditor(workspace, guide,
+                  lessonId: lesson['id'].toString()),
               )),
           ]);
         },
