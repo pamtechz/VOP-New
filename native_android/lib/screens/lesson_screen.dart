@@ -558,7 +558,7 @@ class _LessonScreenState extends State<LessonScreen> {
                         leading:CircleAvatar(radius:14,
                           child:Text('${index+1}',style:const TextStyle(fontSize:11))),
                         title:Text(label,maxLines:2,overflow:TextOverflow.ellipsis),
-                        onTap:selected||busy?null:()=>_save(index),
+                        onTap:selected||busy||index>safePage?null:()=>_save(index),
                       ));
                   },
                 )),
