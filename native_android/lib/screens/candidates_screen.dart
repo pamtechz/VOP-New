@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../core/vop_api.dart';
 import '../theme/vop_theme.dart';
@@ -18,6 +19,20 @@ class _CandidatesScreenState extends State<CandidatesScreen> {
   late Future<Map<String, dynamic>> _catalogFuture;
   String _searchQuery = '';
   String _filter = 'all';
+  Timer? _searchDebounce;
+
+  @override void dispose() {
+    _searchDebounce?.cancel();
+    super.dispose();
+  }
+
+  void _searchChanged(String value) {
+    _searchDebounce?.cancel();
+    _searchQuery = value.trim();
+    _searchDebounce = Timer(const Duration(milliseconds: 250), () {
+      if (mounted) _reload();
+    });
+  }
 
   @override
   void initState() {
@@ -106,6 +121,7 @@ class _CandidatesScreenState extends State<CandidatesScreen> {
                     ? IconButton(
                         icon: const Icon(Icons.clear, size: 18),
                         onPressed: () {
+                          _searchDebounce?.cancel();
                           setState(() => _searchQuery = '');
                           _reload();
                         },
@@ -114,10 +130,7 @@ class _CandidatesScreenState extends State<CandidatesScreen> {
                 contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
-              onChanged: (val) {
-                _searchQuery = val.trim();
-                _reload();
-              },
+              onChanged: _searchChanged,
             ),
           ),
           SingleChildScrollView(
