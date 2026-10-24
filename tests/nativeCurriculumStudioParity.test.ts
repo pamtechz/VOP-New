@@ -40,7 +40,9 @@ test('Curriculum Studio is tenant scoped and server permission aware',()=>{
 
 test('Programme relationships open canonical guides without cloning records',()=>{
   assert.match(studio,/program\['guideIds'\]/);
-  assert.match(studio,/_openGuide\(id\.toString\(\)/);
+  assert.match(studio,/\.map\(\(id\) => id\.toString\(\)\)\.toList\(\)/);
+  assert.match(studio,/if \(byId\.containsKey\(id\)\)/);
+  assert.match(studio,/onTap: \(\) => _openGuide\(id,\s*programId: program\['id'\]\.toString\(\)\)/);
   assert.match(studio,/final id = \(original\['id'\] \?\? newRecordId\(\)\)\.toString\(\)/);
   assert.match(studio,/final initial = <String, dynamic>\{\.\.\.seed, \.\.\.original\}/);
   assert.match(studio,/widget\.api\.adminContent\(/);
