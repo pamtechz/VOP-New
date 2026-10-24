@@ -186,9 +186,64 @@ class _QuizScreenState extends State<QuizScreen> {
               final scheme = Theme.of(context).colorScheme;
               final completed = answers.length;
 
-              return ListView(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-                children: [
+              return LayoutBuilder(builder:(context,layout){
+                final desktop=layout.maxWidth>=1100;
+                return Row(children:[
+                  if(desktop) SizedBox(width:270,child:Material(
+                    color:scheme.surface,
+                    child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,
+                      children:[
+                        Padding(padding:const EdgeInsets.fromLTRB(18,18,16,12),
+                          child:Column(crossAxisAlignment:CrossAxisAlignment.start,
+                            children:[
+                              Text('ASSESSMENT',
+                                style:Theme.of(context).textTheme.labelSmall?.copyWith(
+                                  letterSpacing:1.2,fontWeight:FontWeight.w900)),
+                              const SizedBox(height:10),
+                              Text(widget.title,maxLines:3,
+                                overflow:TextOverflow.ellipsis,
+                                style:Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontWeight:FontWeight.w800)),
+                              const SizedBox(height:8),
+                              Text('$completed of ${questions.length} answered'),
+                              const SizedBox(height:10),
+                              LinearProgressIndicator(
+                                value:completed/questions.length,minHeight:7),
+                            ])),
+                        const Divider(height:1),
+                        Expanded(child:ListView.builder(
+                          padding:const EdgeInsets.all(10),
+                          itemCount:questions.length,
+                          itemBuilder:(context,index){
+                            final selected=current==index;
+                            final answered=answers.containsKey(index.toString());
+                            return Padding(padding:const EdgeInsets.only(bottom:5),
+                              child:ListTile(
+                                dense:true,
+                                selected:selected,
+                                selectedTileColor:scheme.primaryContainer,
+                                shape:RoundedRectangleBorder(
+                                  borderRadius:BorderRadius.circular(10)),
+                                leading:Icon(answered?Icons.check_circle_outline:
+                                  Icons.radio_button_unchecked,
+                                  color:answered?scheme.primary:scheme.onSurfaceVariant),
+                                title:Text('Question ${index+1}'),
+                                subtitle:Text(answered?'Answered':'Not answered'),
+                                onTap:()=>setState((){
+                                  currentIndex=index;
+                                  reviewing=false;
+                                }),
+                              ));
+                          },
+                        )),
+                      ])),
+                  ),
+                  if(desktop)const VerticalDivider(width:1),
+                  Expanded(child:Center(child:ConstrainedBox(
+                    constraints:BoxConstraints(maxWidth:desktop?1020:double.infinity),
+                    child:ListView(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                      children: [
                   // Hero Assessment Header Banner
                   Container(
                     decoration: BoxDecoration(
@@ -607,7 +662,9 @@ class _QuizScreenState extends State<QuizScreen> {
                     ],
                   ),
                 ],
-              );
+                    )))),
+                  ]);
+                });
             },
           ),
   );
