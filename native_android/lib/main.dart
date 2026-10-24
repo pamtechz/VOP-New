@@ -25,20 +25,19 @@ Future<void> main() async {
     }
     return false;
   };
-  String? initError;
-  if (VopConfig.error == null) {
-    try {
-      await Firebase.initializeApp(options: VopConfig.firebaseOptions);
-    } catch (e) {
-      initError = 'Firebase initialization error: $e';
-    }
-  }
-  runApp(VopAndroidApp(initError: initError));
+  // Paint a branded first frame immediately instead of blocking on network
+  // services and Firebase initialization before runApp.
+  final initialization = VopConfig.error == null
+      ? Firebase.initializeApp(options: VopConfig.firebaseOptions)
+          .then<String?>((_) => null)
+          .catchError((Object error) => 'Firebase initialization error: $error')
+      : Future<String?>.value(null);
+  runApp(VopAndroidApp(initialization: initialization));
 }
 
 class VopAndroidApp extends StatefulWidget {
-  const VopAndroidApp({this.initError, super.key});
-  final String? initError;
+  const VopAndroidApp({required this.initialization, super.key});
+  final Future<String?> initialization;
 
   @override
   State<VopAndroidApp> createState() => _VopAndroidAppState();
@@ -48,17 +47,8 @@ class _VopAndroidAppState extends State<VopAndroidApp> {
   Stream<User?>? _authStream;
 
   @override
-  void initState() {
-    super.initState();
-    final activeError = VopConfig.error ?? widget.initError;
-    if (activeError == null) {
-      _authStream = FirebaseAuth.instance.authStateChanges();
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final activeError = VopConfig.error ?? widget.initError;
+    final activeError = VopConfig.error;
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: VopAppearance.mode,
       builder: (context, mode, child) => ValueListenableBuilder<bool>(
@@ -97,18 +87,32 @@ class _VopAndroidAppState extends State<VopAndroidApp> {
                       ),
                     ),
                   )
-                : StreamBuilder<User?>(
-                    initialData: FirebaseAuth.instance.currentUser,
-                    stream: _authStream,
-                    builder: (context, snapshot) {
-                      if (snapshot.connectionState == ConnectionState.waiting &&
-                          !snapshot.hasData) {
-                        return const Scaffold(
-                          body: Center(child: CircularProgressIndicator()),
+                : FutureBuilder<String?>(
+                    future: widget.initialization,
+                    builder: (context, ready) {
+                      if (ready.connectionState != ConnectionState.done) {
+                        return const _StartupScreen();
+                      }
+                      if (ready.hasError || ready.data != null) {
+                        return Scaffold(
+                          body: Center(child: Padding(
+                            padding: const EdgeInsets.all(24),
+                            child: Text(ready.data ?? 'VOP could not initialize. Please restart the app.',
+                              textAlign: TextAlign.center),
+                          )),
                         );
                       }
-                      if (!snapshot.hasData) return const PublicEntryScreen();
-                      return _AuthenticatedHome(uid: snapshot.data!.uid);
+                      _authStream ??= FirebaseAuth.instance.authStateChanges();
+                      return StreamBuilder<User?>(
+                        initialData: FirebaseAuth.instance.currentUser,
+                        stream: _authStream,
+                        builder: (context, snapshot) {
+                          if (snapshot.connectionState == ConnectionState.waiting &&
+                              !snapshot.hasData) return const _StartupScreen();
+                          if (!snapshot.hasData) return const PublicEntryScreen();
+                          return _AuthenticatedHome(uid: snapshot.data!.uid);
+                        },
+                      );
                     },
                   ),
           ),
@@ -116,6 +120,34 @@ class _VopAndroidAppState extends State<VopAndroidApp> {
       ),
     );
   }
+}
+
+
+/// Displayed while the real Firebase application initializes. This is a first
+/// frame, not an artificial splash delay.
+class _StartupScreen extends StatelessWidget {
+  const _StartupScreen();
+
+  @override
+  Widget build(BuildContext context) => const Scaffold(
+    backgroundColor: Color(0xFF081E3E),
+    body: SafeArea(child: Center(child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(Icons.auto_stories_rounded, color: Color(0xFFF6C76C), size: 64),
+        SizedBox(height: 20),
+        Text('Voice of Prophecy', style: TextStyle(
+          color: Colors.white, fontSize: 23, fontWeight: FontWeight.w800)),
+        SizedBox(height: 8),
+        Text('Study the Word. Grow in faith.',
+          style: TextStyle(color: Color(0xFFD2E2F2), fontSize: 14)),
+        SizedBox(height: 26),
+        SizedBox(width: 28, height: 28,
+          child: CircularProgressIndicator(strokeWidth: 2.4,
+            color: Color(0xFFF6C76C))),
+      ],
+    ))),
+  );
 }
 
 class _AuthenticatedHome extends StatefulWidget {
