@@ -153,7 +153,10 @@ class _CurriculumStudioState extends State<CurriculumStudioScreen> {
   }
 
   String _scopeTitle(Map<String, dynamic> workspace) {
-    if (_organizationId.isEmpty) return 'System-wide content';
+    if (_organizationId.isEmpty) {
+      return workspace['isSuperAdmin'] == true ?
+        'System-wide content' : 'Choose an organisation';
+    }
     final options = recordRows(recordMap(workspace['options'])['organizations']);
     for (final option in options) {
       if (option['value'] == _organizationId) return (option['label'] ?? _organizationId).toString();
@@ -162,10 +165,12 @@ class _CurriculumStudioState extends State<CurriculumStudioScreen> {
   }
 
   Future<void> _pickOrganization(Map<String, dynamic> workspace) async {
-    if (workspace['isSuperAdmin'] != true) return;
+    final superAdmin = workspace['isSuperAdmin'] == true;
+    final hierarchy = workspace['tenantType'] == 'hierarchy';
+    if (!superAdmin && !hierarchy) return;
     final options = recordRows(recordMap(workspace['options'])['organizations']);
     final choices = <Map<String, dynamic>>[
-      {'value': '', 'label': 'System-wide content'},
+      if (superAdmin) {'value': '', 'label': 'System-wide content'},
       ...options,
     ];
     var query = '';
@@ -746,7 +751,7 @@ class _CurriculumStudioState extends State<CurriculumStudioScreen> {
                   const Text('Tracks → Guides → Lessons → Chapters → Sections → Blocks and evaluations'),
                 ])),
               const SizedBox(height: 14),
-              if (workspace['isSuperAdmin'] == true)
+              if (workspace['isSuperAdmin'] == true || workspace['tenantType'] == 'hierarchy')
                 Align(alignment: Alignment.centerLeft, child: OutlinedButton.icon(
                   icon: const Icon(Icons.business_outlined),
                   onPressed: () => _pickOrganization(workspace),
