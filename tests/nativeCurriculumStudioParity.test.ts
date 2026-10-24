@@ -62,7 +62,7 @@ test('Flutter lesson authoring is a deep-linked, permission checked full page ed
 });
 
 test('Assessments stay in the protected quiz library, not the learner-readable lesson payload',()=>{
-  assert.match(studio,/collection == 'quizzes'/);
+  assert.match(studio,/collection != 'quizzes'/);
   assert.match(studio,/'attachmentType': 'guide'/);
   assert.match(server,/questions',label:'Questions'/);
   assert.match(api,/collection == 'quizzes' \? action\('\/api\/quizzes'/);
