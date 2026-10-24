@@ -66,7 +66,11 @@ test('programme selection never opens an empty page because guides have zero pub
   assert.match(mobile,/!doc\.exists\|\|!hasAccess\(doc\.data\(\)\|\|\{\},scope\)/);
   assert.match(mobile,/guideIds:program\.guideIds\.filter\(id=>knownGuideIds\.has\(id\)\)/);
   assert.ok(flutter.includes('push(_ProgrammeScreen('));
-  assert.ok(flutter.includes("programId:(p['id']??'').toString()"));
+  // Selecting the chip filters published courses; the full programme screen
+  // remains accessible through the selected programme's details action.
+  assert.ok(flutter.includes("programId:(activeProgram.first['id']??'').toString()"));
+  assert.ok(flutter.includes('selectedStudyProgram'));
+  assert.ok(flutter.includes('ChoiceChip('));
   assert.ok(flutter.includes('widget.api.programme(widget.programId)'));
   assert.ok(flutter.includes("final guides=asRows(s.data?['guides']);"));
   const api=read('native_android/lib/core/vop_api.dart');
