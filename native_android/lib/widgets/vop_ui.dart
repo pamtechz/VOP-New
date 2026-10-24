@@ -242,7 +242,7 @@ class VopCourseCard extends StatelessWidget {
         SizedBox(width:76,height:86,
           child:imageUrl.startsWith('https://')
             ?Image.network(imageUrl,fit:BoxFit.cover,
-              cacheWidth:(76*MediaQuery.devicePixelRatioOf(context)).round().clamp(76,400),
+              cacheWidth:(76*MediaQuery.devicePixelRatioOf(context)).round().clamp(76,400).toInt(),
               filterQuality:FilterQuality.low,
               frameBuilder:(_,child,frame,loaded)=>loaded||frame!=null
                 ? child : const _CoursePlaceholder(),
