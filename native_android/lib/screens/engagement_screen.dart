@@ -27,32 +27,64 @@ class _EngagementScreenState extends State<EngagementScreen> {
       challengesLoaded=true;
     }
   }
+  void _chooseArea(int index) {
+    setState(() {
+      tab=index;
+      if(tab==1&&!challengesLoaded)reload();
+    });
+  }
   @override Widget build(BuildContext context)=>Scaffold(
     appBar:AppBar(title:const Text('Scripture & Challenges')),
-    body:Column(children:[
-      Padding(padding:const EdgeInsets.symmetric(horizontal:12,vertical:9),
-        child:LayoutBuilder(builder:(context,constraints){
-          final compact=constraints.maxWidth<410;
-          return SegmentedButton<int>(
-            showSelectedIcon:!compact,
-            style:ButtonStyle(
-              visualDensity:VisualDensity.compact,
-              padding:WidgetStateProperty.all(const EdgeInsets.symmetric(
-                horizontal:6,vertical:7)),
-              textStyle:WidgetStateProperty.all(const TextStyle(fontSize:12))),
-            segments:[
-              ButtonSegment(value:0,label:Text(compact?'Memory':'Memory decks'),
-                icon:const Icon(Icons.psychology_outlined,size:17)),
-              ButtonSegment(value:1,label:const Text('Challenges'),
-                icon:const Icon(Icons.sports_esports_outlined,size:17)),
-            ],
-            selected:{tab},onSelectionChanged:(values)=>setState((){
-              tab=values.first;
-              if(tab==1&&!challengesLoaded)reload();
-            }));
-        })),
-      Expanded(child:tab==0?_decks():_challenges()),
-    ]),
+    body:LayoutBuilder(builder:(context,layout){
+      final desktop=layout.maxWidth>=1080;
+      return Row(children:[
+        if(desktop) NavigationRail(
+          extended:true,
+          minExtendedWidth:240,
+          backgroundColor:Theme.of(context).colorScheme.surface,
+          selectedIndex:tab,
+          onDestinationSelected:_chooseArea,
+          destinations:const [
+            NavigationRailDestination(
+              icon:Icon(Icons.psychology_outlined),
+              selectedIcon:Icon(Icons.psychology),
+              label:Text('Memory decks')),
+            NavigationRailDestination(
+              icon:Icon(Icons.sports_esports_outlined),
+              selectedIcon:Icon(Icons.sports_esports),
+              label:Text('Challenges')),
+          ],
+        ),
+        if(desktop) const VerticalDivider(width:1),
+        Expanded(child:Center(child:ConstrainedBox(
+          constraints:BoxConstraints(maxWidth:desktop?1160:double.infinity),
+          child:Column(children:[
+            if(!desktop) Padding(
+              padding:const EdgeInsets.symmetric(horizontal:12,vertical:9),
+              child:LayoutBuilder(builder:(context,constraints){
+                final compact=constraints.maxWidth<410;
+                return SegmentedButton<int>(
+                  showSelectedIcon:!compact,
+                  style:ButtonStyle(
+                    visualDensity:VisualDensity.compact,
+                    padding:WidgetStateProperty.all(const EdgeInsets.symmetric(
+                      horizontal:6,vertical:7)),
+                    textStyle:WidgetStateProperty.all(const TextStyle(fontSize:12))),
+                  segments:[
+                    ButtonSegment(value:0,label:Text(compact?'Memory':'Memory decks'),
+                      icon:const Icon(Icons.psychology_outlined,size:17)),
+                    ButtonSegment(value:1,label:const Text('Challenges'),
+                      icon:const Icon(Icons.sports_esports_outlined,size:17)),
+                  ],
+                  selected:{tab},
+                  onSelectionChanged:(values)=>_chooseArea(values.first),
+                );
+              })),
+            Expanded(child:tab==0?_decks():_challenges()),
+          ]),
+        ))),
+      ]);
+    }),
   );
   Widget _decks()=>FutureBuilder<Map<String,dynamic>>(future:decks,
     builder:(context,s){
