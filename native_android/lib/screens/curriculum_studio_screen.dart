@@ -217,13 +217,39 @@ class _CurriculumStudioState extends State<CurriculumStudioScreen> {
     // during an update or after a transient save failure.
     final id = (original['id'] ?? newRecordId()).toString();
     final initial = <String, dynamic>{...seed, ...original};
+    final choices = <String, dynamic>{...recordMap(workspace['options'])};
+    // Resolve relationship choices in the same approved tenant context as
+    // the record being saved, rather than the device's default organisation.
+    final sources = <String>{};
+    void collect(List<Map<String, dynamic>> fields) {
+      for (final field in fields) {
+        final source = (field['source'] ?? '').toString();
+        if (source == 'guides' || source == 'programs') sources.add(source);
+        collect(recordRows(field['fields']));
+      }
+    }
+    collect(recordRows(schema['fields']));
+    try {
+      for (final source in sources) {
+        final rows = recordRows((await _list(source))['items']);
+        choices[source] = [
+          for (final item in rows)
+            {'value': item['id'], 'label': recordTitle(item)},
+        ];
+      }
+    } catch (error) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not load linked curriculum records: ' + error.toString())));
+      return;
+    }
+    if (!mounted) return;
     await Navigator.push<void>(context, MaterialPageRoute<void>(
       builder: (_) => RecordEditor(
         api: widget.api,
         title: current == null ? 'New ' + (schema['title'] ?? collection).toString()
           : 'Edit ' + recordTitle(original),
         fields: recordRows(schema['fields']),
-        options: recordMap(workspace['options']),
+        options: choices,
         initial: initial,
         onSave: (data) async {
           await widget.api.saveRecord(collection, id, data, payload: _scope);
@@ -405,6 +431,9 @@ class _CurriculumStudioState extends State<CurriculumStudioScreen> {
                         onTap: () => _openGuide(id.toString(),
                           programId: program['id'].toString()),
                       ),
+                  if (snapshot.hasError)
+                    Text('Guide links could not be loaded. Refresh to retry.',
+                      style: TextStyle(color: Theme.of(context).colorScheme.error)),
                   if (snapshot.connectionState == ConnectionState.done &&
                       (program['guideIds'] as List? ?? []).isEmpty)
                     const Text('No guides linked yet. Use Edit to assign published guides.'),
