@@ -44,7 +44,14 @@ class _CurriculumStudioState extends State<CurriculumStudioScreen> {
   @override
   void initState() {
     super.initState();
-    _workspace = widget.api.workspace();
+    _workspace = _loadWorkspace();
+  }
+
+  Future<Map<String, dynamic>> _loadWorkspace() async {
+    final workspace = await widget.api.workspace();
+    // Non-super-admin calls must remain in the authenticated tenant's scope.
+    _organizationId = (workspace['organizationId'] ?? '').toString();
+    return workspace;
   }
 
   List<_StudioArea> _available(Map<String, dynamic> workspace) {
@@ -210,7 +217,7 @@ class _CurriculumStudioState extends State<CurriculumStudioScreen> {
     // during an update or after a transient save failure.
     final id = (original['id'] ?? newRecordId()).toString();
     final initial = <String, dynamic>{...seed, ...original};
-    final saved = await Navigator.push<bool>(context, MaterialPageRoute<bool>(
+    await Navigator.push<void>(context, MaterialPageRoute<void>(
       builder: (_) => RecordEditor(
         api: widget.api,
         title: current == null ? 'New ' + (schema['title'] ?? collection).toString()
@@ -503,7 +510,8 @@ class _CurriculumStudioState extends State<CurriculumStudioScreen> {
           }
           if (snapshot.hasError) return VopEmpty(icon: Icons.wifi_off,
             message: snapshot.error.toString(),
-            onRetry: () => _refresh('guides'));
+            onRetry: () => setState(() =>
+              _requests.remove(_key('guideLessons:' + _selectedGuide))));
           final lessons = recordRows(snapshot.data?['items']).where((item) =>
             item['type'] != 'Test' && _visible(item)).toList();
           if (lessons.isEmpty) return const Padding(
@@ -592,10 +600,11 @@ class _CurriculumStudioState extends State<CurriculumStudioScreen> {
         return Scaffold(appBar: AppBar(title: const Text('Curriculum Studio')),
           body: VopEmpty(icon: Icons.wifi_off,
             message: snapshot.error.toString(),
-            onRetry: () => setState(() {
-              _workspace = widget.api.workspace();
-              _refresh();
-            })));
+            onRetry: () {
+              _requests.clear();
+              _counts.clear();
+              setState(() => _workspace = _loadWorkspace());
+            }));
       }
       final workspace = snapshot.data!;
       final areas = _available(workspace);
