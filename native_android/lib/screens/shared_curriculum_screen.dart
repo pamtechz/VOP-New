@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../core/vop_api.dart';
-import '../widgets/vop_ui.dart';
 import 'workspace_records_screen.dart' show recordMap, recordRows, recordTitle;
 
 /// Shared curriculum visibility and owner review. All writes go through the
