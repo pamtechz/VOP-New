@@ -76,6 +76,7 @@ type LessonBlock = {
 
 type EditorState = {
   id: string;
+  originalGuideId?: string;
   title: string;
   description: string;
   lessonNumber: string;
@@ -344,6 +345,7 @@ function editorFromLesson(row: LessonRow): EditorState {
     lessonNumber: row.lesson.lessonNumber,
     language: row.language,
     guideId: valueText(raw.guideId) || row.guide?.id || '',
+    originalGuideId: valueText(raw.guideId) || row.guide?.id || '',
     guideTitle: valueText(raw.guideTitle) || row.guideTitle,
     season: valueText(raw.season) || row.season,
     content: Array.isArray(contentPages)
@@ -978,6 +980,8 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
       const pageBlocks = splitLessonBlocks(sourceBlocks);
       const payload: Record<string, unknown> = {
         lessonId: id,
+        expectedExisting:Boolean(editor.originalGuideId),
+        originalGuideId:editor.originalGuideId || '',
         lessonNumber: editor.lessonNumber.trim(),
         title: resolvedTitle,
         description: editor.description.trim(),
@@ -1022,7 +1026,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
       // retrying look like a new/duplicate lesson.
       await adminContent('upsertLesson', 'curriculum', id, payload, targetOrganizationId);
       await load();
-      const savedEditor={ ...editor, id, title: resolvedTitle, guideTitle: valueText(guide.title) || editor.guideTitle, published: publish || editor.published };
+      const savedEditor={ ...editor, id, originalGuideId:editor.guideId, title: resolvedTitle, guideTitle: valueText(guide.title) || editor.guideTitle, published: publish || editor.published };
       savedEditorSignature.current=JSON.stringify(savedEditor);
       clearLocalDraft(editor.guideId, editor.id);
       if (editor.id !== id) clearLocalDraft(editor.guideId, '');

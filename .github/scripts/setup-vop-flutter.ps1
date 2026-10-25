@@ -36,6 +36,18 @@ if (!$flutter) {
 }
 
 $bin = Split-Path -Parent $flutter
+$sdkRoot = Split-Path -Parent $bin
+# The same immutable revision must build both KASAINSTITUTE and Vercel.
+$buildScript = Get-Content -LiteralPath (Join-Path $PSScriptRoot '..\..\native_android\tool\vercel-build-web.sh') -Raw
+if ($buildScript -notmatch 'readonly flutter_sha="([a-f0-9]{40})"') {
+    throw 'The reviewed Flutter revision is missing from vercel-build-web.sh.'
+}
+$expectedRevision = $Matches[1]
+$actualRevision = & git -C $sdkRoot rev-parse HEAD
+if ($LASTEXITCODE -ne 0 -or "$actualRevision".Trim() -ne $expectedRevision) {
+    throw "Flutter SDK provenance mismatch. KASAINSTITUTE must use revision $expectedRevision."
+}
+Write-Host "Verified pinned Flutter revision $expectedRevision"
 if ($env:GITHUB_PATH) {
     [System.IO.File]::AppendAllText($env:GITHUB_PATH, "$bin`n", [System.Text.UTF8Encoding]::new($false))
 }

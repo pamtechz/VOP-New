@@ -95,7 +95,7 @@ test('saving preserves canonical IDs and programme association does not clone gu
   const native=read('native_android/lib/screens/curriculum_lesson_editor_screen.dart');
   const backend=read('server/programManager.ts');
   assert.ok(programmes.includes("editing.id||'program-'+crypto.randomUUID()"));
-  assert.ok(programmes.includes("programApi('upsert',organizationId,id,{...editing,id})"));
+  assert.match(programmes,/programApi\('upsert',organizationId,id,\{\s*\.\.\.editing,id,expectedExisting:programs\.some\(item=>item\.id===id\)/);
   assert.ok(guides.includes("editing.id||'guide-'+crypto.randomUUID()"));
   assert.ok(guides.includes("guideAdmin('attachGuide'"));
   assert.doesNotMatch(guides,/guideAdmin\('upsert',[\s\S]{0,80}\.\.\.targetProg/);

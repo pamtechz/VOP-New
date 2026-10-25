@@ -323,6 +323,8 @@ export default async function handler(req: Request, res: Response) {
       const id = requestId || dataId || safeId(`guide-${randomUUID().replace(/-/g, '').slice(0,24)}`);
       const ref = ctx.db.doc(`guides/${id}`);
       const existing = await ref.get();
+      if(data.expectedExisting===true && !existing.exists)
+        throw new Error('This guide no longer exists. Reload before editing; no duplicate has been created.');
       const current = existing.exists ? existing.data() || {} : {};
       const ownerOrganizationId = String(current.scope === 'platform'
         ? '' : current.organizationId || current.ownerOrganizationId || '').trim();
@@ -420,6 +422,9 @@ export default async function handler(req: Request, res: Response) {
         // Publication and adoption commit together or not at all.
         await ctx.db.runTransaction(async transaction=>{
           const currentSnapshot=await transaction.get(ref);
+          if(existing.exists!==currentSnapshot.exists || (existing.exists &&
+             !existing.updateTime?.isEqual(currentSnapshot.updateTime!)))
+            throw new Error('The guide changed while saving. Reload before editing.');
           if(currentSnapshot.exists){
             const now=currentSnapshot.data()||{};
             if(String(now.organizationId||now.ownerOrganizationId||'')!==guideOrganizationId ||
@@ -445,7 +450,8 @@ export default async function handler(req: Request, res: Response) {
         }
         await writeTenantAudit(ctx,'guide.language.adoption',`guides/${id}`,undefined,{language:lang});
       } else {
-        await ref.set(nextGuide,{merge:true});
+        if(existing.exists)await ref.update(nextGuide,{lastUpdateTime:existing.updateTime!});
+        else await ref.create(nextGuide);
       }
       const saved = await ref.get();
       await writeTenantAudit(ctx, existing.exists ? 'guide.update' : 'guide.create', `guides/${id}`, current, saved.data());
@@ -658,6 +664,10 @@ export default async function handler(req: Request, res: Response) {
         || !guideOrgId.trim();
       const ref = guideRef.collection('lessons').doc(lessonId);
       const existing = await ref.get();
+      if(data.expectedExisting===true && !existing.exists)
+        throw new Error('The original lesson is missing from this guide. Reload before editing; no duplicate has been created.');
+      if(data.originalGuideId && String(data.originalGuideId)!==guideId)
+        throw new Error('Moving a lesson by editing is not allowed. Use the explicit transfer workflow.');
       if (existing.data()?.sourceQuizId) throw new Error('This assessment is linked to a quiz. Edit it through Quiz Library.');
       // Answer keys live exclusively in the private Quiz Library. Lesson and
       // chapter bodies are readable by learners; never persist inline keys.
@@ -698,7 +708,8 @@ export default async function handler(req: Request, res: Response) {
       if(data.published===true)await requirePermission(ctx,'curriculum','publish');
       if (existing.exists && !(ctx.tenantType === 'hierarchy' ? await canManageOrganizationContent(ctx, existing.data()) : canEditCanonicalContent(ctx, existing.data()))) throw new Error('Only an authorized tenant administrator or VOP Super Admin can edit this lesson.');
       if (existing.exists) assertMutableTenantResource(ctx.isSuperAdmin, existing.data(), 'edit');
-      const { teacherNotes: _incomingNotes, ...publicData }=data;
+      const { teacherNotes: _incomingNotes, expectedExisting: _expectedExisting,
+        originalGuideId: _originalGuideId, ...publicData }=data;
       const notesIncluded=Object.prototype.hasOwnProperty.call(data,'teacherNotes');
       if(notesIncluded && typeof _incomingNotes!=='string') {
         throw new Error('Instructor notes must be text.');
@@ -710,11 +721,11 @@ export default async function handler(req: Request, res: Response) {
       const savedNotes=notesIncluded?String(_incomingNotes):historicalNotes;
       const privateNotesRef=ref.collection('private').doc('instructorNotes');
       const batch=ctx.db.batch();
-      batch.set(ref,{
+      const nextLesson={
         ...publicData,
         // Learner-readable Firestore records must never contain instructor-only
         // notes. A delete sentinel also cleans up an old public notes field.
-        teacherNotes:FieldValue.delete(),
+        ...(existing.exists?{teacherNotes:FieldValue.delete()}:{}),
         // Derive learner pages on the server, not from potentially forged
         // client-side page or block payloads.
         ...(structured ? {
@@ -741,7 +752,9 @@ export default async function handler(req: Request, res: Response) {
         createdAt: existing.data()?.createdAt || new Date().toISOString(),
         updatedAt: FieldValue.serverTimestamp(),
         updatedBy: ctx.auth.uid,
-      }, { merge:true });
+      };
+      if(existing.exists)batch.update(ref,nextLesson,{lastUpdateTime:existing.updateTime!});
+      else batch.create(ref,nextLesson);
       if(notesIncluded||historicalNotes){
         batch.set(privateNotesRef,{
           text:savedNotes,guideId,lessonId,

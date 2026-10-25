@@ -35,6 +35,7 @@ type GuideRecord = {
   ownerUid?: string;
   organizationId?: string;
   canEdit?: boolean;
+  expectedExisting?: boolean;
 };
 
 type GuideGroup = {
@@ -121,6 +122,7 @@ function formatDate(value?: string) {
 function makeRecord(value: Record<string, unknown>, fallbackLessons = 0): GuideRecord {
   return {
     id: valueText(value.id),
+    expectedExisting:true,
     discoverNumber: Math.max(1, Number(value.discoverNumber ?? 1) || 1),
     title: valueText(value.title),
     subtitle: valueText(value.subtitle),
@@ -372,6 +374,7 @@ export default function GuideManager({
       if(!editing.id)setEditing(previous=>previous?{...previous,id:requestedId}:previous);
       const saved = await guideAdmin('upsertGuide', {
         id: requestedId,
+        expectedExisting:editing.expectedExisting===true,
         discoverNumber: editing.discoverNumber,
         title: editing.title.trim(),
         subtitle: editing.subtitle.trim(),
@@ -396,7 +399,7 @@ export default function GuideManager({
       if(!savedId)throw new Error('Guide save did not return an ID. Reload before retrying.');
       // Persist the ID immediately: if linking fails after the guide write,
       // Save again must update the SAME guide, not create a duplicate.
-      setEditing(previous=>previous?{...previous,id:savedId}:previous);
+      setEditing(previous=>previous?{...previous,id:savedId,expectedExisting:true}:previous);
       if (editing.programId) {
         const targetProg = availablePrograms.find(p => p.id === editing.programId);
         if (!targetProg) throw new Error('Guide saved, but its programme was not found. Refresh and attach it again.');

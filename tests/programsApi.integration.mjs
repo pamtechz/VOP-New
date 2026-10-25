@@ -622,6 +622,65 @@ await db.doc('guides/'+notesGuide).set({
   language:'en',title:'Private notes guide',published:true,
   archived:false,sharingScope:'organization',canonical:true,
 });
+await test('stale curriculum edits cannot recreate deleted originals or move lessons',async t=>{
+  await t.test('a deleted programme stays deleted after an editor retry',async()=>{
+    const id='program-test-deleted-program';
+    const result=await call(author,{collection:'programs',action:'upsert',id,
+      organizationId:a,data:{expectedExisting:true,title:'Stale programme'}});
+    assert.notEqual(result.status,200);
+    assert.match(result.value.error,/removed|Reload/);
+    assert.equal((await db.doc('programs/'+id).get()).exists,false);
+  });
+  await t.test('a deleted guide stays deleted after an editor retry',async()=>{
+    const id='program-test-deleted-guide';
+    const result=await call(author,{collection:'guides',action:'upsertGuide',id,
+      organizationId:a,data:{expectedExisting:true,language:'en',title:'Stale guide'}});
+    assert.notEqual(result.status,200);
+    assert.match(result.value.error,/no longer exists/);
+    assert.equal((await db.doc('guides/'+id).get()).exists,false);
+  });
+  await t.test('a deleted lesson stays deleted and cannot acquire new private notes',async()=>{
+    const id='program-test-deleted-lesson';
+    const ref=db.doc('guides/'+notesGuide+'/lessons/'+id);
+    const result=await call(author,{collection:'curriculum',action:'upsertLesson',id,
+      organizationId:a,data:{expectedExisting:true,originalGuideId:notesGuide,
+        guideId:notesGuide,language:'en',title:'Stale lesson',teacherNotes:'Stale notes'}});
+    assert.notEqual(result.status,200);
+    assert.match(result.value.error,/original lesson is missing/);
+    assert.equal((await ref.get()).exists,false);
+    assert.equal((await ref.collection('private').doc('instructorNotes').get()).exists,false);
+  });
+  await t.test('changing the guide field cannot create a copy under another guide',async()=>{
+    const id='program-test-moved-lesson';
+    const result=await call(author,{collection:'curriculum',action:'upsertLesson',id,
+      organizationId:a,data:{originalGuideId:guideA,guideId:notesGuide,
+        language:'en',title:'Moved lesson'}});
+    assert.notEqual(result.status,200);
+    assert.match(result.value.error,/Moving a lesson by editing is not allowed/);
+    assert.equal((await db.doc('guides/'+notesGuide+'/lessons/'+id).get()).exists,false);
+  });
+  await t.test('deletion after authorization aborts the entire lesson and private-note batch',async()=>{
+    const id='program-test-delete-during-save';
+    const ref=db.doc('guides/'+notesGuide+'/lessons/'+id);
+    await ref.set({id,lessonId:id,title:'Original',organizationId:a,
+      ownerOrganizationId:a,ownerTenantId:a,ownerUid:author.uid});
+    const originalBatch=db.batch;
+    db.batch=function(){
+      const batch=originalBatch.call(this);
+      const commit=batch.commit.bind(batch);
+      batch.commit=async()=>{await ref.delete();return commit();};
+      return batch;
+    };
+    try{
+      const result=await call(author,{collection:'curriculum',action:'upsertLesson',id,
+        organizationId:a,data:{expectedExisting:true,originalGuideId:notesGuide,
+          guideId:notesGuide,language:'en',title:'Stale replacement',teacherNotes:'Private text'}});
+      assert.notEqual(result.status,200);
+      assert.equal((await ref.get()).exists,false);
+      assert.equal((await ref.collection('private').doc('instructorNotes').get()).exists,false);
+    }finally{db.batch=originalBatch;}
+  });
+});
 await test('teacher notes are private and transferred atomically from legacy lessons',async t=>{
   const lessonId='program-test-study-lesson';
   const privatePath='guides/'+notesGuide+'/lessons/'+lessonId+'/private/instructorNotes';

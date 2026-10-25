@@ -93,6 +93,8 @@ class _CurriculumLessonEditorState extends State<CurriculumLessonEditorScreen>{
           ...payload,'id':stableLessonId,
           'data':{
             ...data,'lessonId':stableLessonId,
+            if(lesson!=null)'expectedExisting':true,
+            if(lesson!=null)'originalGuideId':widget.guide['id'],
             'guideId':widget.guide['id'],'language':widget.guide['language'],
             'type':'Lesson',
             'published':lesson?['published']==true,

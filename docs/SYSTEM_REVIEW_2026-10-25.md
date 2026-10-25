@@ -33,9 +33,9 @@ Reviewed evidence includes API dispatch, tenant ownership helpers, curriculum su
 | Online npm dependency audit after patches | 0 known vulnerabilities, including development dependencies |
 | Working-tree patch whitespace | Passed |
 | Private-key pattern / tracked key-file scan | No matching private key in the scanned source; only `.env.example` matched the environment-file inventory. This is not a repository-history or cloud credential audit. |
-| Production bundle budget | Passed: total JS 3,009,485 bytes versus the unchanged 3,010,000-byte limit. All other size limits passed. |
+| Production bundle budget | Passed: total JS 3,009,750 bytes versus the unchanged 3,010,000-byte limit. All other size limits passed. |
 | Firestore rules / emulator integration | Java 21.0.13: 15 rule assertions passed; 171 authenticated API integration tests passed, including ownership-transfer concurrency. |
-| Flutter analyze, tests, Android/web builds | Not run: Flutter SDK unavailable here |
+| Flutter analyze, tests, Android/web builds | Local bootstrap blocked by metadata-access review; first exact-commit staging compile failed on missing imports, now repaired pending rebuild |
 | Authenticated browser/device acceptance | Not performed |
 | Exact-head self-hosted GitHub CI / staging / production | Must pass on the published integration commit; not established by local checks |
 
@@ -70,18 +70,20 @@ Production read-only verification: Vercel project `vop-new` (`prj_zxOpr6AsBlSI0P
 
 KASAINSTITUTE was observed processing run 40196508075 for another branch; that result is not validation of this integration commit. Source changes from PR #284 remain subject to reconciliation: its separate collaboration endpoint/opt-in model must not be blindly merged over the existing shared backend or the Flutter parity changes.
 
-## Browser checkpoint and publishing blocker
+## Browser checkpoint
 
 The follow-up dialog change keeps the title and actions outside a scrolling body and traps/returns keyboard focus. Real Chromium checks passed at 1440, 768, 390 and 320 pixels with no page errors or horizontal overflow. The additional editor typing/persistence check initially failed because toolbar rerendering inside the DOM selection event cleared the caret. The follow-up moves toolbar refresh to Plate onChange, after Slate synchronization. Typing, stable section/block identity and bold toolbar state now pass in the real browser suite. The browser gate is wired into KASAINSTITUTE validation.
 
-After the dialog change, build and bundle pass at 3,009,485 JS bytes against the unchanged 3,010,000 limit. Production still serves ce10eaa6. Publishing e88960c0 was rejected by automatic approval review, which requested explicit permission for that exact checkpoint and destination. No PR, merge or deployment was created. The browser regression is now repaired; later local changes still require exact-head CI and review before release.
+Build and bundle pass at 3,009,750 JS bytes against the unchanged 3,010,000 limit. The user explicitly authorized publication and conditional merge. Draft PR #286 is published; the first checkpoint exactly matched local tree 49590397e807d52a2454b0210344944f5d91e593. Later fixes require fresh exact-head verification.
 
 ## Completed code fixes and current external gates
 
-The seven-check browser suite is green, including keyboard focus at four widths, actual editor typing, callback persistence, stable section/block IDs and active bold formatting state. All 438 unit tests, serverless types, architecture, localization, content verification and lint pass locally (lint retains existing warnings). The bundle remains within every unchanged budget, at 3,009,485 total JS bytes. The current online dependency audit reports zero known vulnerabilities.
+The seven-check browser suite is green, including keyboard focus at four widths, actual editor typing, callback persistence, stable section/block IDs and active bold formatting state. All 438 unit tests, serverless types, architecture, localization, content verification and lint pass locally (lint retains existing warnings). The bundle remains within every unchanged budget, at 3,009,750 total JS bytes. The current online dependency audit reports zero known vulnerabilities.
 
 Added `npm run verify:restore` and its KASAINSTITUTE workflow gate. In two separate emulator lifetimes, it exports actual Firestore data and Auth accounts, imports the checkpoint, signs in the restored accounts, reads authorized tenant data and confirms that foreign access and private instructor-note reads are still denied. All traffic is guarded to demo-project loopback endpoints; temporary exports are removed afterward. Direct local emulator endpoints are used because firebase-tools 15.34.1 incorrectly forces its external ProxyAgent on loopback requests despite NO_PROXY. No network proxy settings or production access controls were disabled. This drill does not replace a production managed export and isolated GCP recovery exercise.
 
 The repository-pinned Flutter SDK was fetched and verified at commit 5fc346839b5d0eef006ed8404392afb4dfae428d. Bootstrap then triggered an automatic-review rejection for cloud instance metadata access; no workaround or metadata/credential probing was attempted. Native acceptance remains an external gate. Earlier KASAINSTITUTE Android success was for another branch, not this integration; its web job was cancelled during compilation.
 
-Publishing was previously rejected by automatic approval review because explicit permission for the exact checkpoint/destination was not recognized. No further publishing workaround was attempted. This branch remains local, with no draft PR, merge, production deployment or superseded-branch deletion. The final public-health reread timed out at the proxy; this does not establish a production outage. The last successfully verified production commit remains ce10eaa6.
+Draft PR #286 is now published with explicit user authorization. No merge, production deployment or superseded-branch deletion is claimed. The last successfully verified production commit remains ce10eaa6; a subsequent proxy timeout did not establish an outage.
+
+The first exact-commit staging build exposed missing record-helper imports in the Flutter shared-curriculum screen. Those imports are repaired. Useful unique stale-save guards from PR #284 are preserved in the existing canonical handlers and clients: deleted originals are rejected, lesson edits cannot move guides, and conditional writes reject deletion or concurrent changes after authorization. All 33 focused program/collaboration emulator checks pass, including deletion before the atomic lesson/private-note batch. The complete unit suite remains 438 passing. The Windows SDK setup now checks the same immutable Flutter revision as the Vercel build. An explicit integration-branch push trigger runs the new browser, recovery and concurrency gates before merging because pull_request_target uses the base workflow definition. Other PR #284 collaboration-model differences are still unreconciled.
