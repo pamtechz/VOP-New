@@ -19,13 +19,18 @@ class _PlateDocumentEditorState extends State<PlateDocumentEditor>{
   void changed(){setState((){});emit();}
   String id()=>DateTime.now().microsecondsSinceEpoch.toRadixString(36)+'-'+(++sequence).toString();
   Map<String,dynamic> block(String type){
+    // Links are inline children of a paragraph in the shared Plate schema.
+    // A top-level "a" node is rejected by normalizeStudyPlateDocument.
+    if(type=='link')return {'type':'p','id':id(),'children':[
+      {'type':'a','url':'','children':[{'text':'Link text'}]},
+    ]};
     if(type=='table')return {'type':'table','id':id(),'children':List.generate(2,(_)=>{'type':'tr','children':List.generate(2,(_)=>{'type':'td','children':[{'type':'p','children':[{'text':''}]}]})})};
     if(type=='ul'||type=='ol')return {'type':type,'id':id(),'children':[{'type':'li','children':[{'type':'lic','children':[{'text':''}]}]}]};
     return {'type':type,'id':id(),'children':[{'text':''}]};
   }
   Future<void> add()async{
     final type=await showModalBottomSheet<String>(context:context,builder:(ctx)=>SafeArea(child:ListView(shrinkWrap:true,children:[
-      for(final entry in {'p':'Paragraph','h1':'Heading 1','h2':'Heading 2','h3':'Heading 3','blockquote':'Quotation','callout':'Callout','ul':'Bullet list','ol':'Numbered list','table':'Table','img':'Image','video':'Video','audio':'Audio','code_block':'Code block','a':'Link'}.entries)
+      for(final entry in {'p':'Paragraph','h1':'Heading 1','h2':'Heading 2','h3':'Heading 3','blockquote':'Quotation','callout':'Callout','ul':'Bullet list','ol':'Numbered list','table':'Table','img':'Image','video':'Video','audio':'Audio','code_block':'Code block','link':'Link'}.entries)
         ListTile(title:Text(entry.value),onTap:()=>Navigator.pop(ctx,entry.key))])));
     if(type!=null){nodes.add(block(type));changed();}
   }

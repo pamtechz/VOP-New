@@ -113,3 +113,12 @@ test('Flutter Android and Classic web lesson authoring uses responsive Legacy-sc
   assert.match(plate,/jsonDecode\(jsonEncode\(nodes\)\)/);
   assert.match(plate,/int sequence=0/);
 });
+
+test('Flutter links are inserted inside a content paragraph, never as invalid top-level nodes',()=>{
+  const plate=read('native_android/lib/widgets/plate_document_editor.dart');
+  const normalizer=read('shared/studyPlateDocument.ts');
+  assert.ok(plate.includes("if(type=='link')return {'type':'p'"));
+  assert.ok(plate.includes("'type':'a','url':''"));
+  assert.ok(plate.includes("'link':'Link'}.entries"));
+  assert.ok(normalizer.includes("if(top&&['li','lic','a','tr','th','td'].includes(type))"));
+});
