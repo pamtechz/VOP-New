@@ -156,6 +156,8 @@ export async function handleCurriculumPrograms(ctx:TenantContext,
     throw new Error('Unsupported program action.');
   const raw=body.data&&typeof body.data==='object'&&!Array.isArray(body.data)
     ?body.data as Record<string,unknown>:{};
+  if(body.id&&raw.id&&String(body.id)!==String(raw.id))
+    throw new Error('Programme identity changed during editing. Reload the original programme.');
   const id=action==='upsert'&&!body.id&&!raw.id
     ?'program-'+randomUUID().replace(/-/g,'')
     :validId(body.id||raw.id);
