@@ -23,12 +23,13 @@ function subject(uid: string, organizationId = 'church-one', membershipRole = 'a
 }
 const contribution = {ownerTenantId:'church-one',ownerOrganizationId:'church-one',organizationId:'church-one',ownerUid:'author'};
 
-test('peer administrators cannot edit another author\'s contribution',async()=>{
+test('owning organization administrators can steward own content, never foreign shared content',async()=>{
   const {canEditCanonicalContent}=await tenantModule;
   assert.equal(canEditCanonicalContent(subject('author'),contribution),true);
-  assert.equal(canEditCanonicalContent(subject('peer'),contribution),false);
+  assert.equal(canEditCanonicalContent(subject('peer'),contribution),true);
+  assert.equal(canEditCanonicalContent(subject('peer','church-two'),{...contribution,sharingScope:'shared'}),false);
   assert.equal(canEditCanonicalContent(subject('author','church-two'),contribution),false);
-  assert.equal(canEditCanonicalContent(subject('author'),{...contribution,ownerUid:''}),false);
+  assert.equal(canEditCanonicalContent(subject('author'),{...contribution,ownerUid:''}),true);
 });
 test('teacher may edit only own authored content when tenant matches',async()=>{
   const {canEditCanonicalContent}=await tenantModule;
