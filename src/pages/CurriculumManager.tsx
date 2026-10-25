@@ -18,6 +18,7 @@ import { resolveMediaSource } from '../../shared/mediaSources';
 import { normalizeCurriculumStructure, curriculumPages, type CurriculumChapter } from '../../shared/curriculumStructure';
 import { newChapter } from '../components/admin/StructuredLessonEditor';
 import { PlateCurriculumAuthoringReview } from '../components/admin/PlateCurriculumAuthoringReview';
+import { SharedCurriculumControls } from '../components/admin/SharedCurriculumControls';
 import { StudyPlateContent } from '../components/reader/StudyPlateContent';
 import './curriculum-structure.css';
 import { AppAlertDialog, appConfirm } from '../components/layout/AppDialog';
@@ -1622,6 +1623,8 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
         </div>
       </div>
 
+      {!isSuperAdmin && currentUser?.organizationId &&
+        <SharedCurriculumControls organizationId={String(currentUser.organizationId)} />}
       {(isSuperAdmin || isHierarchyAdmin) && <div className="vop-content-scope-bar">
         <div><strong>{tx('curriculum.publishingScope', 'Publishing scope')}</strong><span>{isSuperAdmin ? 'Super Admin can publish system-wide or target an organisation.' : 'You can only target organisations within your authorized hierarchy.'}</span></div>
         <label><span>{tx('curriculum.organisationTarget', 'Organisation target')}</span><select value={scopeOrganizationId} onChange={e=>setScopeOrganizationId(e.target.value)} disabled={organizationLoading}>
