@@ -4,6 +4,7 @@ import {readFileSync} from 'node:fs';
 
 const read=(path:string)=>readFileSync(path,'utf8');
 const studio=read('native_android/lib/screens/curriculum_studio_screen.dart');
+const shared=read('native_android/lib/screens/shared_curriculum_screen.dart');
 const lessons=read('native_android/lib/screens/curriculum_lesson_editor_screen.dart');
 const api=read('native_android/lib/core/vop_api.dart');
 const navigation=read('native_android/lib/screens/workspace_navigation.dart');
@@ -71,4 +72,18 @@ test('Assessments stay in the protected quiz library, not the learner-readable l
   assert.match(server,/questions',label:'Questions'/);
   assert.match(api,/collection == 'quizzes' \? action\('\/api\/quizzes'/);
   assert.doesNotMatch(lessons,/'questions':data\['questions'\]/);
+});
+
+test('Flutter web and Android provide the same shared curriculum collaboration workflow',()=>{
+  assert.match(studio,/SharedCurriculumScreen\(/);
+  assert.match(shared,/adminContent\('curriculum',action:action,payload:payload\)/);
+  for(const action of ['getSharedVisibility','setSharedVisibility','proposeEdit',
+    'listSuggestedEdits','reviewSuggestedEdit']) {
+    assert.ok(shared.includes("'"+action+"'"),action);
+  }
+  assert.match(shared,/_guideRequest/);
+  assert.match(shared,/request==_guideRequest/);
+  assert.match(shared,/nextCursor/);
+  assert.match(shared,/loadMore\(\)async/);
+  assert.match(shared,/SingleChildScrollView\(/);
 });
