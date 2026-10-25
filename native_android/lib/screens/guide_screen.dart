@@ -150,9 +150,60 @@ class _GuideScreenState extends State<GuideScreen> {
         final title='${details['title']??'Study guide'}';
         final rawLang='${details['language']??''}'.trim().toLowerCase();
         final language=rawLang.isNotEmpty&&rawLang!='null'?rawLang:'en';
-        return RefreshIndicator(
-          onRefresh:()async{setState(reload);await guide;},
-          child:ListView(padding:const EdgeInsets.all(16),children:[
+        return LayoutBuilder(builder:(context,layout){
+          final desktop=layout.maxWidth>=1100;
+          final scheme=Theme.of(context).colorScheme;
+          return Row(children:[
+            if(desktop) SizedBox(width:290,child:Material(
+              color:scheme.surface,
+              child:ListView(padding:const EdgeInsets.all(20),children:[
+                Text('STUDY GUIDE',style:Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color:scheme.primary,letterSpacing:1.2,fontWeight:FontWeight.w900)),
+                const SizedBox(height:12),
+                Text(title,style:Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight:FontWeight.w900)),
+                const SizedBox(height:8),
+                Text((details['description']??'').toString(),maxLines:6,
+                  overflow:TextOverflow.ellipsis),
+                const SizedBox(height:14),
+                Wrap(spacing:8,runSpacing:7,children:[
+                  Chip(label:Text(language.toUpperCase())),
+                  Chip(label:Text('${studyLessons.length} lessons')),
+                  if(data['offline']==true)const Chip(
+                    avatar:Icon(Icons.offline_bolt_outlined,size:15),
+                    label:Text('Offline')),
+                ]),
+                const Divider(height:27),
+                Text('Your study journey',
+                  style:Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight:FontWeight.w800)),
+                const SizedBox(height:12),
+                LinearProgressIndicator(
+                  value:studyLessons.isEmpty?0:
+                    studyLessons.where((lesson)=>lesson['completed']==true).length/studyLessons.length,
+                  minHeight:7,
+                  borderRadius:BorderRadius.circular(999)),
+                const SizedBox(height:8),
+                Text('${studyLessons.where((lesson)=>lesson['completed']==true).length} of ${studyLessons.length} lessons completed'),
+                const SizedBox(height:18),
+                OutlinedButton.icon(
+                  onPressed:askForHelp,
+                  icon:const Icon(Icons.support_agent_outlined),
+                  label:const Text('Ask a mentor')),
+                if(!kIsWeb) Padding(
+                  padding:const EdgeInsets.only(top:8),
+                  child:OutlinedButton.icon(
+                    onPressed:downloading?null:download,
+                    icon:const Icon(Icons.download_for_offline_outlined),
+                    label:const Text('Save for offline study'))),
+              ]),
+            )),
+            if(desktop) const VerticalDivider(width:1),
+            Expanded(child:Center(child:ConstrainedBox(
+              constraints:BoxConstraints(maxWidth:desktop?1150:double.infinity),
+              child:RefreshIndicator(
+                onRefresh:()async{setState(reload);await guide;},
+                child:ListView(padding:const EdgeInsets.all(16),children:[
             Text(title,style:Theme.of(context).textTheme.headlineSmall?.copyWith(
               fontWeight:FontWeight.w800)),
             const SizedBox(height:9),
@@ -379,7 +430,9 @@ class _GuideScreenState extends State<GuideScreen> {
               }),
             ],
           ]),
-        );
+        )))),
+          ]);
+        });
       },
     ),
   );

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../core/vop_api.dart';
 import '../widgets/vop_ui.dart';
+import '../widgets/vop_desktop_layout.dart';
 import '../widgets/plate_document_editor.dart';
 import '../widgets/certificate_layout_editor.dart';
 import 'curriculum_lesson_editor_screen.dart';
@@ -21,7 +22,7 @@ class WorkspaceRecordsScreen extends StatefulWidget {
 class _WorkspaceRecordsState extends State<WorkspaceRecordsScreen>{
   late Future<List<Map<String,dynamic>>> future;
   String search='';
-  bool table=false;
+  bool? tableOverride;
   Map<String,dynamic> get scope=>{if(widget.organizationId?.isNotEmpty==true)'organizationId':widget.organizationId};
   @override void initState(){super.initState();reload();}
   void reload(){future=Future.wait([widget.api.workspace(),widget.api.recordList(widget.collection,payload:scope)]);}
@@ -56,27 +57,28 @@ class _WorkspaceRecordsState extends State<WorkspaceRecordsScreen>{
     final title=(schema['title']??'Workspace').toString();
     final records=recordRows(s.data?.last['items']);
     final filtered=records.where((v)=>search.isEmpty||recordTitle(v).toLowerCase().contains(search)).toList();
+    final useTable=tableOverride ?? VopDesktopWorkspaceFrame.isDesktop(context);
     return Scaffold(appBar:AppBar(title:Text(title),actions:[
-      IconButton(tooltip:table?'Show cards':'Show table',onPressed:()=>setState(()=>table=!table),icon:Icon(table?Icons.view_agenda_outlined:Icons.table_rows_outlined)),
+      IconButton(tooltip:useTable?'Show cards':'Show table',onPressed:()=>setState(()=>tableOverride=!useTable),icon:Icon(useTable?Icons.view_agenda_outlined:Icons.table_rows_outlined)),
       IconButton(tooltip:'Refresh',onPressed:()=>setState(reload),icon:const Icon(Icons.refresh))]),
       floatingActionButton:schema.isNotEmpty&&(actions.contains('create')||(schema['singleton']==true&&actions.contains('update')))
         ?FloatingActionButton.extended(onPressed:()=>edit(schema,workspace,schema['singleton']==true&&records.isNotEmpty?records.first:null),
           icon:Icon(schema['singleton']==true?Icons.edit:Icons.add),label:Text(schema['singleton']==true?'Edit settings':'Add')):null,
-      body:s.connectionState!=ConnectionState.done?const VopSkeleton():s.hasError?
+      body:VopDesktopWorkspaceFrame(api:widget.api,child:s.connectionState!=ConnectionState.done?const VopSkeleton():s.hasError?
         VopEmpty(icon:Icons.error_outline,message:'${s.error}',onRetry:()=>setState(reload)):
         schema.isEmpty?const VopEmpty(icon:Icons.lock_outline,message:'This workspace is not available to your account.'):
         Column(children:[Padding(padding:const EdgeInsets.all(16),child:TextField(
           decoration:const InputDecoration(labelText:'Search',prefixIcon:Icon(Icons.search)),onChanged:(v)=>setState(()=>search=v.trim().toLowerCase()))),
           Expanded(child:filtered.isEmpty?const VopEmpty(icon:Icons.inbox_outlined,message:'No records found.'):
-            table?SingleChildScrollView(scrollDirection:Axis.horizontal,child:SingleChildScrollView(child:DataTable(columns:const[
+            useTable?SingleChildScrollView(scrollDirection:Axis.horizontal,child:SingleChildScrollView(child:DataTable(columns:const[
               DataColumn(label:Text('Name')),DataColumn(label:Text('Status')),DataColumn(label:Text('Actions'))],
-              rows:filtered.map((item)=>DataRow(cells:[DataCell(SizedBox(width:260,child:Text(recordTitle(item)))),
+              rows:filtered.map((item)=>DataRow(cells:[DataCell(SizedBox(width:260,child:Text(recordTitle(item))),onTap:()=>_details(item,schema,workspace,actions)),
                 DataCell(Text(item['published']==true?'Published':item['published']==false?'Draft':'${item['status']??''}')),
                 DataCell(_actions(item,schema,workspace,actions))])).toList()))):
             ListView.separated(padding:const EdgeInsets.fromLTRB(16,0,16,96),itemCount:filtered.length,
               separatorBuilder:(_,__)=>const Divider(),itemBuilder:(_,i){final item=filtered[i];return ListTile(
                 title:Text(recordTitle(item)),subtitle:Text('${item['description']??item['subtitle']??item['language']??''}',maxLines:2,overflow:TextOverflow.ellipsis),
-                trailing:_actions(item,schema,workspace,actions),onTap:()=>_details(item,schema,workspace,actions));}))]));
+                trailing:_actions(item,schema,workspace,actions),onTap:()=>_details(item,schema,workspace,actions));}))])));
   });
   Widget _actions(Map<String,dynamic> item,Map<String,dynamic> schema,Map<String,dynamic> workspace,Set<String> actions)=>Wrap(children:[
     if(widget.collection=='guides')IconButton(tooltip:'Manage lessons',icon:const Icon(Icons.menu_book_outlined),onPressed:()=>Navigator.push(context,MaterialPageRoute<void>(builder:(_)=>CurriculumLessonEditorScreen(api:widget.api,guide:item,workspace:workspace)))),
