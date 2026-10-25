@@ -1,4 +1,4 @@
-import React,{useEffect,useMemo,useState} from 'react';
+import React,{useEffect,useMemo,useRef,useState} from 'react';
 import {Archive,ArrowDown,ArrowLeft,ArrowUp,BookOpen,Check,ChevronRight,
   Edit3,FolderOpen,Globe2,LoaderCircle,Plus,RefreshCw,Save,Search,ShieldCheck,Trash2,X} from 'lucide-react';
 import {auth} from '../lib/firebase';
@@ -53,6 +53,8 @@ export default function ProgramManager({
   const [programs,setPrograms]=useState<Program[]>([]);
   const [loading,setLoading]=useState(true);
   const [saving,setSaving]=useState(false);
+  const savingLock=useRef(false);
+  const pendingCanonicalId=useRef('');
   const [error,setError]=useState('');
   const [notice,setNotice]=useState('');
   const [query,setQuery]=useState('');
@@ -88,20 +90,22 @@ export default function ProgramManager({
   },[programs,query,showArchived,guides]);
   const selected=programs.find(item=>item.id===selectedId);
   const save=async()=>{
-    if(!editing||saving)return;
+    if(!editing||saving||savingLock.current)return;
+    savingLock.current=true;
     setSaving(true);setError('');setNotice('');
     try{
       // Reserve a stable identity before contacting the server: a lost save
       // acknowledgement must not turn the next click into a new programme.
-      const id=editing.id||'program-'+crypto.randomUUID().replace(/-/g,'');
+      const id=editing.id||pendingCanonicalId.current||'program-'+crypto.randomUUID().replace(/-/g,'');
+      pendingCanonicalId.current=id;
       if(!editing.id)setEditing(previous=>previous?{...previous,id}:previous);
       const result=await programApi('upsert',organizationId,id,{...editing,id});
       if(result.item?.id!==id)throw new Error('Programme identity mismatch. Reload before making another change.');
       await load();
       if(id)setSelectedId(id);
-      setEditing(null);setNotice('Program saved. Published guides remain in their original organization.');
+      pendingCanonicalId.current='';setEditing(null);setNotice('Program saved. Published guides remain in their original organization.');
     }catch(reason){setError(reason instanceof Error?reason.message:'Program save failed.');}
-    finally{setSaving(false);}
+    finally{savingLock.current=false;setSaving(false);}
   };
   const archive=async(program:Program)=>{
     if(!program.canEdit||saving||
@@ -151,6 +155,7 @@ export default function ProgramManager({
   };
   const startEdit=(program:Program)=>()=>{
     if(!program.canEdit)return;
+    pendingCanonicalId.current='';
     setSelectedId(program.id);
     setGuideQuery('');
     setEditing({
