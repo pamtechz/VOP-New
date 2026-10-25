@@ -1,6 +1,7 @@
 import {randomUUID} from 'node:crypto';
 import {FieldValue} from 'firebase-admin/firestore';
 import {normalizeProgramDraft} from '../shared/programModel.js';
+import {loadSharedVisibility,sharedItemVisible} from './sharedCurriculumVisibility.js';
 import {assertMutableTenantResource,platformStewardedResource} from '../shared/platformStewardship.js';
 import {canEditCanonicalContent,canManageOrganizationContent,
   accessibleOrganizationIds,billingTenantFromContext,enforceBillingTenantQuota,enforceOrganizationQuota,organizationInHierarchyScope,tenantOwnerKey,writeTenantAudit,
@@ -42,13 +43,15 @@ export async function handleCurriculumPrograms(ctx:TenantContext,
           ctx.db.collection('programs').where('sharingScope','==','shared')
             .where('published','==',true).get(),
         ]);
+    const hidden=await loadSharedVisibility(ctx.db,ctx.organizationId);
     const known=new Map<string,Record<string,unknown>>();
     for(const snapshot of snapshots)for(const document of snapshot.docs){
       const data=document.data();
       const orgId=String(data.organizationId||'').trim();
       const owned=ctx.isSuperAdmin||ids.includes(orgId);
       const shared=data.sharingScope==='shared';
-      if(data.archived===true||data.published!==true||(!owned&&!shared))continue;
+      if(data.archived===true||data.published!==true||(!owned&&!shared) ||
+          !sharedItemVisible(hidden,'programs',document.id,orgId,ctx.organizationId))continue;
       const title=String(data.title||'').trim();
       if(!title)continue;
       known.set(document.id,{

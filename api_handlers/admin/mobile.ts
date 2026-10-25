@@ -7,6 +7,7 @@ import {curriculumPages,containsPublicQuizAnswer} from '../../shared/curriculumS
 import {normalizeStudyPlateDocument} from '../../shared/studyPlateDocument.js';
 import {isSafeHttpsMediaUrl} from '../../shared/mediaSources.js';
 import {mobileWorkspace,mobileAppInfo} from '../../server/mobileWorkspace.js';
+import {loadSharedVisibility,sharedItemVisible} from '../../server/sharedCurriculumVisibility.js';
 import type {QueryDocumentSnapshot,DocumentData} from 'firebase-admin/firestore';
 
 type Request={method?:string;query?:Record<string,string|string[]|undefined>;headers?:Record<string,string|string[]|undefined>};
@@ -128,13 +129,21 @@ export default async function mobile(req:Request,res:Response){
   res.setHeader?.('X-Content-Type-Options','nosniff');
   if(req.method!=='GET')return res.status(405).json({ok:false,code:'METHOD_NOT_ALLOWED',error:'Use GET for read-only mobile endpoints.'});
   const resource=param(req,'resource');
-  if(!['bootstrap','workspace','catalog','program','guide','lesson','progress','announcements','resources','events','radio','languages'].includes(resource))
+  if(!['bootstrap','workspace','catalog','program','guide','lesson','progress','announcements','resources','events','radio','languages','sharedVisibility'].includes(resource))
     return res.status(404).json({ok:false,code:'NOT_FOUND',error:'Unknown mobile API resource.'});
   try{
     const ctx=await authenticateTenant(req,undefined,true);
     const scope={organizationId:ctx.organizationId,isSuperAdmin:ctx.isSuperAdmin};
     const db=ctx.db;
+    const visibility=['catalog','program','guide','lesson','sharedVisibility'].includes(resource)
+      ?await loadSharedVisibility(db,ctx.organizationId)
+      :{hiddenPrograms:[],hiddenGuides:[],hiddenLessons:[]};
+    const show=(kind:'programs'|'guides'|'lessons',id:string,data:Raw,guideId='')=>
+      ctx.isSuperAdmin||sharedItemVisible(visibility,kind,kind==='lessons'?guideId+':'+id:id,
+        string(data.ownerOrganizationId||data.organizationId),ctx.organizationId);
     const uid=ctx.auth.uid;
+    if(resource==='sharedVisibility')
+      return res.status(200).json({ok:true,selection:visibility});
     if(resource==='workspace')return res.status(200).json(await mobileWorkspace(ctx));
     if(resource==='bootstrap'){
       const organization=scope.organizationId?await db.doc('organizations/'+scope.organizationId).get():null;
@@ -194,9 +203,9 @@ export default async function mobile(req:Request,res:Response){
         Promise.all(tasks),Promise.all(programTasks),
       ]);
       const guides=unique(guideSets.map(set=>set.docs))
-        .filter(doc=>hasAccess(doc.data(),scope)).map(doc=>plainGuide(doc.id,doc.data()));
+        .filter(doc=>hasAccess(doc.data(),scope)&&show('guides',doc.id,doc.data())).map(doc=>plainGuide(doc.id,doc.data()));
       const programs=unique(programSets.map(set=>set.docs))
-        .filter(doc=>hasAccess(doc.data(),scope)).map(doc=>plainProgram(doc.id,doc.data()));
+        .filter(doc=>hasAccess(doc.data(),scope)&&show('programs',doc.id,doc.data())).map(doc=>plainProgram(doc.id,doc.data()));
       // The catalogue queries are bounded; a programme may reference an
       // authorized guide beyond those query limits. Resolve its canonical IDs
       // explicitly, then apply the SAME publication and tenancy checks before
@@ -208,7 +217,7 @@ export default async function mobile(req:Request,res:Response){
         const extra=await db.getAll(...missingIds.slice(offset,offset+25)
           .map(id=>db.doc('guides/'+id)));
         for(const doc of extra){
-          if(!doc.exists||!hasAccess(doc.data()||{},scope)||knownGuideIds.has(doc.id))continue;
+          if(!doc.exists||!hasAccess(doc.data()||{},scope)||!show('guides',doc.id,doc.data()||{})||knownGuideIds.has(doc.id))continue;
           guides.push(plainGuide(doc.id,doc.data()||{}));
           knownGuideIds.add(doc.id);
         }
@@ -223,7 +232,7 @@ export default async function mobile(req:Request,res:Response){
     if(resource==='program'){
       const programId=cleanId(param(req,'programId'));
       const snap=await db.doc('programs/'+programId).get();
-      if(!snap.exists||!hasAccess(snap.data()||{},scope))
+      if(!snap.exists||!hasAccess(snap.data()||{},scope)||!show('programs',snap.id,snap.data()||{}))
         return res.status(404).json({ok:false,code:'NOT_FOUND',
           error:'Published programme not found or not available.'});
       const program=plainProgram(snap.id,snap.data()||{});
@@ -234,7 +243,7 @@ export default async function mobile(req:Request,res:Response){
         const ids=program.guideIds.slice(offset,offset+25);
         const documents=await db.getAll(...ids.map(id=>db.doc('guides/'+id)));
         for(const document of documents){
-          if(!document.exists||!hasAccess(document.data()||{},scope))continue;
+          if(!document.exists||!hasAccess(document.data()||{},scope)||!show('guides',document.id,document.data()||{}))continue;
           guides.push(plainGuide(document.id,document.data()||{}));
         }
       }
@@ -307,13 +316,14 @@ export default async function mobile(req:Request,res:Response){
     }
     const guideId=cleanId(param(req,'guideId'));
     const guideSnap=await db.doc('guides/'+guideId).get();
-    if(!guideSnap.exists||!hasAccess(guideSnap.data()||{},scope))
+    if(!guideSnap.exists||!hasAccess(guideSnap.data()||{},scope)||!show('guides',guideId,guideSnap.data()||{}))
       return res.status(404).json({ok:false,code:'NOT_FOUND',error:'Published course not found or not available.'});
     const guide=guideSnap.data()||{};
     const snapLessons=await guideSnap.ref.collection('lessons')
       .where('published','==',true).limit(120).get();
     const lessons=snapLessons.docs.filter(doc=>hasAccess(
-      doc.data(),scope,string(guide.organizationId||guide.ownerOrganizationId)))
+      doc.data(),scope,string(guide.organizationId||guide.ownerOrganizationId))&&
+      show('lessons',doc.id,doc.data(),guideId))
       .map(doc=>plainLesson(doc.id,doc.data()))
       .sort((a,b)=>a.lessonNumber.localeCompare(b.lessonNumber,undefined,{numeric:true}));
     const progress=ctx.profile.progress&&typeof ctx.profile.progress==='object'

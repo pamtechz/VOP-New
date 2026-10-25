@@ -16,6 +16,7 @@ import { configuredPassThreshold } from '../../shared/studyValidation.js';
 import { normalizeCurriculumStructure, curriculumPages, containsPublicQuizAnswer } from '../../shared/curriculumStructure.js';
 import { transferCurriculumNode } from '../../shared/curriculumTransfer.js';
 import { handleCurriculumPrograms } from '../../server/programManager.js';
+import { handleSharedCurriculumAction } from '../../server/sharedCurriculumActions.js';
 import { adoptOrganizationLanguage } from '../../server/tenantLanguageAdoption.js';
 import { translationKey } from '../../server/localization.js';
 
@@ -48,7 +49,7 @@ const SUBSCRIPTION_FEATURE_BY_COLLECTION:Partial<Record<string,SubscriptionFeatu
   certificates:'certification',
   graduationRequests:'certification',
 };
-const NON_EXPANSIVE_CONTENT_ACTIONS=new Set(['list','learnerList','listGuides','listGuideLessons','delete','archiveGuide']);
+const NON_EXPANSIVE_CONTENT_ACTIONS=new Set(['list','learnerList','listGuides','listGuideLessons','delete','archiveGuide','getSharedVisibility','setSharedVisibility','proposeEdit','listEditProposals','reviewEditProposal']);
 function quotaKeyForCollection(collection:string){
   return collection==='announcements'?'maxAnnouncements'
     :collection==='events'?'maxEvents'
@@ -174,6 +175,10 @@ export default async function handler(req: Request, res: Response) {
       }
     }
 
+    if (['getSharedVisibility','setSharedVisibility','proposeEdit',
+         'listEditProposals','reviewEditProposal'].includes(action)) {
+      return await handleSharedCurriculumAction(ctx,action,collection,body,res);
+    }
     if(collection==='programs'){
       return await handleCurriculumPrograms(ctx,action,body,effectiveOrganizationId,res);
     }
@@ -210,12 +215,16 @@ export default async function handler(req: Request, res: Response) {
       });
       const items = await Promise.all(visibleLessons.map(async doc => {
         const row = doc.data();
-        const canEdit = ctx.isSuperAdmin || (String(row.ownerUid || '') === ctx.auth.uid && !platformStewardedResource(row));
+        const canEdit = ctx.isSuperAdmin || (canEditCanonicalContent(ctx,row) && !platformStewardedResource(row));
         if (!canEdit) return {
           id:doc.id, guideId:selectedGuideId, title:String(row.title || ''),
           lessonNumber:String(row.lessonNumber || ''), type:row.type === 'Test' ? 'Test' : 'Lesson',
           language:String(row.language || guide.data()?.language || ''), published:row.published === true,
           archived:row.archived === true, estimatedMinutes:Number(row.estimatedMinutes || 15),
+          description:String(row.description||'').slice(0,5000),
+          sharingScope:row.sharingScope==='shared'?'shared':'organization',
+          ownerOrganizationId:String(row.ownerOrganizationId||row.organizationId||ownerOrganizationId),
+          organizationId:String(row.organizationId||ownerOrganizationId),
           canEdit:false,
         };
         // Private quiz-bank answers never enter curriculum selector responses.
