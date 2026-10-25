@@ -28,6 +28,52 @@ export async function curriculumCollaborationApi(action:string,data:Record<strin
   return result;
 }
 
+export function SuggestCurriculumEditAction({target}: {target:SuggestTarget}){
+  const [open,setOpen]=useState(false);
+  const [title,setTitle]=useState(target.title);
+  const [description,setDescription]=useState(target.description||'');
+  const [reason,setReason]=useState('');
+  const [busy,setBusy]=useState(false);
+  const [error,setError]=useState('');
+  const [success,setSuccess]=useState('');
+  const submit=async()=>{
+    const changes:Record<string,string>={};
+    if(title.trim()!==target.title)changes.title=title.trim();
+    if(description.trim()!==(target.description||''))changes.description=description.trim();
+    if(!reason.trim()||!Object.keys(changes).length){
+      setError('Explain your correction and change the title or description.');return;
+    }
+    setBusy(true);setError('');
+    try{
+      await curriculumCollaborationApi('proposeEdit',{kind:target.kind,id:target.id,
+        guideId:target.guideId,changes,reason:reason.trim()});
+      setOpen(false);setSuccess('Suggestion submitted for owner review.');
+    }catch(e){setError(e instanceof Error?e.message:'Could not submit suggestion.');}
+    finally{setBusy(false);}
+  };
+  return <span className="vop-collab-suggestion">
+    <button type="button" className="vop-secondary" onClick={()=>setOpen(true)}>
+      <Send size={15}/> Suggest edit
+    </button>
+    {success&&<small role="status">{success}</small>}
+    {open&&<div className="vop-collab-overlay" role="presentation">
+      <div role="dialog" aria-modal="true" aria-label="Suggest edit" className="vop-collab-dialog">
+        <h3>Suggest correction — {target.title}</h3>
+        <p>This suggestion is sent to the original owner. You cannot directly update or delete their published content.</p>
+        <label>Proposed title<input value={title} onChange={e=>setTitle(e.target.value)}/></label>
+        <label>Proposed description<textarea rows={5} value={description} onChange={e=>setDescription(e.target.value)}/></label>
+        <label>Reason<textarea rows={3} value={reason} onChange={e=>setReason(e.target.value)}/></label>
+        {error&&<p className="vop-collab-error" role="alert">{error}</p>}
+        <div className="vop-collab-actions">
+          <button type="button" className="vop-secondary" onClick={()=>setOpen(false)} disabled={busy}>Cancel</button>
+          <button type="button" className="vop-primary" disabled={busy||!reason.trim()}
+            onClick={()=>void submit()}>{busy?<LoaderCircle size={15} className="spin"/>:<Send size={15}/>} Send to owner</button>
+        </div>
+      </div>
+    </div>}
+  </span>;
+}
+
 const initialVisibility:Visibility={mode:'all',programIds:[],guideIds:[],lessonIds:[]};
 export function CurriculumCollaborationPanel({organizationId,isSuperAdmin,onClose}:{
   organizationId:string;isSuperAdmin:boolean;onClose:()=>void;
