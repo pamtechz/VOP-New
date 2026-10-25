@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../core/vop_api.dart';
 import '../widgets/vop_ui.dart';
 import 'curriculum_lesson_editor_screen.dart';
+import 'shared_curriculum_screen.dart';
 import 'workspace_records_screen.dart';
 
 /// One curriculum workspace for Flutter web and Android, backed by the same
@@ -716,6 +717,16 @@ class _CurriculumStudioState extends State<CurriculumStudioScreen> {
       final canCreate = area.id != 'lessons' && _may(schema, 'create');
       return Scaffold(
         appBar: AppBar(title: const Text('Curriculum Studio'), actions: [
+          if (workspace['isSuperAdmin'] == true ||
+              (workspace['organizationId'] ?? '').toString().isNotEmpty)
+            IconButton(
+              tooltip: 'Shared curriculum & suggested edits',
+              icon: const Icon(Icons.hub_outlined),
+              onPressed: () => Navigator.push<void>(context, MaterialPageRoute(
+                builder: (_) => SharedCurriculumScreen(
+                  api: widget.api,
+                  platformMode: workspace['isSuperAdmin'] == true))),
+            ),
           IconButton(
             tooltip: 'Refresh curriculum',
             icon: const Icon(Icons.refresh),
