@@ -11,6 +11,7 @@ import {
 import { requireOrganizationSubscriptionFeature, requirePermission, requireSubscriptionFeature, resourceForCollection } from '../../server/permissions.js';
 import type { SubscriptionFeatureKey } from '../../shared/subscriptions.js';
 import { assertMutableTenantResource, platformStewardedResource } from '../../shared/platformStewardship.js';
+import {loadSharedCurriculumSelection,sharedContentChosen} from '../../server/sharedCurriculum.js';
 import { notifyOrganizationMembers, normalizePublicationAudience } from '../../server/notifications.js';
 import { configuredPassThreshold } from '../../shared/studyValidation.js';
 import { normalizeCurriculumStructure, curriculumPages, containsPublicQuizAnswer } from '../../shared/curriculumStructure.js';
@@ -248,12 +249,15 @@ export default async function handler(req: Request, res: Response) {
             ...organizationIds.map(orgId => ctx.db.collection('guides').where('organizationId','==',orgId).get()),
             ctx.db.collection('guides').where('sharingScope','==','shared').where('published','==',true).get(),
           ]);
+      const selection=await loadSharedCurriculumSelection(ctx.db,ctx.organizationId);
       const visibleGuides = new Map<string,FirebaseFirestore.QueryDocumentSnapshot>();
       for (const snapshot of snapshots) for (const document of snapshot.docs) {
         const data=document.data();
         const owned=organizationIds.includes(String(data.organizationId||''));
         const shared=data.sharingScope==='shared'&&data.published===true&&data.archived!==true;
-        if(ctx.isSuperAdmin||owned||shared)visibleGuides.set(document.id,document);
+        if((ctx.isSuperAdmin||owned||shared) &&
+           (ctx.isSuperAdmin||owned||sharedContentChosen(selection,'guide',document.id)))
+          visibleGuides.set(document.id,document);
       }
       const items = await Promise.all([...visibleGuides.values()].map(async d => {
         const guideData=d.data();
