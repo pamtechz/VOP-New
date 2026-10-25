@@ -295,7 +295,15 @@ export default async function handler(req: Request, res: Response) {
       if (!isLanguageCode(lang)) throw new Error('A valid language code is required for a guide.');
       const title = String(data.title || '').trim();
       if (!title) throw new Error('Guide title is required.');
-      const id = data.id ? safeId(data.id) : safeId(`guide-${randomUUID().replace(/-/g, '').slice(0,24)}`);
+      // The request's canonical ID must win over nested editor data. Some
+      // Flutter/Legacy editors send an existing record ID at the top level
+      // while their form values omit the hidden "id" field.
+      const requestId = body.id ? safeId(body.id) : '';
+      const dataId = data.id ? safeId(data.id) : '';
+      if (requestId && dataId && requestId !== dataId) {
+        throw new Error('The guide identity changed during editing. Reload the original guide.');
+      }
+      const id = requestId || dataId || safeId(`guide-${randomUUID().replace(/-/g, '').slice(0,24)}`);
       const ref = ctx.db.doc(`guides/${id}`);
       const existing = await ref.get();
       const current = existing.exists ? existing.data() || {} : {};
