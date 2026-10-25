@@ -1,6 +1,7 @@
 import {useCallback,useEffect,useRef,useState} from 'react';
 import {auth} from '../../lib/firebase';
 import {useLocalization} from '../../services/i18n';
+import './shared-curriculum-panel.css';
 
 type Row={id:string;title?:string;description?:string;sharingScope?:string;published?:boolean;organizationId?:string;ownerOrganizationId?:string;guideId?:string;canEdit?:boolean};
 type Suggestion={id:string;kind:string;recordId:string;guideId?:string;reason:string;status:string;proposerUid:string;ownerOrganizationId:string;proposed:Record<string,string>};
@@ -25,11 +26,13 @@ function list(data:unknown):Row[]{
   return Array.isArray(data)?data.filter((item):item is Row=>
     Boolean(item&&typeof item==='object'&&typeof item.id==='string')):[];
 }
+function errorMessage(error:unknown){return error instanceof Error?error.message:String(error);}
 function shared(data:Row){
   return data.sharingScope==='shared'&&data.published===true&&data.canEdit===false;
 }
 export default function SharedCurriculumPanel({onUpdated,platformMode=false}:{onUpdated?:()=>void;platformMode?:boolean}){
-  const {t}=useLocalization();
+  const {t:translate}=useLocalization();
+  const t=(key:string,fallback:string)=>translate('curriculum.sharing.'+key,fallback);
   const [opened,setOpened]=useState(false);
   const [busy,setBusy]=useState(false);
   const [message,setMessage]=useState('');
@@ -64,7 +67,7 @@ export default function SharedCurriculumPanel({onUpdated,platformMode=false}:{on
       setNextCursor(typeof proposals.nextCursor==='string'?proposals.nextCursor:null);
       setPrograms(list(tracks.items).filter(shared));
       setGuides(list(modules.items).filter(shared));
-    }catch(e){setError(e instanceof Error?e.message:String(e));}
+    }catch(e){setError(errorMessage(e));}
     finally{setBusy(false);}
   },[platformMode]);
   useEffect(()=>{if(opened)void load();},[opened,load]);
@@ -87,7 +90,7 @@ export default function SharedCurriculumPanel({onUpdated,platformMode=false}:{on
         window.dispatchEvent(new Event('vop_public_content_changed'));
       onUpdated?.();
       return true;
-    }catch(e){setError(e instanceof Error?e.message:String(e));return false;}
+    }catch(e){setError(errorMessage(e));return false;}
     finally{mutationPending.current=false;setBusy(false);}
   };
   const selectGuide=async(id:string)=>{
@@ -101,7 +104,7 @@ export default function SharedCurriculumPanel({onUpdated,platformMode=false}:{on
       if(sequence===guideRequest.current)
         setLessons(list(data.items).map(item=>({...item,guideId:id})));
     }catch(e){if(sequence===guideRequest.current)
-      setError(e instanceof Error?e.message:String(e));}
+      setError(errorMessage(e));}
     finally{if(sequence===guideRequest.current)setBusy(false);}
   };
   const loadMore=async()=>{
@@ -116,7 +119,7 @@ export default function SharedCurriculumPanel({onUpdated,platformMode=false}:{on
         return [...all.values()];
       });
       setNextCursor(typeof result.nextCursor==='string'?result.nextCursor:null);
-    }catch(e){setError(e instanceof Error?e.message:String(e));}
+    }catch(e){setError(errorMessage(e));}
     finally{setLoadingMore(false);}
   };
   const submit=async()=>{
@@ -137,32 +140,32 @@ export default function SharedCurriculumPanel({onUpdated,platformMode=false}:{on
     ['guides','Shared guides',guides,'hiddenGuideIds'],
     ['lessons','Shared lessons',lessons,'hiddenLessonKeys'],
   ];
-  return <section className="vop-card" style={{marginBlock:'20px',padding:'18px'}} aria-label={t('curriculum.sharing.label','Shared curriculum collaboration')}>
-    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,flexWrap:'wrap'}}>
-      <div><h2 style={{margin:0}}>{t('curriculum.sharing.heading','Shared curriculum & suggested edits')}</h2>
-        <p style={{margin:'5px 0 0'}}>{platformMode?'Review curriculum corrections submitted by organisations.':'Choose which shared studies your organisation displays, or propose corrections to the owner.'}</p></div>
+  return <section className="vop-card vsc-root" aria-label={t('label','Shared curriculum collaboration')}>
+    <div className="vsc-header">
+      <div><h2 className="vsc-title">{t('heading','Shared curriculum & suggested edits')}</h2>
+        <p className="vsc-intro">{platformMode?'Review curriculum corrections submitted by organisations.':'Choose which shared studies your organisation displays, or propose corrections to the owner.'}</p></div>
       <button type="button" className="vop-secondary" onClick={()=>setOpened(value=>!value)}
         aria-expanded={opened}>{opened?'Close shared studies':'Manage shared studies'}</button>
     </div>
-    {opened&&<div style={{display:'grid',gap:20,marginTop:20}}>
-      {busy&&<p role="status">{t('curriculum.sharing.updating','Updating shared curriculum…')}</p>}
-      {error&&<p role="alert" style={{color:'var(--danger,#b42318)'}}>{error}</p>}
+    {opened&&<div className="vsc-body">
+      {busy&&<p role="status">{t('updating','Updating shared curriculum…')}</p>}
+      {error&&<p role="alert" className="vsc-error">{error}</p>}
       {message&&<p role="status">{message}</p>}
-      <button type="button" className="vop-secondary" onClick={()=>void load()} disabled={busy}>{t('curriculum.sharing.refresh','Refresh shared studies')}</button>
+      <button type="button" className="vop-secondary" onClick={()=>void load()} disabled={busy}>{t('refresh','Refresh shared studies')}</button>
       {!platformMode&&sections.map(([type,label,rows,key])=><section key={type} aria-label={label}>
         <h3>{label}</h3>
         {type==='lessons'&&<label>Guide
           <select value={guideId} onChange={event=>void selectGuide(event.target.value)}>
-            <option value="">{t('curriculum.sharing.selectGuide','Select a guide to manage individual lessons')}</option>
+            <option value="">{t('selectGuide','Select a guide to manage individual lessons')}</option>
             {guides.map(guide=><option value={guide.id} key={guide.id}>{guide.title||guide.id}</option>)}
           </select></label>}
-        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(min(100%,260px),1fr))',gap:10}}>
+        <div className="vsc-grid">
           {rows.map(row=>{
             const keyValue=type==='lessons'?guideId+'/'+row.id:row.id;
             const hidden=visibility[key]?.includes(keyValue)===true;
-            return <div key={keyValue} className="vop-card" style={{padding:12}}>
+            return <div key={keyValue} className="vop-card vsc-card">
               <strong>{row.title||row.id}</strong>
-              <p style={{margin:'4px 0 10px'}}>{row.description||'Published shared content'}</p>
+              <p className="vsc-desc">{row.description||'Published shared content'}</p>
               <button type="button" className="vop-secondary" disabled={busy} onClick={()=>
                 void mutate('setSharedVisibility',{kind:type,id:row.id,guideId: type==='lessons'?guideId:undefined,hidden:!hidden})}>
                 {hidden?'Show for my organisation':'Hide for my organisation'}
@@ -171,49 +174,49 @@ export default function SharedCurriculumPanel({onUpdated,platformMode=false}:{on
           })}
           {(visibility[key]||[]).filter(id=>!rows.some(row=>
             (type==='lessons'?guideId+'/'+row.id:row.id)===id)).map(hiddenId=>
-            <div key={hiddenId} className="vop-card" style={{padding:12}}>
-              <strong>{hiddenId}</strong><p>{t('curriculum.sharing.hiddenStudy','Hidden shared study')}</p>
+            <div key={hiddenId} className="vop-card vsc-card">
+              <strong>{hiddenId}</strong><p>{t('hiddenStudy','Hidden shared study')}</p>
               <button type="button" disabled={busy} className="vop-secondary" onClick={()=>
                 void mutate('setSharedVisibility',{kind:type,
                   id:type==='lessons'?hiddenId.split('/')[1]:hiddenId,
                   guideId:type==='lessons'?hiddenId.split('/')[0]:undefined,hidden:false})}>
-                {t('curriculum.sharing.showAgain','Show again')}</button></div>)}
+                {t('showAgain','Show again')}</button></div>)}
         </div>
       </section>)}
       {!platformMode&&<section>
-        <h3>{t('curriculum.sharing.suggest','Suggest a correction')}</h3>
+        <h3>{t('suggest','Suggest a correction')}</h3>
         <div className="vop-form-grid">
-          <label>{t('curriculum.sharing.contentType','Content type')}<select value={kind} onChange={e=>{setKind(e.target.value as Kind);setSelectedId('');}}>
-            <option value="programs">{t('curriculum.sharing.studyTrack','Study track')}</option><option value="guides">{t('curriculum.sharing.studyGuide','Study guide')}</option>
-            <option value="lessons">{t('curriculum.sharing.lesson','Lesson')}</option>
+          <label>{t('contentType','Content type')}<select value={kind} onChange={e=>{setKind(e.target.value as Kind);setSelectedId('');}}>
+            <option value="programs">{t('studyTrack','Study track')}</option><option value="guides">{t('studyGuide','Study guide')}</option>
+            <option value="lessons">{t('lesson','Lesson')}</option>
           </select></label>
-          <label>{t('curriculum.sharing.sharedContent','Shared content')}<select value={selectedId} onChange={e=>{setSelectedId(e.target.value);setTitle('');}}>
-            <option value="">{t('curriculum.sharing.chooseContent','Choose shared content')}</option>
+          <label>{t('sharedContent','Shared content')}<select value={selectedId} onChange={e=>{setSelectedId(e.target.value);setTitle('');}}>
+            <option value="">{t('chooseContent','Choose shared content')}</option>
             {selected.map(row=><option key={row.id} value={row.id}>{row.title||row.id}</option>)}
           </select></label>
-          <label>{t('curriculum.sharing.suggestedTitle','Suggested title')}<input value={title} onChange={e=>setTitle(e.target.value)}
+          <label>{t('suggestedTitle','Suggested title')}<input value={title} onChange={e=>setTitle(e.target.value)}
             placeholder={current?.title||'Leave unchanged'}/></label>
-          <label>{t('curriculum.sharing.suggestedDescription','Suggested description')}<textarea value={description} onChange={e=>setDescription(e.target.value)}
-            placeholder={t('curriculum.sharing.describeCorrection','Describe the correction')} rows={3}/></label>
-          <label>{t('curriculum.sharing.reason','Reason for correction')}<textarea value={reason} onChange={e=>setReason(e.target.value)}
+          <label>{t('suggestedDescription','Suggested description')}<textarea value={description} onChange={e=>setDescription(e.target.value)}
+            placeholder={t('describeCorrection','Describe the correction')} rows={3}/></label>
+          <label>{t('reason','Reason for correction')}<textarea value={reason} onChange={e=>setReason(e.target.value)}
             required rows={3}/></label>
         </div>
         <button type="button" className="vop-primary" disabled={busy||!selectedId||!reason.trim()}
-          onClick={submit}>{t('curriculum.sharing.send','Send suggestion to owner')}</button>
+          onClick={submit}>{t('send','Send suggestion to owner')}</button>
       </section>}
       <section>
-        <h3>{t('curriculum.sharing.reviews','Suggested edit reviews')}</h3>
-        {suggestions.length===0&&<p>{t('curriculum.sharing.noSuggestions','No suggestions yet.')}</p>}
-        {suggestions.map(item=><article key={item.id} className="vop-card" style={{padding:14,marginBottom:10}}>
+        <h3>{t('reviews','Suggested edit reviews')}</h3>
+        {suggestions.length===0&&<p>{t('noSuggestions','No suggestions yet.')}</p>}
+        {suggestions.map(item=><article key={item.id} className="vop-card vsc-review">
           <strong>{item.kind}: {item.recordId}</strong> · {item.status}
           <p>{item.reason}</p>
           <p>Proposed: {Object.entries(item.proposed||{}).map(([key,value])=>key+': '+value).join(' · ')}</p>
           {item.status==='pending'&&auth?.currentUser?.uid!==item.proposerUid&&
-            <div style={{display:'flex',gap:10}}>
+            <div className="vsc-review-actions">
               <button type="button" className="vop-primary" disabled={busy} onClick={()=>
-                void mutate('reviewSuggestedEdit',{id:item.id,decision:'approve'})}>{t('curriculum.sharing.approve','Approve correction')}</button>
+                void mutate('reviewSuggestedEdit',{id:item.id,decision:'approve'})}>{t('approve','Approve correction')}</button>
               <button type="button" className="vop-secondary" disabled={busy} onClick={()=>
-                void mutate('reviewSuggestedEdit',{id:item.id,decision:'reject'})}>{t('curriculum.sharing.reject','Reject')}</button>
+                void mutate('reviewSuggestedEdit',{id:item.id,decision:'reject'})}>{t('reject','Reject')}</button>
             </div>}
         </article>)}
         {nextCursor&&<button className="vop-secondary" type="button"

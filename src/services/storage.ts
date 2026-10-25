@@ -59,12 +59,9 @@ function writeStorage(key: string, value: string): void {
   }
   try {
     localStorage.setItem(scoped, value);
-  } catch (error) {
-    if (!(error instanceof DOMException) ||
-        !['QuotaExceededError', 'NS_ERROR_DOM_QUOTA_REACHED'].includes(error.name)) {
-      // Private browsing, disabled storage, and policy restrictions are also
-      // cache failures rather than reasons to abort a successful API fetch.
-    }
+  } catch {
+    // Cache failures, including quota and privacy restrictions, must not
+    // abort a successful API fetch. Remove stale persistent data if possible.
     try { localStorage.removeItem(scoped); } catch { /* storage disabled */ }
   }
 }
