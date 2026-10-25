@@ -23,12 +23,15 @@ function subject(uid: string, organizationId = 'church-one', membershipRole = 'a
 }
 const contribution = {ownerTenantId:'church-one',ownerOrganizationId:'church-one',organizationId:'church-one',ownerUid:'author'};
 
-test('peer administrators cannot edit another author\'s contribution',async()=>{
-  const {canEditCanonicalContent}=await tenantModule;
+test('owning organisation administrators can maintain staff content but not foreign shared content',async()=>{
+  const {canEditCanonicalContent,canManageOrganizationContent}=await tenantModule;
   assert.equal(canEditCanonicalContent(subject('author'),contribution),true);
-  assert.equal(canEditCanonicalContent(subject('peer'),contribution),false);
+  assert.equal(canEditCanonicalContent(subject('peer'),contribution),true);
+  assert.equal(await canManageOrganizationContent(subject('peer'),contribution),true);
   assert.equal(canEditCanonicalContent(subject('author','church-two'),contribution),false);
-  assert.equal(canEditCanonicalContent(subject('author'),{...contribution,ownerUid:''}),false);
+  assert.equal(await canManageOrganizationContent(subject('peer','church-two'),contribution),false);
+  assert.equal(canEditCanonicalContent(subject('author'),{...contribution,ownerUid:''}),true);
+  assert.equal(canEditCanonicalContent(subject('peer','church-one','teacher'),contribution),false);
 });
 test('teacher may edit only own authored content when tenant matches',async()=>{
   const {canEditCanonicalContent}=await tenantModule;
