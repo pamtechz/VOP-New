@@ -1,4 +1,5 @@
-import {FieldValue} from 'firebase-admin/firestore';
+import {FieldValue,FieldPath} from 'firebase-admin/firestore';
+import {requirePermission} from './permissions.js';
 import type {TenantContext} from './tenant.js';
 import {canEditCanonicalContent, canManageOrganizationContent, writeTenantAudit} from './tenant.js';
 
@@ -136,20 +137,34 @@ export async function handleCurriculumCollaboration(
     return true;
   }
   if(action==='listSuggestedEdits'){
+    // Stable document-ID cursor pagination keeps actionable older suggestions
+    // accessible even when a tenant has hundreds of historical reviews.
     const collection=ctx.db.collection('curriculumEditSuggestions');
-    const snapshots=ctx.isSuperAdmin?[await collection.limit(100).get()]:await Promise.all([
-      collection.where('ownerOrganizationId','==',organizationId).limit(100).get(),
-      collection.where('proposerUid','==',ctx.auth.uid).limit(50).get(),
-    ]);
+    const pageSize=60;
+    const cursor=body.cursor? id(body.cursor):'';
+    let query=ctx.isSuperAdmin?collection.orderBy(FieldPath.documentId())
+      :collection.where('ownerOrganizationId','==',organizationId)
+        .orderBy(FieldPath.documentId());
+    if(cursor)query=query.startAfter(cursor);
+    const snapshot=await query.limit(pageSize).get();
+    const ownSubmitted=!ctx.isSuperAdmin&&!cursor
+      ?await collection.where('proposerUid','==',ctx.auth.uid).limit(30).get()
+      :null;
     const results=new Map<string,Input>();
-    for(const snapshot of snapshots)for(const doc of snapshot.docs){
+    for(const doc of snapshot.docs){
       const data=doc.data();
-      if(!ctx.isSuperAdmin&&
-        !(data.proposerUid===ctx.auth.uid || (data.ownerOrganizationId===organizationId &&
-          ['owner','admin','editor'].includes(String(ctx.membership.role||'')))))continue;
+      if(!ctx.isSuperAdmin&&!(
+        data.ownerOrganizationId===organizationId &&
+        ['owner','admin','editor'].includes(String(ctx.membership.role||''))))continue;
       results.set(doc.id,{id:doc.id,...data});
     }
-    res.status(200).json({ok:true,items:[...results.values()]});
+    for(const doc of ownSubmitted?.docs||[]){
+      const data=doc.data();
+      if(data.proposerUid===ctx.auth.uid)results.set(doc.id,{id:doc.id,...data});
+    }
+    res.status(200).json({ok:true,items:[...results.values()],
+      nextCursor:snapshot.docs.length===pageSize
+        ?snapshot.docs[snapshot.docs.length-1].id:null});
     return true;
   }
   if(action==='reviewSuggestedEdit'){
@@ -173,6 +188,10 @@ export async function handleCurriculumCollaboration(
         !(await canManageOrganizationContent(ctx,record.data())) &&
         !canEditCanonicalContent(ctx,record.data()))
       throw new Error('Only the content owner or platform administrator can review this suggestion.');
+    // Approving a public edit performs a real curriculum mutation. Ownership
+    // alone must not bypass the permission matrix or billing guardrails.
+    await requirePermission(ctx,'curriculum','update');
+    if(decision==='approve')await requirePermission(ctx,'curriculum','publish');
     const result=await ctx.db.runTransaction(async tx=>{
       const [pending,target]=await Promise.all([tx.get(suggestionRef),tx.get(ref)]);
       const data=pending.data()||{},value=target.data()||{};
