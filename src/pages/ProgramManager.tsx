@@ -1,4 +1,4 @@
-import React,{useEffect,useMemo,useState} from 'react';
+import React,{useEffect,useMemo,useRef,useState} from 'react';
 import {Archive,ArrowDown,ArrowLeft,ArrowUp,BookOpen,Check,ChevronRight,
   Edit3,FolderOpen,Globe2,LoaderCircle,Plus,RefreshCw,Save,Search,ShieldCheck,Trash2,X} from 'lucide-react';
 import {auth} from '../lib/firebase';
@@ -58,6 +58,7 @@ export default function ProgramManager({
   const [query,setQuery]=useState('');
   const [selectedId,setSelectedId]=useState('');
   const [editing,setEditing]=useState<(CurriculumProgramDraft&{id:string})|null>(null);
+  const originallyEditingId=useRef('');
   const [guideQuery,setGuideQuery]=useState('');
   const [showArchived,setShowArchived]=useState(false);
   const availableGuides=useMemo(()=>guides.filter(guide=>{
@@ -95,7 +96,8 @@ export default function ProgramManager({
       // acknowledgement must not turn the next click into a new programme.
       const id=editing.id||'program-'+crypto.randomUUID().replace(/-/g,'');
       if(!editing.id)setEditing(previous=>previous?{...previous,id}:previous);
-      const result=await programApi('upsert',organizationId,id,{...editing,id});
+      const result=await programApi('upsert',organizationId,id,{...editing,id,
+        expectedExisting:originallyEditingId.current===id});
       if(result.item?.id!==id)throw new Error('Programme identity mismatch. Reload before making another change.');
       await load();
       if(id)setSelectedId(id);
@@ -151,6 +153,7 @@ export default function ProgramManager({
   };
   const startEdit=(program:Program)=>()=>{
     if(!program.canEdit)return;
+    originallyEditingId.current=program.id;
     setSelectedId(program.id);
     setGuideQuery('');
     setEditing({
@@ -173,7 +176,7 @@ export default function ProgramManager({
         <button type="button" className="vop-secondary" onClick={()=>void load()} disabled={loading}>
           {loading ? <LoaderCircle className="spin" size={16}/> : <RefreshCw size={16}/>} {loading ? 'Refreshing…' : 'Refresh'}</button>
         <button type="button" className="vop-primary"
-          onClick={()=>{setEditing({...blank(organizationId),id:''});setSelectedId('');setGuideQuery('');}}>
+          onClick={()=>{originallyEditingId.current='';setEditing({...blank(organizationId),id:''});setSelectedId('');setGuideQuery('');}}>
           <Plus size={16}/> New Study Track</button>
       </div>
     </header>
@@ -382,7 +385,7 @@ export default function ProgramManager({
       <h3>No Study Tracks Created Yet</h3>
       <p>Study Tracks (Series) are the Tier 2 containers that organize your curriculum into overarching correspondence series (e.g. Discover Guides, Focus on Prophecy). You don't need any modules created first—create your track now and attach study guides later.</p>
       <button type="button" className="vop-primary vop-empty-hero-cta"
-        onClick={()=>{setEditing({...blank(organizationId),id:''});setSelectedId('');setGuideQuery('');}}>
+        onClick={()=>{originallyEditingId.current='';setEditing({...blank(organizationId),id:''});setSelectedId('');setGuideQuery('');}}>
         <Plus size={18}/> Create First Study Track
       </button>
     </div>}
