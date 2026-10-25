@@ -87,3 +87,29 @@ test('Flutter web and Android provide the same shared curriculum collaboration w
   assert.match(shared,/loadMore\(\)async/);
   assert.match(shared,/SingleChildScrollView\(/);
 });
+
+
+test('Flutter Android and Classic web lesson authoring uses responsive Legacy-schema pages',()=>{
+  const form=read('native_android/lib/screens/workspace_records_screen.dart');
+  const plate=read('native_android/lib/widgets/plate_document_editor.dart');
+  assert.match(lessons,/lessonMode:true/);
+  assert.match(form,/lessonTab='details'/);
+  for(const tab of ['details','chapters','preview','media','references','settings']){
+    assert.ok(form.includes("'"+tab+"'"),tab);
+  }
+  assert.match(form,/PlatePageView\(page:section\)/);
+  assert.match(form,/constraints\.maxWidth>=960/);
+  assert.match(form,/SingleChildScrollView\(scrollDirection:Axis\.horizontal/);
+  assert.match(form,/SafeArea\(top:false/);
+  assert.match(form,/PageStorageKey\('node\.'/);
+  assert.match(form,/rows\.length>1/);
+  assert.match(form,/if\(saveInFlight\)return/);
+  assert.match(lessons,/contentPages=recordRows\(initial\['contentPages'\]\)/);
+  assert.match(lessons,/initial\['chapters'\]=\[/);
+  assert.match(lessons,/if\(lesson!=null\)'expectedExisting':true/);
+  assert.match(lessons,/if\(lesson!=null\)'originalGuideId'/);
+  assert.match(lessons,/if\(actions\.contains\('publish'\)\)/);
+  assert.match(plate,/void emit\(\)/);
+  assert.match(plate,/jsonDecode\(jsonEncode\(nodes\)\)/);
+  assert.match(plate,/int sequence=0/);
+});

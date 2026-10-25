@@ -12,9 +12,12 @@ class _PlateDocumentEditorState extends State<PlateDocumentEditor>{
   late List<Map<String,dynamic>> nodes;
   bool preview=false;
   int revision=0;
+  int sequence=0;
   @override void initState(){super.initState();nodes=(jsonDecode(jsonEncode(widget.document)) as List).map((v)=>Map<String,dynamic>.from(v as Map)).toList();}
-  void changed(){setState((){});widget.onChanged(nodes);}
-  String id()=>DateTime.now().microsecondsSinceEpoch.toRadixString(36);
+  void emit(){widget.onChanged((jsonDecode(jsonEncode(nodes)) as List)
+    .map((v)=>Map<String,dynamic>.from(v as Map)).toList());}
+  void changed(){setState((){});emit();}
+  String id()=>DateTime.now().microsecondsSinceEpoch.toRadixString(36)+'-'+(++sequence).toString();
   Map<String,dynamic> block(String type){
     if(type=='table')return {'type':'table','id':id(),'children':List.generate(2,(_)=>{'type':'tr','children':List.generate(2,(_)=>{'type':'td','children':[{'type':'p','children':[{'text':''}]}]})})};
     if(type=='ul'||type=='ol')return {'type':type,'id':id(),'children':[{'type':'li','children':[{'type':'lic','children':[{'text':''}]}]}]};
@@ -22,7 +25,7 @@ class _PlateDocumentEditorState extends State<PlateDocumentEditor>{
   }
   Future<void> add()async{
     final type=await showModalBottomSheet<String>(context:context,builder:(ctx)=>SafeArea(child:ListView(shrinkWrap:true,children:[
-      for(final entry in {'p':'Paragraph','h1':'Heading 1','h2':'Heading 2','h3':'Heading 3','blockquote':'Quotation','callout':'Callout','ul':'Bullet list','ol':'Numbered list','table':'Table','img':'Image','video':'Video','audio':'Audio','code_block':'Code block'}.entries)
+      for(final entry in {'p':'Paragraph','h1':'Heading 1','h2':'Heading 2','h3':'Heading 3','blockquote':'Quotation','callout':'Callout','ul':'Bullet list','ol':'Numbered list','table':'Table','img':'Image','video':'Video','audio':'Audio','code_block':'Code block','a':'Link'}.entries)
         ListTile(title:Text(entry.value),onTap:()=>Navigator.pop(ctx,entry.key))])));
     if(type!=null){nodes.add(block(type));changed();}
   }
@@ -38,7 +41,7 @@ class _PlateDocumentEditorState extends State<PlateDocumentEditor>{
     ])))),
     if(!preview)OutlinedButton.icon(onPressed:add,icon:const Icon(Icons.add),label:const Text('Add content block')),
   ]);
-  String _label(String type)=>{'p':'Paragraph','h1':'Heading 1','h2':'Heading 2','h3':'Heading 3','blockquote':'Quotation','callout':'Callout','ul':'Bullet list','ol':'Numbered list','table':'Table','img':'Image','video':'Video','audio':'Audio','code_block':'Code block'}[type]??type;
+  String _label(String type)=>{'p':'Paragraph','h1':'Heading 1','h2':'Heading 2','h3':'Heading 3','blockquote':'Quotation','callout':'Callout','ul':'Bullet list','ol':'Numbered list','table':'Table','img':'Image','video':'Video','audio':'Audio','code_block':'Code block','a':'Link'}[type]??type;
   Widget _node(Map<String,dynamic> node,String path){
     if(node.containsKey('text'))return Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
       Wrap(spacing:3,children:[
@@ -47,20 +50,20 @@ class _PlateDocumentEditorState extends State<PlateDocumentEditor>{
       ]),
       TextFormField(key:ValueKey('leaf.$path.$revision'),initialValue:'${node['text']??''}',minLines:1,maxLines:8,
         style:TextStyle(fontWeight:node['bold']==true?FontWeight.bold:null,fontStyle:node['italic']==true?FontStyle.italic:null),
-        decoration:const InputDecoration(labelText:'Text'),onChanged:(value){node['text']=value;widget.onChanged(nodes);}),
+        decoration:const InputDecoration(labelText:'Text'),onChanged:(value){node['text']=value;emit();}),
       Row(children:[Expanded(child:TextFormField(key:ValueKey('color.$path.$revision'),initialValue:'${node['color']??''}',decoration:const InputDecoration(labelText:'Text colour',hintText:'#RRGGBB'),
         validator:(v)=>(v??'').isNotEmpty&&!RegExp(r'^#[0-9A-Fa-f]{6}$').hasMatch(v!)?'Use #RRGGBB':null,
-        onChanged:(v){v.isEmpty?node.remove('color'):node['color']=v;widget.onChanged(nodes);})),const SizedBox(width:12),
+        onChanged:(v){v.isEmpty?node.remove('color'):node['color']=v;emit();})),const SizedBox(width:12),
         Expanded(child:TextFormField(key:ValueKey('size.$path.$revision'),initialValue:'${node['fontSize']??''}',decoration:const InputDecoration(labelText:'Font size'),
-          onChanged:(v){v.isEmpty?node.remove('fontSize'):node['fontSize']=v;widget.onChanged(nodes);})),]),
+          onChanged:(v){v.isEmpty?node.remove('fontSize'):node['fontSize']=v;emit();})),]),
     ]);
     final children=(node['children'] as List? ?? []).map((v)=>v is Map<String,dynamic>?v:Map<String,dynamic>.from(v as Map)).toList();
     node['children']=children;
     final type='${node['type']}';
     if(['img','video','audio','a'].contains(type))return Column(children:[
       TextFormField(key:ValueKey('url.$path.$revision'),initialValue:'${node['url']??''}',decoration:const InputDecoration(labelText:'Public HTTPS URL'),
-        validator:(v)=>Uri.tryParse(v??'')?.scheme=='https'?null:'Enter a public HTTPS URL',onChanged:(v){node['url']=v;widget.onChanged(nodes);}),
-      if(type=='img')TextFormField(initialValue:'${node['alt']??''}',decoration:const InputDecoration(labelText:'Image description'),onChanged:(v){node['alt']=v;widget.onChanged(nodes);}),
+        validator:(v)=>Uri.tryParse(v??'')?.scheme=='https'?null:'Enter a public HTTPS URL',onChanged:(v){node['url']=v;emit();}),
+      if(type=='img')TextFormField(initialValue:'${node['alt']??''}',decoration:const InputDecoration(labelText:'Image description'),onChanged:(v){node['alt']=v;emit();}),
       if(type=='a')...children.asMap().entries.map((e)=>_node(e.value,'$path.${e.key}')),
     ]);
     if(type=='table')return Column(children:[

@@ -58,6 +58,43 @@ class _CurriculumLessonEditorState extends State<CurriculumLessonEditorScreen>{
         ...section,if(section['document']==null&&section['blocks'] is List)'document':legacyDocument(section['blocks']),
       }).toList()}).toList();
     }
+    // Open pre-chapter Legacy lessons with the same page content rather than
+    // replacing it with an empty chapter when Flutter authors the first edit.
+    if(initial['chapters']==null){
+      final contentPages=recordRows(initial['contentPages']).isNotEmpty
+        ?recordRows(initial['contentPages']):recordRows(initial['pages']);
+      final fallback=(initial['content']??'').toString();
+      if(contentPages.isNotEmpty||fallback.trim().isNotEmpty){
+        final pages=contentPages.isNotEmpty?contentPages:<Map<String,dynamic>>[
+          {'title':initial['title']??'Lesson content','content':fallback}];
+        initial['chapters']=[{
+          'id':newRecordId(),'title':'Lesson content',
+          'sections':pages.map((page){
+            final blocks=recordRows(page['blocks']);
+            return <String,dynamic>{
+              'id':(page['sectionId']??newRecordId()).toString(),
+              'title':(page['sectionTitle']??page['title']??'Study section').toString(),
+              'document':page['document'] is List?recordRows(page['document']):
+                blocks.isNotEmpty?legacyDocument(blocks):<Map<String,dynamic>>[{
+                  'id':newRecordId(),'type':'p',
+                  'children':[{'text':(page['content']??'').toString()}],
+                }],
+            };
+          }).toList(),
+        }];
+      }
+    }
+    final references=initial['bibleReferences'];
+    initial['bibleReferences']=references is List?references:
+      references is String?references.split('\n').where((v)=>v.trim().isNotEmpty).toList():<String>[];
+    final tags=initial['tags'];
+    initial['tags']=tags is List?tags:
+      tags is String?tags.split(',').where((v)=>v.trim().isNotEmpty).toList():<String>[];
+    final media=recordMap(initial['media']);
+    for(final key in ['imageUrl','audioUrl','videoUrl']){
+      if((media[key]??'').toString().isEmpty&&initial[key]!=null)media[key]=initial[key];
+    }
+    initial['media']=media;
     final pageFields=<Map<String,dynamic>>[
       {'key':'title','label':'Page title'},{'key':'content','label':'Legacy page text','type':'multiline'},
       {'key':'document','label':'Rich text','type':'plate'},{'key':'imageUrl','label':'Image URL'},
@@ -66,7 +103,17 @@ class _CurriculumLessonEditorState extends State<CurriculumLessonEditorScreen>{
     final fields=<Map<String,dynamic>>[
       {'key':'title','label':'Lesson title','required':true},{'key':'description','label':'Description','type':'multiline'},
       {'key':'lessonNumber','label':'Lesson number','required':true},{'key':'estimatedMinutes','label':'Estimated minutes','type':'number'},
-      {'key':'teacherNotes','label':'Instructor notes','type':'multiline'},
+      {'key':'teacherNotes','label':'Private instructor notes','type':'multiline'},
+      {'key':'bibleReferences','label':'Bible references','type':'strings'},
+      {'key':'tags','label':'Tags','type':'strings'},
+      {'key':'sharingScope','label':'Sharing','type':'choice',
+        'choices':['private','organization','shared']},
+      if(actions.contains('publish')){'key':'published','label':'Published','type':'boolean'},
+      {'key':'media','label':'Featured media','type':'object','fields':[
+        {'key':'imageUrl','label':'Image URL'},
+        {'key':'audioUrl','label':'Audio URL'},
+        {'key':'videoUrl','label':'Video URL'},
+      ]},
       if(initial['chapters']==null&&initial['contentPages'] is List){'key':'contentPages','label':'Existing lesson pages','type':'list','fields':pageFields},
       if(initial['chapters']==null&&initial['pages'] is List){'key':'pages','label':'Existing block pages','type':'list','fields':[
         ...pageFields,{'key':'blocks','label':'Blocks','type':'list','fields':[
@@ -79,7 +126,15 @@ class _CurriculumLessonEditorState extends State<CurriculumLessonEditorScreen>{
         {'key':'id','label':'Chapter reference','required':true},{'key':'title','label':'Chapter title','required':true},
         {'key':'sections','label':'Sections','type':'list','fields':[
           {'key':'id','label':'Section reference','required':true},{'key':'title','label':'Section title','required':true},
-          {'key':'document','label':'Content','type':'plate'},
+          {'key':'document','label':'Rich lesson content','type':'plate'},
+          {'key':'scriptureQuote','label':'Scripture focus','type':'object','fields':[
+            {'key':'reference','label':'Bible reference'},
+            {'key':'text','label':'Passage text','type':'multiline'},
+          ]},
+          {'key':'keyTakeaway','label':'Key takeaway','type':'multiline'},
+          {'key':'imageUrl','label':'Section image URL'},
+          {'key':'audioUrl','label':'Section audio URL'},
+          {'key':'videoUrl','label':'Section video URL'},
         ]},
       ]},
     ];
@@ -88,6 +143,7 @@ class _CurriculumLessonEditorState extends State<CurriculumLessonEditorScreen>{
     final stableLessonId=(lesson?['id']??newRecordId()).toString();
     await Navigator.push(context,MaterialPageRoute<void>(builder:(_)=>RecordEditor(api:widget.api,
       title:lesson==null?'New lesson':'Edit ${recordTitle(lesson)}',fields:fields,options:recordMap(widget.workspace['options']),initial:initial,
+      lessonMode:true,
       onSave:(data)async{
         await widget.api.adminContent('curriculum',action:'upsertLesson',payload:{
           ...payload,'id':stableLessonId,
@@ -97,7 +153,7 @@ class _CurriculumLessonEditorState extends State<CurriculumLessonEditorScreen>{
             if(lesson!=null)'originalGuideId':widget.guide['id'],
             'guideId':widget.guide['id'],'language':widget.guide['language'],
             'type':'Lesson',
-            'published':lesson?['published']==true,
+            'published':actions.contains('publish')?data['published']==true:lesson?['published']==true,
           },
         });
       })));
