@@ -1632,7 +1632,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
         </select></label>
       </div>}
       
-      <SharedCurriculumPanel onUpdated={()=>void load()} />
+      <SharedCurriculumPanel platformMode={isSuperAdmin} onUpdated={()=>void load()} />
 
       <div className="vop-reference-tabs">
         {tabs.map(item => {
