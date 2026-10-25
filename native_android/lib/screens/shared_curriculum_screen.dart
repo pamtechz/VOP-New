@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../core/vop_api.dart';
 import '../widgets/vop_ui.dart';
 
@@ -215,7 +216,7 @@ class _SharedCurriculumState extends State<SharedCurriculumScreen> {
             Text('Proposed changes: ${recordMap(suggestion['proposed']).entries.map((e)=>
               e.key+': '+e.value.toString()).join(' · ')}'),
             if(suggestion['status']=='pending'&&
-                suggestion['proposerUid']!=widget.api.uid)
+                suggestion['proposerUid']!=FirebaseAuth.instance.currentUser?.uid)
               Wrap(spacing:8,children:[
                 FilledButton.icon(icon:const Icon(Icons.check),
                   label:const Text('Approve'),
