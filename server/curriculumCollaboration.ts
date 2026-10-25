@@ -36,14 +36,17 @@ const own=(ctx:TenantContext,data:Record<string,unknown>)=>{
 const shared=(data:Record<string,unknown>)=>
   data.published===true&&data.archived!==true&&data.sharingScope==='shared';
 
-export async function sharedCurriculumVisible(ctx:TenantContext,kind:'programs'|'guides'|'lessons',
-    contentId:string,ownerOrganizationId:string,guideId=''):Promise<boolean>{
-  if(ctx.isSuperAdmin||!ctx.organizationId||ctx.organizationId===ownerOrganizationId)return true;
-  const snap=await ctx.db.doc('organizations/'+ctx.organizationId+'/settings/sharedCurriculum').get();
-  const blocked=snap.data()||{};
-  const key=kind==='programs'?'hiddenProgramIds':kind==='guides'?'hiddenGuideIds':'hiddenLessonKeys';
-  const value=kind==='lessons'?guideId+'/'+contentId:contentId;
-  return !(Array.isArray(blocked[key])&&blocked[key].includes(value));
+export async function loadSharedCurriculumVisibility(ctx:TenantContext){
+  const settings=ctx.isSuperAdmin||!ctx.organizationId ? {} :
+    (await ctx.db.doc('organizations/'+ctx.organizationId+'/settings/sharedCurriculum').get()).data()||{};
+  const set=(key:string)=>new Set<string>(
+    Array.isArray(settings[key]) ? settings[key].filter((item:unknown):item is string=>
+      typeof item==='string') : []);
+  return {
+    programs:set('hiddenProgramIds'),
+    guides:set('hiddenGuideIds'),
+    lessons:set('hiddenLessonKeys'),
+  };
 }
 export async function handleCurriculumCollaboration(
   ctx:TenantContext,action:string,body:Input,res:Reply
@@ -163,7 +166,11 @@ export async function handleCurriculumCollaboration(
       kind==='lessons'?id(submitted.guideId):'');
     const record=await ref.get();
     if(!record.exists)throw new Error('Original curriculum record no longer exists.');
-    if(!ctx.isSuperAdmin && !(await canManageOrganizationContent(ctx,record.data())) &&
+    const ownerOrganizationId=String(record.data()?.ownerOrganizationId||record.data()?.organizationId||'');
+    const ownerOrgAdministrator=Boolean(ownerOrganizationId&&ctx.organizationId===ownerOrganizationId
+      &&['owner','admin'].includes(String(ctx.membership.role||'')));
+    if(!ctx.isSuperAdmin && !ownerOrgAdministrator &&
+        !(await canManageOrganizationContent(ctx,record.data())) &&
         !canEditCanonicalContent(ctx,record.data()))
       throw new Error('Only the content owner or platform administrator can review this suggestion.');
     const result=await ctx.db.runTransaction(async tx=>{
