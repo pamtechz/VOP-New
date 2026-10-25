@@ -67,12 +67,19 @@ class _CurriculumLessonEditorState extends State<CurriculumLessonEditorScreen>{
       if(contentPages.isNotEmpty||fallback.trim().isNotEmpty){
         final pages=contentPages.isNotEmpty?contentPages:<Map<String,dynamic>>[
           {'title':initial['title']??'Lesson content','content':fallback}];
+        final usedSectionIds=<String>{};
+        String sectionIdForPage(Map<String,dynamic> page){
+          final original=(page['sectionId']??'').toString();
+          return original.isNotEmpty&&usedSectionIds.add(original)
+            ?original:newRecordId();
+        }
         initial['chapters']=[{
           'id':newRecordId(),'title':'Lesson content',
           'sections':pages.map((page){
             final blocks=recordRows(page['blocks']);
             return <String,dynamic>{
-              'id':(page['sectionId']??newRecordId()).toString(),
+              // Ensure every imported section has one stable canonical ID.
+              'id':sectionIdForPage(page),
               'title':(page['sectionTitle']??page['title']??'Study section').toString(),
               'document':page['document'] is List?recordRows(page['document']):
                 blocks.isNotEmpty?legacyDocument(blocks):<Map<String,dynamic>>[{
@@ -83,6 +90,18 @@ class _CurriculumLessonEditorState extends State<CurriculumLessonEditorScreen>{
           }).toList(),
         }];
       }
+    }
+    // The Legacy editor starts every new lesson with a usable chapter and
+    // section. Flutter must create the same valid hierarchy on first open.
+    if(initial['chapters'] is! List || recordRows(initial['chapters']).isEmpty){
+      initial['chapters']=[{
+        'id':newRecordId(),'title':'New chapter',
+        'sections':[{
+          'id':newRecordId(),'title':'New section',
+          'document':[{'id':newRecordId(),'type':'p',
+            'children':[{'text':''}]}],
+        }],
+      }];
     }
     final references=initial['bibleReferences'];
     initial['bibleReferences']=references is List?references:

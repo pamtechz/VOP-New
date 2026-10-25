@@ -11,7 +11,8 @@ import 'curriculum_lesson_editor_screen.dart';
 Map<String,dynamic> recordMap(dynamic value)=>value is Map?Map<String,dynamic>.from(value):{};
 List<Map<String,dynamic>> recordRows(dynamic value)=>value is List?value.whereType<Map>().map((v)=>Map<String,dynamic>.from(v)).toList():[];
 String recordTitle(Map<String,dynamic> value)=>(value['title']??value['name']??value['displayName']??value['id']??'Record').toString();
-String newRecordId()=>DateTime.now().microsecondsSinceEpoch.toRadixString(36);
+int _recordIdSequence=0;
+String newRecordId()=>DateTime.now().microsecondsSinceEpoch.toRadixString(36)+'-'+(++_recordIdSequence).toRadixString(36);
 
 class WorkspaceRecordsScreen extends StatefulWidget {
   const WorkspaceRecordsScreen({required this.api,required this.collection,this.organizationId,super.key});
@@ -135,6 +136,10 @@ class _RecordEditorState extends State<RecordEditor>{
       setState((){lessonTab='details';error='Enter the lesson title and number.';});
       return;
     }
+    if(widget.lessonMode){
+      final problem=lessonStructureError();
+      if(problem!=null){setState((){lessonTab='chapters';error=problem;});return;}
+    }
     if(!form.currentState!.validate())return;
     saveInFlight=true;
     setState((){saving=true;error=null;});
@@ -142,6 +147,29 @@ class _RecordEditorState extends State<RecordEditor>{
       WidgetsBinding.instance.addPostFrameCallback((_){if(mounted)Navigator.pop(context);});}}
     catch(e){if(mounted)setState(()=>error='$e');}
     finally{saveInFlight=false;if(mounted)setState(()=>saving=false);}
+  }
+  String? lessonStructureError(){
+    final chapters=recordRows(value['chapters']);
+    if(chapters.isEmpty)return 'Add at least one chapter and section.';
+    if(chapters.length>40)return 'A lesson supports at most 40 chapters.';
+    for(final chapter in chapters){
+      if((chapter['title']??'').toString().trim().isEmpty){
+        return 'Give every chapter a title.';
+      }
+      final sections=recordRows(chapter['sections']);
+      if(sections.isEmpty)return 'Each chapter needs at least one section.';
+      if(sections.length>40)return 'Each chapter supports at most 40 sections.';
+      for(final section in sections){
+        if((section['title']??'').toString().trim().isEmpty){
+          return 'Give every section a title.';
+        }
+        if(recordRows(section['document']).isEmpty &&
+           recordRows(section['blocks']).isEmpty){
+          return 'Add at least one content block to every section.';
+        }
+      }
+    }
+    return null;
   }
   bool showLessonField(Map<String,dynamic> field){
     final key=(field['key']??'').toString();
@@ -302,9 +330,23 @@ class SchemaFields extends StatelessWidget{
           )),
         const SizedBox(height:8),
         OutlinedButton.icon(
-          onPressed:()=>update(key,[...rows,
-            if(children.any((f)=>f['key']=='id'))
-              {'id':newRecordId()}else <String,dynamic>{}]),
+          onPressed:(){
+            final nextId=newRecordId();
+            final blankContent={'id':newRecordId(),'type':'p',
+              'children':[{'text':''}]};
+            final blankSection={'id':newRecordId(),'title':'New section',
+              'document':[blankContent]};
+            final newItem=key=='chapters'
+              ?<String,dynamic>{'id':nextId,'title':'New chapter',
+                  'sections':[blankSection]}
+              :key=='sections'
+                ?<String,dynamic>{'id':nextId,'title':'New section',
+                    'document':[blankContent]}
+                :children.any((f)=>f['key']=='id')
+                  ?<String,dynamic>{'id':nextId}
+                  :<String,dynamic>{};
+            update(key,[...rows,newItem]);
+          },
           icon:const Icon(Icons.add),label:Text('Add '+label)),
       ]);
     }

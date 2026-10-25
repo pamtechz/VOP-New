@@ -122,3 +122,17 @@ test('Flutter links are inserted inside a content paragraph, never as invalid to
   assert.ok(plate.includes("'link':'Link'}.entries"));
   assert.ok(normalizer.includes("if(top&&['li','lic','a','tr','th','td'].includes(type))"));
 });
+
+
+test('new Flutter lessons and added chapters retain valid canonical structure',()=>{
+  const form=read('native_android/lib/screens/workspace_records_screen.dart');
+  assert.match(lessons,/if\(initial\['chapters'\] is! List \|\| recordRows\(initial\['chapters'\]\)\.isEmpty\)/);
+  assert.match(lessons,/sectionIdForPage\(page\)/);
+  assert.match(form,/String newRecordId\(\)=>DateTime\.now\(\)\.microsecondsSinceEpoch\.toRadixString\(36\)\+'-'/);
+  assert.match(form,/int _recordIdSequence=0/);
+  assert.match(form,/final newItem=key=='chapters'/);
+  assert.match(form,/'sections':\[blankSection\]/);
+  assert.match(form,/'document':\[blankContent\]/);
+  assert.match(form,/lessonStructureError\(\)/);
+  assert.match(form,/lessonTab='chapters';error=problem/);
+});

@@ -38,6 +38,40 @@ test('normalizes chapter/section/block hierarchy and produces reader-compatible 
   assert.equal(curriculumAnchorExists(model,'block','not-in-this-lesson'),false);
 });
 
+test('section Scripture, takeaway and media metadata survive canonical page derivation',()=>{
+  const fixture=chapter().map(ch=>({...ch,sections:ch.sections.map(sec=>({
+    ...sec,scriptureQuote:{reference:'John 3:16',text:'For God so loved the world'},
+    keyTakeaway:'God loves the world.',
+    imageUrl:'https://example.com/study.png',
+    audioUrl:'https://example.com/study.mp3',
+    videoUrl:'https://example.com/study.mp4',
+  }))}));
+  const model=normalizeCurriculumStructure(fixture);
+  const section=model[0].sections[0];
+  assert.deepEqual(section.scriptureQuote,{reference:'John 3:16',text:'For God so loved the world'});
+  assert.equal(section.keyTakeaway,'God loves the world.');
+  assert.equal(section.imageUrl,'https://example.com/study.png');
+  assert.equal(section.audioUrl,'https://example.com/study.mp3');
+  const pages=curriculumPages(model);
+  assert.equal(pages[0].sectionId,section.id);
+  assert.deepEqual(pages[0].scriptureQuote,section.scriptureQuote);
+  assert.equal(pages[0].keyTakeaway,section.keyTakeaway);
+  assert.equal(pages[0].imageUrl,section.imageUrl);
+  assert.equal(pages[0].audioUrl,section.audioUrl);
+  assert.equal(pages[0].videoUrl,section.videoUrl);
+});
+test('section metadata rejects unsafe media, malformed Scripture and oversized text',()=>{
+  const make=(field:string,value:unknown)=>{
+    const fixture=chapter() as unknown as Record<string,unknown>[];
+    const section=((fixture[0].sections as Record<string,unknown>[])[0]);
+    section[field]=value;
+    return fixture;
+  };
+  assert.throws(()=>normalizeCurriculumStructure(make('imageUrl','http://example.com/file.png')),/safe public HTTPS/);
+  assert.throws(()=>normalizeCurriculumStructure(make('videoUrl','https://127.0.0.1/movie.mp4')),/safe public HTTPS/);
+  assert.throws(()=>normalizeCurriculumStructure(make('scriptureQuote',{reference:'John 3:16',text:''})),/Scripture focus/);
+  assert.throws(()=>normalizeCurriculumStructure(make('keyTakeaway','x'.repeat(2001))),/takeaway exceeds/);
+});
 test('refuses missing, duplicate, oversized, scriptable and private media blocks',()=>{
   assert.throws(()=>normalizeCurriculumStructure([]),/chapters/);
   assert.throws(()=>normalizeCurriculumStructure([{id:'c',title:'Chapter',sections:[]}]),/sections/);
