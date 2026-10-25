@@ -5,7 +5,7 @@ export function platformStewardedResource(data: Record<string, unknown>): boolea
   return (data.scope === 'platform' && !String(data.ownerOrganizationId || '').trim())
     || data.platformOwned === true
     || data.adoptedByPlatform === true
-    || (data.sharingScope === 'shared' && data.published === true);
+;
 }
 
 export function assertMutableTenantResource(
