@@ -18,6 +18,7 @@ import { resolveMediaSource } from '../../shared/mediaSources';
 import { normalizeCurriculumStructure, curriculumPages, type CurriculumChapter } from '../../shared/curriculumStructure';
 import { newChapter } from '../components/admin/StructuredLessonEditor';
 import { PlateCurriculumAuthoringReview } from '../components/admin/PlateCurriculumAuthoringReview';
+import { CurriculumCollaborationPanel } from '../components/admin/CurriculumCollaborationPanel';
 import { StudyPlateContent } from '../components/reader/StudyPlateContent';
 import './curriculum-structure.css';
 import { AppAlertDialog, appConfirm } from '../components/layout/AppDialog';
@@ -482,6 +483,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
   const [mediaResolving, setMediaResolving] = useState(false);
   const [editorTab, setEditorTab] = useState<'content' | 'image' | 'media' | 'bible' | 'notes' | 'settings'>('content');
   const [editingRecord, setEditingRecord] = useState<RecordItem | null>(null);
+  const [collaborationOpen,setCollaborationOpen]=useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [organizationOptions, setOrganizationOptions] = useState<Array<{id:string;name:string}>>([]);
   const [organizationLoading, setOrganizationLoading] = useState(false);
@@ -1630,6 +1632,9 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
         <div className="vop-reference-actions">
           <button className="vop-secondary" type="button" disabled={loading} onClick={() => void load()}>{loading ? <LoaderCircle className="spin" size={17}/> : <RefreshCw size={17}/>}{loading ? ' ' + tx('common.loading', 'Loading…') : tx('common.refresh', 'Refresh')}</button>
           <button className="vop-secondary" type="button" onClick={() => onOpenSettings?.()}><Settings size={17}/>{tab === 'quizzes' ? 'Quiz Settings' : 'Curriculum Settings'}</button>
+          <button className="vop-secondary" type="button" onClick={()=>setCollaborationOpen(value=>!value)} aria-expanded={collaborationOpen}>
+            <Globe size={17}/> Shared studies & edit suggestions
+          </button>
           {tab==='lessons' && <button className="vop-primary" type="button" onClick={()=>selectedGuideId?openNewLesson(selectedGuideId):setLessonModuleRequiredModalOpen(true)}><Plus size={18}/>{selectedGuideId?'New lesson':'New lesson'}</button>}
         </div>
       </div>
@@ -1643,6 +1648,9 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
         </select></label>
       </div>}
       
+      {collaborationOpen&&<CurriculumCollaborationPanel key={scopeOrganizationId}
+        organizationId={scopeOrganizationId} isSuperAdmin={isSuperAdmin}
+        onClose={()=>setCollaborationOpen(false)}/>}
       <div className="vop-reference-tabs">
         {tabs.map(item => {
           const Icon = item.icon;
