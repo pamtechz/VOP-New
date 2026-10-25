@@ -474,6 +474,8 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
   const [editor, setEditor] = useState<EditorState | null>(null);
   const savedEditorSignature=useRef('');
   const pendingLessonId=useRef('');
+  const originallyEditingLessonId=useRef('');
+  const originalGuideId=useRef('');
   const [editorDirty,setEditorDirty]=useState(false);
   const [plateValidationErrors,setPlateValidationErrors]=useState<Record<string,string>>({});
   const [mediaSourceInput, setMediaSourceInput] = useState('');
@@ -807,7 +809,9 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
 
   const openLesson = (row: LessonRow,sectionId='') => {
     pendingLessonId.current='';
+    originallyEditingLessonId.current=row.lesson.id;
     const source: RecordItem = row.raw || { id: row.key };
+    originalGuideId.current=valueText(source.guideId)||row.guide?.id||'';
     const organizationId = valueText(source.organizationId || source.ownerOrganizationId);
     if (isSuperAdmin && organizationId && organizationId !== scopeOrganizationId) setScopeOrganizationId(organizationId);
     const nextEditor=editorFromLesson(row);
@@ -830,6 +834,8 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
 
   const openNewLesson = (guideId = selectedGuideId) => {
     pendingLessonId.current='';
+    originallyEditingLessonId.current='';
+    originalGuideId.current='';
     if (!guideId) {
       setLessonModuleRequiredModalOpen(true);
       return;
@@ -955,6 +961,10 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
     if (isSuperAdmin && targetOrganizationId !== scopeOrganizationId) setScopeOrganizationId(targetOrganizationId);
 
     const guide = existingGuideRecord;
+    if(originallyEditingLessonId.current && originalGuideId.current &&
+       originalGuideId.current!==editor.guideId){
+      return setError('Moving a lesson by editing would create a duplicate. Use the explicit move/transfer workflow.');
+    }
 
     const duplicate = moduleLessons.some(row =>
       valueText(row.id || row.lessonId) !== editor.id
@@ -976,6 +986,8 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
       const sourceBlocks = editor.content.trim() ? contentToBlocks(editor.content) : editor.blocks;
       const pageBlocks = splitLessonBlocks(sourceBlocks);
       const payload: Record<string, unknown> = {
+        expectedExisting:originallyEditingLessonId.current===id,
+        originalGuideId:originalGuideId.current || undefined,
         lessonId: id,
         lessonNumber: editor.lessonNumber.trim(),
         title: resolvedTitle,
