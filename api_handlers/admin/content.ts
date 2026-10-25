@@ -210,7 +210,7 @@ export default async function handler(req: Request, res: Response) {
       });
       const items = await Promise.all(visibleLessons.map(async doc => {
         const row = doc.data();
-        const canEdit = ctx.isSuperAdmin || (String(row.ownerUid || '') === ctx.auth.uid && !platformStewardedResource(row));
+        const canEdit = !platformStewardedResource(row) && canEditCanonicalContent(ctx,row) || ctx.isSuperAdmin;
         if (!canEdit) return {
           id:doc.id, guideId:selectedGuideId, title:String(row.title || ''),
           lessonNumber:String(row.lessonNumber || ''), type:row.type === 'Test' ? 'Test' : 'Lesson',
@@ -281,7 +281,7 @@ export default async function handler(req: Request, res: Response) {
             published:lesson.data().published === true, guideId:d.id,
           })),
           languages: [String(d.data().language || '')].filter(Boolean),
-          canEdit: ctx.isSuperAdmin || (!platformStewardedResource(d.data()) && (ctx.tenantType === 'hierarchy' || String(d.data().ownerUid || '') === ctx.auth.uid)),
+          canEdit: ctx.isSuperAdmin || (!platformStewardedResource(d.data()) && (ctx.tenantType === 'hierarchy' ? await canManageOrganizationContent(ctx,d.data()) : canEditCanonicalContent(ctx,d.data()))),
         };
       }));
       return res.status(200).json({ ok: true, items });
