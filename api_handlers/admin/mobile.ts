@@ -129,17 +129,21 @@ export default async function mobile(req:Request,res:Response){
   res.setHeader?.('X-Content-Type-Options','nosniff');
   if(req.method!=='GET')return res.status(405).json({ok:false,code:'METHOD_NOT_ALLOWED',error:'Use GET for read-only mobile endpoints.'});
   const resource=param(req,'resource');
-  if(!['bootstrap','workspace','catalog','program','guide','lesson','progress','announcements','resources','events','radio','languages'].includes(resource))
+  if(!['bootstrap','workspace','catalog','program','guide','lesson','progress','announcements','resources','events','radio','languages','sharedVisibility'].includes(resource))
     return res.status(404).json({ok:false,code:'NOT_FOUND',error:'Unknown mobile API resource.'});
   try{
     const ctx=await authenticateTenant(req,undefined,true);
     const scope={organizationId:ctx.organizationId,isSuperAdmin:ctx.isSuperAdmin};
     const db=ctx.db;
-    const visibility=await loadSharedVisibility(db,ctx.organizationId);
+    const visibility=['catalog','program','guide','lesson','sharedVisibility'].includes(resource)
+      ?await loadSharedVisibility(db,ctx.organizationId)
+      :{hiddenPrograms:[],hiddenGuides:[],hiddenLessons:[]};
     const show=(kind:'programs'|'guides'|'lessons',id:string,data:Raw,guideId='')=>
       ctx.isSuperAdmin||sharedItemVisible(visibility,kind,kind==='lessons'?guideId+':'+id:id,
         string(data.ownerOrganizationId||data.organizationId),ctx.organizationId);
     const uid=ctx.auth.uid;
+    if(resource==='sharedVisibility')
+      return res.status(200).json({ok:true,selection:visibility});
     if(resource==='workspace')return res.status(200).json(await mobileWorkspace(ctx));
     if(resource==='bootstrap'){
       const organization=scope.organizationId?await db.doc('organizations/'+scope.organizationId).get():null;
