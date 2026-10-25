@@ -136,6 +136,17 @@ export async function loadFirestoreGuides(_language?: LanguageCode, scopeUser?: 
     adminNodeId = String(scopeUser.adminNodeId || '').trim();
   }
 
+  const visibilityPromise=currentUser&&organizationId
+    ?currentUser.getIdToken().then(async token=>{
+      const response=await fetch('/api/admin/mobile?resource=sharedVisibility',{
+        headers:{Authorization:'Bearer '+token},cache:'no-store'});
+      if(!response.ok)throw Error('Shared catalogue preferences unavailable');
+      const data=await response.json() as {selection?:{
+        hiddenGuides?:string[];hiddenLessons?:string[]}};
+      return data.selection||{};
+    }).catch(()=>({hiddenGuides:[],hiddenLessons:[]}))
+    :Promise.resolve({hiddenGuides:[],hiddenLessons:[]});
+
   // Start the two universal catalogue reads immediately. They are independent
   // from tenant/hierarchy discovery, so do not serialize them behind profile scope.
   const sharedGuidesPromise=getDocs(query(collection(firestore,'guides'),
@@ -192,6 +203,9 @@ export async function loadFirestoreGuides(_language?: LanguageCode, scopeUser?: 
   }
 
   const legacyGuides=await legacyGuidesPromise;
+  const visibility=await visibilityPromise;
+  const hiddenGuides=new Set(visibility.hiddenGuides||[]);
+  const hiddenLessons=new Set(visibility.hiddenLessons||[]);
 
   const guides = new Map<string, { guide: DiscoverGuide; lessonsRef: ReturnType<typeof collection> }>();
 
@@ -206,6 +220,7 @@ export async function loadFirestoreGuides(_language?: LanguageCode, scopeUser?: 
       const withinScope = profileRole === 'super_admin'
         || Boolean(ownerOrg && (ownerOrg === organizationId || scopedOrganizationIds.includes(ownerOrg)));
       if (!withinScope && data.sharingScope !== 'shared') continue;
+      if (!withinScope && organizationId && hiddenGuides.has(item.id)) continue;
     }
 
     // Programme references use canonical Firestore document IDs, not an old
@@ -271,6 +286,8 @@ export async function loadFirestoreGuides(_language?: LanguageCode, scopeUser?: 
       if (!isShared && !isOwnOrg && !isSuperAdmin) {
         continue;
       }
+      if (!isOwnOrg && !isSuperAdmin && organizationId &&
+          hiddenLessons.has(entry.guide.id+':'+item.id)) continue;
 
       const lesson = normalizeLesson(data, item.id);
       if (!lesson) continue;
