@@ -15,7 +15,7 @@ test('curriculum approval preserves ownership and rejects stale or overlapping r
   try{
     const {authenticateTenant}=await vite.ssrLoadModule('/server/tenant.ts');
     const {handleCurriculumCollaboration}=await vite.ssrLoadModule('/server/curriculumCollaboration.ts');
-    async function identity(name,organizationId){
+    async function identity(name,organizationId,role='owner'){
       const result=await fetch('http://'+process.env.FIREBASE_AUTH_EMULATOR_HOST+
         '/identitytoolkit.googleapis.com/v1/accounts:signUp?key=demo-key',{
         method:'POST',headers:{'Content-Type':'application/json'},
@@ -24,12 +24,13 @@ test('curriculum approval preserves ownership and rejects stale or overlapping r
       const account=await result.json();
       assert.equal(result.status,200,JSON.stringify(account));
       await db.doc('organizations/'+organizationId).set({status:'active',name:organizationId});
-      await db.doc('organizations/'+organizationId+'/members/'+account.localId).set({uid:account.localId,role:'owner',active:true});
-      await db.doc('users/'+account.localId).set({uid:account.localId,role:'student',organizationId,organizationRole:'owner'});
+      await db.doc('organizations/'+organizationId+'/members/'+account.localId).set({uid:account.localId,role,active:true});
+      await db.doc('users/'+account.localId).set({uid:account.localId,role:'student',organizationId,organizationRole:role});
       return authenticateTenant({headers:{authorization:'Bearer '+account.idToken}},organizationId);
     }
     const owner=await identity('collaboration-owner','collaboration-org-a');
     const outsider=await identity('collaboration-outsider','collaboration-org-b');
+    const editor=await identity('collaboration-editor','collaboration-org-b','editor');
     const response=()=>({code:200,body:null,status(code){this.code=code;return this;},json(body){this.body=body;}});
     async function fixture(name){
       const target=db.doc('guides/collaboration-'+name);
@@ -50,6 +51,19 @@ test('curriculum approval preserves ownership and rejects stale or overlapping r
       const value=Reflect.get(target,key,target);
       return typeof value==='function'?value.bind(target):value;
     }})});
+    await t.test('organisation editors cannot change tenant-wide shared curriculum visibility',async()=>{
+      const {target}=await fixture('visibility');
+      const settings=db.doc('organizations/'+outsider.organizationId+'/settings/sharedCurriculum');
+      const payload={kind:'guides',id:target.id,hidden:true};
+      await assert.rejects(
+        handleCurriculumCollaboration(editor,'setSharedVisibility',payload,response()),
+        /Only an organization administrator/);
+      assert.equal((await settings.get()).exists,false);
+      const reply=response();
+      assert.equal(await handleCurriculumCollaboration(outsider,'setSharedVisibility',payload,reply),true);
+      assert.equal(reply.code,200);
+      assert.deepEqual((await settings.get()).data().hiddenGuideIds,[target.id]);
+    });
     await t.test('a foreign administrator cannot approve another organization suggestion',async()=>{
       const {target,suggestion}=await fixture('foreign');
       await assert.rejects(review(outsider,suggestion.id),/Only the content owner/);
