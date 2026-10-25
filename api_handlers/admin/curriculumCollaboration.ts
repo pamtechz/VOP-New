@@ -175,27 +175,34 @@ export default async function handler(req:Req,res:Res){
       if(decision==='approve')await requirePermission(ctx,'curriculum','update');
       const kind=request.kind as Kind;
       const contentRef=target(ctx.db,kind,String(request.id||''),String(request.guideId||''));
+      const acceptedStatus=decision==='reject'?'rejected':
+        ctx.isSuperAdmin?'approved':'owner_approved';
       await ctx.db.runTransaction(async tx=>{
         const currentProposal=await tx.get(proposalRef);
-        if(currentProposal.data()?.status!=='pending')throw new Error('This suggestion was already reviewed.');
+        const status=String(currentProposal.data()?.status||'');
+        if(status!=='pending' && !(ctx.isSuperAdmin&&status==='owner_approved'))
+          throw new Error('This suggestion was already reviewed.');
         const record=await tx.get(contentRef);
         if(!record.exists)throw new Error('Original content no longer exists.');
         const data=record.data()||{};
         const recordOrg=String(data.ownerOrganizationId||data.organizationId||'');
         if(recordOrg!==owner||!canEditCanonicalContent(ctx,data))
-          throw new Error('The owner is no longer authorised to edit this content.');
+          throw new Error('The reviewer is no longer authorised for this content.');
         if(decision==='approve'){
           if((record.updateTime?.toMillis()||0)!==Number(request.sourceVersion||0))
             throw new Error('The original content has changed. Ask the proposer to submit a fresh suggestion.');
-          tx.update(contentRef,{...proposalPatch(request.changes),
+          // Published shared content is under platform stewardship. The
+          // owning organisation approves first; only Super Admin writes back
+          // to the shared canonical record.
+          if(ctx.isSuperAdmin)tx.update(contentRef,{...proposalPatch(request.changes),
             updatedAt:FieldValue.serverTimestamp(),updatedBy:ctx.auth.uid});
         }
-        tx.update(proposalRef,{status:decision==='approve'?'approved':'rejected',
+        tx.update(proposalRef,{status:acceptedStatus,
           reviewedAt:FieldValue.serverTimestamp(),reviewedBy:ctx.auth.uid});
       });
-      await writeTenantAudit(ctx,'curriculum.proposal.'+decision,proposalRef.path,
-        {status:'pending'},{status:decision,kind,recordId:request.id});
-      return res.status(200).json({ok:true,status:decision});
+      await writeTenantAudit(ctx,'curriculum.proposal.'+acceptedStatus,proposalRef.path,
+        {status:request.status},{status:acceptedStatus,kind,recordId:request.id});
+      return res.status(200).json({ok:true,status:acceptedStatus});
     }
     return res.status(400).json({error:'Unsupported curriculum collaboration action.'});
   }catch(error){
