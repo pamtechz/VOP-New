@@ -448,7 +448,8 @@ test('Format Painter applies existing text and viewport-anchored ribbon menus su
 test('ribbon state reflects the actual Plate selection rather than stale empty selectors',()=>{
   const editor=read('src/components/admin/StudyPlatePageEditor.tsx');
   assert.match(editor,/value=\{currentBlockStyle\}/);
-  assert.match(editor,/onSelect=\{\(\)=>\{rememberSelection\(\);refreshSelectionState/);
+  assert.match(editor,/<Plate editor=\{editor\} onChange=\{\(\)=>\{\s*rememberSelection\(\);\s*refreshSelectionState/);
+  assert.doesNotMatch(editor,/onSelect=\{\(\)=>\{rememberSelection\(\);refreshSelectionState/);
   assert.match(editor,/aria-pressed=\{pressed\}/);
   assert.match(editor,/const activeStyleNode=nodes\(\)\[selectedIndex\(\)\]/);
   assert.doesNotMatch(editor,/event\.currentTarget\.value='';/);

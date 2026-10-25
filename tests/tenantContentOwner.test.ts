@@ -23,18 +23,29 @@ function subject(uid: string, organizationId = 'church-one', membershipRole = 'a
 }
 const contribution = {ownerTenantId:'church-one',ownerOrganizationId:'church-one',organizationId:'church-one',ownerUid:'author'};
 
-test('peer administrators cannot edit another author\'s contribution',async()=>{
-  const {canEditCanonicalContent}=await tenantModule;
+test('owning organisation administrators can maintain staff content but not foreign shared content',async()=>{
+  const {canEditCanonicalContent,canManageOrganizationContent}=await tenantModule;
   assert.equal(canEditCanonicalContent(subject('author'),contribution),true);
-  assert.equal(canEditCanonicalContent(subject('peer'),contribution),false);
+  assert.equal(canEditCanonicalContent(subject('peer'),contribution),true);
+  assert.equal(await canManageOrganizationContent(subject('peer'),contribution),true);
   assert.equal(canEditCanonicalContent(subject('author','church-two'),contribution),false);
-  assert.equal(canEditCanonicalContent(subject('author'),{...contribution,ownerUid:''}),false);
+  assert.equal(await canManageOrganizationContent(subject('peer','church-two'),contribution),false);
+  assert.equal(canEditCanonicalContent(subject('author'),{...contribution,ownerUid:''}),true);
+  assert.equal(canEditCanonicalContent(subject('peer','church-one','teacher'),contribution),false);
 });
 test('teacher may edit only own authored content when tenant matches',async()=>{
   const {canEditCanonicalContent}=await tenantModule;
   assert.equal(canEditCanonicalContent(subject('teacher','church-one','teacher'),{...contribution,ownerUid:'teacher'}),true);
   assert.equal(canEditCanonicalContent(subject('teacher','church-one','teacher'),contribution),false);
   assert.equal(canEditCanonicalContent(subject('unprivileged','church-one','learner'),{...contribution,ownerUid:'unprivileged'}),false);
+});
+test('canonical organisation ownership takes priority over a stale organisation reference',async()=>{
+  const {canManageOrganizationContent}=await tenantModule;
+  const inconsistent={...contribution,organizationId:'church-two'};
+  assert.equal(await canManageOrganizationContent(subject('peer','church-two'),inconsistent),false);
+  assert.equal(await canManageOrganizationContent(subject('peer','church-one'),inconsistent),true);
+  assert.equal(await canManageOrganizationContent(subject('peer','church-one'),{organizationId:'church-one'}),true);
+  assert.equal(await canManageOrganizationContent(subject('peer','church-one'),{...contribution,ownerTenantId:'church-two'}),false);
 });
 test('Super Admin retains platform override without organization selection',async()=>{
   const {canEditCanonicalContent}=await tenantModule;

@@ -136,6 +136,30 @@ export async function loadFirestoreGuides(_language?: LanguageCode, scopeUser?: 
     adminNodeId = String(scopeUser.adminNodeId || '').trim();
   }
 
+  // A member organization's shared-study choices are authoritative for its
+  // learner directory, not just the administration selectors. Fetch these in
+  // parallel with Firestore snapshots to avoid adding serial startup latency.
+  const visibilityPromise = currentUser && organizationId && profileRole !== 'super_admin'
+    ? currentUser.getIdToken().then(async token=>{
+        const response=await fetch('/api/admin/content',{
+          method:'POST',
+          headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
+          body:JSON.stringify({collection:'curriculum',action:'getSharedVisibility'}),
+        });
+        if(!response.ok)throw new Error('Shared study settings could not be loaded.');
+        const data=await response.json() as {settings?:Record<string,unknown>};
+        const values=data.settings||{};
+        const ids=(key:string)=>new Set<string>(Array.isArray(values[key])
+          ?(values[key] as unknown[]).filter((v):v is string=>typeof v==='string'):[]);
+        return {guides:ids('hiddenGuideIds'),lessons:ids('hiddenLessonKeys'),
+          unavailable:false};
+      }).catch(()=>{
+        // Do not display potentially hidden foreign content if settings fail.
+        return {guides:new Set<string>(),lessons:new Set<string>(),unavailable:true};
+      })
+    : Promise.resolve({guides:new Set<string>(),lessons:new Set<string>(),
+        unavailable:false});
+
   // Start the two universal catalogue reads immediately. They are independent
   // from tenant/hierarchy discovery, so do not serialize them behind profile scope.
   const sharedGuidesPromise=getDocs(query(collection(firestore,'guides'),
@@ -191,7 +215,8 @@ export async function loadFirestoreGuides(_language?: LanguageCode, scopeUser?: 
     guideSnapshots.push(...sharedGuides.docs);
   }
 
-  const legacyGuides=await legacyGuidesPromise;
+  const [legacyGuides,sharedVisibility]=await Promise.all([
+    legacyGuidesPromise,visibilityPromise]);
 
   const guides = new Map<string, { guide: DiscoverGuide; lessonsRef: ReturnType<typeof collection> }>();
 
@@ -200,13 +225,13 @@ export async function loadFirestoreGuides(_language?: LanguageCode, scopeUser?: 
     const legacy = item.ref.path.startsWith('curricula/discover/languages/');
     const language = String(data.language ?? (legacy ? item.id : '')).trim();
     if (!language || data.archived === true || data.published !== true) continue;
-
-    if (!legacy) {
-      const ownerOrg = String(data.organizationId ?? data.ownerOrganizationId ?? '').trim();
-      const withinScope = profileRole === 'super_admin'
-        || Boolean(ownerOrg && (ownerOrg === organizationId || scopedOrganizationIds.includes(ownerOrg)));
-      if (!withinScope && data.sharingScope !== 'shared') continue;
-    }
+    const candidateId=legacy?String(data.id||item.id).trim():item.id;
+    const ownerOrg = String(data.ownerOrganizationId ?? data.organizationId ?? '').trim();
+    const withinScope = profileRole === 'super_admin' ||
+      Boolean(ownerOrg && (ownerOrg === organizationId || scopedOrganizationIds.includes(ownerOrg)));
+    if(!withinScope && (sharedVisibility.unavailable ||
+        sharedVisibility.guides.has(candidateId)))continue;
+    if (!legacy && !withinScope && data.sharingScope !== 'shared') continue;
 
     // Programme references use canonical Firestore document IDs, not an old
     // embedded `id` field that may survive a migration or content fork.
@@ -266,6 +291,9 @@ export async function loadFirestoreGuides(_language?: LanguageCode, scopeUser?: 
       const isShared = data.sharingScope === 'shared' || (!lessonOrg && entry.guide.sharingScope === 'shared');
       const isOwnOrg = Boolean(organizationId && (lessonOrg === organizationId || scopedOrganizationIds.includes(lessonOrg)));
       const isSuperAdmin = profileRole === 'super_admin';
+      if(!isOwnOrg&&!isSuperAdmin &&
+          (sharedVisibility.unavailable ||
+            sharedVisibility.lessons.has(entry.guide.id+'/'+item.id)))continue;
 
       // The learners portal should show the added lessons in their organisation and those that are for shared.
       if (!isShared && !isOwnOrg && !isSuperAdmin) {

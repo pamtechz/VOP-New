@@ -3,6 +3,7 @@
  * /api/study/progress, /api/mentorship, /api/share and /api/engagement handlers.
  * Never send private assessment banks, permissions or payment secrets. */
 import {authenticateTenant} from '../../server/tenant.js';
+import {loadSharedCurriculumVisibility} from '../../server/curriculumCollaboration.js';
 import {curriculumPages,containsPublicQuizAnswer} from '../../shared/curriculumStructure.js';
 import {normalizeStudyPlateDocument} from '../../shared/studyPlateDocument.js';
 import {isSafeHttpsMediaUrl} from '../../shared/mediaSources.js';
@@ -135,6 +136,21 @@ export default async function mobile(req:Request,res:Response){
     const scope={organizationId:ctx.organizationId,isSuperAdmin:ctx.isSuperAdmin};
     const db=ctx.db;
     const uid=ctx.auth.uid;
+    // One tenant preference read for catalog, programme and lesson routes.
+    // Shared content is still server-authorised; this only narrows what the
+    // current organisation elects to show, without copying canonical records.
+    const hidden=['catalog','program','guide','lesson'].includes(resource)
+      ?await loadSharedCurriculumVisibility(ctx)
+      :{programs:new Set<string>(),guides:new Set<string>(),lessons:new Set<string>()};
+    const foreign=(row:Raw)=>Boolean(scope.organizationId&&!scope.isSuperAdmin &&
+      string(row.ownerOrganizationId||row.organizationId)!==scope.organizationId);
+    const permittedProgram=(key:string,row:Raw)=>
+      hasAccess(row,scope)&&(!foreign(row)||!hidden.programs.has(key));
+    const permittedGuide=(key:string,row:Raw)=>
+      hasAccess(row,scope)&&(!foreign(row)||!hidden.guides.has(key));
+    const permittedLesson=(key:string,row:Raw,guideKey:string,guideData:Raw)=>
+      hasAccess(row,scope,string(guideData.organizationId||guideData.ownerOrganizationId))
+      &&(!foreign(row)||!hidden.lessons.has(guideKey+'/'+key));
     if(resource==='workspace')return res.status(200).json(await mobileWorkspace(ctx));
     if(resource==='bootstrap'){
       const organization=scope.organizationId?await db.doc('organizations/'+scope.organizationId).get():null;
@@ -194,9 +210,9 @@ export default async function mobile(req:Request,res:Response){
         Promise.all(tasks),Promise.all(programTasks),
       ]);
       const guides=unique(guideSets.map(set=>set.docs))
-        .filter(doc=>hasAccess(doc.data(),scope)).map(doc=>plainGuide(doc.id,doc.data()));
+        .filter(doc=>permittedGuide(doc.id,doc.data())).map(doc=>plainGuide(doc.id,doc.data()));
       const programs=unique(programSets.map(set=>set.docs))
-        .filter(doc=>hasAccess(doc.data(),scope)).map(doc=>plainProgram(doc.id,doc.data()));
+        .filter(doc=>permittedProgram(doc.id,doc.data())).map(doc=>plainProgram(doc.id,doc.data()));
       // The catalogue queries are bounded; a programme may reference an
       // authorized guide beyond those query limits. Resolve its canonical IDs
       // explicitly, then apply the SAME publication and tenancy checks before
@@ -208,7 +224,7 @@ export default async function mobile(req:Request,res:Response){
         const extra=await db.getAll(...missingIds.slice(offset,offset+25)
           .map(id=>db.doc('guides/'+id)));
         for(const doc of extra){
-          if(!doc.exists||!hasAccess(doc.data()||{},scope)||knownGuideIds.has(doc.id))continue;
+          if(!doc.exists||!permittedGuide(doc.id,doc.data()||{})||knownGuideIds.has(doc.id))continue;
           guides.push(plainGuide(doc.id,doc.data()||{}));
           knownGuideIds.add(doc.id);
         }
@@ -223,7 +239,7 @@ export default async function mobile(req:Request,res:Response){
     if(resource==='program'){
       const programId=cleanId(param(req,'programId'));
       const snap=await db.doc('programs/'+programId).get();
-      if(!snap.exists||!hasAccess(snap.data()||{},scope))
+      if(!snap.exists||!permittedProgram(snap.id,snap.data()||{}))
         return res.status(404).json({ok:false,code:'NOT_FOUND',
           error:'Published programme not found or not available.'});
       const program=plainProgram(snap.id,snap.data()||{});
@@ -234,7 +250,7 @@ export default async function mobile(req:Request,res:Response){
         const ids=program.guideIds.slice(offset,offset+25);
         const documents=await db.getAll(...ids.map(id=>db.doc('guides/'+id)));
         for(const document of documents){
-          if(!document.exists||!hasAccess(document.data()||{},scope))continue;
+          if(!document.exists||!permittedGuide(document.id,document.data()||{}))continue;
           guides.push(plainGuide(document.id,document.data()||{}));
         }
       }
@@ -307,13 +323,13 @@ export default async function mobile(req:Request,res:Response){
     }
     const guideId=cleanId(param(req,'guideId'));
     const guideSnap=await db.doc('guides/'+guideId).get();
-    if(!guideSnap.exists||!hasAccess(guideSnap.data()||{},scope))
+    if(!guideSnap.exists||!permittedGuide(guideId,guideSnap.data()||{}))
       return res.status(404).json({ok:false,code:'NOT_FOUND',error:'Published course not found or not available.'});
     const guide=guideSnap.data()||{};
     const snapLessons=await guideSnap.ref.collection('lessons')
       .where('published','==',true).limit(120).get();
-    const lessons=snapLessons.docs.filter(doc=>hasAccess(
-      doc.data(),scope,string(guide.organizationId||guide.ownerOrganizationId)))
+    const lessons=snapLessons.docs.filter(doc=>permittedLesson(
+      doc.id,doc.data(),guideId,guide))
       .map(doc=>plainLesson(doc.id,doc.data()))
       .sort((a,b)=>a.lessonNumber.localeCompare(b.lessonNumber,undefined,{numeric:true}));
     const progress=ctx.profile.progress&&typeof ctx.profile.progress==='object'

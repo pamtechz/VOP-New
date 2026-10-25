@@ -11,8 +11,9 @@ import 'workspace_records_screen.dart';
 import 'workspace_operations_screen.dart';
 
 class WorkspaceNavigation extends StatefulWidget{
-  const WorkspaceNavigation({required this.api,super.key});
+  const WorkspaceNavigation({required this.api,this.compact=false,super.key});
   final VopApi api;
+  final bool compact;
   @override State<WorkspaceNavigation> createState()=>_WorkspaceNavigationState();
 }
 class _WorkspaceNavigationState extends State<WorkspaceNavigation>{
@@ -44,6 +45,21 @@ class _WorkspaceNavigationState extends State<WorkspaceNavigation>{
       if(s.data?['isSuperAdmin']==true)tile('Permissions',Icons.admin_panel_settings_outlined,WorkspaceOperationsScreen(api:widget.api,kind:'permissions',workspace:s.data!)),
       if(can('translations','view'))tile('Translation Studio',Icons.translate,WorkspaceOperationsScreen(api:widget.api,kind:'translations',workspace:s.data!)),
     ];
+    if (widget.compact) {
+      return Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+        for(final link in links) Padding(
+          padding:const EdgeInsets.only(bottom:5),
+          child:Theme(data:Theme.of(context).copyWith(
+            listTileTheme:ListTileThemeData(
+              dense:true,
+              minLeadingWidth:16,
+              shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(10)),
+              tileColor:Theme.of(context).colorScheme.surfaceContainerLow,
+              contentPadding:const EdgeInsets.symmetric(horizontal:12))),
+            child:link),
+        ),
+      ]);
+    }
     return LayoutBuilder(builder:(context,constraints){
       final columns=constraints.maxWidth>=950?3:
         constraints.maxWidth>=620?2:1;

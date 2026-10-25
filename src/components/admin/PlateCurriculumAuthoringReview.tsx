@@ -17,13 +17,13 @@ import {
   type StudyPlateDocument,
 } from '../../../shared/studyPlateDocument';
 import type { Lesson, DiscoverGuide } from '../../types';
-import { getTranslation, getUiLocale } from '../../services/i18n';
+import { createUiTranslator } from '../../services/i18n';
 import { LessonReaderModal } from '../reader/LessonReaderModal';
 import { StructureActionsMenu } from './StructureActionsMenu';
 import { StudyPlatePageEditor } from './StudyPlatePageEditor';
 import './plate-structure.css';
 
-const uiT = (key: string, fallback: string) => getTranslation(key, getUiLocale(), undefined, fallback, 'PlateCurriculumAuthoringReview');
+const uiT = createUiTranslator('admin.plate_authoring', 'PlateCurriculumAuthoringReview');
 
 type Anchor={type:'chapter'|'section'|'block';id:string};
 type Props={
@@ -332,12 +332,12 @@ export function PlateCurriculumAuthoringReview({
     </div>
     {recoveryBanner}
     {!onBack && <div className="vop-plate-author-head">
-      <div><span>{uiT('admin.plate_authoring.continuous_document_authoring',"CONTINUOUS DOCUMENT AUTHORING")}</span>
-        <h3>{uiT('admin.plate_authoring.write_first_define_learner_pages_inside_the_document',"Write first. Define learner pages inside the document.")}</h3>
-        <p>{uiT('admin.plate_authoring.write_each_chapter_naturally_in_plate_put_the_cursor_in_any_paragraph_or_heading_and_choos',"Write each chapter naturally in Plate. Put the cursor in any paragraph or heading and choose")}<strong>{uiT('admin.plate_authoring.start_section',"Start section")}</strong>. That block starts a new learner page, and every following block stays on that page until the next section boundary.</p>
+      <div><span>{uiT('continuous_document_authoring',"CONTINUOUS DOCUMENT AUTHORING")}</span>
+        <h3>{uiT('write_first_define_learner_pages_inside_the_document',"Write first. Define learner pages inside the document.")}</h3>
+        <p>{uiT('write_each_chapter_naturally_in_plate_put_the_cursor_in_any_paragraph_or_heading_and_choos',"Write each chapter naturally in Plate. Put the cursor in any paragraph or heading and choose")}<strong>{uiT('start_section',"Start section")}</strong>. That block starts a new learner page, and every following block stays on that page until the next section boundary.</p>
       </div>
       <button type="button" className="vop-secondary" disabled={chapters.length>=40}
-        onClick={addChapter}><Plus size={16}/>{uiT('admin.plate_authoring.chapter',"Chapter")}</button>
+        onClick={addChapter}><Plus size={16}/>{uiT('chapter',"Chapter")}</button>
     </div>}
     <div className="vop-plate-chapter-picker">
       {onBack && (
@@ -345,14 +345,14 @@ export function PlateCurriculumAuthoringReview({
           type="button"
           className="vop-plate-back-btn"
           onClick={onBack}
-          title={uiT('admin.plate_authoring.back_to_curriculum',"Back to curriculum")}
-          aria-label={uiT('admin.plate_authoring.back',"Back")}
+          title={uiT('back_to_curriculum',"Back to curriculum")}
+          aria-label={uiT('back',"Back")}
         >
           <ArrowLeft size={18}/>
         </button>
       )}
       <select
-        aria-label={uiT('admin.plate_authoring.select_chapter',"Select chapter")}
+        aria-label={uiT('select_chapter',"Select chapter")}
         className="vop-plate-chapter-select"
         value={chapter?.id||''}
         onChange={e=>{
@@ -365,7 +365,7 @@ export function PlateCurriculumAuthoringReview({
           {index+1}. {item.title}
         </option>)}
       </select>
-      {chapter&&<input aria-label={uiT('admin.plate_authoring.chapter_title',"Chapter title")} className="vop-plate-chapter-title"
+      {chapter&&<input aria-label={uiT('chapter_title',"Chapter title")} className="vop-plate-chapter-title"
         value={chapter.title} onChange={e=>onChange(chapters.map(item=>item.id===chapter.id
           ?{...item,title:e.target.value}:item))}/>}
       {lessonHeaderFields}
@@ -376,19 +376,19 @@ export function PlateCurriculumAuthoringReview({
             type="button"
             className="vop-plate-header-save-btn vop-plate-btn-preview"
             onClick={() => setPreviewOpen(true)}
-            title={uiT('admin.plate_authoring.preview_this_lesson_as_a_student',"Preview this lesson as a student")}
-            aria-label={uiT('admin.plate_authoring.preview_lesson_as_student',"Preview lesson as student")}
+            title={uiT('preview_this_lesson_as_a_student',"Preview this lesson as a student")}
+            aria-label={uiT('preview_lesson_as_student',"Preview lesson as student")}
           >
             <Eye size={15}/>
-            <span>{uiT('admin.plate_authoring.preview',"Preview")}</span>
+            <span>{uiT('preview',"Preview")}</span>
           </button>
           <button
             type="button"
             className="vop-plate-header-save-btn vop-plate-btn-save-draft"
             disabled={saving}
             onClick={() => onSave(false)}
-            title={uiT('admin.plate_authoring.save_lesson_draft',"Save lesson draft")}
-            aria-label={uiT('admin.plate_authoring.save_lesson_draft',"Save lesson draft")}
+            title={uiT('save_lesson_draft',"Save lesson draft")}
+            aria-label={uiT('save_lesson_draft',"Save lesson draft")}
           >
             {saving ? <LoaderCircle className="spin" size={15}/> : <Save size={15}/>}
             <span>{saving ? 'Saving…' : 'Save draft'}</span>
@@ -408,40 +408,40 @@ export function PlateCurriculumAuthoringReview({
       )}
       {chapter&&<StructureActionsMenu label="Chapter">
         <button type="button" onClick={() => setPreviewOpen(true)}>
-          <Eye size={15}/>{uiT('admin.plate_authoring.preview_as_student',"Preview as student")}</button>
+          <Eye size={15}/>{uiT('preview_as_student',"Preview as student")}</button>
         <button type="button" disabled={chapters.length>=40} onClick={addChapter}>
-          <Plus size={15}/>{uiT('admin.plate_authoring.add_chapter',"Add chapter")}</button>
+          <Plus size={15}/>{uiT('add_chapter',"Add chapter")}</button>
         <button type="button" disabled={chapterIndex<=0} onClick={()=>moveChapter(-1)}>
-          <ArrowUp size={15}/>{uiT('admin.plate_authoring.move_chapter_up',"Move chapter up")}</button>
+          <ArrowUp size={15}/>{uiT('move_chapter_up',"Move chapter up")}</button>
         <button type="button" disabled={chapterIndex<0||chapterIndex>=chapters.length-1} onClick={()=>moveChapter(1)}>
-          <ArrowDown size={15}/>{uiT('admin.plate_authoring.move_chapter_down',"Move chapter down")}</button>
+          <ArrowDown size={15}/>{uiT('move_chapter_down',"Move chapter down")}</button>
         <button type="button" disabled={chapters.length>=40} onClick={duplicateChapter}>
-          <Copy size={15}/>{uiT('admin.plate_authoring.duplicate_chapter',"Duplicate chapter")}</button>
+          <Copy size={15}/>{uiT('duplicate_chapter',"Duplicate chapter")}</button>
         <button type="button" disabled={!canAttachQuiz}
           onClick={()=>onQuiz({type:'chapter',id:chapter.id})}>
-          <FileQuestion size={15}/>{uiT('admin.plate_authoring.chapter_quiz',"Chapter quiz")}</button>
+          <FileQuestion size={15}/>{uiT('chapter_quiz',"Chapter quiz")}</button>
         {onSave && <button type="button" disabled={saving} onClick={()=>onSave(false)}>
           {saving ? <LoaderCircle className="spin" size={15}/> : <Save size={15}/>} {saving ? 'Saving…' : 'Save draft'}</button>}
         {onSave && <button type="button" disabled={saving} onClick={()=>onSave(true)}>
           {saving ? <LoaderCircle className="spin" size={15}/> : <Save size={15}/>} {saving ? 'Publishing…' : 'Publish lesson'}</button>}
         {onOpenSettings && <button type="button" onClick={onOpenSettings}>
-          <Settings size={15}/>{uiT('admin.plate_authoring.lesson_details_and_media',"Lesson details & media")}</button>}
+          <Settings size={15}/>{uiT('lesson_details_and_media',"Lesson details & media")}</button>}
         {destinations('chapter',chapter.id)}
       </StructureActionsMenu>}
     </div>
 
     {chapter&&<div className={'vop-plate-document-shell '+(sidebarCollapsed?'vop-plate-sidebar-collapsed':'')}>
-      <aside className={'vop-plate-outline '+(sidebarCollapsed?'collapsed':'')} aria-label={uiT('admin.plate_authoring.learner_page_outline',"Learner page outline")}>
+      <aside className={'vop-plate-outline '+(sidebarCollapsed?'collapsed':'')} aria-label={uiT('learner_page_outline',"Learner page outline")}>
         <div className="vop-plate-outline-head">
           {!sidebarCollapsed ? (
-            <div><span>{uiT('admin.plate_authoring.learner_pages',"LEARNER PAGES")}</span><strong>{chapter.sections.length} sections</strong></div>
+            <div><span>{uiT('learner_pages',"LEARNER PAGES")}</span><strong>{chapter.sections.length} sections</strong></div>
           ) : (
-            <span className="vop-plate-outline-collapsed-title" title={uiT('admin.plate_authoring.learner_pages_2',"Learner Pages")}>{uiT('admin.plate_authoring.pages',"PAGES")}</span>
+            <span className="vop-plate-outline-collapsed-title" title={uiT('learner_pages_2',"Learner Pages")}>{uiT('pages',"PAGES")}</span>
           )}
           <div className="vop-plate-outline-head-actions">
-            <button type="button" title={uiT('admin.plate_authoring.student_preview',"Student preview")} aria-label={uiT('admin.plate_authoring.student_preview',"Student preview")}
+            <button type="button" title={uiT('student_preview',"Student preview")} aria-label={uiT('student_preview',"Student preview")}
               onClick={()=>setPreviewOpen(true)}><Eye size={14}/></button>
-            <button type="button" title={uiT('admin.plate_authoring.add_a_blank_section',"Add a blank section")} aria-label={uiT('admin.plate_authoring.add_a_blank_section',"Add a blank section")}
+            <button type="button" title={uiT('add_a_blank_section',"Add a blank section")} aria-label={uiT('add_a_blank_section',"Add a blank section")}
               onClick={()=>addSection()} disabled={chapter.sections.length>=40}><Plus size={14}/></button>
             <button type="button"
               className="vop-plate-outline-collapse-toggle"
@@ -542,13 +542,13 @@ export function PlateCurriculumAuthoringReview({
                 ) : (
                   <>
                     <div className="vop-plate-outline-drag-handle"
-                      title={uiT('admin.plate_authoring.drag_to_reorder_section',"Drag to reorder section")} aria-label={uiT('admin.plate_authoring.drag_to_reorder_section',"Drag to reorder section")}>
+                      title={uiT('drag_to_reorder_section',"Drag to reorder section")} aria-label={uiT('drag_to_reorder_section',"Drag to reorder section")}>
                       <GripVertical size={13}/>
                     </div>
                     <button type="button" className="vop-plate-outline-main"
                       onClick={()=>jumpToSection(section.id)}
                       onDoubleClick={()=>setEditingSectionId(section.id)}
-                      title={uiT('admin.plate_authoring.click_to_jump_to_this_section_in_the_document',"Click to jump to this section in the document")}>
+                      title={uiT('click_to_jump_to_this_section_in_the_document',"Click to jump to this section in the document")}>
                       <span className="vop-plate-outline-badge">{index+1}</span>
                       <span className="vop-plate-outline-text">
                         <strong>{section.title}</strong>
@@ -558,8 +558,8 @@ export function PlateCurriculumAuthoringReview({
                     <button
                       type="button"
                       className="vop-plate-outline-quick-add"
-                      title={uiT('admin.plate_authoring.insert_section_after_this_page',"Insert section after this page")}
-                      aria-label={uiT('admin.plate_authoring.insert_section_after_this_page',"Insert section after this page")}
+                      title={uiT('insert_section_after_this_page',"Insert section after this page")}
+                      aria-label={uiT('insert_section_after_this_page',"Insert section after this page")}
                       disabled={chapter.sections.length>=40}
                       onClick={(e)=>{e.stopPropagation();addSection(section.id);}}
                     >
@@ -568,8 +568,8 @@ export function PlateCurriculumAuthoringReview({
                     <button
                       type="button"
                       className="vop-plate-outline-quick-rename"
-                      title={uiT('admin.plate_authoring.rename_section',"Rename section")}
-                      aria-label={uiT('admin.plate_authoring.rename_section',"Rename section")}
+                      title={uiT('rename_section',"Rename section")}
+                      aria-label={uiT('rename_section',"Rename section")}
                       onClick={(e)=>{e.stopPropagation();setEditingSectionId(section.id);}}
                     >
                       <Edit3 size={12}/>
@@ -577,18 +577,18 @@ export function PlateCurriculumAuthoringReview({
                     <StructureActionsMenu label={'Section '+(index+1)}>
                       <button type="button" disabled={chapter.sections.length>=40}
                         onClick={()=>addSection(section.id)}>
-                        <Plus size={15}/>{uiT('admin.plate_authoring.insert_section_after',"Insert section after")}</button>
+                        <Plus size={15}/>{uiT('insert_section_after',"Insert section after")}</button>
                       <button type="button" onClick={()=>setEditingSectionId(section.id)}>
-                        <Edit3 size={15}/>{uiT('admin.plate_authoring.rename_section',"Rename section")}</button>
+                        <Edit3 size={15}/>{uiT('rename_section',"Rename section")}</button>
                       <button type="button" disabled={!canAttachQuiz}
                         onClick={()=>onQuiz({type:'section',id:section.id})}>
-                        <FileQuestion size={15}/>{uiT('admin.plate_authoring.section_quiz',"Section quiz")}</button>
+                        <FileQuestion size={15}/>{uiT('section_quiz',"Section quiz")}</button>
                       <button type="button" disabled={index===0}
-                        onClick={()=>moveSection(section.id,-1)}><ArrowUp size={15}/>{uiT('admin.plate_authoring.move_page_up',"Move page up")}</button>
+                        onClick={()=>moveSection(section.id,-1)}><ArrowUp size={15}/>{uiT('move_page_up',"Move page up")}</button>
                       <button type="button" disabled={index===chapter.sections.length-1}
-                        onClick={()=>moveSection(section.id,1)}><ArrowDown size={15}/>{uiT('admin.plate_authoring.move_page_down',"Move page down")}</button>
+                        onClick={()=>moveSection(section.id,1)}><ArrowDown size={15}/>{uiT('move_page_down',"Move page down")}</button>
                       <button type="button" disabled={chapter.sections.length>=40}
-                        onClick={()=>duplicateSection(section.id)}><Copy size={15}/>{uiT('admin.plate_authoring.duplicate_section',"Duplicate section")}</button>
+                        onClick={()=>duplicateSection(section.id)}><Copy size={15}/>{uiT('duplicate_section',"Duplicate section")}</button>
                       {chapters.length>1&&<label className="vop-plate-move-label">Move into chapter
                         <select value="" disabled={chapter.sections.length<=1}
                           onChange={event=>moveToChapter(section.id,event.target.value)}>
@@ -601,7 +601,7 @@ export function PlateCurriculumAuthoringReview({
                       <button className="vop-structure-delete" type="button"
                         disabled={chapter.sections.length<=1||lessonPublished}
                         title={lessonPublished?'Unpublish and resolve dependent quizzes before deleting a published section.':''}
-                        onClick={()=>removeSection(section.id)}><Trash2 size={15}/>{uiT('admin.plate_authoring.delete_section',"Delete section")}</button>
+                        onClick={()=>removeSection(section.id)}><Trash2 size={15}/>{uiT('delete_section',"Delete section")}</button>
                     </StructureActionsMenu>
                   </>
                 )}
@@ -638,8 +638,8 @@ export function PlateCurriculumAuthoringReview({
       <>
         <div className="vop-lesson-preview-banner" role="status">
           <div className="vop-lesson-preview-banner-content">
-            <span className="vop-lesson-preview-pill"><Eye size={13}/>{uiT('admin.plate_authoring.student_preview_2',"STUDENT PREVIEW")}</span>
-            <span>{uiT('admin.plate_authoring.viewing_draft_pages_in_the_live_reader_changes_made_in_the_editor_reflect_here',"Viewing draft pages in the live reader. Changes made in the editor reflect here.")}</span>
+            <span className="vop-lesson-preview-pill"><Eye size={13}/>{uiT('student_preview_2',"STUDENT PREVIEW")}</span>
+            <span>{uiT('viewing_draft_pages_in_the_live_reader_changes_made_in_the_editor_reflect_here',"Viewing draft pages in the live reader. Changes made in the editor reflect here.")}</span>
             <button type="button" className="vop-lesson-preview-exit-btn" onClick={()=>setPreviewOpen(false)}>
               Back to Editor
             </button>

@@ -38,3 +38,25 @@ test('long admin modals have responsive, scrollable viewport constraints without
   assert.match(global,/overscroll-behavior:\s*contain/);
   assert.match(global,/-webkit-overflow-scrolling:\s*touch/);
 });
+
+
+test('long-form user, announcement and payment editors keep primary actions accessible',()=>{
+  const styles=read('src/modal-overflow.css');
+  for(const selector of [
+    '.vop-ann-editor-modal > div:last-child',
+    '.vop-user-editor-modal > .vop-user-modal-actions',
+    '.vop-candidate-modal > .vop-candidate-modal-actions',
+    '.vop-payable-editor > .vop-payment-submit',
+    '.vop-app-dialog-actions',
+  ])assert.ok(styles.includes(selector),selector+' needs a visible action bar');
+  assert.match(styles,/position:\s*sticky/);
+  assert.match(styles,/bottom:\s*0/);
+  assert.match(styles,/safe-area-inset-bottom/);
+  assert.match(styles,/\.vop-payable-editor[\s\S]*?overscroll-behavior-y:\s*contain/);
+  const user=read('src/pages/UserManagement.tsx');
+  const admin=read('src/pages/AdminRecordsPanel.tsx');
+  const payment=read('src/pages/PaymentManagement.tsx');
+  assert.match(user,/vop-user-modal-actions/);
+  assert.match(admin,/vop-ann-editor-modal/);
+  assert.match(payment,/vop-payable-editor/);
+});

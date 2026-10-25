@@ -38,16 +38,30 @@ function DialogSurface({
   const [value,setValue]=useState(defaultValue);
   const primaryRef=useRef<HTMLButtonElement>(null);
   const inputRef=useRef<HTMLInputElement>(null);
+  const dialogRef=useRef<HTMLFormElement>(null);
+  const openerRef=useRef<HTMLElement|null>(null);
   useEffect(()=>{
+    if(!openerRef.current&&document.activeElement instanceof HTMLElement)
+      openerRef.current=document.activeElement;
     (mode==='prompt'?inputRef.current:primaryRef.current)?.focus();
     const key=(event:KeyboardEvent)=>{
+      const dialog=dialogRef.current;
+      if(!dialog?.contains(document.activeElement))return;
       if(event.key==='Escape'){
         event.preventDefault();
         onResolve(mode==='alert'?true:null);
+      }else if(event.key==='Tab'){
+        const controls=dialog.querySelectorAll<HTMLElement>('button:not([disabled]),input:not([disabled]),[tabindex="0"]');
+        const first=controls[0],last=controls[controls.length-1];
+        if(event.shiftKey&&document.activeElement===first){event.preventDefault();last?.focus();}
+        else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first?.focus();}
       }
     };
     document.addEventListener('keydown',key);
-    return()=>document.removeEventListener('keydown',key);
+    return()=>{
+      document.removeEventListener('keydown',key);
+      if(openerRef.current?.isConnected)openerRef.current.focus({preventScroll:true});
+    };
   },[mode,onResolve]);
   const submit=(event?:FormEvent)=>{
     event?.preventDefault();
@@ -57,21 +71,23 @@ function DialogSurface({
     <div className="vop-app-dialog-backdrop" onMouseDown={event=>{
       if(event.target===event.currentTarget)onResolve(mode==='alert'?true:null);
     }}>
-      <form className={'vop-app-dialog tone-'+tone} role={tone==='danger'?'alertdialog':'dialog'}
+      <form ref={dialogRef} className={'vop-app-dialog tone-'+tone} role={tone==='danger'?'alertdialog':'dialog'}
         aria-modal="true" aria-labelledby="vop-app-dialog-title" aria-describedby="vop-app-dialog-message"
         onSubmit={submit} onMouseDown={event=>event.stopPropagation()}>
         <div className="vop-app-dialog-head">
           <span className="vop-app-dialog-icon"><DialogIcon tone={tone}/></span>
-          <div><h2 id="vop-app-dialog-title">{title}</h2>
-            <p id="vop-app-dialog-message">{message}</p></div>
+          <div><h2 id="vop-app-dialog-title">{title}</h2></div>
           <button type="button" className="vop-app-dialog-close" aria-label="Close"
             onClick={()=>onResolve(mode==='alert'?true:null)}><X size={18}/></button>
         </div>
+        <div className="vop-app-dialog-body">
+        <p id="vop-app-dialog-message">{message}</p>
         {mode==='prompt'&&<label className="vop-app-dialog-prompt">
           <span>Value</span>
           <input ref={inputRef} value={value} placeholder={placeholder}
             onChange={event=>setValue(event.target.value)}/>
         </label>}
+        </div>
         <div className="vop-app-dialog-actions">
           {mode!=='alert'&&<button type="button" className="vop-secondary"
             onClick={()=>onResolve(null)}>{cancelLabel}</button>}

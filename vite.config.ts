@@ -102,13 +102,17 @@ export function createLocalApiMiddleware(server: {
     const isAccountRoute=route==='account';
     const isAccountLifecycleCron=route==='account-lifecycle-cron';
     const isHealthRoute=route==='health';
+    const isPublicCatalogRoute=route==='public-catalog';
+    const isMobileRoute=route==='mobile';
     if(isPaymentsRoute)query.__vopPaymentRoute=route.slice('payments/'.length);
     if(isAccountRoute||isAccountLifecycleCron)query.__vopRoute='account';
     if(isAccountLifecycleCron)query.__vopAccountRoute='lifecycle-cron';
     if(isHealthRoute)query.__vopRoute='health';
+    if(isPublicCatalogRoute)query.__vopRoute='public-catalog';
+    if(isMobileRoute)query.__vopRoute='mobile';
     const modulePath = isPaymentsRoute
       ? '/api/payments.ts'
-      : isAccountRoute||isAccountLifecycleCron
+      : isAccountRoute||isAccountLifecycleCron||isHealthRoute||isPublicCatalogRoute||isMobileRoute
         ? '/api/admin.ts'
         : route.startsWith('admin/') ? '/api_handlers/' + route + '.ts' : '/api/' + route + '.ts';
 
@@ -144,7 +148,8 @@ export function createLocalApiMiddleware(server: {
     } catch (error) {
       console.error('[local-api] ' + (req.method ?? 'GET') + ' ' + requestUrl, error);
       if (!res.headersSent) {
-        res.statusCode = error instanceof Error && error.message === 'Request body is too large.' ? 413 : 500;
+        res.statusCode = error instanceof Error && error.message === 'Request body is too large.' ? 413
+          : error instanceof Error && error.message === 'Request body must be valid JSON.' ? 400 : 500;
         res.setHeader('Content-Type', 'application/json; charset=utf-8');
         res.end(JSON.stringify({
           error: error instanceof Error ? error.message : 'Local API request failed.',
@@ -170,6 +175,7 @@ export default defineConfig(({ mode }) => {
       },
     ],
     build: {
+      emptyOutDir: true,
       rollupOptions: {
         output: {
           manualChunks(id) {

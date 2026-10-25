@@ -194,3 +194,11 @@ incompatible major version. Keep the existing trusted-repository runner guards
 and isolated demo-project emulator tests. Review the chain when an upstream
 compatible repair is published; this is not a claim of a clean full-toolchain
 audit.
+
+## Isolated recovery checkpoint test
+
+Run `npm run verify:restore` from the repository root with the locked Node 22 dependencies and Java 21 or newer available. The KASAINSTITUTE validation workflow runs it after the rule tests.
+
+This command uses only the `demo-vop-security-rules` Firebase Auth and Firestore emulators. It seeds two fixture tenants, exports Firestore records and Auth accounts into a newly created temporary directory, shuts down the emulators, imports the checkpoint into a new session, and verifies restored login, canonical ownership, tenant isolation and private instructor-note denial. It refuses non-demo project IDs and non-loopback endpoints. Temporary data is deleted after the run.
+
+The test uses the local emulator export endpoints and Firebase export metadata format; it preserves external proxy settings. Firebase CLI 15.34.1 otherwise forces its generic API proxy onto loopback export requests and ignores NO_PROXY. This is a local fixture recovery test, not evidence that production backups, bucket IAM, credential rotation, or a GCP managed restore have been verified. Those release checks still require the configured production export destination and an isolated recovery database.

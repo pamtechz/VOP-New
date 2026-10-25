@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../core/vop_api.dart';
 import '../theme/vop_theme.dart';
 import '../widgets/vop_ui.dart';
+import '../widgets/vop_desktop_layout.dart';
 
 class PrayerScreen extends StatefulWidget {
   const PrayerScreen({required this.api,this.embedded=false,super.key});
@@ -27,7 +28,7 @@ class _PrayerScreenState extends State<PrayerScreen> {
           message:'${s.error}',onRetry:()=>setState(reload));
       }
       final list=rows(s.data?['items']);
-      return RefreshIndicator(onRefresh:()async{setState(reload);await requests.catchError((_) => <String, dynamic>{});},
+      return VopDesktopContent(maxWidth:1100,child:RefreshIndicator(onRefresh:()async{setState(reload);await requests.catchError((_) => <String, dynamic>{});},
         child:ListView(padding:const EdgeInsets.all(17),children:[
           VopHeroCard(
             kicker:'PRAYER MINISTRY',
@@ -80,7 +81,7 @@ class _PrayerScreenState extends State<PrayerScreen> {
                   ]),
               ])))),
           const SizedBox(height:45),
-        ]));
+        ])));
     });
     return widget.embedded?body:Scaffold(
       appBar:AppBar(title:const Text('Prayer Ministry')),body:body,

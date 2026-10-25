@@ -94,6 +94,7 @@ await db.doc('organizations/'+a).set({id:a,status:'active'});
 await db.doc('organizations/'+b).set({id:b,status:'active'});
 const author=await identity('program-test-author',a);
 const coAdmin=await identity('program-test-peer',a);
+const coEditor=await identity('program-test-editor',a,'editor');
 const learner=await identity('program-test-learner',a,'learner');
 const outsider=await identity('program-test-outside',b);
 const outsideLearner=await identity('program-test-outside-learner',b,'learner');
@@ -316,11 +317,24 @@ await test('program ownership, tenant scope, and read permissions',async t=>{
     assert.notEqual(bad.status,200);
     assert.match(String(bad.value.error),/another organization|missing|belongs|shared guides/);
   });
-  await t.test('co-admin cannot edit the other author program',async()=>{
-    const bad=await call(coAdmin,{collection:'programs',action:'upsert',
-      id:programId,organizationId:a,data:{...base,title:'Account takeover'}});
-    assert.notEqual(bad.status,200);
-    assert.equal((await db.doc('programs/'+programId).get()).data()?.title,base.title);
+  await t.test('owning co-admin updates the canonical program while nonauthor editors and foreign admins cannot',async()=>{
+    const before=(await db.collection('programs').get()).size;
+    const saved=await call(coAdmin,{collection:'programs',action:'upsert',
+      id:programId,organizationId:a,data:{...base,title:'Organization update'}});
+    assert.equal(saved.status,200,JSON.stringify(saved.value));
+    const record=(await db.doc('programs/'+programId).get()).data();
+    assert.equal(record.title,'Organization update');
+    assert.equal(record.ownerUid,author.uid,'editing does not transfer authorship');
+    assert.equal(record.ownerOrganizationId,a);
+    assert.equal((await db.collection('programs').get()).size,before,'editing does not clone the program');
+    for(const actor of [coEditor,outsider]){
+      const denied=await call(actor,{collection:'programs',action:'upsert',
+        id:programId,organizationId:actor===outsider?b:a,data:{...base,title:'Unauthorized update'}});
+      assert.notEqual(denied.status,200);
+      assert.equal((await db.doc('programs/'+programId).get()).data()?.title,'Organization update');
+    }
+    const restored=await call(author,{collection:'programs',action:'upsert',id:programId,organizationId:a,data:base});
+    assert.equal(restored.status,200);
   });
   await t.test('cross-tenant private programs are invisible to other org admins',async()=>{
     const outside=await call(outsider,{collection:'programs',action:'list',organizationId:b});
@@ -331,7 +345,10 @@ await test('program ownership, tenant scope, and read permissions',async t=>{
     assert.equal(inside.value.items.find(item=>item.id===programId).canEdit,true);
     const peer=await call(coAdmin,{collection:'programs',action:'list',organizationId:a});
     assert.equal(peer.status,200);
-    assert.equal(peer.value.items.find(item=>item.id===programId).canEdit,false);
+    assert.equal(peer.value.items.find(item=>item.id===programId).canEdit,true);
+    const editor=await call(coEditor,{collection:'programs',action:'list',organizationId:a});
+    assert.equal(editor.status,200);
+    assert.equal(editor.value.items.find(item=>item.id===programId).canEdit,false);
   });
   await t.test('a tenant cannot unilaterally make a program system-wide',async()=>{
     const attempt=await call(author,{collection:'programs',action:'upsert',
@@ -621,12 +638,16 @@ await test('teacher notes are private and transferred atomically from legacy les
       .data()?.teacherNotes,undefined);
     assert.equal((await db.doc(privatePath).get()).data()?.text,notes);
   });
-  await t.test('authorized author receives notes, co-editor only metadata, outsider nothing',async()=>{
+  await t.test('author and owning admin receive instructor notes, nonauthor editor receives metadata and outsider nothing',async()=>{
     const own=await call(author,{collection:'curriculum',action:'listGuideLessons',id:notesGuide,
       organizationId:a});
     assert.equal(own.status,200,JSON.stringify(own.value));
     assert.equal(own.value.items.find(item=>item.id===lessonId).teacherNotes,notes);
-    const peer=await call(coAdmin,{collection:'curriculum',action:'listGuideLessons',id:notesGuide,
+    const admin=await call(coAdmin,{collection:'curriculum',action:'listGuideLessons',id:notesGuide,
+      organizationId:a});
+    assert.equal(admin.status,200,JSON.stringify(admin.value));
+    assert.equal(admin.value.items.find(item=>item.id===lessonId).teacherNotes,notes);
+    const peer=await call(coEditor,{collection:'curriculum',action:'listGuideLessons',id:notesGuide,
       organizationId:a});
     assert.equal(peer.status,200,JSON.stringify(peer.value));
     assert.equal(peer.value.items.find(item=>item.id===lessonId).teacherNotes,undefined);

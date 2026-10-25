@@ -63,7 +63,7 @@ test('programme selection never opens an empty page because guides have zero pub
   assert.doesNotMatch(loader,/\.filter\(guide => guide\.lessons\.length > 0\)/);
   assert.match(loader,/const id = legacy \? String\(data\.id \|\| item\.id\)\.trim\(\) : item\.id/);
   assert.match(mobile,/const missingIds=\[\.\.\.new Set\(programs\.flatMap\(program=>program\.guideIds\)\)\]/);
-  assert.match(mobile,/!doc\.exists\|\|!hasAccess\(doc\.data\(\)\|\|\{\},scope\)/);
+  assert.match(mobile,/!doc\.exists\|\|!permittedGuide\(doc\.id,doc\.data\(\)\|\|\{\}\)/);
   assert.match(mobile,/guideIds:program\.guideIds\.filter\(id=>knownGuideIds\.has\(id\)\)/);
   assert.ok(flutter.includes('push(_ProgrammeScreen('));
   // Selecting the chip filters published courses; the full programme screen
@@ -76,7 +76,7 @@ test('programme selection never opens an empty page because guides have zero pub
   const api=read('native_android/lib/core/vop_api.dart');
   assert.ok(api.includes("read('program', {'programId': programId})"));
   assert.ok(mobile.includes("if(resource==='program')"));
-  assert.ok(mobile.includes('!snap.exists||!hasAccess(snap.data()||{},scope)'));
+  assert.ok(mobile.includes('!snap.exists||!permittedProgram(snap.id,snap.data()||{})'));
   assert.ok(flutter.includes('No accessible courses are published under this programme.'));
 });
 test('Guide Manager differentiates same-titled tenant records and edits the original',()=>{
