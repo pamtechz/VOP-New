@@ -1,5 +1,6 @@
 import {FieldValue} from 'firebase-admin/firestore';
 import {randomUUID} from 'node:crypto';
+import {createNotification} from './notifications.js';
 import type {TenantContext} from './tenant.js';
 import {canEditCanonicalContent,requireOrgRole,writeTenantAudit} from './tenant.js';
 import {loadSharedVisibility,updateSharedVisibility,validSharedId,
@@ -88,6 +89,35 @@ export async function handleSharedCurriculumAction(
     });
     await writeTenantAudit(ctx,'curriculum.edit.propose',target.path,undefined,
       {proposalId,changes:Object.keys(changes)});
+    // Deliver an in-app review notice to the creator and the owning admins.
+    // Notification failures must not undo a securely queued proposal.
+    try{
+      const recipients=new Set<string>();
+      if(data.ownerUid)recipients.add(String(data.ownerUid));
+      if(ownerOrg){
+        const members=await ctx.db.collection('organizations/'+ownerOrg+'/members')
+          .where('active','==',true).limit(150).get();
+        for(const member of members.docs){
+          if(['owner','admin'].includes(String(member.data()?.role||'')))
+            recipients.add(String(member.data()?.uid||member.id));
+        }
+      }else{
+        const administrators=await ctx.db.collection('users')
+          .where('role','==','super_admin').limit(40).get();
+        administrators.docs.forEach(doc=>recipients.add(doc.id));
+      }
+      recipients.delete(ctx.auth.uid);
+      await Promise.allSettled([...recipients].slice(0,30).map(recipientId=>
+        createNotification(ctx.db,{
+          organizationId:ownerOrg||undefined,
+          recipientId,
+          title:'Shared curriculum edit suggested',
+          body:'Review a proposed '+collection+' change from another organisation.',
+          type:'system',channel:'in_app',actionUrl:'/admin',
+          metadata:{proposalId,collection,targetId:id},
+          createdBy:ctx.auth.uid,
+        })));
+    }catch{ /* the review queue is authoritative even if notifications fail */ }
     return res.status(200).json({ok:true,id:proposalId,status:'pending'});
   }
   if(action==='listEditProposals'){
