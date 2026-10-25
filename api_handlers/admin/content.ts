@@ -156,7 +156,7 @@ export default async function handler(req: Request, res: Response) {
     const editorRoles = curriculum || GLOBAL_COLLECTIONS.has(collection)
       ? ['owner','admin','editor','union_admin','conference_admin','district_admin','church_admin']
       : ['owner','admin'];
-    if (action !== 'list' && action !== 'learnerList' && action !== 'listGuides' && action !== 'listGuideLessons' && !HIERARCHY_COLLECTIONS.has(collection) && !(ctx.tenantType === 'hierarchy' && ORG_COLLECTIONS.has(collection))) requireOrgRole(ctx, editorRoles);
+    if (action !== 'list' && action !== 'learnerList' && action !== 'listGuides' && action !== 'listGuideLessons' && action !== 'getSharedVisibility' && !HIERARCHY_COLLECTIONS.has(collection) && !(ctx.tenantType === 'hierarchy' && ORG_COLLECTIONS.has(collection))) requireOrgRole(ctx, editorRoles);
     if ((collection === 'settings' || collection === 'certificationConfig') && !ctx.isSuperAdmin) {
       if (collection === 'certificationConfig') {
         if (ctx.tenantType === 'hierarchy') {
@@ -219,7 +219,9 @@ export default async function handler(req: Request, res: Response) {
       });
       const items = await Promise.all(visibleLessons.map(async doc => {
         const row = doc.data();
-        const canEdit = ctx.isSuperAdmin || (String(row.ownerUid || '') === ctx.auth.uid && !platformStewardedResource(row));
+        const canEdit = ctx.isSuperAdmin ||
+          (!platformStewardedResource(row) &&
+            (canEditCanonicalContent(ctx,row) || await canManageOrganizationContent(ctx,row)));
         if (!canEdit) return {
           id:doc.id, guideId:selectedGuideId, title:String(row.title || ''),
           lessonNumber:String(row.lessonNumber || ''), type:row.type === 'Test' ? 'Test' : 'Lesson',
@@ -294,7 +296,9 @@ export default async function handler(req: Request, res: Response) {
             published:lesson.data().published === true, guideId:d.id,
           })),
           languages: [String(d.data().language || '')].filter(Boolean),
-          canEdit: ctx.isSuperAdmin || (!platformStewardedResource(d.data()) && (ctx.tenantType === 'hierarchy' || String(d.data().ownerUid || '') === ctx.auth.uid)),
+          canEdit: ctx.isSuperAdmin || (!platformStewardedResource(d.data()) &&
+            (canEditCanonicalContent(ctx,d.data()) ||
+              await canManageOrganizationContent(ctx,d.data()))),
         };
       }));
       return res.status(200).json({ ok: true, items });
