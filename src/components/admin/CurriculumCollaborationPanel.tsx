@@ -150,13 +150,16 @@ export function CurriculumCollaborationPanel({organizationId,isSuperAdmin,onClos
   },'Suggestion submitted to the original content owner for review.');
   const review=(item:Proposal,decision:'approve'|'reject')=>
     void run(()=>curriculumCollaborationApi('reviewProposal',{id:item.id,decision}),
-      decision==='approve'?'Approved correction applied to the original record.':'Suggestion rejected.');
+      decision==='reject'?'Suggestion rejected.':isSuperAdmin
+        ?'Approved correction applied to the original record.'
+        :'Owner approved. Sent to VOP Super Admin for final platform review.');
 
   const includes=(key:keyof Visibility,id:string)=>Array.isArray(visibility[key])&&
     (visibility[key] as string[]).includes(id);
   const matching=(list:Entry[])=>list.filter(v=>
     (v.title+' '+(v.description||'')).toLowerCase().includes(search.toLowerCase().trim()));
-  const incoming=useMemo(()=>proposals.filter(item=>item.status==='pending' &&
+  const incoming=useMemo(()=>proposals.filter(item=>
+    (item.status==='pending'||(isSuperAdmin&&item.status==='owner_approved')) &&
     (isSuperAdmin||(organizationId&&item.ownerOrganizationId===organizationId))),[proposals,organizationId,isSuperAdmin]);
   const selectable=Boolean(organizationId);
 
@@ -223,7 +226,7 @@ export function CurriculumCollaborationPanel({organizationId,isSuperAdmin,onClos
         </div>
         <aside className="vop-collab-hint"><ShieldCheck size={27}/><h3>Ownership stays with its creator</h3>
           <p>A shared course is referenced, never duplicated. Your organisation cannot change or delete somebody else’s canonical material.</p>
-          <p>Suggestions go to its owner for approval. VOP Super Admin may steward all records.</p></aside>
+          <p>The original owner reviews suggestions. VOP Super Admin applies the final correction to platform-stewarded shared publications.</p></aside>
       </div>:
       <div className="vop-collab-review">
         <h3>Owner review inbox</h3>
@@ -235,7 +238,8 @@ export function CurriculumCollaborationPanel({organizationId,isSuperAdmin,onClos
           <pre>{JSON.stringify(item.changes,null,2)}</pre>
           <div className="vop-collab-actions">
             <button type="button" className="vop-primary" disabled={busy}
-              onClick={()=>review(item,'approve')}><Check size={16}/> Approve & apply</button>
+              onClick={()=>review(item,'approve')}><Check size={16}/>
+                {isSuperAdmin?'Approve & apply':'Approve & forward'}</button>
             <button type="button" className="vop-secondary" disabled={busy}
               onClick={()=>review(item,'reject')}><X size={16}/> Reject</button>
           </div>
