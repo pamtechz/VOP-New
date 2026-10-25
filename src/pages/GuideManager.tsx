@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Archive, BookOpen, CalendarDays, Check, ChevronLeft, ChevronRight, Edit3,
   Filter, FolderOpen, Globe, Image as ImageIcon, LoaderCircle, MoreVertical, Plus, RefreshCw, Save,
@@ -205,6 +205,7 @@ export default function GuideManager({
 }: Props) {
   const [records, setRecords] = useState<GuideRecord[]>([]);
   const [editing, setEditing] = useState<GuideRecord | null>(null);
+  const originallyEditingId=useRef('');
   const [availablePrograms, setAvailablePrograms] = useState<Array<{ id: string; title: string; guideIds: string[] }>>([]);
   const [programSelectModalOpen, setProgramSelectModalOpen] = useState(false);
   const [chosenProgramId, setChosenProgramId] = useState('');
@@ -298,6 +299,7 @@ export default function GuideManager({
   const pageRows = filtered.slice((page - 1) * pageSize, page * pageSize);
 
   const startGuideCreation = (programId: string) => {
+    originallyEditingId.current='';
     const language = enabledLanguages[0]?.code || '';
     setEditing({
       id: '',
@@ -345,6 +347,7 @@ export default function GuideManager({
       return;
     }
     const currentProg = availablePrograms.find(p => p.guideIds.includes(preferred.id));
+    originallyEditingId.current=preferred.id;
     setEditing({ ...preferred, programId: currentProg?.id || '' });
   };
 
@@ -372,6 +375,7 @@ export default function GuideManager({
       if(!editing.id)setEditing(previous=>previous?{...previous,id:requestedId}:previous);
       const saved = await guideAdmin('upsertGuide', {
         id: requestedId,
+        expectedExisting:originallyEditingId.current===requestedId,
         discoverNumber: editing.discoverNumber,
         title: editing.title.trim(),
         subtitle: editing.subtitle.trim(),
