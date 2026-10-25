@@ -300,6 +300,7 @@ export default function GuideManager({
   const pageRows = filtered.slice((page - 1) * pageSize, page * pageSize);
 
   const startGuideCreation = (programId: string) => {
+    pendingCanonicalId.current='';
     const language = enabledLanguages[0]?.code || '';
     setEditing({
       id: '',
@@ -336,6 +337,7 @@ export default function GuideManager({
   };
 
   const openEdit = (group: GuideGroup) => {
+    pendingCanonicalId.current='';
     const preferred = group.records.find(record=>record.canEdit!==false
         && record.organizationId===(organizationId||'') && !record.archived)
       || group.records.find(record=>record.canEdit!==false && record.published && !record.archived)
@@ -511,7 +513,7 @@ export default function GuideManager({
         <div className="vop-reference-editor">
           <div className="vop-section-title">
             <div><h2>{editing.id ? 'Edit Guide' : 'New Guide'}</h2><p>Guide metadata is stored in the content service.</p></div>
-            <button className="vop-actions" type="button" onClick={() => setEditing(null)}><X size={17}/></button>
+            <button className="vop-actions" type="button" onClick={() => {pendingCanonicalId.current='';setEditing(null);}}><X size={17}/></button>
           </div>
           <div className="vop-form-grid vop-reference-form-grid">
             <div className="vop-field"><label>Guide Title *</label><input value={editing.title} onChange={e => setEditing({...editing,title:e.target.value})}/></div>
@@ -607,7 +609,7 @@ export default function GuideManager({
               )}
             </div>
             <div style={{display:'flex',gap:8}}>
-              <button className="vop-secondary" type="button" onClick={() => setEditing(null)}>Cancel</button>
+              <button className="vop-secondary" type="button" onClick={() => {pendingCanonicalId.current='';setEditing(null);}}>Cancel</button>
               <button className="vop-primary" type="button" onClick={() => void save()} disabled={saving}>
                 {saving ? <LoaderCircle className="spin" size={17}/> : <Save size={17}/>}
                 <span>{saving ? 'Saving…' : 'Save Guide'}</span>
