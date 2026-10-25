@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Archive, BookOpen, CalendarDays, Check, ChevronLeft, ChevronRight, Edit3,
   Filter, FolderOpen, Globe, Image as ImageIcon, LoaderCircle, MoreVertical, Plus, RefreshCw, Save,
@@ -215,6 +215,8 @@ export default function GuideManager({
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const savingLock=useRef(false);
+  const pendingCanonicalId=useRef('');
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [certificationRequirements,setCertificationRequirements]=useState<CertificationRequirement[]>([]);
@@ -298,6 +300,7 @@ export default function GuideManager({
   const pageRows = filtered.slice((page - 1) * pageSize, page * pageSize);
 
   const startGuideCreation = (programId: string) => {
+    pendingCanonicalId.current='';
     const language = enabledLanguages[0]?.code || '';
     setEditing({
       id: '',
@@ -334,6 +337,7 @@ export default function GuideManager({
   };
 
   const openEdit = (group: GuideGroup) => {
+    pendingCanonicalId.current='';
     const preferred = group.records.find(record=>record.canEdit!==false
         && record.organizationId===(organizationId||'') && !record.archived)
       || group.records.find(record=>record.canEdit!==false && record.published && !record.archived)
@@ -349,7 +353,7 @@ export default function GuideManager({
   };
 
   const save = async () => {
-    if (!editing || saving) return;
+    if (!editing || saving || savingLock.current) return;
     if (!editing.programId) {
       setError('A parent study track (program) is required. Please select a study track for this guide.');
       return;
@@ -363,12 +367,14 @@ export default function GuideManager({
       return;
     }
 
+    savingLock.current=true;
     setSaving(true);
     setError('');
     try {
       // Reserve one canonical ID before the request. Lost HTTP responses and
       // failed programme attachment must not create additional guide copies.
-      const requestedId=editing.id||'guide-'+crypto.randomUUID().replace(/-/g,'');
+      const requestedId=editing.id||pendingCanonicalId.current||'guide-'+crypto.randomUUID().replace(/-/g,'');
+      pendingCanonicalId.current=requestedId;
       if(!editing.id)setEditing(previous=>previous?{...previous,id:requestedId}:previous);
       const saved = await guideAdmin('upsertGuide', {
         id: requestedId,
@@ -408,6 +414,7 @@ export default function GuideManager({
         }
       }
 
+      pendingCanonicalId.current='';
       setEditing(null);
       setMessage(editing.published ? 'Guide published.' : 'Guide saved as draft.');
       onSaved?.();
@@ -416,6 +423,7 @@ export default function GuideManager({
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Could not save guide.');
     } finally {
+      savingLock.current=false;
       setSaving(false);
     }
   };
@@ -505,7 +513,7 @@ export default function GuideManager({
         <div className="vop-reference-editor">
           <div className="vop-section-title">
             <div><h2>{editing.id ? 'Edit Guide' : 'New Guide'}</h2><p>Guide metadata is stored in the content service.</p></div>
-            <button className="vop-actions" type="button" onClick={() => setEditing(null)}><X size={17}/></button>
+            <button className="vop-actions" type="button" onClick={() => {pendingCanonicalId.current='';setEditing(null);}}><X size={17}/></button>
           </div>
           <div className="vop-form-grid vop-reference-form-grid">
             <div className="vop-field"><label>Guide Title *</label><input value={editing.title} onChange={e => setEditing({...editing,title:e.target.value})}/></div>
@@ -601,7 +609,7 @@ export default function GuideManager({
               )}
             </div>
             <div style={{display:'flex',gap:8}}>
-              <button className="vop-secondary" type="button" onClick={() => setEditing(null)}>Cancel</button>
+              <button className="vop-secondary" type="button" onClick={() => {pendingCanonicalId.current='';setEditing(null);}}>Cancel</button>
               <button className="vop-primary" type="button" onClick={() => void save()} disabled={saving}>
                 {saving ? <LoaderCircle className="spin" size={17}/> : <Save size={17}/>}
                 <span>{saving ? 'Saving…' : 'Save Guide'}</span>

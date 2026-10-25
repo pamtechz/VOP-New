@@ -23,30 +23,35 @@ function subject(uid: string, organizationId = 'church-one', membershipRole = 'a
 }
 const contribution = {ownerTenantId:'church-one',ownerOrganizationId:'church-one',organizationId:'church-one',ownerUid:'author'};
 
-test('peer administrators cannot edit another author\'s contribution',async()=>{
+test('organization owner and admin may edit any record owned by their tenant, without duplicating it',async()=>{
   const {canEditCanonicalContent}=await tenantModule;
   assert.equal(canEditCanonicalContent(subject('author'),contribution),true);
-  assert.equal(canEditCanonicalContent(subject('peer'),contribution),false);
+  assert.equal(canEditCanonicalContent(subject('peer','church-one','admin'),contribution),true);
+  assert.equal(canEditCanonicalContent(subject('peer','church-one','owner'),contribution),true);
+  assert.equal(canEditCanonicalContent(subject('peer','church-one','admin'),{...contribution,ownerUid:''}),true);
   assert.equal(canEditCanonicalContent(subject('author','church-two'),contribution),false);
-  assert.equal(canEditCanonicalContent(subject('author'),{...contribution,ownerUid:''}),false);
+  assert.equal(canEditCanonicalContent(subject('peer','church-two','admin'),contribution),false);
 });
-test('teacher may edit only own authored content when tenant matches',async()=>{
+
+test('editors and teachers remain author-only even inside their own tenant',async()=>{
   const {canEditCanonicalContent}=await tenantModule;
   assert.equal(canEditCanonicalContent(subject('teacher','church-one','teacher'),{...contribution,ownerUid:'teacher'}),true);
   assert.equal(canEditCanonicalContent(subject('teacher','church-one','teacher'),contribution),false);
-  assert.equal(canEditCanonicalContent(subject('unprivileged','church-one','learner'),{...contribution,ownerUid:'unprivileged'}),false);
+  assert.equal(canEditCanonicalContent(subject('learner','church-one','learner'),{...contribution,ownerUid:'learner'}),false);
 });
+
 test('Super Admin retains platform override without organization selection',async()=>{
   const {canEditCanonicalContent}=await tenantModule;
   const superAdmin=subject('super','','platform','super_admin');
   superAdmin.tenantType='platform';
   assert.equal(canEditCanonicalContent(superAdmin,contribution),true);
 });
-test('hierarchy tenant cannot inherit authorship from another hierarchy',async()=>{
+
+test('hierarchy administrator cannot cross hierarchy ownership boundary',async()=>{
   const {canEditCanonicalContent}=await tenantModule;
   const hierarchy=subject('union-user','','union_admin','union_admin');
   hierarchy.tenantType='hierarchy';
   hierarchy.tenantId='union_admin:union-one';
-  assert.equal(canEditCanonicalContent(hierarchy,{ownerUid:'union-user',ownerTenantId:'union_admin:union-one'}),true);
-  assert.equal(canEditCanonicalContent(hierarchy,{ownerUid:'union-user',ownerTenantId:'union_admin:union-two'}),false);
+  assert.equal(canEditCanonicalContent(hierarchy,{ownerUid:'writer',ownerTenantId:'union_admin:union-one'}),true);
+  assert.equal(canEditCanonicalContent(hierarchy,{ownerUid:'writer',ownerTenantId:'union_admin:union-two'}),false);
 });

@@ -32,12 +32,70 @@ function scopedStorageKey(key: string): string {
   return `vop:${uid}:${key}`;
 }
 
+// Local storage is a small, optional convenience cache, NOT the authority for
+// published curriculum or downloadable offline study packages.
+const volatileCache = new Map<string, string>();
+const MAX_GUIDE_CACHE_CHARACTERS = 180_000;
+let reportedStoragePressure = false;
+
+function cacheWarning(): void {
+  if (reportedStoragePressure) return;
+  reportedStoragePressure = true;
+  console.warn('VOP browser cache is full. Curriculum remains available from the service; large snapshots will not be stored in localStorage.');
+}
+
+function browserStore(): Storage | null {
+  try {
+    return typeof localStorage === 'undefined' ? null : localStorage;
+  } catch {
+    return null;
+  }
+}
+
 function readStorage(key: string): string | null {
-  return localStorage.getItem(scopedStorageKey(key));
+  const name = scopedStorageKey(key);
+  if (volatileCache.has(name)) return volatileCache.get(name) ?? null;
+  try { return browserStore()?.getItem(name) ?? null; } catch { return null; }
+}
+
+function evictGuideSnapshots(storage: Storage): void {
+  // Only remove regenerable guide snapshots, never authentication, progress,
+  // offline queues, settings or personal drafts.
+  const names: string[] = [];
+  for (let i = 0; i < storage.length; i++) {
+    const name = storage.key(i);
+    if (name && /^vop:[^:]+:vop_discover_guides$/.test(name)) names.push(name);
+  }
+  names.forEach(name => { try { storage.removeItem(name); } catch { /* optional cache */ } });
 }
 
 function writeStorage(key: string, value: string): void {
-  localStorage.setItem(scopedStorageKey(key), value);
+  const name = scopedStorageKey(key);
+  const storage = browserStore();
+  const isGuideSnapshot = key === 'vop_discover_guides';
+  // A full lesson catalogue can exceed the browser quota by itself. Retain it
+  // in memory for current-tab browsing and leave explicit offline study storage
+  // to the IndexedDB/offline queue implementation.
+  if (isGuideSnapshot && value.length > MAX_GUIDE_CACHE_CHARACTERS) {
+    volatileCache.set(name, value);
+    try { storage?.removeItem(name); } catch { /* optional cache */ }
+    return;
+  }
+  if (!storage) { volatileCache.set(name, value); return; }
+  try {
+    storage.setItem(name, value);
+    volatileCache.delete(name);
+  } catch {
+    try {
+      evictGuideSnapshots(storage);
+      storage.setItem(name, value);
+      volatileCache.delete(name);
+      return;
+    } catch {
+      volatileCache.set(name, value);
+      cacheWarning();
+    }
+  }
 }
 
 const STORAGE_KEYS = {

@@ -216,8 +216,10 @@ export async function handleCurriculumPrograms(ctx:TenantContext,
   // A published platform program is, by definition, system-wide. Do not
   // permit a platform publication whose visibility contradicts its scope.
   if(!programOrganizationId&&input.published)input.sharingScope='shared';
-  if(input.sharingScope==='shared'&&!ctx.isSuperAdmin)
-    throw new Error('Only VOP Super Admin may publish a cross-organization program.');
+  if(input.sharingScope==='shared'&&!ctx.isSuperAdmin &&
+    !(previous.exists && String(current.organizationId||'')===programOrganizationId &&
+      current.sharingScope==='shared'))
+    throw new Error('Only VOP Super Admin may approve a new cross-organization program.');
   if(!programOrganizationId&&input.sharingScope==='organization')
     throw new Error('Platform-wide programs must be private or shared.');
   if(programOrganizationId && !ctx.isSuperAdmin && input.published &&

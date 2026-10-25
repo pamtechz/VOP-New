@@ -2,10 +2,9 @@
  * Server/runtime imports continue to use platformStewardship.js.
  */
 export function platformStewardedResource(data: Record<string, unknown>): boolean {
-  return (data.scope === 'platform' && !String(data.ownerOrganizationId || '').trim())
-    || data.platformOwned === true
-    || data.adoptedByPlatform === true
-    || (data.sharingScope === 'shared' && data.published === true);
+  const ownerOrganizationId = String(data.ownerOrganizationId || data.organizationId || '').trim();
+  return !ownerOrganizationId &&
+    (data.scope === 'platform' || data.platformOwned === true || data.adoptedByPlatform === true);
 }
 
 export function assertMutableTenantResource(
@@ -15,7 +14,7 @@ export function assertMutableTenantResource(
 ): void {
   if (isSuperAdmin || !existing || !platformStewardedResource(existing)) return;
   throw new Error(
-    'This published shared resource is under VOP platform stewardship. ' +
+    'This platform-owned resource is under VOP platform stewardship. ' +
     'An organization cannot ' + operation + ' it. Copy it into your organization or request Super Admin review.',
   );
 }
