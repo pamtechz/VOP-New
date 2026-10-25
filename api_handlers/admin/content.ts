@@ -298,6 +298,8 @@ export default async function handler(req: Request, res: Response) {
       const id = data.id ? safeId(data.id) : safeId(`guide-${randomUUID().replace(/-/g, '').slice(0,24)}`);
       const ref = ctx.db.doc(`guides/${id}`);
       const existing = await ref.get();
+      if(data.expectedExisting===true && !existing.exists)
+        throw new Error('This guide no longer exists. Reload before editing; no duplicate has been created.');
       const current = existing.exists ? existing.data() || {} : {};
       const ownerOrganizationId = String(current.scope === 'platform'
         ? '' : current.organizationId || current.ownerOrganizationId || '').trim();
@@ -629,6 +631,10 @@ export default async function handler(req: Request, res: Response) {
         || !guideOrgId.trim();
       const ref = guideRef.collection('lessons').doc(lessonId);
       const existing = await ref.get();
+      if(data.expectedExisting===true && !existing.exists)
+        throw new Error('The original lesson is missing from this guide. Reload before editing; no duplicate has been created.');
+      if(data.originalGuideId && String(data.originalGuideId)!==guideId)
+        throw new Error('Moving a lesson by editing is not allowed. Use the explicit transfer workflow.');
       if (existing.data()?.sourceQuizId) throw new Error('This assessment is linked to a quiz. Edit it through Quiz Library.');
       // Answer keys live exclusively in the private Quiz Library. Lesson and
       // chapter bodies are readable by learners; never persist inline keys.
@@ -669,7 +675,8 @@ export default async function handler(req: Request, res: Response) {
       if(data.published===true)await requirePermission(ctx,'curriculum','publish');
       if (existing.exists && !(ctx.tenantType === 'hierarchy' ? await canManageOrganizationContent(ctx, existing.data()) : canEditCanonicalContent(ctx, existing.data()))) throw new Error('Only an authorized tenant administrator or VOP Super Admin can edit this lesson.');
       if (existing.exists) assertMutableTenantResource(ctx.isSuperAdmin, existing.data(), 'edit');
-      const { teacherNotes: _incomingNotes, ...publicData }=data;
+      const { teacherNotes: _incomingNotes, expectedExisting: _expectedExisting,
+        originalGuideId: _originalGuideId, ...publicData }=data;
       const notesIncluded=Object.prototype.hasOwnProperty.call(data,'teacherNotes');
       if(notesIncluded && typeof _incomingNotes!=='string') {
         throw new Error('Instructor notes must be text.');
