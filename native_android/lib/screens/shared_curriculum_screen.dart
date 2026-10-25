@@ -15,6 +15,8 @@ class SharedCurriculumScreen extends StatefulWidget {
 
 class _SharedCurriculumState extends State<SharedCurriculumScreen> {
   bool loading=false;
+  int _guideRequest=0;
+  String? nextCursor;
   String? error,notice;
   String selectedGuide='';
   List<Map<String,dynamic>> programs=[],guides=[],lessons=[],suggestions=[];
@@ -39,6 +41,8 @@ class _SharedCurriculumState extends State<SharedCurriculumScreen> {
       setState((){
         preferences=widget.platformMode?{}:recordMap(results[0]['settings']);
         suggestions=recordRows(results[offset]['items']);
+        nextCursor=results[offset]['nextCursor'] is String
+          ?results[offset]['nextCursor'].toString():null;
         if(!widget.platformMode){
           programs=recordRows(results[2]['items']).where(shared).toList();
           guides=recordRows(results[3]['items']).where(shared).toList();
@@ -52,12 +56,38 @@ class _SharedCurriculumState extends State<SharedCurriculumScreen> {
     item['sharingScope']=='shared'&&item['published']==true&&item['canEdit']==false;
 
   Future<void> pickGuide(String value)async{
+    final request=++_guideRequest;
     setState((){selectedGuide=value;lessons=[];error=null;});
     if(value.isEmpty)return;
     setState(()=>loading=true);
     try{
       final result=await call('listGuideLessons',{'guideId':value});
-      if(mounted)setState(()=>lessons=recordRows(result['items']));
+      if(mounted&&request==_guideRequest)
+        setState(()=>lessons=recordRows(result['items']));
+    }catch(e){
+      if(mounted&&request==_guideRequest)setState(()=>error=e.toString());
+    }finally{
+      if(mounted&&request==_guideRequest)setState(()=>loading=false);
+    }
+  }
+
+  Future<void> loadMore()async{
+    final cursor=nextCursor;
+    if(cursor==null||loading)return;
+    setState(()=>loading=true);
+    try{
+      final result=await call('listSuggestedEdits',{'cursor':cursor});
+      if(!mounted)return;
+      setState((){
+        final entries={for(final item in suggestions)
+          item['id'].toString():item};
+        for(final item in recordRows(result['items'])){
+          entries[item['id'].toString()]=item;
+        }
+        suggestions=entries.values.toList();
+        nextCursor=result['nextCursor'] is String
+          ?result['nextCursor'].toString():null;
+      });
     }catch(e){if(mounted)setState(()=>error=e.toString());}
     finally{if(mounted)setState(()=>loading=false);}
   }
@@ -228,6 +258,11 @@ class _SharedCurriculumState extends State<SharedCurriculumScreen> {
                     {'id':suggestion['id'],'decision':'reject'},'Suggestion rejected.')),
               ]),
           ]))),
+      if(nextCursor!=null)
+        OutlinedButton.icon(
+          icon:const Icon(Icons.expand_more),
+          label:const Text('Load older suggestions'),
+          onPressed:loading?null:loadMore),
     ]);
   }
   @override
