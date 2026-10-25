@@ -75,7 +75,12 @@ export default function SharedCurriculumPanel({onUpdated,platformMode=false}:{on
       await request(action,body);
       setMessage(action==='proposeEdit'?'Your suggestion was sent to the content owner for review.':
         action==='reviewSuggestedEdit'?'Suggestion reviewed successfully.':'Shared study visibility updated.');
-      await load();onUpdated?.();
+      await load();
+      // The learner directory uses a separate, throttled public snapshot.
+      // An explicit shared-selection change must invalidate it immediately.
+      if(action==='setSharedVisibility'||action==='reviewSuggestedEdit')
+        window.dispatchEvent(new Event('vop_public_content_changed'));
+      onUpdated?.();
     }catch(e){setError(e instanceof Error?e.message:String(e));}
     finally{setBusy(false);}
   };
