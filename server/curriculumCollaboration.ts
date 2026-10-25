@@ -140,9 +140,11 @@ export async function handleCurriculumCollaboration(
     const ownerUid=String(data.ownerUid||'');
     const reviewerIds=new Set<string>();
     if(ownerUid&&ownerUid!==ctx.auth.uid)reviewerIds.add(ownerUid);
-    if(!ownerUid&&suggestion.ownerOrganizationId){
+    if(suggestion.ownerOrganizationId){
+      // Notify organisation owners/admins even when a teacher is the named
+      // creator. A contributor may not have curriculum approval permissions.
       const members=await ctx.db.collection('organizations/'+suggestion.ownerOrganizationId+
-        '/members').where('active','==',true).limit(50).get().catch(()=>null);
+        '/members').where('active','==',true).limit(100).get().catch(()=>null);
       for(const member of members?.docs||[]){
         if(['owner','admin'].includes(String(member.data().role||'')))
           reviewerIds.add(String(member.data().uid||member.id));
