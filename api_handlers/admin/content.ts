@@ -16,6 +16,7 @@ import { configuredPassThreshold } from '../../shared/studyValidation.js';
 import { normalizeCurriculumStructure, curriculumPages, containsPublicQuizAnswer } from '../../shared/curriculumStructure.js';
 import { transferCurriculumNode } from '../../shared/curriculumTransfer.js';
 import { handleCurriculumPrograms } from '../../server/programManager.js';
+import { handleCurriculumCollaboration, loadSharedCurriculumVisibility } from '../../server/curriculumCollaboration.js';
 import { adoptOrganizationLanguage } from '../../server/tenantLanguageAdoption.js';
 import { translationKey } from '../../server/localization.js';
 
@@ -48,7 +49,8 @@ const SUBSCRIPTION_FEATURE_BY_COLLECTION:Partial<Record<string,SubscriptionFeatu
   certificates:'certification',
   graduationRequests:'certification',
 };
-const NON_EXPANSIVE_CONTENT_ACTIONS=new Set(['list','learnerList','listGuides','listGuideLessons','delete','archiveGuide']);
+const NON_EXPANSIVE_CONTENT_ACTIONS=new Set(['list','learnerList','listGuides','listGuideLessons','delete','archiveGuide',
+  'getSharedVisibility','setSharedVisibility','proposeEdit','listSuggestedEdits','reviewSuggestedEdit']);
 function quotaKeyForCollection(collection:string){
   return collection==='announcements'?'maxAnnouncements'
     :collection==='events'?'maxEvents'
@@ -174,6 +176,9 @@ export default async function handler(req: Request, res: Response) {
       }
     }
 
+    if(collection==='curriculum' &&
+        await handleCurriculumCollaboration(ctx,action,body,res))return;
+
     if(collection==='programs'){
       return await handleCurriculumPrograms(ctx,action,body,effectiveOrganizationId,res);
     }
@@ -200,8 +205,12 @@ export default async function handler(req: Request, res: Response) {
         Boolean(ownerOrganizationId && (ctx.tenantType==='hierarchy'
           ?await organizationInHierarchyScope(ctx,ownerOrganizationId)
           :ownerOrganizationId===ctx.organizationId));
+      const hidden=await loadSharedCurriculumVisibility(ctx);
+      if (!canReadDrafts && hidden.guides.has(selectedGuideId))
+        return res.status(200).json({ok:true,items:[]});
       const snap = await guide.ref.collection('lessons').get();
       const visibleLessons=snap.docs.filter(doc=>{
+        if (!canReadDrafts && hidden.lessons.has(selectedGuideId+'/'+doc.id))return false;
         if(canReadDrafts)return true;
         const lesson=doc.data();
         return lesson.published===true && lesson.archived!==true
@@ -248,12 +257,15 @@ export default async function handler(req: Request, res: Response) {
             ...organizationIds.map(orgId => ctx.db.collection('guides').where('organizationId','==',orgId).get()),
             ctx.db.collection('guides').where('sharingScope','==','shared').where('published','==',true).get(),
           ]);
+      const hidden=await loadSharedCurriculumVisibility(ctx);
       const visibleGuides = new Map<string,FirebaseFirestore.QueryDocumentSnapshot>();
       for (const snapshot of snapshots) for (const document of snapshot.docs) {
         const data=document.data();
         const owned=organizationIds.includes(String(data.organizationId||''));
         const shared=data.sharingScope==='shared'&&data.published===true&&data.archived!==true;
-        if(ctx.isSuperAdmin||owned||shared)visibleGuides.set(document.id,document);
+        if((ctx.isSuperAdmin||owned||shared) &&
+          (owned||ctx.isSuperAdmin||!hidden.guides.has(document.id)))
+          visibleGuides.set(document.id,document);
       }
       const items = await Promise.all([...visibleGuides.values()].map(async d => {
         const guideData=d.data();
@@ -264,7 +276,8 @@ export default async function handler(req: Request, res: Response) {
           Boolean(guideOrganizationId&&organizationIds.includes(guideOrganizationId));
         const studyLessons=lessons.docs.filter(lesson => {
           const data=lesson.data();
-          return data.archived!==true
+          return (canReadAllChildren||!hidden.lessons.has(d.id+'/'+lesson.id))
+            && data.archived!==true
             && String(data.type||'Lesson')!=='Test'
             && (canReadAllChildren || (data.published===true &&
               (platformGuide || (guideData.sharingScope==='shared' && data.sharingScope==='shared'))));
