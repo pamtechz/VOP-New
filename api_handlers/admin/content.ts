@@ -201,9 +201,15 @@ export default async function handler(req: Request, res: Response) {
         Boolean(ownerOrganizationId && (ctx.tenantType==='hierarchy'
           ?await organizationInHierarchyScope(ctx,ownerOrganizationId)
           :ownerOrganizationId===ctx.organizationId));
+      const sharedSelection=await loadSharedCurriculumSelection(ctx.db,ctx.organizationId);
+      if(!canReadDrafts && !sharedContentChosen(sharedSelection,'guide',selectedGuideId))
+        throw new Error('This shared guide is not included in your organisation library.');
       const snap = await guide.ref.collection('lessons').get();
       const visibleLessons=snap.docs.filter(doc=>{
         if(canReadDrafts)return true;
+        if(sharedSelection.mode==='selected' && sharedSelection.lessonIds.size &&
+           !sharedContentChosen(sharedSelection,'lesson',selectedGuideId+':'+doc.id))
+          return false;
         const lesson=doc.data();
         return lesson.published===true && lesson.archived!==true
           && lesson.type!=='Test' &&
