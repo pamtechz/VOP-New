@@ -178,7 +178,7 @@ export default function ProgramManager({
         <button type="button" className="vop-secondary" onClick={()=>void load()} disabled={loading}>
           {loading ? <LoaderCircle className="spin" size={16}/> : <RefreshCw size={16}/>} {loading ? 'Refreshing…' : 'Refresh'}</button>
         <button type="button" className="vop-primary"
-          onClick={()=>{setEditing({...blank(organizationId),id:''});setSelectedId('');setGuideQuery('');}}>
+          onClick={()=>{pendingCanonicalId.current='';setEditing({...blank(organizationId),id:''});setSelectedId('');setGuideQuery('');}}>
           <Plus size={16}/> New Study Track</button>
       </div>
     </header>
@@ -198,7 +198,7 @@ export default function ProgramManager({
           <h3>{editing.id?'Edit Study Track (Series)':'Create Study Track (Series)'}</h3>
         </div>
         <button type="button" className="vop-actions" aria-label="Close program editor"
-          onClick={()=>setEditing(null)}><X size={17}/></button>
+          onClick={()=>{pendingCanonicalId.current='';setEditing(null);}}><X size={17}/></button>
       </div>
       <div className="vop-program-editor-banner">
         <FolderOpen size={18}/>
@@ -278,7 +278,7 @@ export default function ProgramManager({
         <span className="vop-program-visibility-help">Published, shared programmes expose their title and description in the public study catalogue; only individually published and shared courses appear in its outline.</span>
         <label className="vop-program-publish"><input type="checkbox" checked={editing.published}
           onChange={event=>setEditing({...editing,published:event.target.checked})}/> Published</label>
-        <button type="button" className="vop-secondary" onClick={()=>setEditing(null)}>Cancel</button>
+        <button type="button" className="vop-secondary" onClick={()=>{pendingCanonicalId.current='';setEditing(null);}}>Cancel</button>
         <button type="button" className="vop-primary" disabled={saving||!editing.title.trim()}
           onClick={()=>void save()}>
           {saving ? <LoaderCircle className="spin" size={16}/> : <Save size={16}/>}
@@ -387,7 +387,7 @@ export default function ProgramManager({
       <h3>No Study Tracks Created Yet</h3>
       <p>Study Tracks (Series) are the Tier 2 containers that organize your curriculum into overarching correspondence series (e.g. Discover Guides, Focus on Prophecy). You don't need any modules created first—create your track now and attach study guides later.</p>
       <button type="button" className="vop-primary vop-empty-hero-cta"
-        onClick={()=>{setEditing({...blank(organizationId),id:''});setSelectedId('');setGuideQuery('');}}>
+        onClick={()=>{pendingCanonicalId.current='';setEditing({...blank(organizationId),id:''});setSelectedId('');setGuideQuery('');}}>
         <Plus size={18}/> Create First Study Track
       </button>
     </div>}
