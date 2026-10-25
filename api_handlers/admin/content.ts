@@ -629,7 +629,11 @@ export default async function handler(req: Request, res: Response) {
       const data = body.data && typeof body.data === 'object' ? body.data as Record<string, unknown> : {};
       const language = String(data.language || '').trim();
       const guideId = safeId(data.guideId);
-      const lessonId = safeId(body.id || data.lessonId);
+      const requestedLessonId = body.id ? safeId(body.id) : '';
+      const nestedLessonId = data.lessonId ? safeId(data.lessonId) : '';
+      if (requestedLessonId && nestedLessonId && requestedLessonId !== nestedLessonId)
+        throw new Error('Lesson identity changed during editing. Reload the original lesson.');
+      const lessonId = safeId(requestedLessonId || nestedLessonId);
       if (!language || !guideId) throw new Error('A guide and language are required for a lesson.');
       const guideRef = ctx.db.doc(`guides/${guideId}`);
       const guide = await guideRef.get();
