@@ -215,12 +215,16 @@ export default async function handler(req: Request, res: Response) {
       });
       const items = await Promise.all(visibleLessons.map(async doc => {
         const row = doc.data();
-        const canEdit = ctx.isSuperAdmin || (String(row.ownerUid || '') === ctx.auth.uid && !platformStewardedResource(row));
+        const canEdit = ctx.isSuperAdmin || (canEditCanonicalContent(ctx,row) && !platformStewardedResource(row));
         if (!canEdit) return {
           id:doc.id, guideId:selectedGuideId, title:String(row.title || ''),
           lessonNumber:String(row.lessonNumber || ''), type:row.type === 'Test' ? 'Test' : 'Lesson',
           language:String(row.language || guide.data()?.language || ''), published:row.published === true,
           archived:row.archived === true, estimatedMinutes:Number(row.estimatedMinutes || 15),
+          description:String(row.description||'').slice(0,5000),
+          sharingScope:row.sharingScope==='shared'?'shared':'organization',
+          ownerOrganizationId:String(row.ownerOrganizationId||row.organizationId||ownerOrganizationId),
+          organizationId:String(row.organizationId||ownerOrganizationId),
           canEdit:false,
         };
         // Private quiz-bank answers never enter curriculum selector responses.
