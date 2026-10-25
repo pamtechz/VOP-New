@@ -201,7 +201,11 @@ export async function canManageOrganizationContent(ctx: TenantContext, data: Doc
   const organizationId = String(data?.organizationId || data?.ownerOrganizationId || '').trim();
   if (!organizationId) return false;
   if (ctx.tenantType === 'hierarchy') return organizationInHierarchyScope(ctx, organizationId);
-  return organizationId === ctx.organizationId && ['owner', 'admin'].includes(String(ctx.membership.role || '')) && String(data?.ownerUid || '') === ctx.auth.uid;
+  // An organization's owner/admin may maintain the organization's own
+  // curriculum even when a different member originally authored it.
+  // Foreign organisations and platform-owned records remain outside scope.
+  return organizationId === ctx.organizationId &&
+    ['owner', 'admin'].includes(String(ctx.membership.role || ''));
 }
 
 export function canEditCanonicalContent(ctx: TenantContext, data: DocumentData | undefined) {
@@ -216,11 +220,12 @@ export function canEditCanonicalContent(ctx: TenantContext, data: DocumentData |
     || membershipRole === 'editor' || membershipRole === 'teacher'
     || role === 'editor' || role === 'teacher';
   if (!canContribute) return false;
-  // Tenant equality is necessary but never sufficient to edit somebody
-  // else's contribution. Neither a shared record nor a later organization
-  // switch transfers authorship. Only Super Admin may override the owner.
-  return Boolean(ownerKey && currentTenant && ownerKey === currentTenant)
-    && Boolean(data?.ownerUid) && String(data?.ownerUid) === ctx.auth.uid;
+  // Tenant equality is mandatory. Within the tenant, administrators may
+  // maintain all its curriculum; editors/teachers retain author-only access.
+  // Sharing does not transfer ownership or allow cross-tenant mutations.
+  const sameTenant = Boolean(ownerKey && currentTenant && ownerKey === currentTenant);
+  return sameTenant && (isOrgAdminOrOwner || isHierarchyAdmin ||
+    (Boolean(data?.ownerUid) && String(data?.ownerUid) === ctx.auth.uid));
 }
 
 const CANDIDATE_MEMBERSHIP_ROLES=new Set(['learner','student','candidate']);
