@@ -1,6 +1,7 @@
 import {randomUUID} from 'node:crypto';
 import {FieldValue} from 'firebase-admin/firestore';
 import {normalizeProgramDraft} from '../shared/programModel.js';
+import {loadSharedCurriculumVisibility} from './curriculumCollaboration.js';
 import {assertMutableTenantResource,platformStewardedResource} from '../shared/platformStewardship.js';
 import {canEditCanonicalContent,canManageOrganizationContent,
   accessibleOrganizationIds,billingTenantFromContext,enforceBillingTenantQuota,enforceOrganizationQuota,organizationInHierarchyScope,tenantOwnerKey,writeTenantAudit,
@@ -42,13 +43,15 @@ export async function handleCurriculumPrograms(ctx:TenantContext,
           ctx.db.collection('programs').where('sharingScope','==','shared')
             .where('published','==',true).get(),
         ]);
+    const hidden=await loadSharedCurriculumVisibility(ctx);
     const known=new Map<string,Record<string,unknown>>();
     for(const snapshot of snapshots)for(const document of snapshot.docs){
       const data=document.data();
       const orgId=String(data.organizationId||'').trim();
       const owned=ctx.isSuperAdmin||ids.includes(orgId);
       const shared=data.sharingScope==='shared';
-      if(data.archived===true||data.published!==true||(!owned&&!shared))continue;
+      if(data.archived===true||data.published!==true||(!owned&&!shared)||
+        (!owned&&hidden.programs.has(document.id)))continue;
       const title=String(data.title||'').trim();
       if(!title)continue;
       known.set(document.id,{
@@ -58,7 +61,8 @@ export async function handleCurriculumPrograms(ctx:TenantContext,
         coverImageUrl:String(data.coverImageUrl||''),
         guideIds:Array.isArray(data.guideIds)
           ?data.guideIds.filter((value:unknown):value is string=>
-              typeof value==='string'&&value.length>0).slice(0,100)
+              typeof value==='string'&&value.length>0&&
+                (owned||!hidden.guides.has(value))).slice(0,100)
           :[],
         organizationId:orgId,
         entryMode:data.entryMode==='sections'?'sections':'lessons',
@@ -86,6 +90,7 @@ export async function handleCurriculumPrograms(ctx:TenantContext,
           ctx.db.collection('programs').where('sharingScope','==','shared')
             .where('published','==',true).get(),
         ]);
+    const hidden=await loadSharedCurriculumVisibility(ctx);
     const known=new Map<string,Record<string,unknown>>();
     for(const snapshot of collections)for(const document of snapshot.docs){
       const data=document.data();
@@ -94,6 +99,7 @@ export async function handleCurriculumPrograms(ctx:TenantContext,
         && data.archived!==true;
       if(data.archived===true&&!owned)continue;
       if(!owned&&!shared)continue;
+      if(!owned&&hidden.programs.has(document.id))continue;
       known.set(document.id,{
         id:document.id,...data,
         canEdit:await mayEdit(ctx,data),
