@@ -1,4 +1,4 @@
-import {useCallback,useEffect,useState} from 'react';
+import {useCallback,useEffect,useRef,useState} from 'react';
 import {auth} from '../../lib/firebase';
 
 type Row={id:string;title?:string;description?:string;sharingScope?:string;published?:boolean;organizationId?:string;ownerOrganizationId?:string;guideId?:string;canEdit?:boolean};
@@ -38,6 +38,9 @@ export default function SharedCurriculumPanel({onUpdated,platformMode=false}:{on
   const [guideId,setGuideId]=useState('');
   const [visibility,setVisibility]=useState<Visibility>(empty);
   const [suggestions,setSuggestions]=useState<Suggestion[]>([]);
+  const [nextCursor,setNextCursor]=useState<string|null>(null);
+  const [loadingMore,setLoadingMore]=useState(false);
+  const guideRequest=useRef(0);
   const [kind,setKind]=useState<Kind>('guides');
   const [selectedId,setSelectedId]=useState('');
   const [title,setTitle]=useState('');
@@ -55,6 +58,7 @@ export default function SharedCurriculumPanel({onUpdated,platformMode=false}:{on
       ]);
       setVisibility({...empty,...(settings.settings as Visibility||{})});
       setSuggestions(Array.isArray(proposals.items)?proposals.items as Suggestion[]:[]);
+      setNextCursor(typeof proposals.nextCursor==='string'?proposals.nextCursor:null);
       setPrograms(list(tracks.items).filter(shared));
       setGuides(list(modules.items).filter(shared));
     }catch(e){setError(e instanceof Error?e.message:String(e));}
@@ -76,14 +80,33 @@ export default function SharedCurriculumPanel({onUpdated,platformMode=false}:{on
     finally{setBusy(false);}
   };
   const selectGuide=async(id:string)=>{
+    const sequence=++guideRequest.current;
     setGuideId(id);setLessons([]);setError('');
     if(!id)return;
     try{
       setBusy(true);
       const data=await request('listGuideLessons',{guideId:id});
-      setLessons(list(data.items).map(item=>({...item,guideId:id})));
+      // Never combine guide A's response with guide B's selected ID.
+      if(sequence===guideRequest.current)
+        setLessons(list(data.items).map(item=>({...item,guideId:id})));
+    }catch(e){if(sequence===guideRequest.current)
+      setError(e instanceof Error?e.message:String(e));}
+    finally{if(sequence===guideRequest.current)setBusy(false);}
+  };
+  const loadMore=async()=>{
+    if(!nextCursor||loadingMore)return;
+    setLoadingMore(true);setError('');
+    try{
+      const result=await request('listSuggestedEdits',{cursor:nextCursor});
+      setSuggestions(previous=>{
+        const all=new Map(previous.map(item=>[item.id,item]));
+        for(const item of (Array.isArray(result.items)?result.items:[]) as Suggestion[])
+          all.set(item.id,item);
+        return [...all.values()];
+      });
+      setNextCursor(typeof result.nextCursor==='string'?result.nextCursor:null);
     }catch(e){setError(e instanceof Error?e.message:String(e));}
-    finally{setBusy(false);}
+    finally{setLoadingMore(false);}
   };
   const submit=()=>{
     if(!current||!reason.trim())return;
@@ -178,6 +201,10 @@ export default function SharedCurriculumPanel({onUpdated,platformMode=false}:{on
                 void mutate('reviewSuggestedEdit',{id:item.id,decision:'reject'})}>Reject</button>
             </div>}
         </article>)}
+        {nextCursor&&<button className="vop-secondary" type="button"
+          disabled={busy||loadingMore} onClick={()=>void loadMore()}>
+          {loadingMore?'Loading…':'Load older suggestions'}
+        </button>}
       </section>
     </div>}
   </section>;
