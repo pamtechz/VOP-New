@@ -51,6 +51,29 @@ export default async function handler(req:Req,res:Res){
     const action=String(body.action||'');
     const ctx=await authenticateTenant(req,String(body.organizationId||'')||undefined);
     await requirePermission(ctx,'curriculum','view');
+    if(action==='getCatalog'){
+      const [programs,guides]=await Promise.all([
+        ctx.db.collection('programs').where('sharingScope','==','shared').where('published','==',true).limit(200).get(),
+        ctx.db.collection('guides').where('sharingScope','==','shared').where('published','==',true).limit(200).get(),
+      ]);
+      const metadata=(snapshot:FirebaseFirestore.QuerySnapshot)=>snapshot.docs
+        .filter(doc=>doc.data().archived!==true)
+        .map(doc=>({id:doc.id,title:String(doc.data().title||'Untitled'),
+          description:String(doc.data().description||'').slice(0,250),
+          organizationId:String(doc.data().organizationId||'')}));
+      return res.status(200).json({ok:true,programs:metadata(programs),guides:metadata(guides)});
+    }
+    if(action==='getSharedLessons'){
+      const guideId=safe(body.guideId);
+      const guide=await ctx.db.doc('guides/'+guideId).get();
+      if(!guide.exists||!shared(guide.data()||{}))
+        throw new Error('This guide is not publicly shared.');
+      const lessons=await guide.ref.collection('lessons').limit(150).get();
+      return res.status(200).json({ok:true,items:lessons.docs
+        .filter(doc=>shared(doc.data())&&doc.data().type!=='Test')
+        .map(doc=>({id:doc.id,title:String(doc.data().title||'Untitled'),
+          guideId,lessonNumber:String(doc.data().lessonNumber||'')}))});
+    }
     if(action==='getVisibility'||action==='setVisibility'){
       const org=await getOrg(ctx,String(body.organizationId||'').trim());
       const ref=ctx.db.doc('organizations/'+safe(org)+'/settings/sharedCurriculum');
@@ -128,8 +151,10 @@ export default async function handler(req:Req,res:Res){
       const queries=ctx.isSuperAdmin
         ?[ctx.db.collection('curriculumEditProposals').limit(100)]
         :[
-          ctx.db.collection('curriculumEditProposals')
-            .where('ownerOrganizationId','==',ctx.organizationId).limit(100),
+          ...(canManage(ctx,ctx.organizationId)?[
+            ctx.db.collection('curriculumEditProposals')
+              .where('ownerOrganizationId','==',ctx.organizationId).limit(100),
+          ]:[]),
           ctx.db.collection('curriculumEditProposals')
             .where('proposedByUid','==',ctx.auth.uid).limit(100),
         ];
