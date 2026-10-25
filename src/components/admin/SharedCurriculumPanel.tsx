@@ -27,7 +27,7 @@ function list(data:unknown):Row[]{
 function shared(data:Row){
   return data.sharingScope==='shared'&&data.published===true&&data.canEdit===false;
 }
-export default function SharedCurriculumPanel({onUpdated}:{onUpdated?:()=>void}){
+export default function SharedCurriculumPanel({onUpdated,platformMode=false}:{onUpdated?:()=>void;platformMode?:boolean}){
   const [opened,setOpened]=useState(false);
   const [busy,setBusy]=useState(false);
   const [message,setMessage]=useState('');
@@ -48,10 +48,10 @@ export default function SharedCurriculumPanel({onUpdated}:{onUpdated?:()=>void})
     setBusy(true);setError('');
     try {
       const [settings,proposals,tracks,modules]=await Promise.all([
-        request('getSharedVisibility'),
+        platformMode?Promise.resolve({settings:empty}):request('getSharedVisibility'),
         request('listSuggestedEdits'),
-        request('list',{collection:'programs'}), // the root collection is replaced by request()
-        request('listGuides'),
+        platformMode?Promise.resolve({items:[]}):request('list',{collection:'programs'}),
+        platformMode?Promise.resolve({items:[]}):request('listGuides'),
       ]);
       setVisibility({...empty,...(settings.settings as Visibility||{})});
       setSuggestions(Array.isArray(proposals.items)?proposals.items as Suggestion[]:[]);
@@ -59,7 +59,7 @@ export default function SharedCurriculumPanel({onUpdated}:{onUpdated?:()=>void})
       setGuides(list(modules.items).filter(shared));
     }catch(e){setError(e instanceof Error?e.message:String(e));}
     finally{setBusy(false);}
-  },[]);
+  },[platformMode]);
   useEffect(()=>{if(opened)void load();},[opened,load]);
 
   const selected=kind==='programs'?programs:kind==='guides'?guides:lessons;
@@ -102,7 +102,7 @@ export default function SharedCurriculumPanel({onUpdated}:{onUpdated?:()=>void})
   return <section className="vop-card" style={{marginBlock:'20px',padding:'18px'}} aria-label="Shared curriculum collaboration">
     <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,flexWrap:'wrap'}}>
       <div><h2 style={{margin:0}}>Shared curriculum & suggested edits</h2>
-        <p style={{margin:'5px 0 0'}}>Choose which shared studies your organisation displays, or propose corrections to the owner.</p></div>
+        <p style={{margin:'5px 0 0'}}>{platformMode?'Review curriculum corrections submitted by organisations.':'Choose which shared studies your organisation displays, or propose corrections to the owner.'}</p></div>
       <button type="button" className="vop-secondary" onClick={()=>setOpened(value=>!value)}
         aria-expanded={opened}>{opened?'Close shared studies':'Manage shared studies'}</button>
     </div>
@@ -111,7 +111,7 @@ export default function SharedCurriculumPanel({onUpdated}:{onUpdated?:()=>void})
       {error&&<p role="alert" style={{color:'var(--danger,#b42318)'}}>{error}</p>}
       {message&&<p role="status">{message}</p>}
       <button type="button" className="vop-secondary" onClick={()=>void load()} disabled={busy}>Refresh shared studies</button>
-      {sections.map(([type,label,rows,key])=><section key={type} aria-label={label}>
+      {!platformMode&&sections.map(([type,label,rows,key])=><section key={type} aria-label={label}>
         <h3>{label}</h3>
         {type==='lessons'&&<label>Guide
           <select value={guideId} onChange={event=>void selectGuide(event.target.value)}>
@@ -142,7 +142,7 @@ export default function SharedCurriculumPanel({onUpdated}:{onUpdated?:()=>void})
                 Show again</button></div>)}
         </div>
       </section>)}
-      <section>
+      {!platformMode&&<section>
         <h3>Suggest a correction</h3>
         <div className="vop-form-grid">
           <label>Content type<select value={kind} onChange={e=>{setKind(e.target.value as Kind);setSelectedId('');}}>
@@ -162,7 +162,7 @@ export default function SharedCurriculumPanel({onUpdated}:{onUpdated?:()=>void})
         </div>
         <button type="button" className="vop-primary" disabled={busy||!selectedId||!reason.trim()}
           onClick={submit}>Send suggestion to owner</button>
-      </section>
+      </section>}
       <section>
         <h3>Suggested edit reviews</h3>
         {suggestions.length===0&&<p>No suggestions yet.</p>}
