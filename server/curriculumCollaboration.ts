@@ -1,5 +1,6 @@
 import {FieldValue,FieldPath} from 'firebase-admin/firestore';
 import {requirePermission} from './permissions.js';
+import {createNotification} from './notifications.js';
 import type {TenantContext} from './tenant.js';
 import {canEditCanonicalContent, canManageOrganizationContent, writeTenantAudit} from './tenant.js';
 
@@ -133,6 +134,29 @@ export async function handleCurriculumCollaboration(
     await suggestionRef.create(suggestion);
     await writeTenantAudit(ctx,'curriculum.suggestion.submit',suggestionRef.path,undefined,
       {kind,recordId,ownerOrganizationId:suggestion.ownerOrganizationId});
+    // Alert the original author and, when authorship is missing on legacy
+    // records, the owning organisation administrators. Notifications never
+    // alter the outcome of the durable suggestion write.
+    const ownerUid=String(data.ownerUid||'');
+    const reviewerIds=new Set<string>();
+    if(ownerUid&&ownerUid!==ctx.auth.uid)reviewerIds.add(ownerUid);
+    if(!ownerUid&&suggestion.ownerOrganizationId){
+      const members=await ctx.db.collection('organizations/'+suggestion.ownerOrganizationId+
+        '/members').where('active','==',true).limit(50).get().catch(()=>null);
+      for(const member of members?.docs||[]){
+        if(['owner','admin'].includes(String(member.data().role||'')))
+          reviewerIds.add(String(member.data().uid||member.id));
+      }
+    }
+    await Promise.all([...reviewerIds].map(recipientId=>
+      createNotification(ctx.db,{
+        recipientId,organizationId:suggestion.ownerOrganizationId,
+        title:'Curriculum correction awaiting review',
+        body:'A contributor suggested a correction to '+kind+' '+recordId+
+          '. Review it in Curriculum Studio.',
+        type:'system',channel:'in_app',createdBy:ctx.auth.uid,
+        metadata:{suggestionId:suggestionRef.id,kind,recordId},
+      }).catch(()=>undefined)));
     res.status(200).json({ok:true,id:suggestionRef.id,status:'pending'});
     return true;
   }
@@ -211,6 +235,19 @@ export async function handleCurriculumCollaboration(
     });
     await writeTenantAudit(ctx,'curriculum.suggestion.'+decision,ref.path,undefined,
       {suggestionId:proposalId});
+    const proposerUid=String(submitted.proposerUid||'');
+    if(proposerUid&&proposerUid!==ctx.auth.uid){
+      await createNotification(ctx.db,{
+        recipientId:proposerUid,
+        organizationId:String(submitted.proposerOrganizationId||''),
+        title:decision==='approve'?'Curriculum suggestion approved':'Curriculum suggestion reviewed',
+        body:decision==='approve'
+          ?'Your suggested correction was approved by the content owner.'
+          :'The content owner declined your suggested correction.',
+        type:'system',channel:'in_app',createdBy:ctx.auth.uid,
+        metadata:{suggestionId:proposalId,kind,recordId:ref.id},
+      }).catch(()=>undefined);
+    }
     res.status(200).json({ok:true,...result});
     return true;
   }
