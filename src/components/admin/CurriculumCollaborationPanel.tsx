@@ -1,7 +1,10 @@
 import React,{useCallback,useEffect,useMemo,useState} from 'react';
 import {Check,ChevronDown,ChevronUp,Edit3,Globe2,LoaderCircle,RefreshCw,Save,Send,ShieldCheck,X} from 'lucide-react';
 import {auth} from '../../lib/firebase';
+import {getTranslation} from '../../services/i18n';
 import './curriculum-collaboration.css';
+
+const collabText=(key:string,fallback:string)=>getTranslation('admin.curriculumCollaboration.'+key,'',undefined,fallback,'CurriculumCollaborationPanel');
 
 type Kind='program'|'guide'|'lesson';
 type Entry={id:string;title:string;description?:string;organizationId?:string;guideId?:string;lessonNumber?:string};
@@ -57,15 +60,15 @@ export function SuggestCurriculumEditAction({target}: {target:SuggestTarget}){
     </button>
     {success&&<small role="status">{success}</small>}
     {open&&<div className="vop-collab-overlay" role="presentation">
-      <div role="dialog" aria-modal="true" aria-label="Suggest edit" className="vop-collab-dialog">
+      <div role="dialog" aria-modal="true" aria-label={collabText('suggestEdit', "Suggest edit")} className="vop-collab-dialog">
         <h3>Suggest correction — {target.title}</h3>
-        <p>This suggestion is sent to the original owner. You cannot directly update or delete their published content.</p>
-        <label>Proposed title<input value={title} onChange={e=>setTitle(e.target.value)}/></label>
-        <label>Proposed description<textarea rows={5} value={description} onChange={e=>setDescription(e.target.value)}/></label>
-        <label>Reason<textarea rows={3} value={reason} onChange={e=>setReason(e.target.value)}/></label>
+        <p>{collabText('thisSuggestionIsSentToTheOriginalOwner', "This suggestion is sent to the original owner. You cannot directly update or delete their published content.")}</p>
+        <label>{collabText('proposedTitle', "Proposed title")}<input value={title} onChange={e=>setTitle(e.target.value)}/></label>
+        <label>{collabText('proposedDescription', "Proposed description")}<textarea rows={5} value={description} onChange={e=>setDescription(e.target.value)}/></label>
+        <label>{collabText('reason', "Reason")}<textarea rows={3} value={reason} onChange={e=>setReason(e.target.value)}/></label>
         {error&&<p className="vop-collab-error" role="alert">{error}</p>}
         <div className="vop-collab-actions">
-          <button type="button" className="vop-secondary" onClick={()=>setOpen(false)} disabled={busy}>Cancel</button>
+          <button type="button" className="vop-secondary" onClick={()=>setOpen(false)} disabled={busy}>{collabText('cancel', "Cancel")}</button>
           <button type="button" className="vop-primary" disabled={busy||!reason.trim()}
             onClick={()=>void submit()}>{busy?<LoaderCircle size={15} className="spin"/>:<Send size={15}/>} Send to owner</button>
         </div>
@@ -163,17 +166,17 @@ export function CurriculumCollaborationPanel({organizationId,isSuperAdmin,onClos
     (isSuperAdmin||(organizationId&&item.ownerOrganizationId===organizationId))),[proposals,organizationId,isSuperAdmin]);
   const selectable=Boolean(organizationId);
 
-  return <section className="vop-collab-panel" aria-label="Shared curriculum collaboration">
+  return <section className="vop-collab-panel" aria-label={collabText('sharedCurriculumCollaboration', "Shared curriculum collaboration")}>
     <header className="vop-collab-header">
-      <div><small>SHARED STUDY GOVERNANCE</small><h2>Shared content & suggestions</h2>
-        <p>Choose published shared studies for your organisation, or suggest corrections without changing another owner’s work.</p></div>
+      <div><small>{collabText('sHAREDSTUDYGOVERNANCE', "SHARED STUDY GOVERNANCE")}</small><h2>{collabText('sharedContentSuggestions', "Shared content & suggestions")}</h2>
+        <p>{collabText('choosePublishedSharedStudiesForYourOrganisationOr', "Choose published shared studies for your organisation, or suggest corrections without changing another owner’s work.")}</p></div>
       <div className="vop-collab-actions">
-        <button type="button" className="vop-secondary" onClick={()=>void refresh()} disabled={loading||busy}><RefreshCw size={16}/> Refresh</button>
-        <button type="button" className="vop-secondary" onClick={onClose}><X size={16}/> Close</button>
+        <button type="button" className="vop-secondary" onClick={()=>void refresh()} disabled={loading||busy}><RefreshCw size={16}/>{collabText('refresh', "Refresh")}</button>
+        <button type="button" className="vop-secondary" onClick={onClose}><X size={16}/>{collabText('close', "Close")}</button>
       </div>
     </header>
-    <nav className="vop-collab-tabs" aria-label="Shared content controls">
-      <button type="button" aria-current={tab==='selection'?'page':undefined} onClick={()=>setTab('selection')}><Globe2 size={17}/> Shared catalogue</button>
+    <nav className="vop-collab-tabs" aria-label={collabText('sharedContentControls', "Shared content controls")}>
+      <button type="button" aria-current={tab==='selection'?'page':undefined} onClick={()=>setTab('selection')}><Globe2 size={17}/>{collabText('sharedCatalogue', "Shared catalogue")}</button>
       <button type="button" aria-current={tab==='suggestions'?'page':undefined} onClick={()=>setTab('suggestions')}><ShieldCheck size={17}/> Suggestions ({incoming.length} awaiting review)</button>
     </nav>
     {error&&<p role="alert" className="vop-collab-error">{error}</p>}
@@ -182,23 +185,23 @@ export function CurriculumCollaborationPanel({organizationId,isSuperAdmin,onClos
       tab==='selection'?<div className="vop-collab-columns">
         <div>
           {selectable?<div className="vop-collab-mode">
-            <h3>What should appear in this organisation?</h3>
-            <label><input type="radio" checked={visibility.mode==='all'} onChange={()=>setVisibility(v=>({...v,mode:'all'}))}/> All currently published shared studies</label>
-            <label><input type="radio" checked={visibility.mode==='selected'} onChange={()=>setVisibility(v=>({...v,mode:'selected'}))}/> Only the studies selected below</label>
-            <p>Owned studies always remain accessible. This affects discovery, not ownership or permissions.</p>
-            <button type="button" className="vop-primary" disabled={busy} onClick={save}><Save size={16}/> Save visibility</button>
-          </div>:<p>Choose an organisation from the Curriculum Studio scope selector to configure its shared library.</p>}
-          <input className="vop-collab-search" aria-label="Find shared studies" placeholder="Search shared tracks and guides" value={search} onChange={e=>setSearch(e.target.value)}/>
-          <h3>Shared programmes</h3>
+            <h3>{collabText('whatShouldAppearInThisOrganisation', "What should appear in this organisation?")}</h3>
+            <label><input type="radio" checked={visibility.mode==='all'} onChange={()=>setVisibility(v=>({...v,mode:'all'}))}/>{collabText('allCurrentlyPublishedSharedStudies', "All currently published shared studies")}</label>
+            <label><input type="radio" checked={visibility.mode==='selected'} onChange={()=>setVisibility(v=>({...v,mode:'selected'}))}/>{collabText('onlyTheStudiesSelectedBelow', "Only the studies selected below")}</label>
+            <p>{collabText('ownedStudiesAlwaysRemainAccessibleThisAffectsDiscovery', "Owned studies always remain accessible. This affects discovery, not ownership or permissions.")}</p>
+            <button type="button" className="vop-primary" disabled={busy} onClick={save}><Save size={16}/>{collabText('saveVisibility', "Save visibility")}</button>
+          </div>:<p>{collabText('chooseAnOrganisationFromTheCurriculumStudioScope', "Choose an organisation from the Curriculum Studio scope selector to configure its shared library.")}</p>}
+          <input className="vop-collab-search" aria-label={collabText('findSharedStudies', "Find shared studies")} placeholder={collabText('searchSharedTracksAndGuides', "Search shared tracks and guides")} value={search} onChange={e=>setSearch(e.target.value)}/>
+          <h3>{collabText('sharedProgrammes', "Shared programmes")}</h3>
           {matching(data.programs).map(p=><article className="vop-collab-item" key={p.id}>
             <label><input type="checkbox" disabled={!selectable||visibility.mode!=='selected'}
               checked={includes('programIds',p.id)}
               onChange={()=>toggle('programIds',p.id)}/><strong>{p.title}</strong></label>
             <p>{p.description}</p><small>Owner: {p.organizationId||'VOP platform'}</small>
             {!isSuperAdmin&&p.organizationId!==organizationId&&<button type="button" className="vop-secondary"
-              onClick={()=>suggest({kind:'program',id:p.id,title:p.title,description:p.description})}><Edit3 size={15}/> Suggest edit</button>}
+              onClick={()=>suggest({kind:'program',id:p.id,title:p.title,description:p.description})}><Edit3 size={15}/>{collabText('suggestEdit', "Suggest edit")}</button>}
           </article>)}
-          <h3>Shared guides & lessons</h3>
+          <h3>{collabText('sharedGuidesLessons', "Shared guides & lessons")}</h3>
           {matching(data.guides).map(g=><article key={g.id} className="vop-collab-item">
             <label><input type="checkbox" disabled={!selectable||visibility.mode!=='selected'}
               checked={includes('guideIds',g.id)}
@@ -208,7 +211,7 @@ export function CurriculumCollaborationPanel({organizationId,isSuperAdmin,onClos
               <button type="button" className="vop-secondary" onClick={()=>void expand(g.id)}>
                 {expanded===g.id?<ChevronUp size={15}/>:<ChevronDown size={15}/>} Shared lessons</button>
               {!isSuperAdmin&&g.organizationId!==organizationId&&<button type="button" className="vop-secondary"
-                onClick={()=>suggest({kind:'guide',id:g.id,title:g.title,description:g.description})}><Edit3 size={15}/> Suggest edit</button>}
+                onClick={()=>suggest({kind:'guide',id:g.id,title:g.title,description:g.description})}><Edit3 size={15}/>{collabText('suggestEdit', "Suggest edit")}</button>}
             </div>
             {expanded===g.id&&<div className="vop-collab-lessons">
               {(lessons[g.id]||[]).map(lesson=><div key={lesson.id} className="vop-collab-lesson">
@@ -217,20 +220,20 @@ export function CurriculumCollaborationPanel({organizationId,isSuperAdmin,onClos
                   onChange={()=>toggle('lessonIds',g.id+':'+lesson.id)}/>
                   <span>{lesson.lessonNumber&&lesson.lessonNumber+'. '}{lesson.title}</span></label>
                 {!isSuperAdmin&&g.organizationId!==organizationId&&<button type="button" className="vop-secondary"
-                  onClick={()=>suggest({kind:'lesson',id:lesson.id,guideId:g.id,title:lesson.title})}>Suggest edit</button>}
+                  onClick={()=>suggest({kind:'lesson',id:lesson.id,guideId:g.id,title:lesson.title})}>{collabText('suggestEdit', "Suggest edit")}</button>}
               </div>)}
               {!lessons[g.id]&&<span>Loading shared lessons…</span>}
-              {lessons[g.id]?.length===0&&<span>No published shared lessons.</span>}
+              {lessons[g.id]?.length===0&&<span>{collabText('noPublishedSharedLessons', "No published shared lessons.")}</span>}
             </div>}
           </article>)}
         </div>
-        <aside className="vop-collab-hint"><ShieldCheck size={27}/><h3>Ownership stays with its creator</h3>
-          <p>A shared course is referenced, never duplicated. Your organisation cannot change or delete somebody else’s canonical material.</p>
-          <p>The original owner reviews suggestions. VOP Super Admin applies the final correction to platform-stewarded shared publications.</p></aside>
+        <aside className="vop-collab-hint"><ShieldCheck size={27}/><h3>{collabText('ownershipStaysWithItsCreator', "Ownership stays with its creator")}</h3>
+          <p>{collabText('aSharedCourseIsReferencedNeverDuplicatedYour', "A shared course is referenced, never duplicated. Your organisation cannot change or delete somebody else’s canonical material.")}</p>
+          <p>{collabText('theOriginalOwnerReviewsSuggestionsVOPSuperAdmin', "The original owner reviews suggestions. VOP Super Admin applies the final correction to platform-stewarded shared publications.")}</p></aside>
       </div>:
       <div className="vop-collab-review">
-        <h3>Owner review inbox</h3>
-        {incoming.length===0&&<p>No pending suggestions require your approval.</p>}
+        <h3>{collabText('ownerReviewInbox', "Owner review inbox")}</h3>
+        {incoming.length===0&&<p>{collabText('noPendingSuggestionsRequireYourApproval', "No pending suggestions require your approval.")}</p>}
         {incoming.map(item=><article className="vop-collab-item" key={item.id}>
           <strong>{item.sourceTitle||item.kind}</strong>
           <p>From organisation: {item.proposedByOrganizationId||'Unknown'}</p>
@@ -241,25 +244,25 @@ export function CurriculumCollaborationPanel({organizationId,isSuperAdmin,onClos
               onClick={()=>review(item,'approve')}><Check size={16}/>
                 {isSuperAdmin?'Approve & apply':'Approve & forward'}</button>
             <button type="button" className="vop-secondary" disabled={busy}
-              onClick={()=>review(item,'reject')}><X size={16}/> Reject</button>
+              onClick={()=>review(item,'reject')}><X size={16}/>{collabText('reject', "Reject")}</button>
           </div>
         </article>)}
-        <h3>Submitted and reviewed suggestions</h3>
+        <h3>{collabText('submittedAndReviewedSuggestions', "Submitted and reviewed suggestions")}</h3>
         {proposals.filter(item=>!incoming.some(v=>v.id===item.id)).map(item=>
           <div className="vop-collab-history" key={item.id}><strong>{item.sourceTitle||item.kind}</strong>
             <span>{item.status}</span><small>{item.reason}</small></div>)}
       </div>}
     {draft&&<div className="vop-collab-overlay" role="presentation">
-      <div className="vop-collab-dialog" role="dialog" aria-modal="true" aria-label="Suggest content edit">
+      <div className="vop-collab-dialog" role="dialog" aria-modal="true" aria-label={collabText('suggestContentEdit', "Suggest content edit")}>
         <h3>Suggest changes to {draft.title}</h3>
-        <p>The owner will review your proposal. The shared content is not modified until approval.</p>
-        <label>Suggested title<input value={proposalTitle} onChange={e=>setProposalTitle(e.target.value)}/></label>
-        <label>Suggested description<textarea rows={4} value={description} onChange={e=>setDescription(e.target.value)}/></label>
-        <label>Reason for correction<textarea rows={3} required value={reason} onChange={e=>setReason(e.target.value)}/></label>
+        <p>{collabText('theOwnerWillReviewYourProposalTheShared', "The owner will review your proposal. The shared content is not modified until approval.")}</p>
+        <label>{collabText('suggestedTitle', "Suggested title")}<input value={proposalTitle} onChange={e=>setProposalTitle(e.target.value)}/></label>
+        <label>{collabText('suggestedDescription', "Suggested description")}<textarea rows={4} value={description} onChange={e=>setDescription(e.target.value)}/></label>
+        <label>{collabText('reasonForCorrection', "Reason for correction")}<textarea rows={3} required value={reason} onChange={e=>setReason(e.target.value)}/></label>
         <div className="vop-collab-actions">
-          <button type="button" className="vop-secondary" onClick={()=>setDraft(null)}>Cancel</button>
+          <button type="button" className="vop-secondary" onClick={()=>setDraft(null)}>{collabText('cancel', "Cancel")}</button>
           <button type="button" className="vop-primary" disabled={busy||!reason.trim()} onClick={submitSuggestion}>
-            <Send size={16}/> Send to owner</button>
+            <Send size={16}/>{collabText('sendToOwner', "Send to owner")}</button>
         </div>
       </div>
     </div>}

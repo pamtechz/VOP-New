@@ -32,8 +32,7 @@ test('owning organisations can hide foreign shared programmes without deleting r
 });
 
 test('unconfigured tenant continues to see public shared studies',async()=>{
-  const db={doc:(_path:string)=>({get:async()=>({data:()=>({})})})}
-    as unknown as Parameters<typeof loadSharedCurriculumSelection>[0];
+  const db={doc:(_path:string)=>({get:async()=>({data:()=>({})})})} as unknown as Parameters<typeof loadSharedCurriculumSelection>[0];
   const visibility=await loadSharedCurriculumSelection(db,'church-two');
   assert.equal(visibility.mode,'all');
   assert.equal(sharedContentChosen(visibility,'guide','any-shared'),true);
