@@ -155,6 +155,8 @@ export async function handleCurriculumPrograms(ctx:TenantContext,
     :validId(body.id||raw.id);
   const ref=ctx.db.doc('programs/'+id);
   const previous=await ref.get();
+  if(action==='upsert' && raw.expectedExisting===true && !previous.exists)
+    throw new Error('This programme was changed or removed. Reload before editing; no new record was created.');
   const current=previous.data()||{};
   // Existing programme ownership is immutable. A Super Admin editing a
   // programme after changing the UI tenant filter must retain its source.
