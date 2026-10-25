@@ -101,3 +101,82 @@
   overflow-y: auto;
   overscroll-behavior: contain;
 }
+
+
+/* Long editors keep their action buttons visible as the form grows.
+   The scrollable card remains the scroll container: no nested page scrolling. */
+:is(.vop-ann-editor-modal,.vop-user-editor-modal,
+    .vop-candidate-modal,.vop-payable-editor) {
+  scrollbar-gutter: stable;
+  -webkit-overflow-scrolling: touch;
+}
+.vop-ann-editor-modal > div:last-child,
+.vop-user-editor-modal > .vop-user-modal-actions,
+.vop-candidate-modal > .vop-candidate-modal-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 4;
+  background: var(--vop-card, var(--bg-card, #fff));
+  border-top: 1px solid var(--vop-border, var(--border-subtle, #dbe5ee));
+  padding-block: 12px max(12px, env(safe-area-inset-bottom));
+}
+.vop-ann-editor-modal > div:last-child {
+  margin-inline: -2px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.vop-user-editor-modal > .vop-user-modal-head,
+.vop-user-modal > .vop-user-modal-head,
+.vop-cert-issuer-modal > .vop-cert-issuer-head {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  background: var(--bg-card, var(--vop-card, #fff));
+}
+.vop-user-editor-modal > .vop-user-modal-head,
+.vop-user-modal > .vop-user-modal-head {
+  /* Preserve the original user-management header gradient. */
+  background: linear-gradient(135deg,#0b4ba7,#082f79);
+}
+.vop-payable-editor > .vop-payment-submit {
+  position: sticky;
+  bottom: 0;
+  z-index: 4;
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  min-height: 44px;
+  margin-top: 12px;
+  box-shadow: 0 -8px 16px -10px rgba(15,23,42,.35);
+}
+.vop-payable-editor {
+  overscroll-behavior-y: contain;
+  padding-bottom: max(18px, env(safe-area-inset-bottom));
+}
+/* Compact confirmations should scroll on short screens, not cover the exit. */
+.vop-app-dialog-backdrop {
+  max-height: 100dvh;
+  overflow-y: auto;
+  padding-block: max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-bottom));
+}
+.vop-app-dialog {
+  max-height: calc(100dvh - 20px);
+  overscroll-behavior-y: contain;
+}
+.vop-app-dialog-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  background: var(--bg-card, #fff);
+}
+@media (max-width: 700px), (max-height: 540px) {
+  .vop-ann-editor-modal > div:last-child,
+  .vop-user-editor-modal > .vop-user-modal-actions {
+    gap: 8px;
+  }
+  .vop-ann-editor-modal > div:last-child button,
+  .vop-user-editor-modal > .vop-user-modal-actions button {
+    min-height: 44px;
+  }
+}
