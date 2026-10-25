@@ -7,6 +7,7 @@ const content=readFileSync('api_handlers/admin/content.ts','utf8');
 const programs=readFileSync('server/programManager.ts','utf8');
 const collaboration=readFileSync('server/curriculumCollaboration.ts','utf8');
 const panel=readFileSync('src/components/admin/SharedCurriculumPanel.tsx','utf8');
+const learner=readFileSync('src/services/firestoreData.ts','utf8');
 const studio=readFileSync('src/pages/CurriculumManager.tsx','utf8');
 
 test('public curriculum loading never throws because the large legacy guide cache exhausts localStorage',()=>{
@@ -46,4 +47,23 @@ test('shared edit suggestions are separate from canonical records until owner ap
   assert.match(panel,/setSharedVisibility/);
   assert.match(panel,/proposeEdit/);
   assert.match(studio,/SharedCurriculumPanel platformMode=\{isSuperAdmin\}/);
+});
+
+test('learner catalogue receives shared visibility from authenticated organization settings',()=>{
+  assert.ok(learner.includes("action:'getSharedVisibility'"));
+  assert.ok(learner.includes('sharedVisibility.guides.has(candidateId)'));
+  assert.ok(learner.includes("sharedVisibility.lessons.has(entry.guide.id+'/'+item.id)"));
+  assert.ok(learner.includes('sharedVisibility.unavailable'));
+});
+test('review permission and pagination prevent unauthorized approvals and hidden older proposals',()=>{
+  assert.ok(collaboration.includes("requirePermission(ctx,'curriculum','update')"));
+  assert.ok(collaboration.includes("requirePermission(ctx,'curriculum','publish')"));
+  assert.ok(collaboration.includes('nextCursor:'));
+  assert.ok(collaboration.includes('startAfter(cursor)'));
+  assert.ok(panel.includes('loadMore=async()'));
+  assert.ok(panel.includes('guideRequest.current'));
+});
+test('programme and lesson save reject contradictory identities',()=>{
+  assert.ok(content.includes('requestedLessonId !== nestedLessonId'));
+  assert.ok(programs.includes('String(body.id)!==String(raw.id)'));
 });
