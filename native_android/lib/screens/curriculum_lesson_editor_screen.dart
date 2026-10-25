@@ -81,6 +81,12 @@ class _CurriculumLessonEditorState extends State<CurriculumLessonEditorScreen>{
               // Ensure every imported section has one stable canonical ID.
               'id':sectionIdForPage(page),
               'title':(page['sectionTitle']??page['title']??'Study section').toString(),
+              // Preserve existing reader-specific section metadata on import.
+              if(page['scriptureQuote'] is Map)'scriptureQuote':page['scriptureQuote'],
+              if(page['keyTakeaway']!=null)'keyTakeaway':page['keyTakeaway'],
+              if(page['imageUrl']!=null)'imageUrl':page['imageUrl'],
+              if(page['audioUrl']!=null)'audioUrl':page['audioUrl'],
+              if(page['videoUrl']!=null)'videoUrl':page['videoUrl'],
               'document':page['document'] is List?recordRows(page['document']):
                 blocks.isNotEmpty?legacyDocument(blocks):<Map<String,dynamic>>[{
                   'id':newRecordId(),'type':'p',
