@@ -12,6 +12,7 @@ import { loadFirestoreGuides } from '../services/firestoreData';
 import GuideManager from './GuideManager';
 import ProgramManager from './ProgramManager';
 import QuizLibrary from './QuizLibrary';
+import SharedCurriculumPanel from '../components/admin/SharedCurriculumPanel';
 import { getTranslation } from '../services/i18n';
 import { MediaPlayer } from '../components/media/MediaPlayer';
 import { resolveMediaSource } from '../../shared/mediaSources';
@@ -1631,6 +1632,8 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
         </select></label>
       </div>}
       
+      <SharedCurriculumPanel platformMode={isSuperAdmin} onUpdated={()=>void load()} />
+
       <div className="vop-reference-tabs">
         {tabs.map(item => {
           const Icon = item.icon;

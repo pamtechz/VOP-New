@@ -32,12 +32,41 @@ function scopedStorageKey(key: string): string {
   return `vop:${uid}:${key}`;
 }
 
+// Indexed lesson downloads are stored by the offline study subsystem.
+// localStorage is a small best-effort cache, not the source of truth.
+const volatileCache = new Map<string, string>();
+const MAX_LOCAL_CACHE_CHARS = 250_000;
+
 function readStorage(key: string): string | null {
-  return localStorage.getItem(scopedStorageKey(key));
+  const scoped = scopedStorageKey(key);
+  if (volatileCache.has(scoped)) return volatileCache.get(scoped) ?? null;
+  try {
+    return typeof localStorage === 'undefined' ? null : localStorage.getItem(scoped);
+  } catch {
+    return null;
+  }
 }
 
 function writeStorage(key: string, value: string): void {
-  localStorage.setItem(scopedStorageKey(key), value);
+  const scoped = scopedStorageKey(key);
+  // Retain the complete just-fetched guide content for this page session,
+  // but do not fill the browser's ~5 MB localStorage with lesson bodies.
+  volatileCache.set(scoped, value);
+  if (typeof localStorage === 'undefined') return;
+  if (value.length > MAX_LOCAL_CACHE_CHARS) {
+    try { localStorage.removeItem(scoped); } catch { /* storage disabled */ }
+    return;
+  }
+  try {
+    localStorage.setItem(scoped, value);
+  } catch (error) {
+    if (!(error instanceof DOMException) ||
+        !['QuotaExceededError', 'NS_ERROR_DOM_QUOTA_REACHED'].includes(error.name)) {
+      // Private browsing, disabled storage, and policy restrictions are also
+      // cache failures rather than reasons to abort a successful API fetch.
+    }
+    try { localStorage.removeItem(scoped); } catch { /* storage disabled */ }
+  }
 }
 
 const STORAGE_KEYS = {
