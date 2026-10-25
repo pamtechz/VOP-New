@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Archive, BookOpen, CalendarDays, Check, ChevronLeft, ChevronRight, Edit3,
   Filter, FolderOpen, Globe, Image as ImageIcon, LoaderCircle, MoreVertical, Plus, RefreshCw, Save,
@@ -7,6 +7,7 @@ import {
 import type { CustomLanguage, DiscoverGuide } from '../types';
 import { auth } from '../lib/firebase';
 import { appConfirm } from '../components/layout/AppDialog';
+import {SuggestCurriculumEditAction} from '../components/admin/CurriculumCollaborationPanel';
 import { ShimmerList } from '../components/layout/Shimmer';
 
 type GuideRecord = {
@@ -205,6 +206,7 @@ export default function GuideManager({
 }: Props) {
   const [records, setRecords] = useState<GuideRecord[]>([]);
   const [editing, setEditing] = useState<GuideRecord | null>(null);
+  const originallyEditingId=useRef('');
   const [availablePrograms, setAvailablePrograms] = useState<Array<{ id: string; title: string; guideIds: string[] }>>([]);
   const [programSelectModalOpen, setProgramSelectModalOpen] = useState(false);
   const [chosenProgramId, setChosenProgramId] = useState('');
@@ -298,6 +300,7 @@ export default function GuideManager({
   const pageRows = filtered.slice((page - 1) * pageSize, page * pageSize);
 
   const startGuideCreation = (programId: string) => {
+    originallyEditingId.current='';
     const language = enabledLanguages[0]?.code || '';
     setEditing({
       id: '',
@@ -345,6 +348,7 @@ export default function GuideManager({
       return;
     }
     const currentProg = availablePrograms.find(p => p.guideIds.includes(preferred.id));
+    originallyEditingId.current=preferred.id;
     setEditing({ ...preferred, programId: currentProg?.id || '' });
   };
 
@@ -372,6 +376,7 @@ export default function GuideManager({
       if(!editing.id)setEditing(previous=>previous?{...previous,id:requestedId}:previous);
       const saved = await guideAdmin('upsertGuide', {
         id: requestedId,
+        expectedExisting:originallyEditingId.current===requestedId,
         discoverNumber: editing.discoverNumber,
         title: editing.title.trim(),
         subtitle: editing.subtitle.trim(),
@@ -646,7 +651,11 @@ export default function GuideManager({
                     <button key={'open-'+record.id} className="vop-secondary vop-guide-open-button" type="button"
                       onClick={()=>onOpenGuide(record.id)} title={'Manage '+record.language.toUpperCase()+' module lessons'}>
                       <BookOpen size={15}/> Open {record.language.toUpperCase()}
-                    </button>)}<button className="vop-actions" type="button" onClick={() => openEdit(group)} title={group.records.some(record => record.canEdit !== false) ? 'Edit guide' : 'Owned by another contributor'} disabled={!group.records.some(record => record.canEdit !== false)}><MoreVertical size={18}/></button>{group.records.some(record => record.canEdit !== false) && <button className="vop-actions vop-actions-delete" type="button" onClick={() => { const rec = group.records.find(r => r.canEdit !== false); if (rec) void deleteGuide(rec); }} title="Delete guide" style={{color:'var(--danger,#c5221f)'}}><Trash2 size={16}/></button>}{group.records.filter(record => record.sharingScope === 'shared' && record.published).map(record => <button key={'copy-'+record.id} className="vop-actions" type="button" onClick={() => void fork(record)} title="Copy shared guide"><Copy size={16}/></button>)}</div></td>
+                    </button>)}<button className="vop-actions" type="button" onClick={() => openEdit(group)} title={group.records.some(record => record.canEdit !== false) ? 'Edit guide' : 'Owned by another contributor'} disabled={!group.records.some(record => record.canEdit !== false)}><MoreVertical size={18}/></button>{group.records.some(record => record.canEdit !== false) && <button className="vop-actions vop-actions-delete" type="button" onClick={() => { const rec = group.records.find(r => r.canEdit !== false); if (rec) void deleteGuide(rec); }} title="Delete guide" style={{color:'var(--danger,#c5221f)'}}><Trash2 size={16}/></button>}{group.records.filter(record=>record.canEdit===false &&
+    record.sharingScope==='shared' && record.published && !record.archived)
+  .map(record=><SuggestCurriculumEditAction key={'suggest-'+record.id} target={{
+    kind:'guide',id:record.id,title:record.title,description:record.description,
+  }}/>)}</div></td>
                 </tr>
               ))}
             </tbody>

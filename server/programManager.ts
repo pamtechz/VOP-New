@@ -6,6 +6,7 @@ import {canEditCanonicalContent,canManageOrganizationContent,
   accessibleOrganizationIds,billingTenantFromContext,enforceBillingTenantQuota,enforceOrganizationQuota,organizationInHierarchyScope,tenantOwnerKey,writeTenantAudit,
   type TenantContext} from './tenant.js';
 import {requireOrganizationSubscriptionFeature,requirePermission,requireSubscriptionFeature} from './permissions.js';
+import {loadSharedCurriculumSelection,sharedContentChosen} from './sharedCurriculum.js';
 
 type Reply={status:(code:number)=>Reply;json:(data:unknown)=>void};
 const validId=(raw:unknown)=>{
@@ -42,6 +43,7 @@ export async function handleCurriculumPrograms(ctx:TenantContext,
           ctx.db.collection('programs').where('sharingScope','==','shared')
             .where('published','==',true).get(),
         ]);
+    const selection=await loadSharedCurriculumSelection(ctx.db,ctx.organizationId);
     const known=new Map<string,Record<string,unknown>>();
     for(const snapshot of snapshots)for(const document of snapshot.docs){
       const data=document.data();
@@ -49,6 +51,7 @@ export async function handleCurriculumPrograms(ctx:TenantContext,
       const owned=ctx.isSuperAdmin||ids.includes(orgId);
       const shared=data.sharingScope==='shared';
       if(data.archived===true||data.published!==true||(!owned&&!shared))continue;
+      if(!owned&&shared&&!sharedContentChosen(selection,'program',document.id))continue;
       const title=String(data.title||'').trim();
       if(!title)continue;
       known.set(document.id,{
@@ -86,6 +89,7 @@ export async function handleCurriculumPrograms(ctx:TenantContext,
           ctx.db.collection('programs').where('sharingScope','==','shared')
             .where('published','==',true).get(),
         ]);
+    const selection=await loadSharedCurriculumSelection(ctx.db,ctx.organizationId);
     const known=new Map<string,Record<string,unknown>>();
     for(const snapshot of collections)for(const document of snapshot.docs){
       const data=document.data();
@@ -94,6 +98,7 @@ export async function handleCurriculumPrograms(ctx:TenantContext,
         && data.archived!==true;
       if(data.archived===true&&!owned)continue;
       if(!owned&&!shared)continue;
+      if(!owned&&shared&&!sharedContentChosen(selection,'program',document.id))continue;
       known.set(document.id,{
         id:document.id,...data,
         canEdit:await mayEdit(ctx,data),
@@ -155,6 +160,8 @@ export async function handleCurriculumPrograms(ctx:TenantContext,
     :validId(body.id||raw.id);
   const ref=ctx.db.doc('programs/'+id);
   const previous=await ref.get();
+  if(action==='upsert' && raw.expectedExisting===true && !previous.exists)
+    throw new Error('This programme was changed or removed. Reload before editing; no new record was created.');
   const current=previous.data()||{};
   // Existing programme ownership is immutable. A Super Admin editing a
   // programme after changing the UI tenant filter must retain its source.

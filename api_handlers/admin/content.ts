@@ -11,6 +11,7 @@ import {
 import { requireOrganizationSubscriptionFeature, requirePermission, requireSubscriptionFeature, resourceForCollection } from '../../server/permissions.js';
 import type { SubscriptionFeatureKey } from '../../shared/subscriptions.js';
 import { assertMutableTenantResource, platformStewardedResource } from '../../shared/platformStewardship.js';
+import {loadSharedCurriculumSelection,sharedContentChosen} from '../../server/sharedCurriculum.js';
 import { notifyOrganizationMembers, normalizePublicationAudience } from '../../server/notifications.js';
 import { configuredPassThreshold } from '../../shared/studyValidation.js';
 import { normalizeCurriculumStructure, curriculumPages, containsPublicQuizAnswer } from '../../shared/curriculumStructure.js';
@@ -200,9 +201,19 @@ export default async function handler(req: Request, res: Response) {
         Boolean(ownerOrganizationId && (ctx.tenantType==='hierarchy'
           ?await organizationInHierarchyScope(ctx,ownerOrganizationId)
           :ownerOrganizationId===ctx.organizationId));
+      const sharedSelection=await loadSharedCurriculumSelection(ctx.db,ctx.organizationId);
+      if(!canReadDrafts && !sharedContentChosen(sharedSelection,'guide',selectedGuideId))
+        throw new Error('This shared guide is not included in your organisation library.');
       const snap = await guide.ref.collection('lessons').get();
+      // Lesson subsets apply to their own guide only. Selecting one lesson
+      // must not hide every lesson in unrelated selected guides.
+      const hasLessonSubset=sharedSelection.mode==='selected' &&
+        [...sharedSelection.lessonIds].some(id=>id.startsWith(selectedGuideId+':'));
       const visibleLessons=snap.docs.filter(doc=>{
         if(canReadDrafts)return true;
+        if(hasLessonSubset &&
+           !sharedContentChosen(sharedSelection,'lesson',selectedGuideId+':'+doc.id))
+          return false;
         const lesson=doc.data();
         return lesson.published===true && lesson.archived!==true
           && lesson.type!=='Test' &&
@@ -210,7 +221,7 @@ export default async function handler(req: Request, res: Response) {
       });
       const items = await Promise.all(visibleLessons.map(async doc => {
         const row = doc.data();
-        const canEdit = ctx.isSuperAdmin || (String(row.ownerUid || '') === ctx.auth.uid && !platformStewardedResource(row));
+        const canEdit = !platformStewardedResource(row) && canEditCanonicalContent(ctx,row) || ctx.isSuperAdmin;
         if (!canEdit) return {
           id:doc.id, guideId:selectedGuideId, title:String(row.title || ''),
           lessonNumber:String(row.lessonNumber || ''), type:row.type === 'Test' ? 'Test' : 'Lesson',
@@ -248,12 +259,15 @@ export default async function handler(req: Request, res: Response) {
             ...organizationIds.map(orgId => ctx.db.collection('guides').where('organizationId','==',orgId).get()),
             ctx.db.collection('guides').where('sharingScope','==','shared').where('published','==',true).get(),
           ]);
+      const selection=await loadSharedCurriculumSelection(ctx.db,ctx.organizationId);
       const visibleGuides = new Map<string,FirebaseFirestore.QueryDocumentSnapshot>();
       for (const snapshot of snapshots) for (const document of snapshot.docs) {
         const data=document.data();
         const owned=organizationIds.includes(String(data.organizationId||''));
         const shared=data.sharingScope==='shared'&&data.published===true&&data.archived!==true;
-        if(ctx.isSuperAdmin||owned||shared)visibleGuides.set(document.id,document);
+        if((ctx.isSuperAdmin||owned||shared) &&
+           (ctx.isSuperAdmin||owned||sharedContentChosen(selection,'guide',document.id)))
+          visibleGuides.set(document.id,document);
       }
       const items = await Promise.all([...visibleGuides.values()].map(async d => {
         const guideData=d.data();
@@ -281,7 +295,7 @@ export default async function handler(req: Request, res: Response) {
             published:lesson.data().published === true, guideId:d.id,
           })),
           languages: [String(d.data().language || '')].filter(Boolean),
-          canEdit: ctx.isSuperAdmin || (!platformStewardedResource(d.data()) && (ctx.tenantType === 'hierarchy' || String(d.data().ownerUid || '') === ctx.auth.uid)),
+          canEdit: ctx.isSuperAdmin || (!platformStewardedResource(d.data()) && (ctx.tenantType === 'hierarchy' ? await canManageOrganizationContent(ctx,d.data()) : canEditCanonicalContent(ctx,d.data()))),
         };
       }));
       return res.status(200).json({ ok: true, items });
@@ -298,6 +312,8 @@ export default async function handler(req: Request, res: Response) {
       const id = data.id ? safeId(data.id) : safeId(`guide-${randomUUID().replace(/-/g, '').slice(0,24)}`);
       const ref = ctx.db.doc(`guides/${id}`);
       const existing = await ref.get();
+      if(data.expectedExisting===true && !existing.exists)
+        throw new Error('This guide no longer exists. Reload before editing; no duplicate has been created.');
       const current = existing.exists ? existing.data() || {} : {};
       const ownerOrganizationId = String(current.scope === 'platform'
         ? '' : current.organizationId || current.ownerOrganizationId || '').trim();
@@ -629,6 +645,10 @@ export default async function handler(req: Request, res: Response) {
         || !guideOrgId.trim();
       const ref = guideRef.collection('lessons').doc(lessonId);
       const existing = await ref.get();
+      if(data.expectedExisting===true && !existing.exists)
+        throw new Error('The original lesson is missing from this guide. Reload before editing; no duplicate has been created.');
+      if(data.originalGuideId && String(data.originalGuideId)!==guideId)
+        throw new Error('Moving a lesson by editing is not allowed. Use the explicit transfer workflow.');
       if (existing.data()?.sourceQuizId) throw new Error('This assessment is linked to a quiz. Edit it through Quiz Library.');
       // Answer keys live exclusively in the private Quiz Library. Lesson and
       // chapter bodies are readable by learners; never persist inline keys.
@@ -669,7 +689,8 @@ export default async function handler(req: Request, res: Response) {
       if(data.published===true)await requirePermission(ctx,'curriculum','publish');
       if (existing.exists && !(ctx.tenantType === 'hierarchy' ? await canManageOrganizationContent(ctx, existing.data()) : canEditCanonicalContent(ctx, existing.data()))) throw new Error('Only an authorized tenant administrator or VOP Super Admin can edit this lesson.');
       if (existing.exists) assertMutableTenantResource(ctx.isSuperAdmin, existing.data(), 'edit');
-      const { teacherNotes: _incomingNotes, ...publicData }=data;
+      const { teacherNotes: _incomingNotes, expectedExisting: _expectedExisting,
+        originalGuideId: _originalGuideId, ...publicData }=data;
       const notesIncluded=Object.prototype.hasOwnProperty.call(data,'teacherNotes');
       if(notesIncluded && typeof _incomingNotes!=='string') {
         throw new Error('Instructor notes must be text.');

@@ -32,12 +32,45 @@ function scopedStorageKey(key: string): string {
   return `vop:${uid}:${key}`;
 }
 
+// localStorage is a small *optional* convenience cache, not the authoritative
+// curriculum database or the offline lesson store. Large published catalogues
+// must not prevent Firestore content from loading or user drafts from saving.
+const sessionCache = new Map<string, string>();
+const MAX_GUIDE_CACHE_CHARS = 200_000; // never put full books into ~5 MB browser storage
+
 function readStorage(key: string): string | null {
-  return localStorage.getItem(scopedStorageKey(key));
+  const scoped = scopedStorageKey(key);
+  if (sessionCache.has(scoped)) return sessionCache.get(scoped) ?? null;
+  try {
+    return typeof localStorage === 'undefined' ? null : localStorage.getItem(scoped);
+  } catch {
+    return null; // disabled, full, private browser, or blocked storage
+  }
 }
 
 function writeStorage(key: string, value: string): void {
-  localStorage.setItem(scopedStorageKey(key), value);
+  const scoped = scopedStorageKey(key);
+  sessionCache.set(scoped, value);
+  if (typeof localStorage === 'undefined') return;
+  // Do not cache full lessons in localStorage. The server and dedicated
+  // offline storage remain authoritative across sessions.
+  if (key === 'vop_discover_guides' && value.length > MAX_GUIDE_CACHE_CHARS) {
+    try { localStorage.removeItem(scoped); } catch { /* storage disabled */ }
+    return;
+  }
+  try {
+    localStorage.setItem(scoped, value);
+  } catch {
+    // Reclaim only this account's expendable guide cache, never drafts,
+    // account settings, preferences or other users' storage.
+    if (key !== 'vop_discover_guides') {
+      try {
+        const guideKey = scopedStorageKey('vop_discover_guides');
+        localStorage.removeItem(guideKey);
+        localStorage.setItem(scoped, value);
+      } catch { /* continue in memory; never fail the content request */ }
+    }
+  }
 }
 
 const STORAGE_KEYS = {

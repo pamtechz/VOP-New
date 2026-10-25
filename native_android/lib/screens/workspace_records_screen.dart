@@ -36,7 +36,11 @@ class _WorkspaceRecordsState extends State<WorkspaceRecordsScreen>{
       onSave:(value)async{
         final id=(original['id']??(widget.collection=='languages'?value['code']:null)??
           (schema['singleton']==true?widget.collection:draftId)).toString();
-        await widget.api.saveRecord(widget.collection,id,value,payload:scope);
+        await widget.api.saveRecord(widget.collection,id,{
+          ...value,
+          if(record!=null && (widget.collection=='programs'||widget.collection=='guides'))
+            'expectedExisting':true,
+        },payload:scope);
       })));
     if(mounted)setState(reload);
   }

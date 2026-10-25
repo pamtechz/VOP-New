@@ -201,7 +201,10 @@ export async function canManageOrganizationContent(ctx: TenantContext, data: Doc
   const organizationId = String(data?.organizationId || data?.ownerOrganizationId || '').trim();
   if (!organizationId) return false;
   if (ctx.tenantType === 'hierarchy') return organizationInHierarchyScope(ctx, organizationId);
-  return organizationId === ctx.organizationId && ['owner', 'admin'].includes(String(ctx.membership.role || '')) && String(data?.ownerUid || '') === ctx.auth.uid;
+  // Organisation owners/admins steward ALL canonical resources of their own
+  // organisation. They never acquire write access to another tenant's shared
+  // content merely because it is visible in their library.
+  return organizationId === ctx.organizationId && ['owner', 'admin'].includes(String(ctx.membership.role || ''));
 }
 
 export function canEditCanonicalContent(ctx: TenantContext, data: DocumentData | undefined) {
@@ -216,11 +219,13 @@ export function canEditCanonicalContent(ctx: TenantContext, data: DocumentData |
     || membershipRole === 'editor' || membershipRole === 'teacher'
     || role === 'editor' || role === 'teacher';
   if (!canContribute) return false;
-  // Tenant equality is necessary but never sufficient to edit somebody
-  // else's contribution. Neither a shared record nor a later organization
-  // switch transfers authorship. Only Super Admin may override the owner.
-  return Boolean(ownerKey && currentTenant && ownerKey === currentTenant)
-    && Boolean(data?.ownerUid) && String(data?.ownerUid) === ctx.auth.uid;
+  // A tenant must own the record; visibility of published shared content
+  // never authorizes mutation or deletion by another organisation.
+  if (!(ownerKey && currentTenant && ownerKey === currentTenant)) return false;
+  // The owning organisation's admins can correct records left by transferred
+  // teachers/editors. Contributors below admin remain author-scoped.
+  if (ctx.tenantType === 'organization' && isOrgAdminOrOwner) return true;
+  return Boolean(data?.ownerUid) && String(data?.ownerUid) === ctx.auth.uid;
 }
 
 const CANDIDATE_MEMBERSHIP_ROLES=new Set(['learner','student','candidate']);

@@ -18,6 +18,7 @@ import { resolveMediaSource } from '../../shared/mediaSources';
 import { normalizeCurriculumStructure, curriculumPages, type CurriculumChapter } from '../../shared/curriculumStructure';
 import { newChapter } from '../components/admin/StructuredLessonEditor';
 import { PlateCurriculumAuthoringReview } from '../components/admin/PlateCurriculumAuthoringReview';
+import { CurriculumCollaborationPanel } from '../components/admin/CurriculumCollaborationPanel';
 import { StudyPlateContent } from '../components/reader/StudyPlateContent';
 import './curriculum-structure.css';
 import { AppAlertDialog, appConfirm } from '../components/layout/AppDialog';
@@ -474,12 +475,15 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
   const [editor, setEditor] = useState<EditorState | null>(null);
   const savedEditorSignature=useRef('');
   const pendingLessonId=useRef('');
+  const originallyEditingLessonId=useRef('');
+  const originalGuideId=useRef('');
   const [editorDirty,setEditorDirty]=useState(false);
   const [plateValidationErrors,setPlateValidationErrors]=useState<Record<string,string>>({});
   const [mediaSourceInput, setMediaSourceInput] = useState('');
   const [mediaResolving, setMediaResolving] = useState(false);
   const [editorTab, setEditorTab] = useState<'content' | 'image' | 'media' | 'bible' | 'notes' | 'settings'>('content');
   const [editingRecord, setEditingRecord] = useState<RecordItem | null>(null);
+  const [collaborationOpen,setCollaborationOpen]=useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [organizationOptions, setOrganizationOptions] = useState<Array<{id:string;name:string}>>([]);
   const [organizationLoading, setOrganizationLoading] = useState(false);
@@ -807,7 +811,9 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
 
   const openLesson = (row: LessonRow,sectionId='') => {
     pendingLessonId.current='';
+    originallyEditingLessonId.current=row.lesson.id;
     const source: RecordItem = row.raw || { id: row.key };
+    originalGuideId.current=valueText(source.guideId)||row.guide?.id||'';
     const organizationId = valueText(source.organizationId || source.ownerOrganizationId);
     if (isSuperAdmin && organizationId && organizationId !== scopeOrganizationId) setScopeOrganizationId(organizationId);
     const nextEditor=editorFromLesson(row);
@@ -830,6 +836,8 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
 
   const openNewLesson = (guideId = selectedGuideId) => {
     pendingLessonId.current='';
+    originallyEditingLessonId.current='';
+    originalGuideId.current='';
     if (!guideId) {
       setLessonModuleRequiredModalOpen(true);
       return;
@@ -955,6 +963,10 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
     if (isSuperAdmin && targetOrganizationId !== scopeOrganizationId) setScopeOrganizationId(targetOrganizationId);
 
     const guide = existingGuideRecord;
+    if(originallyEditingLessonId.current && originalGuideId.current &&
+       originalGuideId.current!==editor.guideId){
+      return setError('Moving a lesson by editing would create a duplicate. Use the explicit move/transfer workflow.');
+    }
 
     const duplicate = moduleLessons.some(row =>
       valueText(row.id || row.lessonId) !== editor.id
@@ -976,6 +988,8 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
       const sourceBlocks = editor.content.trim() ? contentToBlocks(editor.content) : editor.blocks;
       const pageBlocks = splitLessonBlocks(sourceBlocks);
       const payload: Record<string, unknown> = {
+        expectedExisting:originallyEditingLessonId.current===id,
+        originalGuideId:originalGuideId.current || undefined,
         lessonId: id,
         lessonNumber: editor.lessonNumber.trim(),
         title: resolvedTitle,
@@ -1618,6 +1632,9 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
         <div className="vop-reference-actions">
           <button className="vop-secondary" type="button" disabled={loading} onClick={() => void load()}>{loading ? <LoaderCircle className="spin" size={17}/> : <RefreshCw size={17}/>}{loading ? ' ' + tx('common.loading', 'Loading…') : tx('common.refresh', 'Refresh')}</button>
           <button className="vop-secondary" type="button" onClick={() => onOpenSettings?.()}><Settings size={17}/>{tab === 'quizzes' ? 'Quiz Settings' : 'Curriculum Settings'}</button>
+          <button className="vop-secondary" type="button" onClick={()=>setCollaborationOpen(value=>!value)} aria-expanded={collaborationOpen}>
+            <Globe size={17}/> Shared studies & edit suggestions
+          </button>
           {tab==='lessons' && <button className="vop-primary" type="button" onClick={()=>selectedGuideId?openNewLesson(selectedGuideId):setLessonModuleRequiredModalOpen(true)}><Plus size={18}/>{selectedGuideId?'New lesson':'New lesson'}</button>}
         </div>
       </div>
@@ -1631,6 +1648,9 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
         </select></label>
       </div>}
       
+      {collaborationOpen&&<CurriculumCollaborationPanel key={scopeOrganizationId}
+        organizationId={scopeOrganizationId} isSuperAdmin={isSuperAdmin}
+        onClose={()=>setCollaborationOpen(false)}/>}
       <div className="vop-reference-tabs">
         {tabs.map(item => {
           const Icon = item.icon;
