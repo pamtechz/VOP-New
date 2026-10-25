@@ -9,7 +9,7 @@ export function platformStewardedResource(data) {
   return (data.scope === 'platform' && !String(data.ownerOrganizationId || '').trim())
     || data.platformOwned === true
     || data.adoptedByPlatform === true
-    || (data.sharingScope === 'shared' && data.published === true);
+;
 }
 
 export function assertMutableTenantResource(isSuperAdmin, existing, operation) {
