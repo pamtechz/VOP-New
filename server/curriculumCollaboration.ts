@@ -68,7 +68,7 @@ export async function handleCurriculumCollaboration(
       return true;
     }
     const role=String(ctx.membership.role||'');
-    if(!ctx.isSuperAdmin&&!['owner','admin','editor'].includes(role))
+    if(!ctx.isSuperAdmin&&!['owner','admin'].includes(role))
       throw new Error('Only an organization administrator can configure shared studies.');
     const kind=String(body.kind||'') as SuggestionTarget;
     if(!['programs','guides','lessons'].includes(kind))throw new Error('Select a curriculum content type.');
