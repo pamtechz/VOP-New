@@ -8,6 +8,7 @@ const programs=readFileSync('server/programManager.ts','utf8');
 const collaboration=readFileSync('server/curriculumCollaboration.ts','utf8');
 const panel=readFileSync('src/components/admin/SharedCurriculumPanel.tsx','utf8');
 const learner=readFileSync('src/services/firestoreData.ts','utf8');
+const mobile=readFileSync('api_handlers/admin/mobile.ts','utf8');
 const studio=readFileSync('src/pages/CurriculumManager.tsx','utf8');
 
 test('public curriculum loading never throws because the large legacy guide cache exhausts localStorage',()=>{
@@ -66,4 +67,16 @@ test('review permission and pagination prevent unauthorized approvals and hidden
 test('programme and lesson save reject contradictory identities',()=>{
   assert.ok(content.includes('requestedLessonId !== nestedLessonId'));
   assert.ok(programs.includes('String(body.id)!==String(raw.id)'));
+});
+
+test('Flutter Android and Classic web enforce hidden shared studies on every mobile study route',()=>{
+  assert.match(mobile,/loadSharedCurriculumVisibility\(ctx\)/);
+  assert.match(mobile,/hidden\.programs\.has\(key\)/);
+  assert.match(mobile,/hidden\.guides\.has\(key\)/);
+  assert.match(mobile,/hidden\.lessons\.has\(guideKey\+'\/'\+key\)/);
+  assert.match(mobile,/\.filter\(doc=>permittedGuide\(doc\.id,doc\.data\(\)\)\)/);
+  assert.match(mobile,/\.filter\(doc=>permittedProgram\(doc\.id,doc\.data\(\)\)\)/);
+  assert.match(mobile,/!permittedProgram\(snap\.id,snap\.data\(\)\|\|\{\}\)/);
+  assert.match(mobile,/!permittedGuide\(guideId,guideSnap\.data\(\)\|\|\{\}\)/);
+  assert.match(mobile,/permittedLesson\(\s*doc\.id,doc\.data\(\),guideId,guide\)/);
 });
