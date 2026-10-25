@@ -5,6 +5,7 @@ import {auth} from '../lib/firebase';
 import type {CurriculumProgramDraft} from '../../shared/programModel';
 import './program-manager.css';
 import { appConfirm } from '../components/layout/AppDialog';
+import {SuggestCurriculumEditAction} from '../components/admin/CurriculumCollaborationPanel';
 import { ShimmerCards } from '../components/layout/Shimmer';
 
 type Guide={
@@ -309,6 +310,10 @@ export default function ProgramManager({
           onClick={()=>void restore(selected)}>
           {saving ? <LoaderCircle className="spin" size={15}/> : <RefreshCw size={15}/>} Restore as draft
         </button>}
+        {!selected.canEdit&&selected.published&&selected.sharingScope==='shared'&&
+          <SuggestCurriculumEditAction target={{
+            kind:'program',id:selected.id,title:selected.title,description:selected.description
+          }}/>}
         {!selected.canEdit&&<span><ShieldCheck size={15}/> Shared program · read only</span>}
       </div>
       <div className="vop-program-modules-section">
