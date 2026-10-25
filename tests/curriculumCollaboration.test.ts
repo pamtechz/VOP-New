@@ -86,3 +86,16 @@ test('Legacy Curriculum Studio exposes owner review and opt-in visibility',()=>{
   assert.match(panel,/getSharedLessons/);
   assert.match(panel,/getCatalog/);
 });
+
+test('owner approval applies a revision-guarded canonical edit, not an inert intermediate status',()=>{
+  const handler=text('api_handlers/admin/curriculumCollaboration.ts');
+  assert.match(handler,/const acceptedStatus=decision==='reject'\?'rejected':'approved'/);
+  assert.match(handler,/if\(status!=='pending'\)throw/);
+  assert.match(handler,/tx\.update\(contentRef,\{\.\.\.proposalPatch\(request\.changes\)/);
+  assert.doesNotMatch(handler,/if\(ctx\.isSuperAdmin\)tx\.update\(contentRef/);
+});
+test('a selected lesson subset does not hide other selected guides',()=>{
+  const handler=text('api_handlers/admin/content.ts');
+  assert.match(handler,/some\(id=>id\.startsWith\(selectedGuideId\+':'\)\)/);
+  assert.match(handler,/if\(hasLessonSubset &&/);
+});

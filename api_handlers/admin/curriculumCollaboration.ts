@@ -175,13 +175,11 @@ export default async function handler(req:Req,res:Res){
       if(decision==='approve')await requirePermission(ctx,'curriculum','update');
       const kind=request.kind as Kind;
       const contentRef=target(ctx.db,kind,String(request.id||''),String(request.guideId||''));
-      const acceptedStatus=decision==='reject'?'rejected':
-        ctx.isSuperAdmin?'approved':'owner_approved';
+      const acceptedStatus=decision==='reject'?'rejected':'approved';
       await ctx.db.runTransaction(async tx=>{
         const currentProposal=await tx.get(proposalRef);
         const status=String(currentProposal.data()?.status||'');
-        if(status!=='pending' && !(ctx.isSuperAdmin&&status==='owner_approved'))
-          throw new Error('This suggestion was already reviewed.');
+        if(status!=='pending')throw new Error('This suggestion was already reviewed.');
         const record=await tx.get(contentRef);
         if(!record.exists)throw new Error('Original content no longer exists.');
         const data=record.data()||{};
@@ -191,10 +189,9 @@ export default async function handler(req:Req,res:Res){
         if(decision==='approve'){
           if((record.updateTime?.toMillis()||0)!==Number(request.sourceVersion||0))
             throw new Error('The original content has changed. Ask the proposer to submit a fresh suggestion.');
-          // Published shared content is under platform stewardship. The
-          // owning organisation approves first; only Super Admin writes back
-          // to the shared canonical record.
-          if(ctx.isSuperAdmin)tx.update(contentRef,{...proposalPatch(request.changes),
+          // The owning organisation or Super Admin may approve. Both
+          // authorization and optimistic version checks precede the write.
+          tx.update(contentRef,{...proposalPatch(request.changes),
             updatedAt:FieldValue.serverTimestamp(),updatedBy:ctx.auth.uid});
         }
         tx.update(proposalRef,{status:acceptedStatus,

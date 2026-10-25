@@ -205,9 +205,13 @@ export default async function handler(req: Request, res: Response) {
       if(!canReadDrafts && !sharedContentChosen(sharedSelection,'guide',selectedGuideId))
         throw new Error('This shared guide is not included in your organisation library.');
       const snap = await guide.ref.collection('lessons').get();
+      // Lesson subsets apply to their own guide only. Selecting one lesson
+      // must not hide every lesson in unrelated selected guides.
+      const hasLessonSubset=sharedSelection.mode==='selected' &&
+        [...sharedSelection.lessonIds].some(id=>id.startsWith(selectedGuideId+':'));
       const visibleLessons=snap.docs.filter(doc=>{
         if(canReadDrafts)return true;
-        if(sharedSelection.mode==='selected' && sharedSelection.lessonIds.size &&
+        if(hasLessonSubset &&
            !sharedContentChosen(sharedSelection,'lesson',selectedGuideId+':'+doc.id))
           return false;
         const lesson=doc.data();
