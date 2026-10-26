@@ -36,6 +36,12 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(find.text('HOLY SCRIPTURE FOCUS'), findsOneWidget);
       expect(find.text('Back to Study'), findsOneWidget);
+      await Scrollable.ensureVisible(
+        tester.element(find.text('Back to Study')),
+        alignment: 0.5,
+        duration: const Duration(milliseconds: 160),
+      );
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Back to Study'));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
@@ -68,7 +74,12 @@ void main() {
     await tester.drag(find.byType(SingleChildScrollView).last, const Offset(0, -2000));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
-    await tester.ensureVisible(close);
+    await Scrollable.ensureVisible(
+      tester.element(close),
+      alignment: 0.45,
+      duration: const Duration(milliseconds: 160),
+    );
+    await tester.pumpAndSettle();
     await tester.tap(close);
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);

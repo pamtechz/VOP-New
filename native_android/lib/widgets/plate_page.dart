@@ -114,7 +114,7 @@ class PlatePageView extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 14),
-                Wrap(
+                LayoutBuilder(builder:(context,limits)=>Wrap(
                   spacing: 10,
                   runSpacing: 8,
                   crossAxisAlignment: WrapCrossAlignment.center,
@@ -146,23 +146,25 @@ class PlatePageView extends StatelessWidget {
                       ),
                     ),
                     if (scriptureRef.isNotEmpty)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFD97706).withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          '— $scriptureRef',
-                          style: const TextStyle(
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w800,
-                            color: Color(0xFF92400E),
+                      ConstrainedBox(
+                        constraints:BoxConstraints(maxWidth:limits.maxWidth),
+                        child:Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFD97706).withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child:Text('— $scriptureRef',
+                            softWrap:true,
+                            overflow:TextOverflow.visible,
+                            style:const TextStyle(
+                              fontSize:12.5,fontWeight:FontWeight.w800,
+                              color:Color(0xFF92400E)),
                           ),
                         ),
                       ),
                   ],
-                ),
+                )),
               ],
             ),
           ),

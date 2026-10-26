@@ -21,13 +21,11 @@ void main() {
   });
 
   test(
-    'local and standalone Flutter previews keep their configured backend',
+    'local HTTP development retains configured backend',
     () {
       for (final url in [
         'http://127.0.0.1:7357/',
         'http://localhost:7358/',
-        'https://preview.example/',
-        'https://preview.example/classic-other/',
       ]) {
         expect(
           resolveVopApiOrigin(
@@ -40,6 +38,21 @@ void main() {
       }
     },
   );
+
+  test('standalone HTTPS Flutter browser deployments use the same-origin API', () {
+    for (final url in [
+      'https://vop-flutter-example.vercel.app/',
+      'https://vopafrica.vercel.app/classic/',
+      'https://study.example.org/',
+    ]) {
+      final page = Uri.parse(url);
+      expect(resolveVopApiOrigin(
+        isWeb: true,
+        page: page,
+        configured: 'https://vopafrica.vercel.app',
+      ), page.origin);
+    }
+  });
 
   test('Android never derives a backend from a browser page', () {
     expect(

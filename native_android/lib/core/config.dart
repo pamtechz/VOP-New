@@ -6,6 +6,13 @@ String resolveVopApiOrigin({
   required Uri page,
   required String configured,
 }) {
+  // Production, unified /classic and standalone Vercel browser deployments
+  // serve /api on their own origin. Standalone Flutter Vercel uses a fixed
+  // external rewrite to the same VOP backend, avoiding browser CORS preflights.
+  // Local HTTP development deliberately retains the configured backend.
+  if (isWeb && page.scheme == 'https' && page.host.isNotEmpty) {
+    return page.origin;
+  }
   if (isWeb && page.path.startsWith('/classic/')) return page.origin;
   return configured;
 }

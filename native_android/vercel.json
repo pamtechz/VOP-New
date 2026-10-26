@@ -1,11 +1,28 @@
 {
   "rewrites": [
     {
+      "source": "/api/:path*",
+      "destination": "https://vopafrica.vercel.app/api/:path*"
+    },
+    {
       "source": "/((?!api(?:/|$)|\\.well-known(?:/|$)).*)",
       "destination": "/index.html"
     }
   ],
   "headers": [
+    {
+      "source": "/api/:path*",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store, max-age=0"
+        },
+        {
+          "key": "Pragma",
+          "value": "no-cache"
+        }
+      ]
+    },
     {
       "source": "/(.*)",
       "headers": [

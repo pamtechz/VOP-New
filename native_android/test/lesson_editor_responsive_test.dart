@@ -40,7 +40,12 @@ void main() {
       ));
       expect(tester.takeException(), isNull);
       // The add control can be below the fold on compact viewports.
-      await tester.ensureVisible(find.text('Add Chapters'));
+      await Scrollable.ensureVisible(
+        tester.element(find.text('Add Chapters')),
+        alignment: 0.45,
+        duration: const Duration(milliseconds: 160),
+      );
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Add Chapters'));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
@@ -55,7 +60,12 @@ void main() {
       expect(find.text('New chapter'), findsWidgets);
 
       // The existing chapter must remain usable after a second insertion.
-      await tester.ensureVisible(find.text('Add Chapters'));
+      await Scrollable.ensureVisible(
+        tester.element(find.text('Add Chapters')),
+        alignment: 0.45,
+        duration: const Duration(milliseconds: 160),
+      );
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Add Chapters'));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
