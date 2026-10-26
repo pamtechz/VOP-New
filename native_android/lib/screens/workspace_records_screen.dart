@@ -319,6 +319,27 @@ class SchemaFields extends StatelessWidget{
       final isStructure=key=='chapters'||key=='sections';
       return Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
         Text(label,style:Theme.of(context).textTheme.titleMedium),
+        // Keep the insertion action above expanded nested editors so it remains
+        // reachable on narrow phones without scrolling past entire chapters.
+        OutlinedButton.icon(
+          onPressed:(){
+            final nextId=newRecordId();
+            final blankContent={'id':newRecordId(),'type':'p',
+              'children':[{'text':''}]};
+            final blankSection={'id':newRecordId(),'title':'New section',
+              'document':[blankContent]};
+            final newItem=key=='chapters'
+              ?<String,dynamic>{'id':nextId,'title':'New chapter',
+                  'sections':[blankSection]}
+              :key=='sections'
+                ?<String,dynamic>{'id':nextId,'title':'New section',
+                    'document':[blankContent]}
+                :children.any((f)=>f['key']=='id')
+                  ?<String,dynamic>{'id':nextId}
+                  :<String,dynamic>{};
+            update(key,[...rows,newItem]);
+          },
+          icon:const Icon(Icons.add),label:Text('Add '+label)),
         const SizedBox(height:8),
         for(final entry in rows.asMap().entries)
           Card(child:ExpansionTile(
@@ -351,25 +372,6 @@ class SchemaFields extends StatelessWidget{
                 onChanged:()=>update(key,rows)))],
           )),
         const SizedBox(height:8),
-        OutlinedButton.icon(
-          onPressed:(){
-            final nextId=newRecordId();
-            final blankContent={'id':newRecordId(),'type':'p',
-              'children':[{'text':''}]};
-            final blankSection={'id':newRecordId(),'title':'New section',
-              'document':[blankContent]};
-            final newItem=key=='chapters'
-              ?<String,dynamic>{'id':nextId,'title':'New chapter',
-                  'sections':[blankSection]}
-              :key=='sections'
-                ?<String,dynamic>{'id':nextId,'title':'New section',
-                    'document':[blankContent]}
-                :children.any((f)=>f['key']=='id')
-                  ?<String,dynamic>{'id':nextId}
-                  :<String,dynamic>{};
-            update(key,[...rows,newItem]);
-          },
-          icon:const Icon(Icons.add),label:Text('Add '+label)),
       ]);
     }
     if(type=='choice'){
