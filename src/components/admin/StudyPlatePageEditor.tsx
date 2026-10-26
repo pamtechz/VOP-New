@@ -1739,7 +1739,10 @@ export function StudyPlatePageEditor({
       </ModalLayer>
     )}
 
-    <Plate editor={editor} onValueChange={({value})=>{
+    <Plate editor={editor} onChange={()=>{
+      rememberSelection();
+      refreshSelectionState(value=>value+1);
+    }} onValueChange={({value})=>{
       const next=value as unknown as StudyPlateAuthoringDocument;
       setAuthoringValue(next);
       try{
@@ -1756,7 +1759,6 @@ export function StudyPlatePageEditor({
       <div className="vop-plate-paper">
         <PlateContent className={`vop-plate-editable ${showPilcrow ? 'vop-show-pilcrow' : ''}`}
           aria-label={uiT('admin.study_plate_editor.edit_study_chapter',"Edit study chapter")} spellCheck
-          onSelect={()=>{rememberSelection();refreshSelectionState(v=>v+1);}}
           onMouseUp={()=>{if(formatPainter)window.requestAnimationFrame(applyFormatPainter);}}
           onKeyUp={event=>{if(formatPainter&&(event.shiftKey||(event.key.toLowerCase()==='a'&&(event.ctrlKey||event.metaKey))))window.requestAnimationFrame(applyFormatPainter);}}
           onKeyDown={event=>{
