@@ -449,6 +449,7 @@ class PlatePageView extends StatelessWidget {
       backgroundColor: Colors.transparent,
       builder: (sheetContext) {
         final isDark = Theme.of(sheetContext).brightness == Brightness.dark;
+        final compactSheet = MediaQuery.sizeOf(sheetContext).width < 360;
         return Container(
           constraints: BoxConstraints(
             maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.85,
@@ -464,7 +465,8 @@ class PlatePageView extends StatelessWidget {
               ),
             ],
           ),
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+          padding: EdgeInsets.fromLTRB(compactSheet ? 12 : 20, 12,
+            compactSheet ? 12 : 20, 28),
           child: SafeArea(
             top: false,
             child: SingleChildScrollView(
@@ -485,16 +487,18 @@ class PlatePageView extends StatelessWidget {
                 const SizedBox(height: 16),
                 Row(
                   children: [
-                    Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFD97706).withValues(alpha: 0.15),
-                        shape: BoxShape.circle,
+                    if (!compactSheet) ...[
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFD97706).withValues(alpha: 0.15),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.auto_stories_rounded, color: Color(0xFFD97706), size: 22),
                       ),
-                      child: const Icon(Icons.auto_stories_rounded, color: Color(0xFFD97706), size: 22),
-                    ),
-                    const SizedBox(width: 12),
+                      const SizedBox(width: 12),
+                    ],
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,

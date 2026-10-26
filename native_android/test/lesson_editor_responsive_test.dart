@@ -39,6 +39,8 @@ void main() {
         )),
       ));
       expect(tester.takeException(), isNull);
+      // The add control can be below the fold on compact viewports.
+      await tester.ensureVisible(find.text('Add Chapters'));
       await tester.tap(find.text('Add Chapters'));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
