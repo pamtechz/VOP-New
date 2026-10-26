@@ -582,14 +582,33 @@ export function StudyPlatePageEditor({
 
   const insertParagraphAfter=()=>{
     if(!editor.selection)restoreSelection();
-    const index=selectedIndex();
-    if(index<0||isStudyPlateSectionMarker(nodes()[index])){
-      onNotify?.('Place the cursor in a content block before inserting a paragraph.');
-      return;
+    let index=selectedIndex();
+    const content=nodes();
+    if(index<0||isStudyPlateSectionMarker(content[index])){
+      // Mobile bottom-bar insert works without a focused keyboard/caret.
+      // Append to the selected section, before the next section marker.
+      const marker=content.findIndex(node=>isStudyPlateSectionMarker(node)&&node.id===focusSectionId);
+      if(marker<0){onNotify?.('Select a lesson section before adding a block.');return;}
+      index=marker;
+      while(index+1<content.length&&!isStudyPlateSectionMarker(content[index+1]))index++;
     }
     command(()=>editor.tf.insertNodes({type:'p',children:[{text:''}]},{at:[index+1]}));
-    onNotify?.('Paragraph inserted after the current block.');
+    onNotify?.('Paragraph added to this section.');
   };
+  useEffect(()=>{
+    const root=window.document.querySelector<HTMLElement>(
+      '.vop-plate-page-editor[data-chapter="'+chapterId+'"]');
+    if(!root)return;
+    const handle=(event:Event)=>{
+      const action=(event as CustomEvent<string>).detail;
+      if(action==='add-block')insertParagraphAfter();
+      if(action==='format'){setActiveRibbonTab('home');
+        root.querySelector('.vop-word-ribbon-tabs')?.scrollIntoView({block:'nearest'});}
+      if(action==='media')openInsert('image');
+    };
+    root.addEventListener('vop-studio-action',handle);
+    return ()=>root.removeEventListener('vop-studio-action',handle);
+  },[chapterId,editor,insertParagraphAfter]);
 
   const currentMarks = ((editor.selection ? editor.api.marks() : null) || {}) as Record<string, string>;
   const currentFontFamily = currentMarks.fontFamily || '';

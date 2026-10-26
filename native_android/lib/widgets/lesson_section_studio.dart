@@ -24,8 +24,10 @@ class _LessonSectionStudioState extends State<LessonSectionStudio> {
   static const blue=Color(0xFF2979FF),outline=Color(0xFF284563);
   String? chapterId,sectionId;
   String inspector='content';
+  bool showMobileSettings=false;
   bool preview=false;
   int serial=0;
+  int selectedBlockIndex=0;
 
   String newId()=> 'studio-${DateTime.now().microsecondsSinceEpoch.toRadixString(36)}-${serial++}';
   Map<String,dynamic> asMap(dynamic input)=>input is Map?Map<String,dynamic>.from(input):{};
@@ -141,6 +143,14 @@ class _LessonSectionStudioState extends State<LessonSectionStudio> {
     final moved=nodes.removeAt(oldIndex);
     nodes.insert(target,moved);updateDocument(nodes);
   }
+  void formatSelectedBlock(String type){
+    final nodes=document;
+    if(nodes.isEmpty)return;
+    final index=selectedBlockIndex.clamp(0,nodes.length-1).toInt();
+    if(['img','image','video','audio','table'].contains(nodes[index]['type']))return;
+    nodes[index]={...nodes[index],'type':type};
+    updateDocument(nodes);
+  }
   void removeBlock(int index){
     final nodes=document;
     if(nodes.length<=1)return;
@@ -221,17 +231,21 @@ class _LessonSectionStudioState extends State<LessonSectionStudio> {
     final title=photo?'Image':quote?'Scripture / Quotation':
       type=='h1'||type=='h2'?'Heading':'Paragraph';
     final text=simple?leaves.single['text'].toString():'';
-    return Container(
+    return GestureDetector(
       key:ValueKey('block-${block['id']??index}'),
+      onTap:()=>setState(()=>selectedBlockIndex=index),
+      child:Container(
       margin:const EdgeInsets.only(bottom:10),
       padding:const EdgeInsets.all(13),
       decoration:BoxDecoration(
         color:quote?const Color(0xFF133358):card,
-        border:Border.all(color:quote?const Color(0xFF2D6AA5):outline),
+        border:Border.all(color:selectedBlockIndex==index?blue:
+          quote?const Color(0xFF2D6AA5):outline),
         borderRadius:BorderRadius.circular(13)),
       child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
         Row(children:[
-          const Icon(Icons.drag_indicator,size:18,color:Color(0xFF819AB7)),
+          ReorderableDragStartListener(index:index,
+            child:const Icon(Icons.drag_indicator,size:18,color:Color(0xFF819AB7))),
           const SizedBox(width:8),
           Icon(photo?Icons.image_outlined:quote?Icons.menu_book_outlined:Icons.text_fields,
             size:19,color:quote?const Color(0xFF6CB5FF):const Color(0xFFA0CDFF)),
@@ -249,20 +263,30 @@ class _LessonSectionStudioState extends State<LessonSectionStudio> {
               if(document.length>1)const PopupMenuItem(value:'remove',child:Text('Remove block')),
             ]),
         ]),
-        if(photo)Padding(padding:const EdgeInsets.only(top:9),child:TextFormField(
+        if(photo)...[
+          if((block['url']??block['src']??'').toString().startsWith('https://'))
+            Padding(padding:const EdgeInsets.only(top:8),
+              child:ClipRRect(borderRadius:BorderRadius.circular(8),
+                child:Image.network((block['url']??block['src']).toString(),
+                  fit:BoxFit.contain,height:140,
+                  errorBuilder:(_,__,___)=>const Text('Image cannot be loaded')))),
+          Padding(padding:const EdgeInsets.only(top:9),child:TextFormField(
           key:ValueKey('image-${block['id']}'),
           initialValue:(block['url']??block['src']??'').toString(),
           decoration:const InputDecoration(labelText:'Image HTTPS URL',isDense:true),
           keyboardType:TextInputType.url,
           onChanged:(value)=>updateBlock(index,{...block,'url':value}),
-        ))
+        )),
+        ]
         else if(simple)Padding(padding:const EdgeInsets.only(top:8),child:TextFormField(
           key:ValueKey('text-${block['id']}'),
           initialValue:text,maxLines:null,minLines:quote?2:3,
           style:TextStyle(fontSize:15,height:1.65,fontStyle:quote?FontStyle.italic:null),
           decoration:const InputDecoration(border:InputBorder.none,
             hintText:'Write your lesson content…',isDense:true),
-          onChanged:(value)=>updateBlock(index,{...block,'children':[{'text':value}]}),
+          onChanged:(value)=>updateBlock(index,{...block,'children':[{
+            ...leaves.first,'text':value,
+          }]}),
         ))
         else Padding(padding:const EdgeInsets.only(top:10),child:Column(
           crossAxisAlignment:CrossAxisAlignment.start,children:[
@@ -272,6 +296,7 @@ class _LessonSectionStudioState extends State<LessonSectionStudio> {
               label:const Text('Open advanced editor')),
           ])),
       ]),
+      ),
     );
   }
 
@@ -299,8 +324,8 @@ class _LessonSectionStudioState extends State<LessonSectionStudio> {
           showSelectedIcon:false,
           segments:const [
             ButtonSegment(value:'content',label:Text('Content')),
-            ButtonSegment(value:'media',label:Text('Media')),
-            ButtonSegment(value:'quiz',label:Text('Quiz')),
+            ButtonSegment(value:'design',label:Text('Design')),
+            ButtonSegment(value:'visibility',label:Text('Visibility')),
           ],
           selected:{inspector},onSelectionChanged:(set)=>setState(()=>inspector=set.first)),
         const SizedBox(height:15),
@@ -321,13 +346,16 @@ class _LessonSectionStudioState extends State<LessonSectionStudio> {
               ...asMap(currentSection?['scriptureQuote']),'text':value,
             })),
         ],
-        if(inspector=='media')...[
+        if(inspector=='design')...[
           settingField('Cover image HTTPS URL','imageUrl'),
           settingField('Audio HTTPS URL','audioUrl'),
           settingField('Video HTTPS URL','videoUrl'),
         ],
-        if(inspector=='quiz')...[
-          const Text('Quiz questions are stored in the private assessment library.',
+        if(inspector=='visibility')...[
+          Text('Lesson status: ${widget.value['published']==true?'Published':'Draft'}',
+            style:const TextStyle(color:Color(0xFFACC5E2))),
+          const SizedBox(height:7),
+          const Text('Section visibility follows the lesson publication and enrollment rules.',
             style:TextStyle(color:Color(0xFFACC5E2))),
           const SizedBox(height:12),
           FilledButton.icon(onPressed:widget.onQuiz,
@@ -371,6 +399,26 @@ class _LessonSectionStudioState extends State<LessonSectionStudio> {
             IconButton(tooltip:'Add chapter',onPressed:addChapter,icon:const Icon(Icons.add_circle_outline)),
           ]),
           const SizedBox(height:12),
+          SingleChildScrollView(scrollDirection:Axis.horizontal,child:Row(children:[
+            ChoiceChip(selected:!preview,label:const Text('Edit'),
+              avatar:const Icon(Icons.edit_outlined,size:16),
+              onSelected:(_)=>setState(()=>preview=false)),
+            const SizedBox(width:6),
+            ActionChip(label:const Text('Blocks'),avatar:const Icon(Icons.layers_outlined,size:16),
+              onPressed:()=>addBlock('p')),
+            const SizedBox(width:6),
+            ActionChip(label:const Text('Media'),avatar:const Icon(Icons.image_outlined,size:16),
+              onPressed:()=>addBlock('image')),
+            const SizedBox(width:6),
+            ActionChip(label:const Text('Quiz'),avatar:const Icon(Icons.quiz_outlined,size:16),
+              onPressed:widget.onQuiz),
+            const SizedBox(width:6),
+            ActionChip(label:const Text('Settings'),avatar:const Icon(Icons.settings_outlined,size:16),
+              onPressed:()=>setState((){
+                inspector='content';showMobileSettings=!showMobileSettings;
+              })),
+          ])),
+          const SizedBox(height:10),
           if(wide)Row(crossAxisAlignment:CrossAxisAlignment.start,children:[
             SizedBox(width:215,child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
               const Text('Lesson Pages',style:TextStyle(fontSize:16,fontWeight:FontWeight.w800)),
@@ -394,17 +442,24 @@ class _LessonSectionStudioState extends State<LessonSectionStudio> {
                 padding:const EdgeInsets.only(right:8),child:navItem(pages[i],i,compact:true)),
             ])),
             const SizedBox(height:10),
-            ExpansionTile(title:const Text('Page / Section Settings'),
-              leading:const Icon(Icons.settings_outlined),
-              children:[inspectorPanel()]),
+            if(showMobileSettings)inspectorPanel(),
           ],
           const SizedBox(height:9),
           SafeArea(top:false,child:Wrap(alignment:WrapAlignment.spaceBetween,
             spacing:7,runSpacing:8,children:[
               OutlinedButton.icon(onPressed:()=>addBlock('p'),
                 icon:const Icon(Icons.add),label:const Text('Add Block')),
-              OutlinedButton.icon(onPressed:()=>addBlock('blockquote'),
-                icon:const Icon(Icons.format_quote),label:const Text('Scripture')),
+              PopupMenuButton<String>(tooltip:'Format selected text block',
+                onSelected:formatSelectedBlock,
+                itemBuilder:(_)=>const [
+                  PopupMenuItem(value:'p',child:Text('Paragraph')),
+                  PopupMenuItem(value:'h2',child:Text('Heading')),
+                  PopupMenuItem(value:'blockquote',child:Text('Scripture / Quote')),
+                ],
+                child:const Padding(padding:EdgeInsets.symmetric(horizontal:9,vertical:10),
+                  child:Row(mainAxisSize:MainAxisSize.min,children:[
+                    Icon(Icons.format_size),SizedBox(width:6),Text('Format'),
+                  ]))),
               OutlinedButton.icon(onPressed:()=>addBlock('image'),
                 icon:const Icon(Icons.image_outlined),label:const Text('Media')),
               OutlinedButton.icon(onPressed:()=>setState(()=>preview=!preview),
@@ -430,7 +485,20 @@ class _LessonSectionStudioState extends State<LessonSectionStudio> {
           child:OutlinedButton.icon(onPressed:widget.onAdvanced,
             icon:const Icon(Icons.edit_note),
             label:const Text('Open legacy or rich formatted content'))),
-        for(var i=0;i<document.length;i++)blockCard(document[i],i),
+        ReorderableListView.builder(
+          shrinkWrap:true,
+          physics:const NeverScrollableScrollPhysics(),
+          buildDefaultDragHandles:false,
+          itemCount:document.length,
+          onReorder:(from,to){
+            final nodes=document;
+            if(to>from)to--;
+            final moved=nodes.removeAt(from);
+            nodes.insert(to,moved);
+            updateDocument(nodes);
+          },
+          itemBuilder:(_,index)=>blockCard(document[index],index),
+        ),
       ],
     ]);
   }
