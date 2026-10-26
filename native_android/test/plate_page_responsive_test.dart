@@ -36,6 +36,11 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(find.text('HOLY SCRIPTURE FOCUS'), findsOneWidget);
       expect(find.text('Back to Study'), findsOneWidget);
+      final dismiss = find.byTooltip('Close Scripture details');
+      expect(dismiss, findsOneWidget);
+      // Verify both header and dismiss control remain within the viewport.
+      expect(tester.getTopRight(dismiss).dx, lessThanOrEqualTo(width));
+      expect(tester.getTopLeft(dismiss).dx, greaterThanOrEqualTo(0));
       await Scrollable.ensureVisible(
         tester.element(find.text('Back to Study')),
         alignment: 0.5,

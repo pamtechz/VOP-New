@@ -487,26 +487,27 @@ class PlatePageView extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 16),
-                Row(
+                // Use independently constrained header regions. A narrow
+                // bottom sheet must never let its title compete with the
+                // close control in a horizontal RenderFlex.
+                Stack(
                   children: [
-                    if (!compactSheet) ...[
-                      Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFD97706).withValues(alpha: 0.15),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(Icons.auto_stories_rounded, color: Color(0xFFD97706), size: 22),
-                      ),
-                      const SizedBox(width: 12),
-                    ],
-                    Expanded(
+                    Padding(
+                      padding: const EdgeInsets.only(right: 48),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          if (!compactSheet) ...[
+                            const Icon(
+                              Icons.auto_stories_rounded,
+                              color: Color(0xFFD97706),
+                              size: 22,
+                            ),
+                            const SizedBox(height: 8),
+                          ],
                           const Text(
                             'HOLY SCRIPTURE FOCUS',
+                            softWrap: true,
                             style: TextStyle(
                               fontSize: 10.5,
                               fontWeight: FontWeight.w900,
@@ -516,6 +517,8 @@ class PlatePageView extends StatelessWidget {
                           ),
                           Text(
                             reference.isNotEmpty ? reference : 'Scripture Passage',
+                            softWrap: true,
+                            overflow: TextOverflow.visible,
                             style: const TextStyle(
                               fontSize: 17,
                               fontWeight: FontWeight.w800,
@@ -524,9 +527,14 @@ class PlatePageView extends StatelessWidget {
                         ],
                       ),
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.close_rounded),
-                      onPressed: () => Navigator.of(sheetContext).pop(),
+                    Positioned(
+                      top: 0,
+                      right: 0,
+                      child: IconButton(
+                        tooltip: 'Close Scripture details',
+                        icon: const Icon(Icons.close_rounded),
+                        onPressed: () => Navigator.of(sheetContext).pop(),
+                      ),
                     ),
                   ],
                 ),
