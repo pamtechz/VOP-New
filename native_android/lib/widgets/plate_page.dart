@@ -128,11 +128,14 @@ class PlatePageView extends StatelessWidget {
                           color: const Color(0xFFD97706).withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
+                        // A Wrap avoids RenderFlex overflow when accessibility
+                        // text scaling or compact widths exceed the chip space.
+                        child: const Wrap(
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          spacing: 5,
+                          runSpacing: 2,
                           children: [
                             Icon(Icons.menu_book_rounded, size: 14, color: Color(0xFFB45309)),
-                            SizedBox(width: 5),
                             Text(
                               'Explore Passage Details',
                               style: TextStyle(
