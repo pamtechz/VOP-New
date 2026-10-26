@@ -139,3 +139,20 @@ test('new Flutter lessons and added chapters retain valid canonical structure',(
   assert.match(form,/lessonStructureError\(\)/);
   assert.match(form,/lessonTab='chapters';error=problem/);
 });
+
+
+test('shared Flutter Plate editor offers bounded undo and redo without losing section identity',()=>{
+  const plate=read('native_android/lib/widgets/plate_document_editor.dart');
+  assert.match(plate,/static const historyLimit=40/);
+  assert.match(plate,/final List<String> undoHistory=\[\]/);
+  assert.match(plate,/final List<String> redoHistory=\[\]/);
+  assert.match(plate,/undoHistory\.add\(committedDocument\)/);
+  assert.match(plate,/redoHistory\.clear\(\)/);
+  assert.match(plate,/void undo\(\)/);
+  assert.match(plate,/void redo\(\)/);
+  assert.match(plate,/revision\+\+/);
+  assert.match(plate,/widget\.onChanged\(decodeDocument\(committedDocument\)\)/);
+  assert.match(plate,/tooltip:'Undo'/);
+  assert.match(plate,/tooltip:'Redo'/);
+  assert.match(plate,/nodes\.length<=1\?null/);
+});

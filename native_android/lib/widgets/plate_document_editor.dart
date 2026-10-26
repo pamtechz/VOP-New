@@ -13,10 +13,51 @@ class _PlateDocumentEditorState extends State<PlateDocumentEditor>{
   bool preview=false;
   int revision=0;
   int sequence=0;
-  @override void initState(){super.initState();nodes=(jsonDecode(jsonEncode(widget.document)) as List).map((v)=>Map<String,dynamic>.from(v as Map)).toList();}
-  void emit(){widget.onChanged((jsonDecode(jsonEncode(nodes)) as List)
-    .map((v)=>Map<String,dynamic>.from(v as Map)).toList());}
+  static const historyLimit=40;
+  final List<String> undoHistory=[];
+  final List<String> redoHistory=[];
+  late String committedDocument;
+  List<Map<String,dynamic>> decodeDocument(String raw)=>
+    (jsonDecode(raw) as List).map((v)=>Map<String,dynamic>.from(v as Map)).toList();
+  @override void initState(){
+    super.initState();
+    nodes=decodeDocument(jsonEncode(widget.document));
+    committedDocument=jsonEncode(nodes);
+  }
+  void deliver(){widget.onChanged(decodeDocument(committedDocument));}
+  void emit(){
+    final next=jsonEncode(nodes);
+    if(next==committedDocument)return;
+    undoHistory.add(committedDocument);
+    if(undoHistory.length>historyLimit)undoHistory.removeAt(0);
+    redoHistory.clear();
+    committedDocument=next;
+    if(mounted)setState((){});
+    deliver();
+  }
   void changed(){setState((){});emit();}
+  void undo(){
+    if(undoHistory.isEmpty)return;
+    redoHistory.add(committedDocument);
+    committedDocument=undoHistory.removeLast();
+    setState((){
+      nodes=decodeDocument(committedDocument);
+      revision++;
+      preview=false;
+    });
+    deliver();
+  }
+  void redo(){
+    if(redoHistory.isEmpty)return;
+    undoHistory.add(committedDocument);
+    committedDocument=redoHistory.removeLast();
+    setState((){
+      nodes=decodeDocument(committedDocument);
+      revision++;
+      preview=false;
+    });
+    deliver();
+  }
   String id()=>DateTime.now().microsecondsSinceEpoch.toRadixString(36)+'-'+(++sequence).toString();
   Map<String,dynamic> block(String type){
     // Links are inline children of a paragraph in the shared Plate schema.
@@ -36,12 +77,18 @@ class _PlateDocumentEditorState extends State<PlateDocumentEditor>{
   }
   @override Widget build(BuildContext context)=>Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
     Row(children:[const Expanded(child:Text('Section content',style:TextStyle(fontWeight:FontWeight.w700))),
-      TextButton.icon(onPressed:()=>setState(()=>preview=!preview),icon:Icon(preview?Icons.edit_outlined:Icons.visibility_outlined),label:Text(preview?'Edit':'Preview'))]),
+      IconButton(tooltip:'Undo',onPressed:undoHistory.isEmpty?null:undo,
+        icon:const Icon(Icons.undo)),
+      IconButton(tooltip:'Redo',onPressed:redoHistory.isEmpty?null:redo,
+        icon:const Icon(Icons.redo)),
+      IconButton(tooltip:preview?'Edit':'Preview',
+        onPressed:()=>setState(()=>preview=!preview),
+        icon:Icon(preview?Icons.edit_outlined:Icons.visibility_outlined))]),
     if(preview)PlatePageView(page:{'document':nodes})else ...nodes.asMap().entries.map((entry)=>Card(key:ValueKey('${entry.value['id']??entry.key}.$revision'),child:Padding(padding:const EdgeInsets.all(12),child:Column(children:[
       Row(children:[Expanded(child:Text(_label('${entry.value['type']}'))),
         IconButton(tooltip:'Move up',onPressed:entry.key==0?null:(){final value=nodes.removeAt(entry.key);nodes.insert(entry.key-1,value);revision++;changed();},icon:const Icon(Icons.arrow_upward)),
         IconButton(tooltip:'Move down',onPressed:entry.key==nodes.length-1?null:(){final value=nodes.removeAt(entry.key);nodes.insert(entry.key+1,value);revision++;changed();},icon:const Icon(Icons.arrow_downward)),
-        IconButton(tooltip:'Remove block',onPressed:(){nodes.removeAt(entry.key);revision++;changed();},icon:const Icon(Icons.delete_outline))]),
+        IconButton(tooltip:'Remove block',onPressed:nodes.length<=1?null:(){nodes.removeAt(entry.key);revision++;changed();},icon:const Icon(Icons.delete_outline))]),
       _node(entry.value,'${entry.key}'),
     ])))),
     if(!preview)OutlinedButton.icon(onPressed:add,icon:const Icon(Icons.add),label:const Text('Add content block')),
