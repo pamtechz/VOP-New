@@ -114,7 +114,10 @@ class PlatePageView extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 14),
-                Row(
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     InkWell(
                       borderRadius: BorderRadius.circular(8),
@@ -142,7 +145,6 @@ class PlatePageView extends StatelessWidget {
                         ),
                       ),
                     ),
-                    const Spacer(),
                     if (scriptureRef.isNotEmpty)
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -448,6 +450,9 @@ class PlatePageView extends StatelessWidget {
       builder: (sheetContext) {
         final isDark = Theme.of(sheetContext).brightness == Brightness.dark;
         return Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.85,
+          ),
           decoration: BoxDecoration(
             color: isDark ? const Color(0xFF1E293B) : Colors.white,
             borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
@@ -462,8 +467,9 @@ class PlatePageView extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
           child: SafeArea(
             top: false,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Center(
@@ -549,6 +555,7 @@ class PlatePageView extends StatelessWidget {
                   label: const Text('Back to Study', style: TextStyle(fontWeight: FontWeight.w700)),
                 ),
               ],
+              ),
             ),
           ),
         );
