@@ -157,3 +157,14 @@ test('shared Flutter Plate editor offers bounded undo and redo without losing se
   assert.match(plate,/tooltip:'Redo'/);
   assert.match(plate,/nodes\.length<=1\?null/);
 });
+
+
+test('desktop Flutter lesson chapter authoring displays a live learner preview beside the form',()=>{
+  const form=read('native_android/lib/screens/workspace_records_screen.dart');
+  assert.match(form,/wide&&lessonTab=='chapters'/);
+  assert.match(form,/Expanded\(flex:3,child:SchemaFields/);
+  assert.match(form,/Expanded\(flex:2,child:Card/);
+  assert.match(form,/Live learner preview/);
+  assert.match(form,/lessonPreview\(\)/);
+  assert.match(form,/if\(!wide\)SafeArea/);
+});

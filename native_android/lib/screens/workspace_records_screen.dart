@@ -233,6 +233,28 @@ class _RecordEditorState extends State<RecordEditor>{
                 if(error!=null)Padding(padding:const EdgeInsets.only(bottom:16),
                   child:Text(error!,style:TextStyle(color:Theme.of(context).colorScheme.error))),
                 if(widget.lessonMode&&lessonTab=='preview')lessonPreview()
+                else if(widget.lessonMode&&wide&&lessonTab=='chapters')
+                  Row(crossAxisAlignment:CrossAxisAlignment.start,children:[
+                    Expanded(flex:3,child:SchemaFields(
+                      fields:widget.fields.where(showLessonField).toList(),
+                      value:value,options:options,
+                      onChanged:()=>setState(()=>dirty=true))),
+                    const SizedBox(width:18),
+                    Expanded(flex:2,child:Card(
+                      clipBehavior:Clip.antiAlias,
+                      child:Padding(padding:const EdgeInsets.all(16),
+                        child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+                          Row(children:[
+                            Icon(Icons.visibility_outlined,size:18,
+                              color:Theme.of(context).colorScheme.primary),
+                            const SizedBox(width:8),
+                            Expanded(child:Text('Live learner preview',
+                              style:Theme.of(context).textTheme.titleMedium)),
+                          ]),
+                          const Divider(),
+                          lessonPreview(),
+                        ])))),
+                  ])
                 else SchemaFields(fields:widget.lessonMode
                   ?widget.fields.where(showLessonField).toList():widget.fields,
                   value:value,options:options,onChanged:()=>setState(()=>dirty=true)),
