@@ -16,7 +16,7 @@ test('public curriculum loading never throws because the large legacy guide cach
   assert.match(storage,/volatileCache\.set\(scoped, value\)/);
   assert.match(storage,/if \(value\.length > MAX_LOCAL_CACHE_CHARS\)/);
   assert.match(storage,/try \{\s*localStorage\.setItem\(scoped, value\)/);
-  assert.match(storage,/catch \(error\)/);
+  assert.match(storage,/catch\s*(?:\([^)]*\))?\s*\{/);
   assert.match(storage,/function readStorage\(/);
   assert.match(storage,/if \(volatileCache\.has\(scoped\)\)/);
 });
