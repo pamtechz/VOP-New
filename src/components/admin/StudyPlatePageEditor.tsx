@@ -368,24 +368,33 @@ export function StudyPlatePageEditor({
 
   useEffect(()=>{
     if(!focusSectionId)return;
-    // Keep the production Plate editor intact; only focus the requested
-    // section marker in this editor rather than a marker from another pane.
-    const raf=window.requestAnimationFrame(()=>{
+    // Plate can mount section markers after the parent commits a new focus ID.
+    // Wait for the actual marker instead of dropping the request after one frame.
+    const applyFocus=()=>{
       const pane=window.document.querySelector<HTMLElement>(
         '.vop-plate-page-editor[data-chapter="'+chapterId+'"]');
-      if(!pane)return;
+      if(!pane)return false;
       const markers=pane.querySelectorAll<HTMLElement>('[data-vop-section-id]');
-      let focused:HTMLElement|null=null;
-      for(const marker of markers){
-        marker.removeAttribute('data-vop-focused');
-        if(marker.dataset.vopSectionId===focusSectionId)focused=marker;
-      }
-      if(focused){
-        focused.setAttribute('data-vop-focused','true');
-        focused.scrollIntoView({block:'start',behavior:'smooth',inline:'nearest'});
+      const focused=Array.from(markers).find(marker=>marker.dataset.vopSectionId===focusSectionId);
+      if(!focused)return false;
+      for(const marker of markers)marker.removeAttribute('data-vop-focused');
+      focused.setAttribute('data-vop-focused','true');
+      focused.scrollIntoView({block:'start',behavior:'smooth',inline:'nearest'});
+      return true;
+    };
+    const observer=new MutationObserver(()=>{
+      if(applyFocus())observer.disconnect();
+    });
+    const raf=window.requestAnimationFrame(()=>{
+      if(!applyFocus()){
+        observer.observe(window.document.body,{childList:true,subtree:true});
+        if(applyFocus())observer.disconnect();
       }
     });
-    return ()=>window.cancelAnimationFrame(raf);
+    return ()=>{
+      window.cancelAnimationFrame(raf);
+      observer.disconnect();
+    };
   },[chapterId,focusSectionId]);
 
   const nodes=()=>editor.children as unknown as StudyPlateAuthoringDocument;

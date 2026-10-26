@@ -514,6 +514,9 @@
 
 @media(max-width:640px){
   .vop-plate-authoring-review{--vop-plate-sticky-top:68px}
+  /* Keep preview, draft and publish actions visible on narrow phones. */
+  .vop-plate-header-save-actions{width:100%;min-width:0;max-width:100%;flex-wrap:wrap}
+  .vop-plate-header-save-btn{max-width:100%}
 }
 
 
