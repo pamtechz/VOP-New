@@ -1083,3 +1083,56 @@
 @media(prefers-reduced-motion:reduce){
   .vop-plate-page-editor .vop-study-table-grid-cell{transition:none !important}
 }
+
+
+/* Compact ribbon for touch and short laptop viewports.
+   Commands remain reachable through horizontal scrolling; the editor body
+   itself never becomes wider than the available application column. */
+.vop-plate-page-editor .vop-ms-word-ribbon,
+.vop-plate-page-editor .vop-word-ribbon-content,
+.vop-plate-page-editor .vop-word-ribbon-tabs{
+  box-sizing:border-box;
+  max-width:100%;
+  min-width:0;
+}
+.vop-plate-page-editor .vop-word-ribbon-content{
+  -webkit-overflow-scrolling:touch;
+  scroll-padding-inline:12px;
+  overscroll-behavior-inline:contain;
+}
+.vop-plate-page-editor .vop-ribbon-menu-wrapper .vop-ribbon-popover-light{
+  max-width:calc(100vw - 24px);
+  max-height:min(55dvh,420px);
+  overscroll-behavior:contain;
+}
+@media(max-width:680px){
+  .vop-plate-page-editor .vop-word-ribbon-tabs{
+    padding:4px 42px 0 6px;
+    scroll-snap-type:x proximity;
+    -webkit-overflow-scrolling:touch;
+  }
+  .vop-plate-page-editor .vop-word-ribbon-tab{
+    min-height:42px;
+    scroll-snap-align:start;
+    padding:8px 10px;
+  }
+  .vop-plate-page-editor .vop-word-ribbon-content{
+    padding:3px 5px 5px;
+  }
+  .vop-plate-page-editor .vop-word-group{
+    padding:3px 6px 2px;
+  }
+  .vop-plate-page-editor .vop-word-group-content :where(button:not(.vop-plate-scripture-btn):not(.vop-plate-insert-section-btn):not(.vop-plate-section-break)){
+    min-width:32px;
+    min-height:34px;
+  }
+  .vop-bible-verse-dialog{
+    box-sizing:border-box;
+    width:calc(100vw - 20px);
+    max-height:calc(100dvh - 30px);
+    padding:14px;
+  }
+  .vop-bible-verse-dialog-actions{
+    flex-wrap:wrap;
+  }
+}
