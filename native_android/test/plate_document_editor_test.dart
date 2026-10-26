@@ -8,6 +8,10 @@ Map<String, dynamic> initialParagraph() => {
   'children': [{'text': 'Before'}],
 };
 
+Finder editorIcon(String tooltip) => find.byWidgetPredicate(
+  (widget) => widget is IconButton && widget.tooltip == tooltip,
+);
+
 String firstText(List<Map<String, dynamic>> document) {
   final children = document.first['children'] as List;
   return (children.first as Map)['text'] as String;
@@ -26,8 +30,8 @@ void main() {
       )),
     ));
 
-    expect(find.byTooltip('Undo'), findsOneWidget);
-    expect(find.byTooltip('Redo'), findsOneWidget);
+    expect(editorIcon('Undo'), findsOneWidget);
+    expect(editorIcon('Redo'), findsOneWidget);
     expect(find.text('Before'), findsOneWidget);
 
     await tester.enterText(find.byType(TextFormField).first, 'After');
@@ -36,23 +40,23 @@ void main() {
     expect(firstText(written.last), 'After');
     expect(written.last.first['id'], 'stable-block-one');
 
-    await tester.tap(find.byTooltip('Undo'));
+    await tester.tap(editorIcon('Undo'));
     await tester.pump();
     expect(firstText(written.last), 'Before');
     expect(written.last.first['id'], 'stable-block-one');
 
-    await tester.tap(find.byTooltip('Redo'));
+    await tester.tap(editorIcon('Redo'));
     await tester.pump();
     expect(firstText(written.last), 'After');
     expect(written.last.first['id'], 'stable-block-one');
 
     // Undo, then make a new edit: the obsolete redo chain must be discarded.
-    await tester.tap(find.byTooltip('Undo'));
+    await tester.tap(editorIcon('Undo'));
     await tester.pump();
     await tester.enterText(find.byType(TextFormField).first, 'Different');
     await tester.pump();
     expect(firstText(written.last), 'Different');
-    final redo = tester.widget<IconButton>(find.byTooltip('Redo'));
+    final redo = tester.widget<IconButton>(editorIcon('Redo'));
     expect(redo.onPressed, isNull);
     expect(tester.takeException(), isNull);
   });
@@ -65,7 +69,7 @@ void main() {
             onChanged: (_) {}),
       )),
     ));
-    final remove = tester.widget<IconButton>(find.byTooltip('Remove block'));
+    final remove = tester.widget<IconButton>(editorIcon('Remove block'));
     expect(remove.onPressed, isNull);
     expect(tester.takeException(), isNull);
   });
