@@ -5,6 +5,7 @@ import '../widgets/vop_ui.dart';
 import '../widgets/vop_desktop_layout.dart';
 import '../widgets/plate_document_editor.dart';
 import '../widgets/plate_page.dart';
+import '../widgets/lesson_section_studio.dart';
 import '../widgets/certificate_layout_editor.dart';
 import 'curriculum_lesson_editor_screen.dart';
 
@@ -119,7 +120,7 @@ class _RecordEditorState extends State<RecordEditor>{
   late Map<String,dynamic> value;
   late Map<String,dynamic> options;
   bool saving=false,dirty=false,saveInFlight=false;
-  String lessonTab='details';
+  String lessonTab='chapters';
   String? error;
   @override void initState(){super.initState();value=recordMap(jsonDecode(jsonEncode(writableRecord(widget.initial))));options={...widget.options};loadOptions();}
   Future<void> loadOptions()async{
@@ -174,7 +175,8 @@ class _RecordEditorState extends State<RecordEditor>{
   bool showLessonField(Map<String,dynamic> field){
     final key=(field['key']??'').toString();
     switch(lessonTab){
-      case 'chapters':return ['chapters','contentPages','pages','content'].contains(key);
+      case 'chapters':
+      case 'advanced':return ['chapters','contentPages','pages','content'].contains(key);
       case 'media':return ['media','imageUrl','audioUrl','videoUrl'].contains(key);
       case 'references':return ['bibleReferences','teacherNotes'].contains(key);
       case 'settings':return ['sharingScope','tags','published'].contains(key);
@@ -215,7 +217,8 @@ class _RecordEditorState extends State<RecordEditor>{
               child:Row(children:[
                 for(final item in const [
                   ('details','Details',Icons.info_outline),
-                  ('chapters','Chapters & sections',Icons.account_tree_outlined),
+                  ('chapters','Lesson studio',Icons.edit_note_outlined),
+                  ('advanced','Advanced structure',Icons.account_tree_outlined),
                   ('preview','Learner preview',Icons.visibility_outlined),
                   ('media','Media',Icons.perm_media_outlined),
                   ('references','Bible & notes',Icons.menu_book_outlined),
@@ -233,31 +236,23 @@ class _RecordEditorState extends State<RecordEditor>{
                 if(error!=null)Padding(padding:const EdgeInsets.only(bottom:16),
                   child:Text(error!,style:TextStyle(color:Theme.of(context).colorScheme.error))),
                 if(widget.lessonMode&&lessonTab=='preview')lessonPreview()
-                else if(widget.lessonMode&&wide&&lessonTab=='chapters')
-                  Row(crossAxisAlignment:CrossAxisAlignment.start,children:[
-                    Expanded(flex:3,child:SchemaFields(
-                      fields:widget.fields.where(showLessonField).toList(),
-                      value:value,options:options,
-                      onChanged:()=>setState(()=>dirty=true))),
-                    const SizedBox(width:18),
-                    Expanded(flex:2,child:Card(
-                      clipBehavior:Clip.antiAlias,
-                      child:Padding(padding:const EdgeInsets.all(16),
-                        child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
-                          Row(children:[
-                            Icon(Icons.visibility_outlined,size:18,
-                              color:Theme.of(context).colorScheme.primary),
-                            const SizedBox(width:8),
-                            Expanded(child:Text('Live learner preview',
-                              style:Theme.of(context).textTheme.titleMedium)),
-                          ]),
-                          const Divider(),
-                          lessonPreview(),
-                        ])))),
-                  ])
-                else SchemaFields(fields:widget.lessonMode
-                  ?widget.fields.where(showLessonField).toList():widget.fields,
-                  value:value,options:options,onChanged:()=>setState(()=>dirty=true)),
+                else if(widget.lessonMode&&lessonTab=='chapters')
+                  LessonSectionStudio(
+                    value:value,
+                    saving:saving,
+                    onChanged:()=>setState(()=>dirty=true),
+                    onSave:()=>save(),
+                    onAdvanced:()=>setState(()=>lessonTab='advanced'),
+                    onQuiz:()=>Navigator.push(context,MaterialPageRoute<void>(
+                      builder:(_)=>WorkspaceRecordsScreen(
+                        api:widget.api,collection:'quizzes',
+                        organizationId:widget.initial['organizationId']?.toString()))),
+                  )
+                else SchemaFields(
+                  fields:widget.lessonMode
+                    ?widget.fields.where(showLessonField).toList():widget.fields,
+                  value:value,options:options,
+                  onChanged:()=>setState(()=>dirty=true)),
                 if(wide)const SizedBox(height:32),
               ])))),
           if(!wide)SafeArea(top:false,child:Padding(

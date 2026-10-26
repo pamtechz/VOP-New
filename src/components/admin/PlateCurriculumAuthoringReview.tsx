@@ -2,7 +2,7 @@ import React, {useEffect, useMemo, useState} from 'react';
 import {
   ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BookOpen, ChevronRight,
   Copy, Edit3, Eye, FileQuestion, GripVertical, LoaderCircle, MoreVertical, PanelLeftClose, PanelLeftOpen,
-  Plus, Save, Send, Settings, Trash2,
+  Plus, Save, Send, Settings, Trash2, Image as ImageIcon, Search, X, Layers3,
 } from 'lucide-react';
 import {
   curriculumPages,
@@ -22,6 +22,7 @@ import { LessonReaderModal } from '../reader/LessonReaderModal';
 import { StructureActionsMenu } from './StructureActionsMenu';
 import { StudyPlatePageEditor } from './StudyPlatePageEditor';
 import './plate-structure.css';
+import './plate-studio.css';
 
 const uiT = createUiTranslator('admin.plate_authoring', 'PlateCurriculumAuthoringReview');
 
@@ -100,6 +101,19 @@ export function PlateCurriculumAuthoringReview({
   const [dragOverIndex,setDragOverIndex]=useState<number|null>(null);
   const [dropPosition,setDropPosition]=useState<'above'|'below'|null>(null);
   const [previewOpen,setPreviewOpen]=useState(false);
+  const [pageQuery,setPageQuery]=useState('');
+  const [settingsTab,setSettingsTab]=useState<'content'|'media'|'quiz'>('content');
+  const [settingsOpen,setSettingsOpen]=useState(()=>typeof window!=='undefined'&&window.innerWidth>860);
+  const [mobilePagesOpen,setMobilePagesOpen]=useState(true);
+  const selectedSection=chapter?.sections.find(item=>item.id===focusSectionId)||chapter?.sections[0];
+  const selectedCover=selectedSection?.imageUrl||
+    selectedSection?.blocks.find(item=>item.type==='image')?.src||'';
+  const visibleSections=chapter?.sections.filter(item=>
+    item.title.toLocaleLowerCase().includes(pageQuery.trim().toLocaleLowerCase()))||[];
+  const updateSection=(sectionId:string,patch:Partial<CurriculumSection>)=>{
+    if(!chapter)return;
+    setSections(chapter.sections.map(item=>item.id===sectionId?{...item,...patch}:item));
+  };
 
   const reorderSection=(sourceIndex:number,targetIndex:number,position:'above'|'below')=>{
     if(sourceIndex===targetIndex||!canLeaveChapter()||!chapter)return;
@@ -161,13 +175,24 @@ export function PlateCurriculumAuthoringReview({
   const remountEditor=()=>setEditorRevision(value=>value+1);
 
   const jumpToSection=(sectionId:string)=>{
+    const destination=chapters.find(item=>item.sections.some(section=>section.id===sectionId));
+    if(!destination)return;
+    if(destination.id!==chapter?.id){
+      if(!canLeaveChapter())return;
+      setChapterId(destination.id);
+      remountEditor();
+    }
     setFocusSectionId(sectionId);
-    window.requestAnimationFrame(()=>{
-      const target=window.document.querySelector('[data-vop-section-id="'+sectionId+'"]') as HTMLElement|null;
-      if(target){
-        target.scrollIntoView({block:'start',behavior:'smooth'});
-      }
-    });
+    window.requestAnimationFrame(()=>window.requestAnimationFrame(()=>{
+      const pane=window.document.querySelector('.vop-plate-document-pane');
+      const target=Array.from(pane?.querySelectorAll<HTMLElement>('[data-vop-section-id]')||[])
+        .find(node=>node.dataset.vopSectionId===sectionId);
+      if(!target)return;
+      pane?.querySelectorAll<HTMLElement>('[data-vop-section-id]')
+        .forEach(node=>node.removeAttribute('data-vop-focused'));
+      target.setAttribute('data-vop-focused','true');
+      target.scrollIntoView({block:'start',behavior:'smooth',inline:'nearest'});
+    }));
   };
 
   useEffect(()=>setInvalidChapter(''),[chapterId]);
@@ -327,7 +352,7 @@ export function PlateCurriculumAuthoringReview({
   return <div className="vop-plate-authoring-review">
     <div className="vop-plate-path">
       <BookOpen size={15}/>{programTitle && <><span>{programTitle}</span><ChevronRight size={14}/></>}
-      <span>{guideTitle||'Guide / Module'}</span><ChevronRight size={14}/>
+      <span>{guideTitle||'Guide / Module'}</span><ChevronRight size={14}/><span>Lesson Editor</span><ChevronRight size={14}/>
       <strong>{lessonTitle||'Lesson'}</strong>
     </div>
     {recoveryBanner}
@@ -434,7 +459,7 @@ export function PlateCurriculumAuthoringReview({
       <aside className={'vop-plate-outline '+(sidebarCollapsed?'collapsed':'')} aria-label={uiT('learner_page_outline',"Learner page outline")}>
         <div className="vop-plate-outline-head">
           {!sidebarCollapsed ? (
-            <div><span>{uiT('learner_pages',"LEARNER PAGES")}</span><strong>{chapter.sections.length} sections</strong></div>
+            <div><span>LESSON PAGES</span><strong>{chapter.sections.length} sections · {chapter.sections.reduce((total,item)=>total+(item.document?.length||item.blocks.length),0)} blocks</strong></div>
           ) : (
             <span className="vop-plate-outline-collapsed-title" title={uiT('learner_pages_2',"Learner Pages")}>{uiT('pages',"PAGES")}</span>
           )}
@@ -452,9 +477,17 @@ export function PlateCurriculumAuthoringReview({
             </button>
           </div>
         </div>
-        {!sidebarCollapsed && <p className="vop-plate-outline-help">Sections are page boundaries inside the document—not separate block forms.</p>}
+        {!sidebarCollapsed && <>
+          <button type="button" className="vop-studio-add-page" disabled={chapter.sections.length>=40}
+            onClick={()=>addSection()}><Plus size={16}/> Add page</button>
+          <div className="vop-studio-outline-search"><Search size={15}/>
+            <input type="search" aria-label="Search lesson pages" placeholder="Search pages…"
+              value={pageQuery} onChange={event=>setPageQuery(event.target.value)}/>
+          </div>
+        </>}
         <div className="vop-plate-outline-list">
-          {chapter.sections.map((section,index)=>{
+          {visibleSections.map(section=>{
+             const index=chapter.sections.findIndex(item=>item.id===section.id);
             const isEditing=editingSectionId===section.id;
             const isActive=section.id===focusSectionId;
             const isDragging=draggedIndex===index;
@@ -547,9 +580,14 @@ export function PlateCurriculumAuthoringReview({
                     </div>
                     <button type="button" className="vop-plate-outline-main"
                       onClick={()=>jumpToSection(section.id)}
+                      aria-current={isActive?'page':undefined}
+                      aria-label={'Focus section '+(index+1)+': '+section.title}
                       onDoubleClick={()=>setEditingSectionId(section.id)}
                       title={uiT('click_to_jump_to_this_section_in_the_document',"Click to jump to this section in the document")}>
-                      <span className="vop-plate-outline-badge">{index+1}</span>
+                      <span className="vop-plate-outline-badge" style={section.imageUrl?{
+                           backgroundImage:'url("'+section.imageUrl+'")',
+                           backgroundSize:'cover',backgroundPosition:'center',
+                         }:undefined}>{section.imageUrl?'':index+1}</span>
                       <span className="vop-plate-outline-text">
                         <strong>{section.title}</strong>
                         <small>{section.document?.length||section.blocks.length} content blocks</small>
@@ -616,7 +654,9 @@ export function PlateCurriculumAuthoringReview({
           organizationId={organizationId}
           document={curriculumSectionsToAuthoringDocument(chapter.sections)}
           focusSectionId={focusSectionId}
-          onSectionsChange={sections=>setSections(sections)}
+          onSectionsChange={sections=>setSections(sections.map(section=>({
+             ...chapter.sections.find(item=>item.id===section.id),...section,
+           })))}
           onSectionCreated={sectionId=>setFocusSectionId(sectionId)}
           onNotify={setMessage}
           onValidationError={value=>{
@@ -626,7 +666,82 @@ export function PlateCurriculumAuthoringReview({
           canAttachQuiz={canAttachQuiz}
           onQuiz={onQuiz}/>
       </section>
+      {settingsOpen&&selectedSection&&<aside className="vop-studio-settings"
+        aria-label="Selected lesson page settings">
+        <div className="vop-studio-settings-head"><strong>Page / Section Settings</strong>
+          <button type="button" aria-label="Close page settings" onClick={()=>setSettingsOpen(false)}><X size={17}/></button>
+        </div>
+        <div className="vop-studio-settings-tabs" role="tablist" aria-label="Section settings">
+          {(['content','media','quiz'] as const).map(tab=>
+            <button key={tab} type="button" role="tab" aria-selected={settingsTab===tab}
+              onClick={()=>setSettingsTab(tab)}>{tab==='content'?'Content':tab==='media'?'Media':'Quiz'}</button>)}
+        </div>
+        {settingsTab==='content'&&<div className="vop-studio-settings-fields">
+          <label>Page title
+            <input aria-label="Selected page title" key={selectedSection.id+':title'} maxLength={240}
+              defaultValue={selectedSection.title}
+              onBlur={event=>{const value=event.currentTarget.value.trim();
+                if(value&&value!==selectedSection.title)renameSection(selectedSection.id,value);}}/>
+          </label>
+          <label>Key takeaway / description
+            <textarea aria-label="Selected page description" key={selectedSection.id+':takeaway'}
+              rows={4} maxLength={2000} defaultValue={selectedSection.keyTakeaway||''}
+              onBlur={event=>updateSection(selectedSection.id,{keyTakeaway:event.currentTarget.value})}/>
+          </label>
+          <label>Scripture reference
+            <input aria-label="Selected Scripture reference" key={selectedSection.id+':reference'}
+              maxLength={160} defaultValue={selectedSection.scriptureQuote?.reference||''}
+              onBlur={event=>updateSection(selectedSection.id,{scriptureQuote:{
+                reference:event.currentTarget.value,text:selectedSection.scriptureQuote?.text||'',
+              }})}/>
+          </label>
+          <label>Scripture passage
+            <textarea aria-label="Selected Scripture passage" key={selectedSection.id+':scripture'}
+              rows={4} maxLength={4000} defaultValue={selectedSection.scriptureQuote?.text||''}
+              onBlur={event=>updateSection(selectedSection.id,{scriptureQuote:{
+                reference:selectedSection.scriptureQuote?.reference||'',text:event.currentTarget.value,
+              }})}/>
+          </label>
+        </div>}
+        {settingsTab==='media'&&<div className="vop-studio-settings-fields">
+          <label>Cover image URL (public HTTPS)
+            <input type="url" aria-label="Selected page cover image" key={selectedSection.id+':image'}
+              defaultValue={selectedSection.imageUrl||''}
+              onBlur={event=>updateSection(selectedSection.id,{imageUrl:event.currentTarget.value.trim()||undefined})}/>
+          </label>
+          {selectedCover&&<img className="vop-studio-cover-preview" src={selectedCover}
+            alt={'Cover for '+selectedSection.title}/>}
+          <p>To insert images, audio and video into lesson blocks, use the Media ribbon.</p>
+        </div>}
+        {settingsTab==='quiz'&&<div className="vop-studio-settings-fields">
+          <p>Section quiz questions remain in the private assessment bank and do not expose answer keys to learners.</p>
+          <button type="button" className="vop-studio-quiz-action" disabled={!canAttachQuiz}
+            onClick={()=>onQuiz({type:'section',id:selectedSection.id})}>
+            <FileQuestion size={17}/> Edit section questions
+          </button>
+        </div>}
+      </aside>}
     </div>}
+
+    {chapter&&<div className="vop-studio-mobile-actions">
+      <button type="button" aria-expanded={mobilePagesOpen} onClick={()=>setMobilePagesOpen(v=>!v)}>
+        <Layers3 size={17}/> Pages</button>
+      <button type="button" aria-expanded={settingsOpen} onClick={()=>{setSettingsOpen(v=>!v);setSettingsTab('content');}}>
+        <Settings size={17}/> Settings</button>
+      <button type="button" onClick={()=>setPreviewOpen(true)}><Eye size={17}/> Preview</button>
+      {onSave&&<button type="button" className="vop-studio-mobile-primary" disabled={saving}
+        onClick={()=>onSave(lessonPublished)}><Send size={17}/>{lessonPublished?'Update':'Save'}</button>}
+    </div>}
+    {chapter&&mobilePagesOpen&&<nav className="vop-studio-mobile-pages" aria-label="Jump to lesson section">
+      {chapter.sections.map((section,index)=><button key={section.id} type="button"
+        className={section.id===focusSectionId?'active':''}
+        aria-current={section.id===focusSectionId?'page':undefined}
+        onClick={()=>jumpToSection(section.id)}>
+        {section.imageUrl&&<img src={section.imageUrl} alt=""/>}
+        <span><strong>{index+1}. {section.title}</strong>
+          <small>{section.document?.length||section.blocks.length} blocks</small></span>
+      </button>)}
+    </nav>}
 
     {message&&<p className="vop-plate-message" role="status">{message}</p>}
     <div className="vop-plate-publish-hint">

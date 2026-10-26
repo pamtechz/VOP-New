@@ -6,7 +6,7 @@ import {createServer} from 'vite';
 import {chromium} from '@playwright/test';
 
 const root=fileURLToPath(new URL('../../',import.meta.url));
-const entry="import React from 'react';\nimport {createRoot} from 'react-dom/client';\nimport {PlateCurriculumAuthoringReview} from '/src/components/admin/PlateCurriculumAuthoringReview.tsx';\nimport '/src/index.css';\nconst chapter={id:'responsive-chapter',title:'Chapter with an informative heading',sections:[{id:'responsive-section',title:'Creation and redemption',blocks:[{id:'responsive-block',type:'paragraph',text:'A complete lesson section with real text.'}]}]};\nconst headers=React.createElement('div',{className:'vop-plate-header-fields'},...[['Lesson Title','text'],['Lesson #','number'],['Guide','text'],['Season','text'],['Language','text']].map(([title,type])=>React.createElement('label',{className:'vop-plate-header-field'+(title==='Lesson Title'?' vop-plate-field-title':title==='Lesson #'?' vop-plate-field-small':'')},React.createElement('span',null,title),React.createElement('input',{type,defaultValue:title==='Lesson Title'?'Creation':'1','aria-label':title}))));\nfunction Fixture(){const [chapters,setChapters]=React.useState([chapter]);return React.createElement('div',{className:'vop-fullpage-lesson-editor'},React.createElement(PlateCurriculumAuthoringReview,{chapters,onChange:setChapters,onQuiz:()=>{},canAttachQuiz:false,lessonPublished:false,guideTitle:'Discover',lessonTitle:'Creation',canTransfer:false,otherLessons:[],onTransfer:()=>{},onBack:()=>{},onSave:()=>{window.savedLessonCount=(window.savedLessonCount||0)+1;},lessonHeaderFields:headers,autoSaveChip:React.createElement('span',{className:'vop-plate-autosave-chip'},'Draft status')}));}\ncreateRoot(document.getElementById('root')).render(React.createElement(Fixture));";
+const entry="import React from 'react';\nimport {createRoot} from 'react-dom/client';\nimport {PlateCurriculumAuthoringReview} from '/src/components/admin/PlateCurriculumAuthoringReview.tsx';\nimport '/src/index.css';\nconst chapter={id:'responsive-chapter',title:'Chapter with an informative heading',sections:[{id:'responsive-section',title:'Creation and redemption',blocks:[{id:'responsive-block',type:'paragraph',text:'A complete lesson section with real text.'}]},{id:'responsive-evidence',title:'Evidence and faith',blocks:[{id:'evidence-block',type:'paragraph',text:'Consider the evidence and study further.'}]}]};\nconst headers=React.createElement('div',{className:'vop-plate-header-fields'},...[['Lesson Title','text'],['Lesson #','number'],['Guide','text'],['Season','text'],['Language','text']].map(([title,type])=>React.createElement('label',{className:'vop-plate-header-field'+(title==='Lesson Title'?' vop-plate-field-title':title==='Lesson #'?' vop-plate-field-small':'')},React.createElement('span',null,title),React.createElement('input',{type,defaultValue:title==='Lesson Title'?'Creation':'1','aria-label':title}))));\nfunction Fixture(){const [chapters,setChapters]=React.useState([chapter]);return React.createElement('div',{className:'vop-fullpage-lesson-editor'},React.createElement(PlateCurriculumAuthoringReview,{chapters,onChange:setChapters,onQuiz:()=>{},canAttachQuiz:false,lessonPublished:false,guideTitle:'Discover',lessonTitle:'Creation',canTransfer:false,otherLessons:[],onTransfer:()=>{},onBack:()=>{},onSave:()=>{window.savedLessonCount=(window.savedLessonCount||0)+1;},lessonHeaderFields:headers,autoSaveChip:React.createElement('span',{className:'vop-plate-autosave-chip'},'Draft status')}));}\ncreateRoot(document.getElementById('root')).render(React.createElement(Fixture));";
 
 test('legacy lesson authoring remains operable across desktop, tablet and small phones',
   {timeout:120000},async t=>{
@@ -62,6 +62,23 @@ test('legacy lesson authoring remains operable across desktop, tablet and small 
         assert.equal(await page.evaluate(()=>window.savedLessonCount),1);
         await publish.click();
         assert.equal(await page.evaluate(()=>window.savedLessonCount),2);
+      });
+    }
+    for(const width of [390,1440]){
+      await t.test(width+'px: selecting a section focuses its matching content marker',async()=>{
+        await page.setViewportSize({width,height:850});
+        await page.goto(url);
+        const target=width<861
+          ?page.locator('.vop-studio-mobile-pages button').filter({hasText:'Evidence and faith'})
+          :page.getByRole('button',{name:'Focus section 2: Evidence and faith'});
+        await target.waitFor();
+        await target.click();
+        await page.waitForFunction(()=>{
+          const marker=document.querySelector('[data-vop-section-id="responsive-evidence"]');
+          return marker?.getAttribute('data-vop-focused')==='true';
+        });
+        assert.equal(await page.locator('[data-vop-section-id="responsive-evidence"]')
+          .getAttribute('data-vop-focused'),'true');
       });
     }
     assert.deepEqual(errors,[],'no browser runtime errors during resizing');
