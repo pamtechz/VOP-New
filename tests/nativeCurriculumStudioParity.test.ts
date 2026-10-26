@@ -159,12 +159,19 @@ test('shared Flutter Plate editor offers bounded undo and redo without losing se
 });
 
 
-test('desktop Flutter lesson chapter authoring displays a live learner preview beside the form',()=>{
+test('responsive Flutter lesson studio keeps canonical section IDs and focuses selected pages',()=>{
   const form=read('native_android/lib/screens/workspace_records_screen.dart');
-  assert.match(form,/wide&&lessonTab=='chapters'/);
-  assert.match(form,/Expanded\(flex:3,child:SchemaFields/);
-  assert.match(form,/Expanded\(flex:2,child:Card/);
-  assert.match(form,/Live learner preview/);
-  assert.match(form,/lessonPreview\(\)/);
+  const studio=read('native_android/lib/widgets/lesson_section_studio.dart');
+  assert.match(form,/LessonSectionStudio\(/);
+  assert.match(form,/onAdvanced:\(\)=>setState\(\(\)=>lessonTab='advanced'\)/);
+  assert.match(form,/onSave:\(\)=>save\(\)/);
+  assert.match(studio,/MediaQuery\.sizeOf\(context\)\.width>=1050/);
+  assert.match(studio,/focusSection\(int index\)/);
+  assert.match(studio,/Scrollable\.ensureVisible/);
+  assert.match(studio,/ReorderableListView\.builder/);
+  assert.match(studio,/updateDocument\(nodes\)/);
+  assert.match(studio,/widget\.value\['chapters'\]=source/);
+  assert.match(studio,/PlatePageView\(page:selected\)/);
+  assert.match(studio,/widget\.onAdvanced/);
   assert.match(form,/if\(!wide\)SafeArea/);
 });

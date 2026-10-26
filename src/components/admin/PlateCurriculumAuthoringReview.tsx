@@ -17,6 +17,7 @@ import {
   type StudyPlateDocument,
 } from '../../../shared/studyPlateDocument';
 import type { Lesson, DiscoverGuide } from '../../types';
+import {isSafeHttpsMediaUrl} from '../../../shared/mediaSources';
 import { createUiTranslator } from '../../services/i18n';
 import { LessonReaderModal } from '../reader/LessonReaderModal';
 import { StructureActionsMenu } from './StructureActionsMenu';
@@ -106,8 +107,9 @@ export function PlateCurriculumAuthoringReview({
   const [settingsOpen,setSettingsOpen]=useState(()=>typeof window!=='undefined'&&window.innerWidth>860);
   const [mobilePagesOpen,setMobilePagesOpen]=useState(true);
   const selectedSection=chapter?.sections.find(item=>item.id===focusSectionId)||chapter?.sections[0];
-  const selectedCover=selectedSection?.imageUrl||
+  const coverCandidate=selectedSection?.imageUrl||
     selectedSection?.blocks.find(item=>item.type==='image')?.src||'';
+  const selectedCover=isSafeHttpsMediaUrl(coverCandidate)?coverCandidate:'';
   const visibleSections=chapter?.sections.filter(item=>
     item.title.toLocaleLowerCase().includes(pageQuery.trim().toLocaleLowerCase()))||[];
   const updateSection=(sectionId:string,patch:Partial<CurriculumSection>)=>{
@@ -597,10 +599,10 @@ export function PlateCurriculumAuthoringReview({
                       aria-label={'Focus section '+(index+1)+': '+section.title}
                       onDoubleClick={()=>setEditingSectionId(section.id)}
                       title={uiT('click_to_jump_to_this_section_in_the_document',"Click to jump to this section in the document")}>
-                      <span className="vop-plate-outline-badge" style={section.imageUrl?{
+                      <span className="vop-plate-outline-badge" style={section.imageUrl&&isSafeHttpsMediaUrl(section.imageUrl)?{
                            backgroundImage:'url("'+section.imageUrl+'")',
                            backgroundSize:'cover',backgroundPosition:'center',
-                         }:undefined}>{section.imageUrl?'':index+1}</span>
+                         }:undefined}>{section.imageUrl&&isSafeHttpsMediaUrl(section.imageUrl)?'':index+1}</span>
                       <span className="vop-plate-outline-text">
                         <strong>{section.title}</strong>
                         <small>{section.document?.length||section.blocks.length} content blocks</small>
@@ -770,7 +772,7 @@ export function PlateCurriculumAuthoringReview({
           className={section.id===focusSectionId?'active':''}
           aria-current={section.id===focusSectionId?'page':undefined}
           onClick={()=>jumpToSection(section.id)}>
-          {section.imageUrl&&<img src={section.imageUrl} alt=""/>}
+          {section.imageUrl&&isSafeHttpsMediaUrl(section.imageUrl)&&<img src={section.imageUrl} alt=""/>}
           <span><strong>{index+1}. {section.title}</strong>
             <small>{section.document?.length||section.blocks.length} blocks</small></span>
         </button>)}
