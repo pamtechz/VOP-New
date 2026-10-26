@@ -149,7 +149,7 @@ export async function handleCurriculumPrograms(ctx:TenantContext,
       // Attaching a guide to a platform-adopted programme also transfers
       // stewardship of that guide. Keep both writes in one transaction.
       if(program.adoptedByPlatform===true || (program.published===true && program.sharingScope==='shared')){
-        transaction.set(guideRef,{adoptedByPlatform:true,updatedAt:FieldValue.serverTimestamp(),updatedBy:ctx.auth.uid},{merge:true});
+        transaction.update(guideRef,{adoptedByPlatform:true,updatedAt:FieldValue.serverTimestamp(),updatedBy:ctx.auth.uid});
       }
       return {id,guideIds,alreadyLinked:false};
     });
@@ -286,9 +286,9 @@ export async function handleCurriculumPrograms(ctx:TenantContext,
     // contributor cannot keep mutating adopted content after approval.
     const batch=ctx.db.batch();
     for(const guideId of input.guideIds){
-      batch.set(ctx.db.doc('guides/'+guideId),{
+      batch.update(ctx.db.doc('guides/'+guideId),{
         adoptedByPlatform:true,updatedAt:FieldValue.serverTimestamp(),updatedBy:ctx.auth.uid,
-      },{merge:true});
+      });
     }
     if(previous.exists)batch.update(ref,next,{lastUpdateTime:previous.updateTime!});
     else batch.create(ref,next);
