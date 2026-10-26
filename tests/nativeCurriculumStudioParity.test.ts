@@ -110,7 +110,8 @@ test('Flutter Android and Classic web lesson authoring uses responsive Legacy-sc
   assert.match(lessons,/if\(lesson!=null\)'originalGuideId'/);
   assert.match(lessons,/if\(actions\.contains\('publish'\)\)/);
   assert.match(plate,/void emit\(\)/);
-  assert.match(plate,/jsonDecode\(jsonEncode\(nodes\)\)/);
+  assert.match(plate,/nodes=decodeDocument\(jsonEncode\(widget\.document\)\)/);
+  assert.match(plate,/widget\.onChanged\(decodeDocument\(committedDocument\)\)/);
   assert.match(plate,/int sequence=0/);
 });
 
