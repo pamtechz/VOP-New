@@ -374,6 +374,8 @@ await test('program ownership, tenant scope, and read permissions',async t=>{
     const approved=await call(superAdmin,{collection:'programs',action:'upsert',
       id:programId,organizationId:a,data:{...base,sharingScope:'shared'}});
     assert.equal(approved.status,200,JSON.stringify(approved.value));
+    assert.equal((await db.doc('guides/'+guideA).get()).data()?.adoptedByPlatform,true,
+      'approving a shared program must atomically adopt its referenced guides');
     const outside=await call(outsider,{collection:'programs',action:'list',organizationId:b});
     assert.equal(outside.value.items.find(item=>item.id===programId).canEdit,false);
     const learnerCatalogue=await call(outsideLearner,{collection:'programs',action:'learnerList'});
@@ -399,6 +401,8 @@ await test('program ownership, tenant scope, and read permissions',async t=>{
     assert.equal(record.data()?.archived,true);
     assert.equal(record.data()?.published,false);
     assert.equal(record.data()?.adoptedByPlatform,true);
+    assert.equal((await db.doc('guides/'+guideA).get()).data()?.adoptedByPlatform,true,
+      'archiving a shared program must not return its guides to tenant control');
     const foreign=await call(outsider,{collection:'programs',action:'list',organizationId:b});
     assert.equal(foreign.value.items.some(item=>item.id===programId),false);
     const ownList=await call(author,{collection:'programs',action:'list',organizationId:a});
