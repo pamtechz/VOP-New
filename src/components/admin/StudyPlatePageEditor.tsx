@@ -584,7 +584,8 @@ export function StudyPlatePageEditor({
     if(!editor.selection)restoreSelection();
     let index=selectedIndex();
     const content=nodes();
-    if(index<0||isStudyPlateSectionMarker(content[index])){
+    if(index<0||isStudyPlateSectionMarker(content[index])||
+       sectionForAuthoringIndex(content,index)?.id!==focusSectionId){
       // Mobile bottom-bar insert works without a focused keyboard/caret.
       // Append to the selected section, before the next section marker.
       const marker=content.findIndex(node=>isStudyPlateSectionMarker(node)&&node.id===focusSectionId);
