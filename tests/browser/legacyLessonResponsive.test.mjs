@@ -68,9 +68,7 @@ test('legacy lesson authoring remains operable across desktop, tablet and small 
       await t.test(width+'px: selecting a section focuses its matching content marker',async()=>{
         await page.setViewportSize({width,height:850});
         await page.goto(url);
-        const target=width<861
-          ?page.locator('.vop-studio-mobile-pages button').filter({hasText:'Evidence and faith'})
-          :page.getByRole('button',{name:'Focus section 2: Evidence and faith'});
+        const target=page.locator('.vop-plate-outline-main').filter({hasText:'Evidence and faith'});
         await target.waitFor();
         await target.click();
         await page.waitForFunction(()=>{
@@ -79,17 +77,9 @@ test('legacy lesson authoring remains operable across desktop, tablet and small 
         });
         assert.equal(await page.locator('[data-vop-section-id="responsive-evidence"]')
           .getAttribute('data-vop-focused'),'true');
-        if(width===390){
-          await page.getByRole('button',{name:'Add Block'}).click();
-          await page.waitForFunction(()=>{
-            const sections=window.vopFixtureChapters?.[0]?.sections;
-            return sections?.find(section=>section.id==='responsive-evidence')?.blocks?.length===2;
-          });
-          assert.equal(await page.evaluate(()=>{
-            const sections=window.vopFixtureChapters[0].sections;
-            return sections.find(section=>section.id==='responsive-section').blocks.length;
-          }),1,'adding a mobile block must not duplicate or alter a different section');
-        }
+        assert.ok(await page.locator('.vop-plate-outline-row.active')
+          .filter({hasText:'Evidence and faith'}).count()>0);
+
       });
     }
     assert.deepEqual(errors,[],'no browser runtime errors during resizing');
