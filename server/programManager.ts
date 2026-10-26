@@ -146,6 +146,11 @@ export async function handleCurriculumPrograms(ctx:TenantContext,
       if(ids.length>=100)throw new Error('A programme cannot contain more than 100 guides.');
       const guideIds=[...ids,guideId];
       transaction.update(programRef,{guideIds,updatedAt:FieldValue.serverTimestamp(),updatedBy:ctx.auth.uid});
+      // Attaching a guide to a platform-adopted programme also transfers
+      // stewardship of that guide. Keep both writes in one transaction.
+      if(program.adoptedByPlatform===true || (program.published===true && program.sharingScope==='shared')){
+        transaction.set(guideRef,{adoptedByPlatform:true,updatedAt:FieldValue.serverTimestamp(),updatedBy:ctx.auth.uid},{merge:true});
+      }
       return {id,guideIds,alreadyLinked:false};
     });
     if(!result.alreadyLinked)await writeTenantAudit(ctx,'program.guide.attach',programRef.path,
@@ -275,7 +280,20 @@ export async function handleCurriculumPrograms(ctx:TenantContext,
     createdAt:current.createdAt||new Date().toISOString(),
     updatedAt:FieldValue.serverTimestamp(),updatedBy:ctx.auth.uid,
   };
-  if(previous.exists)await ref.update(next,{lastUpdateTime:previous.updateTime!});
+  if(next.adoptedByPlatform===true && input.guideIds.length){
+    // Platform adoption is permanent for every referenced guide, including
+    // its child lessons. Mark the programme and guides atomically so a
+    // contributor cannot keep mutating adopted content after approval.
+    const batch=ctx.db.batch();
+    for(const guideId of input.guideIds){
+      batch.set(ctx.db.doc('guides/'+guideId),{
+        adoptedByPlatform:true,updatedAt:FieldValue.serverTimestamp(),updatedBy:ctx.auth.uid,
+      },{merge:true});
+    }
+    if(previous.exists)batch.update(ref,next,{lastUpdateTime:previous.updateTime!});
+    else batch.create(ref,next);
+    await batch.commit();
+  }else if(previous.exists)await ref.update(next,{lastUpdateTime:previous.updateTime!});
   else await ref.create(next);
   await writeTenantAudit(ctx,previous.exists?'program.update':'program.create',
     ref.path,previous.exists?current:undefined,next);
