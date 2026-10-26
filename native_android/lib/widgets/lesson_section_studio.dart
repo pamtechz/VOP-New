@@ -1,505 +1,513 @@
 import 'package:flutter/material.dart';
+import 'plate_document_editor.dart';
 import 'plate_page.dart';
 
-/// The visual lesson studio edits the same canonical chapter/section/document
-/// records consumed by the web editor. Quiz answer keys are never stored here.
-class LessonSectionStudio extends StatefulWidget {
+/// Native/Flutter-Web counterpart of the production Legacy Plate lesson editor.
+/// Pages are canonical chapter.sections; all existing IDs, documents and lesson
+/// publishing permissions are preserved by the calling RecordEditor API.
+class LessonSectionStudio extends StatefulWidget{
   const LessonSectionStudio({
-    required this.value,
-    required this.onChanged,
-    required this.onSave,
-    required this.onQuiz,
-    required this.onAdvanced,
-    required this.saving,
-    super.key,
+    required this.value,required this.onChanged,required this.onSave,
+    required this.onQuiz,required this.onAdvanced,required this.saving,
+    this.guideTitle='',this.dirty=false,super.key,
   });
   final Map<String,dynamic> value;
   final VoidCallback onChanged,onSave,onQuiz,onAdvanced;
-  final bool saving;
+  final bool saving,dirty;
+  final String guideTitle;
   @override State<LessonSectionStudio> createState()=>_LessonSectionStudioState();
 }
 
-class _LessonSectionStudioState extends State<LessonSectionStudio> {
-  static const base=Color(0xFF09182B),card=Color(0xFF102640);
-  static const blue=Color(0xFF2979FF),outline=Color(0xFF284563);
+class _LessonSectionStudioState extends State<LessonSectionStudio>{
+  static const navy=Color(0xFF173E71),blue=Color(0xFF2563EB);
+  static const border=Color(0xFFD9E5F2),surface=Color(0xFFF6F9FE);
   String? chapterId,sectionId;
-  String inspector='content';
-  bool showMobileSettings=false;
+  String ribbon='Home';
   bool preview=false;
-  int serial=0;
-  int selectedBlockIndex=0;
-
-  String newId()=> 'studio-${DateTime.now().microsecondsSinceEpoch.toRadixString(36)}-${serial++}';
-  Map<String,dynamic> asMap(dynamic input)=>input is Map?Map<String,dynamic>.from(input):{};
-  List<Map<String,dynamic>> rows(dynamic input)=>input is List?input.map(asMap).toList():[];
-
-  List<Map<String,dynamic>> get chapters=>rows(widget.value['chapters']);
-  int get currentChapterIndex {
-    final index=chapters.indexWhere((row)=>row['id']==chapterId);
-    return index>=0?index:0;
+  bool pagesExpanded=true;
+  bool metadataExpanded=false;
+  int sequence=0;
+  final Map<String,GlobalKey> sectionKeys={};
+  final Map<String,GlobalKey<PlateDocumentEditorState>> editorKeys={};
+  String id()=> 'studio-${DateTime.now().microsecondsSinceEpoch.toRadixString(36)}-${sequence++}';
+  Map<String,dynamic> obj(dynamic value)=>value is Map?Map<String,dynamic>.from(value):<String,dynamic>{};
+  List<Map<String,dynamic>> list(dynamic value)=>value is List
+    ?value.whereType<Map>().map((row)=>Map<String,dynamic>.from(row)).toList()
+    :<Map<String,dynamic>>[];
+  List<Map<String,dynamic>> get chapters=>list(widget.value['chapters']);
+  int get chapterIndex{
+    final i=chapters.indexWhere((v)=>v['id']?.toString()==chapterId);
+    return i>=0?i:0;
   }
-  List<Map<String,dynamic>> get pages=>chapters.isEmpty?[]:rows(chapters[currentChapterIndex]['sections']);
-  int get currentSectionIndex {
-    final index=pages.indexWhere((row)=>row['id']==sectionId);
-    return index>=0?index:0;
+  List<Map<String,dynamic>> get sections=>chapters.isEmpty?[]:list(chapters[chapterIndex]['sections']);
+  String get activeSectionId=>sectionId??(sections.isNotEmpty?'${sections.first['id']}':'');
+  int get sectionIndex{
+    final i=sections.indexWhere((v)=>v['id']?.toString()==activeSectionId);
+    return i>=0?i:0;
   }
-  Map<String,dynamic>? get currentSection=>pages.isEmpty?null:pages[currentSectionIndex];
+  Map<String,dynamic>? get section=>sections.isEmpty?null:sections[sectionIndex];
+  GlobalKey sectionKey(String sid)=>sectionKeys.putIfAbsent(sid,()=>GlobalKey());
+  GlobalKey<PlateDocumentEditorState> editorKey(String sid)=>
+    editorKeys.putIfAbsent(sid,()=>GlobalKey<PlateDocumentEditorState>());
 
-  void setChapter(int index){
+  void selectChapter(int index){
     final source=chapters;
     if(index<0||index>=source.length)return;
     setState((){
       chapterId=source[index]['id']?.toString();
-      final sections=rows(source[index]['sections']);
-      sectionId=sections.isEmpty?null:sections.first['id']?.toString();
-      preview=false;
+      final pages=list(source[index]['sections']);
+      sectionId=pages.isEmpty?null:pages.first['id']?.toString();
     });
+    if(sectionId!=null)focusSection(sectionId!);
   }
-  void focusSection(int index){
-    final source=pages;
-    if(index<0||index>=source.length)return;
-    setState((){sectionId=source[index]['id']?.toString();preview=false;});
-    // Only the chosen section is mounted; its page card becomes the focus,
-    // never another section's old scroll offset.
+  void focusSection(String id){
+    if(!sections.any((row)=>row['id']?.toString()==id))return;
+    setState(()=>sectionId=id);
     WidgetsBinding.instance.addPostFrameCallback((_){
-      if(mounted&&_coverKey.currentContext!=null){
-        Scrollable.ensureVisible(_coverKey.currentContext!,
-          duration:const Duration(milliseconds:220),alignment:0.10);
-      }
+      if(!mounted)return;
+      final target=sectionKey(id).currentContext;
+      if(target!=null)Scrollable.ensureVisible(target,
+        duration:const Duration(milliseconds:240),
+        curve:Curves.easeInOut,alignment:.08);
     });
   }
-  final GlobalKey _coverKey=GlobalKey();
-
-  void updateSection(Map<String,dynamic> next){
+  void changeMetadata(String key,dynamic next){
+    widget.value[key]=next;
+    widget.onChanged();
+  }
+  void changeSection(String id,Map<String,dynamic> patch){
     final source=chapters;
-    if(source.isEmpty||pages.isEmpty)return;
-    final ch=currentChapterIndex,at=currentSectionIndex;
-    final sections=rows(source[ch]['sections']);
-    sections[at]=next;
-    source[ch]['sections']=sections;
+    if(source.isEmpty)return;
+    final index=chapterIndex;
+    final pages=list(source[index]['sections']);
+    final row=pages.indexWhere((p)=>p['id']?.toString()==id);
+    if(row<0)return;
+    pages[row]={...pages[row],...patch};
+    source[index]['sections']=pages;
     widget.value['chapters']=source;
     widget.onChanged();
   }
-  void updateField(String key,dynamic val) {
-    final section=currentSection;
-    if(section==null)return;
-    updateSection({...section,key:val});
-  }
-  void updateDocument(List<Map<String,dynamic>> nodes) {
-    final section=currentSection;
-    if(section==null)return;
-    updateSection({...section,'document':nodes});
-  }
-  void addSection(){
-    final source=chapters;
-    if(source.isEmpty)return;
-    final ch=currentChapterIndex,sections=rows(source[ch]['sections']);
-    if(sections.length>=40)return;
-    final section={'id':newId(),'title':'New section',
-      'document':[{'id':newId(),'type':'p','children':[{'text':''}]}]};
-    sections.insert(currentSection==null?sections.length:currentSectionIndex+1,section);
-    source[ch]['sections']=sections;
-    widget.value['chapters']=source;
-    sectionId=section['id']?.toString();
-    widget.onChanged();setState(()=>preview=false);
-  }
+  void setDocument(String sid,List<Map<String,dynamic>> doc)=>
+    changeSection(sid,{'document':doc});
   void addChapter(){
     final source=chapters;
     if(source.length>=40)return;
-    final entry={'id':newId(),'title':'New chapter','sections':[
-      {'id':newId(),'title':'New section','document':[
-        {'id':newId(),'type':'p','children':[{'text':''}]}
-      ]}
-    ]};
-    source.add(entry);widget.value['chapters']=source;
+    final sid=id();
+    final created={
+      'id':id(),'title':'New chapter',
+      'sections':[{
+        'id':sid,'title':'New section',
+        'document':[{'id':id(),'type':'p','children':[{'text':''}]}]
+      }]
+    };
+    source.add(created);
+    widget.value['chapters']=source;
     widget.onChanged();
-    setChapter(source.length-1);
+    selectChapter(source.length-1);
   }
-  List<Map<String,dynamic>> get document {
-    final section=currentSection;
-    if(section==null)return [];
-    if(section['document'] is List)return rows(section['document']);
-    // Legacy sections are rendered and remain editable using the advanced
-    // editor; never discard them while introducing the visual studio.
-    return [];
-  }
-  void addBlock(String type){
-    final nodes=document;
-    if(currentSection==null)return;
-    if(nodes.length>=50)return;
-    nodes.add(type=='image'
-      ?{'id':newId(),'type':'img','url':'','children':[{'text':''}]}
-      :{'id':newId(),'type':type=='quote'?'blockquote':'p','children':[{'text':''}]});
-    updateDocument(nodes);setState(()=>preview=false);
-  }
-  void updateBlock(int index,Map<String,dynamic> block){
-    final nodes=document;
-    if(index<0||index>=nodes.length)return;
-    nodes[index]=block;updateDocument(nodes);
-  }
-  void reorderBlock(int oldIndex,int step){
-    final nodes=document,target=oldIndex+step;
-    if(oldIndex<0||target<0||target>=nodes.length)return;
-    final moved=nodes.removeAt(oldIndex);
-    nodes.insert(target,moved);updateDocument(nodes);
-  }
-  void formatSelectedBlock(String type){
-    final nodes=document;
-    if(nodes.isEmpty)return;
-    final index=selectedBlockIndex.clamp(0,nodes.length-1).toInt();
-    if(['img','image','video','audio','table'].contains(nodes[index]['type']))return;
-    nodes[index]={...nodes[index],'type':type};
-    updateDocument(nodes);
-  }
-  void removeBlock(int index){
-    final nodes=document;
-    if(nodes.length<=1)return;
-    nodes.removeAt(index);updateDocument(nodes);
-  }
-  Widget navItem(Map<String,dynamic> page,int index,{bool compact=false}){
-    final active=index==currentSectionIndex;
-    final media=(page['imageUrl']??'').toString();
-    return InkWell(
-      onTap:()=>focusSection(index),
-      borderRadius:BorderRadius.circular(12),
-      child:Container(
-        constraints:BoxConstraints(minWidth:compact?150:0,maxWidth:compact?230:double.infinity),
-        padding:const EdgeInsets.all(8),
-        decoration:BoxDecoration(
-          color:active?const Color(0xFF173E74):card,
-          border:Border.all(color:active?blue:outline,width:active?1.5:1),
-          borderRadius:BorderRadius.circular(11)),
-        child:Row(children:[
-          if(media.startsWith('https://'))
-            ClipRRect(borderRadius:BorderRadius.circular(7),
-              child:Image.network(media,width:45,height:45,fit:BoxFit.cover,
-                errorBuilder:(_,__,___)=>const SizedBox(width:45,height:45,child:Icon(Icons.image_outlined))))
-          else Container(width:45,height:45,alignment:Alignment.center,
-            decoration:BoxDecoration(color:const Color(0xFF203F63),borderRadius:BorderRadius.circular(7)),
-            child:Text('${index+1}',style:const TextStyle(fontWeight:FontWeight.bold))),
-          const SizedBox(width:9),
-          Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-            Text('${index+1}. ${page['title']??'Section'}',
-              maxLines:2,overflow:TextOverflow.ellipsis,
-              style:const TextStyle(fontSize:12.5,fontWeight:FontWeight.bold)),
-            const SizedBox(height:3),
-            Text('${rows(page['document']).length} blocks',
-              style:const TextStyle(fontSize:11,color:Color(0xFFA3BFDB))),
-          ])),
-        ]),
-      ),
-    );
-  }
-
-  Widget cover(Map<String,dynamic> page){
-    final url=(page['imageUrl']??'').toString();
-    return Container(key:_coverKey,clipBehavior:Clip.antiAlias,
-      constraints:const BoxConstraints(minHeight:160),
-      decoration:BoxDecoration(
-        border:Border.all(color:outline),
-        borderRadius:BorderRadius.circular(13),
-        gradient:const LinearGradient(colors:[Color(0xFF0C2849),Color(0xFF225383)])),
-      child:Stack(children:[
-        if(url.startsWith('https://'))Positioned.fill(child:Image.network(url,
-          fit:BoxFit.cover,errorBuilder:(_,__,___)=>const SizedBox.shrink())),
-        Positioned.fill(child:DecoratedBox(decoration:BoxDecoration(
-          gradient:LinearGradient(begin:Alignment.centerLeft,end:Alignment.centerRight,
-            colors:[base.withValues(alpha:.94),base.withValues(alpha:.35)])))),
-        Padding(padding:const EdgeInsets.all(19),child:Column(
-          crossAxisAlignment:CrossAxisAlignment.start,children:[
-            Text('SECTION ${currentSectionIndex+1}',style:const TextStyle(
-              fontSize:11,letterSpacing:1.0,fontWeight:FontWeight.bold,color:Color(0xFFCDE4FF))),
-            const SizedBox(height:10),
-            Text((page['title']??'Section').toString(),
-              style:const TextStyle(fontSize:26,fontWeight:FontWeight.w800,height:1.12)),
-            const SizedBox(height:8),
-            Text((page['keyTakeaway']??'').toString().isEmpty
-              ?'Study content and reflection'
-              :(page['keyTakeaway']??'').toString(),
-              style:const TextStyle(color:Color(0xFFD0DFF1),height:1.35)),
-          ])),
-      ]),
-    );
-  }
-
-  Widget blockCard(Map<String,dynamic> block,int index){
-    final type=(block['type']??'p').toString();
-    final leaves=rows(block['children']);
-    final simple=leaves.length==1&&leaves.single['text'] is String;
-    final photo=type=='img'||type=='image';
-    final quote=type=='blockquote';
-    final title=photo?'Image':quote?'Scripture / Quotation':
-      type=='h1'||type=='h2'?'Heading':'Paragraph';
-    final text=simple?leaves.single['text'].toString():'';
-    return GestureDetector(
-      key:ValueKey('block-${block['id']??index}'),
-      onTap:()=>setState(()=>selectedBlockIndex=index),
-      child:Container(
-      margin:const EdgeInsets.only(bottom:10),
-      padding:const EdgeInsets.all(13),
-      decoration:BoxDecoration(
-        color:quote?const Color(0xFF133358):card,
-        border:Border.all(color:selectedBlockIndex==index?blue:
-          quote?const Color(0xFF2D6AA5):outline),
-        borderRadius:BorderRadius.circular(13)),
-      child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-        Row(children:[
-          ReorderableDragStartListener(index:index,
-            child:const Icon(Icons.drag_indicator,size:18,color:Color(0xFF819AB7))),
-          const SizedBox(width:8),
-          Icon(photo?Icons.image_outlined:quote?Icons.menu_book_outlined:Icons.text_fields,
-            size:19,color:quote?const Color(0xFF6CB5FF):const Color(0xFFA0CDFF)),
-          const SizedBox(width:9),
-          Expanded(child:Text(title,style:const TextStyle(fontSize:13,fontWeight:FontWeight.bold))),
-          PopupMenuButton<String>(tooltip:'Block actions',
-            onSelected:(action){
-              if(action=='up')reorderBlock(index,-1);
-              if(action=='down')reorderBlock(index,1);
-              if(action=='remove')removeBlock(index);
-            },
-            itemBuilder:(_)=>[
-              if(index>0)const PopupMenuItem(value:'up',child:Text('Move up')),
-              if(index<document.length-1)const PopupMenuItem(value:'down',child:Text('Move down')),
-              if(document.length>1)const PopupMenuItem(value:'remove',child:Text('Remove block')),
-            ]),
-        ]),
-        if(photo)...[
-          if((block['url']??block['src']??'').toString().startsWith('https://'))
-            Padding(padding:const EdgeInsets.only(top:8),
-              child:ClipRRect(borderRadius:BorderRadius.circular(8),
-                child:Image.network((block['url']??block['src']).toString(),
-                  fit:BoxFit.contain,height:140,
-                  errorBuilder:(_,__,___)=>const Text('Image cannot be loaded')))),
-          Padding(padding:const EdgeInsets.only(top:9),child:TextFormField(
-          key:ValueKey('image-${block['id']}'),
-          initialValue:(block['url']??block['src']??'').toString(),
-          decoration:const InputDecoration(labelText:'Image HTTPS URL',isDense:true),
-          keyboardType:TextInputType.url,
-          onChanged:(value)=>updateBlock(index,{...block,'url':value}),
-        )),
-        ]
-        else if(simple)Padding(padding:const EdgeInsets.only(top:8),child:TextFormField(
-          key:ValueKey('text-${block['id']}'),
-          initialValue:text,maxLines:null,minLines:quote?2:3,
-          style:TextStyle(fontSize:15,height:1.65,fontStyle:quote?FontStyle.italic:null),
-          decoration:const InputDecoration(border:InputBorder.none,
-            hintText:'Write your lesson content…',isDense:true),
-          onChanged:(value)=>updateBlock(index,{...block,'children':[{
-            ...leaves.first,'text':value,
-          }]}),
-        ))
-        else Padding(padding:const EdgeInsets.only(top:10),child:Column(
-          crossAxisAlignment:CrossAxisAlignment.start,children:[
-            const Text('Rich formatted content is preserved.',style:TextStyle(color:Color(0xFFAFCAE7))),
-            const SizedBox(height:5),
-            OutlinedButton.icon(onPressed:widget.onAdvanced,icon:const Icon(Icons.edit_note),
-              label:const Text('Open advanced editor')),
-          ])),
-      ]),
-      ),
-    );
-  }
-
-  Widget settingField(String title,String key,{int lines=1}){
-    final section=currentSection!;
-    final initial=(section[key]??'').toString();
-    return Padding(padding:const EdgeInsets.only(bottom:11),
-      child:TextFormField(key:ValueKey('${section['id']}-$key'),
-        initialValue:initial,maxLines:lines,
-        decoration:InputDecoration(labelText:title,isDense:true,
-          border:const OutlineInputBorder()),onChanged:(value)=>updateField(key,value)));
-  }
-  Widget inspectorPanel(){
-    final section=currentSection;
-    if(section==null)return const SizedBox.shrink();
-    final scripture=asMap(section['scriptureQuote']);
-    return Container(
-      padding:const EdgeInsets.all(13),
-      decoration:BoxDecoration(color:base,border:Border.all(color:outline),
-        borderRadius:BorderRadius.circular(13)),
-      child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
-        const Text('Page / Section Settings',style:TextStyle(fontWeight:FontWeight.w800)),
-        const SizedBox(height:12),
-        SegmentedButton<String>(
-          showSelectedIcon:false,
-          segments:const [
-            ButtonSegment(value:'content',label:Text('Content')),
-            ButtonSegment(value:'design',label:Text('Design')),
-            ButtonSegment(value:'visibility',label:Text('Visibility')),
-          ],
-          selected:{inspector},onSelectionChanged:(set)=>setState(()=>inspector=set.first)),
-        const SizedBox(height:15),
-        if(inspector=='content')...[
-          settingField('Page title','title'),
-          settingField('Description / takeaway','keyTakeaway',lines:3),
-          TextFormField(key:ValueKey('ref-${section['id']}'),
-            initialValue:(scripture['reference']??'').toString(),
-            decoration:const InputDecoration(labelText:'Scripture reference'),
-            onChanged:(value)=>updateField('scriptureQuote',{
-              ...asMap(currentSection?['scriptureQuote']),'reference':value,
-            })),
-          const SizedBox(height:10),
-          TextFormField(key:ValueKey('verse-${section['id']}'),
-            initialValue:(scripture['text']??'').toString(),maxLines:3,
-            decoration:const InputDecoration(labelText:'Scripture passage'),
-            onChanged:(value)=>updateField('scriptureQuote',{
-              ...asMap(currentSection?['scriptureQuote']),'text':value,
-            })),
-        ],
-        if(inspector=='design')...[
-          settingField('Cover image HTTPS URL','imageUrl'),
-          settingField('Audio HTTPS URL','audioUrl'),
-          settingField('Video HTTPS URL','videoUrl'),
-        ],
-        if(inspector=='visibility')...[
-          Text('Lesson status: ${widget.value['published']==true?'Published':'Draft'}',
-            style:const TextStyle(color:Color(0xFFACC5E2))),
-          const SizedBox(height:7),
-          const Text('Section visibility follows the lesson publication and enrollment rules.',
-            style:TextStyle(color:Color(0xFFACC5E2))),
-          const SizedBox(height:12),
-          FilledButton.icon(onPressed:widget.onQuiz,
-            icon:const Icon(Icons.quiz_outlined),label:const Text('Manage quizzes')),
-        ],
-        const SizedBox(height:12),
-        OutlinedButton.icon(onPressed:widget.onAdvanced,
-          icon:const Icon(Icons.account_tree_outlined),
-          label:const Text('Advanced structure editor')),
-      ]),
-    );
-  }
-
-  @override Widget build(BuildContext context){
+  void addSection(){
     final source=chapters;
-    if(source.isEmpty)return Column(children:[
-      const Text('Add a chapter to start authoring this lesson.'),
-      FilledButton.icon(onPressed:addChapter,icon:const Icon(Icons.add),
-        label:const Text('Add chapter')),
-    ]);
-    final selected=currentSection,wide=MediaQuery.sizeOf(context).width>=1050;
-    return Theme(data:ThemeData.dark(useMaterial3:true).copyWith(
-      colorScheme:const ColorScheme.dark(primary:Color(0xFF64A7FF),surface:base)),
-      child:Container(
-        padding:const EdgeInsets.all(8),color:base,
-        child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
-          Row(children:[
-            Expanded(child:DropdownButtonFormField<String>(
-              key:ValueKey('chapter-${source[currentChapterIndex]['id']}'),
-              initialValue:source[currentChapterIndex]['id']?.toString(),
-              decoration:const InputDecoration(labelText:'Chapter',isDense:true),
-              isExpanded:true,items:[
-                for(var i=0;i<source.length;i++)DropdownMenuItem(
-                  value:source[i]['id']?.toString(),
-                  child:Text('${i+1}. ${source[i]['title']??'Chapter'}',
-                    overflow:TextOverflow.ellipsis))
-              ],onChanged:(value){
-                final index=source.indexWhere((item)=>item['id']==value);
-                if(index>=0)setChapter(index);
-              })),
-            IconButton(tooltip:'Add chapter',onPressed:addChapter,icon:const Icon(Icons.add_circle_outline)),
-          ]),
-          const SizedBox(height:12),
-          SingleChildScrollView(scrollDirection:Axis.horizontal,child:Row(children:[
-            ChoiceChip(selected:!preview,label:const Text('Edit'),
-              avatar:const Icon(Icons.edit_outlined,size:16),
-              onSelected:(_)=>setState(()=>preview=false)),
-            const SizedBox(width:6),
-            ActionChip(label:const Text('Blocks'),avatar:const Icon(Icons.layers_outlined,size:16),
-              onPressed:()=>addBlock('p')),
-            const SizedBox(width:6),
-            ActionChip(label:const Text('Media'),avatar:const Icon(Icons.image_outlined,size:16),
-              onPressed:()=>addBlock('image')),
-            const SizedBox(width:6),
-            ActionChip(label:const Text('Quiz'),avatar:const Icon(Icons.quiz_outlined,size:16),
-              onPressed:widget.onQuiz),
-            const SizedBox(width:6),
-            ActionChip(label:const Text('Settings'),avatar:const Icon(Icons.settings_outlined,size:16),
-              onPressed:()=>setState((){
-                inspector='content';showMobileSettings=!showMobileSettings;
-              })),
+    if(source.isEmpty){addChapter();return;}
+    final ci=chapterIndex,pages=list(source[ci]['sections']);
+    if(pages.length>=40)return;
+    final sid=id();
+    pages.insert(pages.isEmpty?0:sectionIndex+1,{
+      'id':sid,'title':'New section',
+      'document':[{'id':id(),'type':'p','children':[{'text':''}]}]
+    });
+    source[ci]['sections']=pages;
+    widget.value['chapters']=source;
+    widget.onChanged();
+    focusSection(sid);
+  }
+  void selectRibbon(String tab)=>setState(()=>ribbon=tab);
+  void act(void Function(PlateDocumentEditorState) command){
+    final state=editorKey(activeSectionId).currentState;
+    if(state!=null)command(state);
+  }
+  Widget bordered(Widget child,{EdgeInsets padding=const EdgeInsets.all(10)})=>
+    Container(padding:padding,decoration:BoxDecoration(
+      color:Colors.white,border:Border.all(color:border),
+      borderRadius:BorderRadius.circular(11)),child:child);
+  Widget field(String label,String key,{double width=190,bool readOnly=false,String? display}){
+    final value=display??(widget.value[key]??'').toString();
+    return SizedBox(width:width,child:Column(
+      crossAxisAlignment:CrossAxisAlignment.start,children:[
+        Text(label,style:const TextStyle(color:Color(0xFF526D8B),
+          fontWeight:FontWeight.w700,fontSize:11)),
+        const SizedBox(height:4),
+        TextFormField(
+          key:ValueKey('lesson-meta-$key'),
+          initialValue:value,readOnly:readOnly,
+          decoration:InputDecoration(isDense:true,filled:true,
+            fillColor:readOnly?const Color(0xFFF3F7FD):Colors.white,
+            contentPadding:const EdgeInsets.symmetric(horizontal:11,vertical:13),
+            border:OutlineInputBorder(borderRadius:BorderRadius.circular(8))),
+          style:const TextStyle(fontSize:13,color:navy,fontWeight:FontWeight.w600),
+          onChanged:readOnly?null:(text)=>changeMetadata(key,text),
+        ),
+      ]));
+  }
+  Widget topHeader(bool narrow){
+    final guide=widget.guideTitle.isNotEmpty?widget.guideTitle:
+      (widget.value['guideId']??'Guide').toString();
+    return bordered(Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+      if(narrow)...[
+        Row(children:[
+          const Icon(Icons.menu_book_outlined,color:navy,size:23),
+          const SizedBox(width:8),
+          Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+            Text((widget.value['title']??'New lesson').toString(),
+              maxLines:1,overflow:TextOverflow.ellipsis,
+              style:const TextStyle(fontSize:16,fontWeight:FontWeight.w800,color:navy)),
+            Text('$guide · ${widget.value['language']??''}',
+              maxLines:1,overflow:TextOverflow.ellipsis,
+              style:const TextStyle(color:Color(0xFF7691AE),fontSize:12)),
           ])),
-          const SizedBox(height:10),
-          if(wide)Row(crossAxisAlignment:CrossAxisAlignment.start,children:[
-            SizedBox(width:215,child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
-              const Text('Lesson Pages',style:TextStyle(fontSize:16,fontWeight:FontWeight.w800)),
-              Text('${pages.length} sections',style:const TextStyle(color:Color(0xFFA6BBD7))),
-              const SizedBox(height:8),
-              FilledButton.icon(onPressed:addSection,icon:const Icon(Icons.add),
-                label:const Text('Add page')),
-              const SizedBox(height:10),
-              for(var i=0;i<pages.length;i++)Padding(
-                padding:const EdgeInsets.only(bottom:8),child:navItem(pages[i],i)),
-            ])),
-            const SizedBox(width:13),
-            Expanded(flex:4,child:contentPane(selected)),
-            const SizedBox(width:13),
-            SizedBox(width:270,child:inspectorPanel()),
-          ])else ...[
-            contentPane(selected),
-            const SizedBox(height:9),
-            SizedBox(height:75,child:ListView(scrollDirection:Axis.horizontal,children:[
-              for(var i=0;i<pages.length;i++)Padding(
-                padding:const EdgeInsets.only(right:8),child:navItem(pages[i],i,compact:true)),
-            ])),
-            const SizedBox(height:10),
-            if(showMobileSettings)inspectorPanel(),
-          ],
-          const SizedBox(height:9),
-          SafeArea(top:false,child:Wrap(alignment:WrapAlignment.spaceBetween,
-            spacing:7,runSpacing:8,children:[
-              OutlinedButton.icon(onPressed:()=>addBlock('p'),
-                icon:const Icon(Icons.add),label:const Text('Add Block')),
-              PopupMenuButton<String>(tooltip:'Format selected text block',
-                onSelected:formatSelectedBlock,
-                itemBuilder:(_)=>const [
-                  PopupMenuItem(value:'p',child:Text('Paragraph')),
-                  PopupMenuItem(value:'h2',child:Text('Heading')),
-                  PopupMenuItem(value:'blockquote',child:Text('Scripture / Quote')),
-                ],
-                child:const Padding(padding:EdgeInsets.symmetric(horizontal:9,vertical:10),
-                  child:Row(mainAxisSize:MainAxisSize.min,children:[
-                    Icon(Icons.format_size),SizedBox(width:6),Text('Format'),
-                  ]))),
-              OutlinedButton.icon(onPressed:()=>addBlock('image'),
-                icon:const Icon(Icons.image_outlined),label:const Text('Media')),
-              OutlinedButton.icon(onPressed:()=>setState(()=>preview=!preview),
-                icon:Icon(preview?Icons.edit_outlined:Icons.visibility_outlined),
-                label:Text(preview?'Edit':'Preview')),
-              FilledButton.icon(onPressed:widget.saving?null:widget.onSave,
-                icon:const Icon(Icons.send_outlined),
-                label:Text(widget.saving?'Saving…':'Update')),
-            ])),
+          IconButton(tooltip:'Edit lesson details',
+            onPressed:()=>setState(()=>metadataExpanded=!metadataExpanded),
+            icon:Icon(metadataExpanded?Icons.expand_less:Icons.edit_outlined,color:navy)),
         ]),
-      ),
+        if(metadataExpanded)Padding(padding:const EdgeInsets.only(top:12),
+          child:Wrap(crossAxisAlignment:WrapCrossAlignment.end,
+            spacing:8,runSpacing:8,children:[
+              field('Lesson Title *','title',width:235),
+              field('Lesson # *','lessonNumber',width:120),
+              field('Guide *','guideId',display:guide,readOnly:true,width:165),
+              field('Language','language',readOnly:true,width:120),
+            ])),
+        const SizedBox(height:6),
+      ] else Wrap(crossAxisAlignment:WrapCrossAlignment.end,spacing:10,runSpacing:10,children:[
+        field('Lesson Title *','title',width:narrow?235:270),
+        field('Lesson # *','lessonNumber',width:100),
+        field('Guide *','guideId',display:guide,readOnly:true,width:170),
+        field('Season / Quarter','season',display:(widget.value['season']??'Not assigned').toString(),
+          readOnly:true,width:145),
+        field('Language','language',readOnly:true,width:145),
+        if(chapters.isNotEmpty)SizedBox(width:200,child:DropdownButtonFormField<String>(
+          key:ValueKey('chapter-$chapterIndex'),
+          initialValue:chapters[chapterIndex]['id']?.toString(),
+          isExpanded:true,
+          decoration:const InputDecoration(labelText:'Chapter',
+            isDense:true,border:OutlineInputBorder()),
+          items:[for(var i=0;i<chapters.length;i++)DropdownMenuItem(
+            value:chapters[i]['id']?.toString(),
+            child:Text('${i+1}. ${chapters[i]['title']??'Chapter'}',
+              overflow:TextOverflow.ellipsis))],
+          onChanged:(value){final i=chapters.indexWhere((ch)=>ch['id']==value);
+            if(i>=0)selectChapter(i);},
+        )),
+      ]),
+      const SizedBox(height:10),
+      Wrap(spacing:7,runSpacing:7,crossAxisAlignment:WrapCrossAlignment.center,children:[
+        Chip(avatar:Icon(widget.saving?Icons.sync:widget.dirty
+          ?Icons.edit_note:Icons.check_circle_outline,
+          color:widget.dirty?const Color(0xFF9A6700):const Color(0xFF147D48),size:17),
+          label:Text(widget.saving?'Saving…':widget.dirty?'Unsaved changes':'No unsaved changes'),
+          backgroundColor:widget.dirty?const Color(0xFFFFF6DE):const Color(0xFFEDFBF3),
+          side:BorderSide.none,visualDensity:VisualDensity.compact),
+        OutlinedButton.icon(onPressed:()=>setState(()=>preview=!preview),
+          icon:Icon(preview?Icons.edit_outlined:Icons.visibility_outlined,size:18),
+          label:Text(preview?'Edit':'Preview')),
+        OutlinedButton.icon(onPressed:widget.saving?null:widget.onSave,
+          icon:const Icon(Icons.save_outlined,size:18),
+          label:Text(widget.value['published']==true?'Save changes':'Save draft')),
+        FilledButton.icon(onPressed:widget.saving?null:widget.onSave,
+          icon:const Icon(Icons.send_outlined,size:17),label:const Text('Update')),
+        PopupMenuButton<String>(tooltip:'More editor options',
+          onSelected:(action){
+            if(action=='chapter')addChapter();
+            if(action=='advanced')widget.onAdvanced();
+            if(action=='quiz')widget.onQuiz();
+          },itemBuilder:(_)=>const [
+            PopupMenuItem(value:'chapter',child:Text('Add chapter')),
+            PopupMenuItem(value:'advanced',child:Text('Advanced structure editor')),
+            PopupMenuItem(value:'quiz',child:Text('Quiz library')),
+          ]),
+      ]),
+    ]),padding:const EdgeInsets.fromLTRB(12,10,12,10));
+  }
+  Widget tool(IconData icon,String label,VoidCallback onTap)=>
+    OutlinedButton.icon(onPressed:onTap,
+      style:OutlinedButton.styleFrom(foregroundColor:navy,
+        padding:const EdgeInsets.symmetric(horizontal:9,vertical:9),
+        side:const BorderSide(color:border)),
+      icon:Icon(icon,size:16),label:Text(label,style:const TextStyle(fontSize:12)));
+  Widget ribbonBar(){
+    return bordered(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+      SingleChildScrollView(scrollDirection:Axis.horizontal,child:Row(children:[
+        for(final tab in ['Home','Insert','Scripture & Layout'])
+          Padding(padding:const EdgeInsets.only(right:6),child:TextButton(
+            onPressed:()=>selectRibbon(tab),
+            style:TextButton.styleFrom(backgroundColor:ribbon==tab
+              ?const Color(0xFFEAF3FF):Colors.transparent),
+            child:Text(tab,style:TextStyle(fontWeight:FontWeight.w700,
+              color:ribbon==tab?blue:navy)))),
+      ])),
+      const Divider(height:5),
+      SingleChildScrollView(scrollDirection:Axis.horizontal,
+        child:Row(children:[
+          if(ribbon=='Home')...[
+            tool(Icons.undo,'Undo',()=>act((e)=>e.undo())),
+            const SizedBox(width:6),
+            tool(Icons.redo,'Redo',()=>act((e)=>e.redo())),
+            const SizedBox(width:9),
+            tool(Icons.notes,'Paragraph',()=>act((e)=>e.styleActiveBlock('p'))),
+            const SizedBox(width:6),
+            tool(Icons.title,'Heading',()=>act((e)=>e.styleActiveBlock('h2'))),
+            const SizedBox(width:6),
+            tool(Icons.format_quote,'Quote',()=>act((e)=>e.styleActiveBlock('blockquote'))),
+            const SizedBox(width:9),
+            tool(Icons.format_bold,'Bold',()=>act((e)=>e.markActiveBlock('bold'))),
+            const SizedBox(width:6),
+            tool(Icons.format_italic,'Italic',()=>act((e)=>e.markActiveBlock('italic'))),
+            const SizedBox(width:6),
+            tool(Icons.format_underlined,'Underline',
+              ()=>act((e)=>e.markActiveBlock('underline'))),
+          ]else if(ribbon=='Insert')...[
+            for(final item in <(String,IconData,String)>[
+              ('p',Icons.subject,'Paragraph'),
+              ('img',Icons.image_outlined,'Image'),
+              ('video',Icons.ondemand_video_outlined,'Video'),
+              ('audio',Icons.audiotrack_outlined,'Audio'),
+              ('table',Icons.table_chart_outlined,'Table'),
+              ('ul',Icons.format_list_bulleted,'List'),
+              ('link',Icons.link,'Link'),
+            ])Padding(padding:const EdgeInsets.only(right:6),
+              child:tool(item.$2,item.$3,()=>act((e)=>e.insertBlock(item.$1)))),
+          ]else ...[
+            tool(Icons.menu_book_outlined,'Scripture focus',()=>_scriptureDialog()),
+            const SizedBox(width:7),
+            tool(Icons.note_add_outlined,'Start section',addSection),
+            const SizedBox(width:7),
+            tool(Icons.library_books_outlined,'Quiz library',widget.onQuiz),
+          ],
+        ])),
+    ]),padding:const EdgeInsets.fromLTRB(10,4,10,9));
+  }
+  Future<void> _scriptureDialog()async{
+    final current=section;if(current==null)return;
+    final sid=current['id'].toString();
+    final previous=obj(current['scriptureQuote']);
+    final reference=TextEditingController(text:(previous['reference']??'').toString());
+    final passage=TextEditingController(text:(previous['text']??'').toString());
+    final result=await showDialog<bool>(context:context,builder:(ctx)=>AlertDialog(
+      title:const Text('Scripture focus'),
+      content:SizedBox(width:440,child:SingleChildScrollView(child:Column(
+        mainAxisSize:MainAxisSize.min,children:[
+          TextField(controller:reference,decoration:const InputDecoration(labelText:'Reference')),
+          const SizedBox(height:8),
+          TextField(controller:passage,maxLines:5,
+            decoration:const InputDecoration(labelText:'Passage text')),
+        ]))),
+      actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),
+        child:const Text('Cancel')),FilledButton(onPressed:()=>Navigator.pop(ctx,true),
+          child:const Text('Save'))],
+    ));
+    if(result==true&&mounted){
+      changeSection(sid,{'scriptureQuote':{
+        'reference':reference.text.trim(),'text':passage.text.trim(),
+      }});
+    }
+    reference.dispose();passage.dispose();
+  }
+  Widget pageButton(Map<String,dynamic> page,int index,{bool compact=false}){
+    final sid=page['id']?.toString()??'';
+    final active=sid==activeSectionId;
+    final blocks=list(page['document']);
+    return InkWell(
+      key:ValueKey('page-button-$sid'),onTap:()=>focusSection(sid),
+      child:Container(
+        constraints:BoxConstraints(minWidth:compact?150:0,maxWidth:compact?205:double.infinity),
+        decoration:BoxDecoration(color:active?const Color(0xFFEEF5FF):Colors.white,
+          border:Border.all(color:active?blue:border,width:active?1.5:1),
+          borderRadius:BorderRadius.circular(9)),
+        padding:const EdgeInsets.symmetric(horizontal:9,vertical:11),
+        child:Row(children:[
+          Icon(Icons.drag_indicator,size:15,color:Colors.blueGrey.shade300),
+          const SizedBox(width:6),
+          Container(width:27,height:27,alignment:Alignment.center,
+            decoration:BoxDecoration(color:const Color(0xFF213E8B),
+              borderRadius:BorderRadius.circular(6)),
+            child:Text('${index+1}',style:const TextStyle(color:Colors.white,fontWeight:FontWeight.bold))),
+          const SizedBox(width:8),
+          Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+            Text(page['title']?.toString()??'Section',
+              maxLines:1,overflow:TextOverflow.ellipsis,
+              style:const TextStyle(fontWeight:FontWeight.bold,fontSize:12,color:navy)),
+            Text('${blocks.length} content blocks',
+              style:const TextStyle(fontSize:11,color:Color(0xFF7990A9))),
+          ])),
+          if(!compact)PopupMenuButton<String>(tooltip:'Section actions',
+            onSelected:(action){
+              if(action=='rename')_renameSection(sid);
+              if(action=='delete')_deleteSection(sid);
+            },itemBuilder:(_)=>[
+              const PopupMenuItem(value:'rename',child:Text('Rename section')),
+              if(sections.length>1)
+                const PopupMenuItem(value:'delete',child:Text('Remove section')),
+            ]),
+        ])),
     );
   }
-  Widget contentPane(Map<String,dynamic>? selected){
-    if(selected==null)return const Card(child:Padding(
-      padding:EdgeInsets.all(24),child:Text('Select or add a section.')));
-    return Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
-      cover(selected),const SizedBox(height:11),
-      if(preview)Card(child:Padding(padding:const EdgeInsets.all(12),
-        child:PlatePageView(page:selected)))
-      else ...[
-        if(document.isEmpty)Padding(padding:const EdgeInsets.all(12),
-          child:OutlinedButton.icon(onPressed:widget.onAdvanced,
-            icon:const Icon(Icons.edit_note),
-            label:const Text('Open legacy or rich formatted content'))),
-        ReorderableListView.builder(
-          shrinkWrap:true,
-          physics:const NeverScrollableScrollPhysics(),
-          buildDefaultDragHandles:false,
-          itemCount:document.length,
-          onReorder:(from,to){
-            final nodes=document;
-            if(to>from)to--;
-            final moved=nodes.removeAt(from);
-            nodes.insert(to,moved);
-            updateDocument(nodes);
-          },
-          itemBuilder:(_,index)=>blockCard(document[index],index),
-        ),
+  Future<void> _renameSection(String sid)async{
+    final row=sections.where((s)=>s['id']?.toString()==sid).toList();
+    if(row.isEmpty)return;
+    final title=TextEditingController(text:(row.first['title']??'').toString());
+    final accepted=await showDialog<bool>(context:context,builder:(ctx)=>AlertDialog(
+      title:const Text('Rename section'),
+      content:TextField(controller:title,maxLength:240,autofocus:true),
+      actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),
+        child:const Text('Cancel')),FilledButton(onPressed:()=>Navigator.pop(ctx,true),
+        child:const Text('Save'))]));
+    if(accepted==true&&title.text.trim().isNotEmpty)changeSection(sid,{'title':title.text.trim()});
+    title.dispose();
+  }
+  void _deleteSection(String sid){
+    final src=chapters;
+    if(src.isEmpty||sections.length<2)return;
+    final ci=chapterIndex,pages=list(src[ci]['sections']);
+    pages.removeWhere((p)=>p['id']?.toString()==sid);
+    src[ci]['sections']=pages;
+    widget.value['chapters']=src;
+    widget.onChanged();
+    focusSection(pages.first['id']!.toString());
+  }
+  Widget pagesSidebar(){
+    return bordered(Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+      const Text('LEARNER PAGES',style:TextStyle(fontSize:12,fontWeight:FontWeight.bold,color:Color(0xFF627D9B))),
+      Text('${sections.length} sections',style:const TextStyle(color:navy,fontWeight:FontWeight.bold)),
+      const SizedBox(height:9),
+      OutlinedButton.icon(onPressed:addSection,
+        icon:const Icon(Icons.add,size:17),label:const Text('Add section')),
+      const SizedBox(height:8),
+      Expanded(child:ListView.separated(
+        itemCount:sections.length,
+        separatorBuilder:(_,__)=>const SizedBox(height:6),
+        itemBuilder:(_,index)=>pageButton(sections[index],index),
+      )),
+    ]));
+  }
+  Widget mobilePages(){
+    return bordered(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+      InkWell(onTap:()=>setState(()=>pagesExpanded=!pagesExpanded),
+        child:Row(children:[
+          const Icon(Icons.menu_book_outlined,size:18,color:navy),
+          const SizedBox(width:8),
+          const Text('Lesson Pages',style:TextStyle(fontWeight:FontWeight.bold,color:navy)),
+          Text(' (${sections.length} sections)',
+            style:const TextStyle(color:Color(0xFF6982A1))),
+          const Spacer(),Icon(pagesExpanded?Icons.expand_less:Icons.expand_more),
+        ])),
+      if(pagesExpanded)...[
+        const SizedBox(height:8),
+        SizedBox(height:66,child:ListView.separated(
+          scrollDirection:Axis.horizontal,
+          itemCount:sections.length,
+          separatorBuilder:(_,__)=>const SizedBox(width:7),
+          itemBuilder:(_,index)=>pageButton(sections[index],index,compact:true))),
       ],
-    ]);
+    ]),padding:const EdgeInsets.all(10));
+  }
+  Widget contentPage(Map<String,dynamic> row,int index){
+    final sid=(row['id']??'').toString();
+    final active=sid==activeSectionId;
+    final doc=list(row['document']);
+    return Container(key:sectionKey(sid),
+      margin:const EdgeInsets.only(bottom:16),
+      decoration:BoxDecoration(color:Colors.white,
+        border:Border.all(color:active?const Color(0xFF9DC5FF):border,
+          width:active?1.5:1),
+        borderRadius:BorderRadius.circular(11)),
+      child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+        Container(padding:const EdgeInsets.all(12),
+          decoration:const BoxDecoration(color:Color(0xFFF0F6FF),
+            borderRadius:BorderRadius.vertical(top:Radius.circular(10))),
+          child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+            Text('▱  SECTION / LEARNER PAGE  ${index+1}',
+              style:const TextStyle(fontSize:12,fontWeight:FontWeight.w700,color:blue)),
+            const SizedBox(height:7),
+            TextFormField(key:ValueKey('page-title-$sid'),
+              initialValue:(row['title']??'').toString(),maxLength:240,
+              decoration:const InputDecoration(
+                hintText:'Section title',isDense:true,border:OutlineInputBorder()),
+              onTap:()=>setState(()=>sectionId=sid),
+              onChanged:(text)=>changeSection(sid,{'title':text}),
+            ),
+          ])),
+        if(row['scriptureQuote'] is Map && !preview)
+          Padding(padding:const EdgeInsets.fromLTRB(12,10,12,0),
+            child:Text('Scripture focus: ${obj(row['scriptureQuote'])['reference']??''}',
+              style:const TextStyle(color:Color(0xFF486D97),fontSize:12))),
+        Padding(padding:const EdgeInsets.all(12),
+          child:preview?PlatePageView(page:row):PlateDocumentEditor(
+            key:editorKey(sid),document:doc,
+            onChanged:(next)=>setDocument(sid,next))),
+      ]),
+    );
+  }
+  Widget canvas(){
+    return Container(decoration:BoxDecoration(color:Colors.white,border:Border.all(color:border),
+      borderRadius:BorderRadius.circular(11)),
+      child:SingleChildScrollView(
+        padding:const EdgeInsets.all(12),
+        child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+          if(sections.isEmpty)OutlinedButton.icon(onPressed:addSection,
+            icon:const Icon(Icons.add),label:const Text('Add section')),
+          for(var i=0;i<sections.length;i++)contentPage(sections[i],i),
+          if(!preview)OutlinedButton.icon(onPressed:addSection,
+            icon:const Icon(Icons.add),label:const Text('Start another section')),
+        ])),
+    );
+  }
+  @override Widget build(BuildContext context){
+    final currentChapters=chapters;
+    return Theme(data:ThemeData.light(useMaterial3:true).copyWith(
+      colorScheme:ColorScheme.fromSeed(seedColor:blue),
+      scaffoldBackgroundColor:surface),
+      child:LayoutBuilder(builder:(context,box){
+        final mobile=box.maxWidth<770;
+        return Container(color:surface,padding:EdgeInsets.all(mobile?8:12),
+          child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+            topHeader(mobile),
+            const SizedBox(height:8),
+            if(mobile)mobilePages(),
+            if(mobile)const SizedBox(height:7),
+            if(currentChapters.isNotEmpty)ribbonBar(),
+            if(currentChapters.isNotEmpty)const SizedBox(height:8),
+            if(currentChapters.isEmpty)
+              Expanded(child:Center(child:FilledButton.icon(
+                onPressed:addChapter,icon:const Icon(Icons.add),
+                label:const Text('Add first chapter'))))
+            else Expanded(child:mobile?canvas():Row(
+              crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+                SizedBox(width:box.maxWidth<950?195:240,child:pagesSidebar()),
+                const SizedBox(width:10),
+                Expanded(child:canvas()),
+              ])),
+            if(mobile&&currentChapters.isNotEmpty&&!preview)SafeArea(top:false,
+              child:Padding(padding:const EdgeInsets.only(top:7),
+                child:SingleChildScrollView(scrollDirection:Axis.horizontal,
+                  child:Row(children:[
+                    tool(Icons.add,'Add block',
+                      ()=>act((e)=>e.insertBlock('p'))),
+                    const SizedBox(width:7),
+                    tool(Icons.format_bold,'Format',
+                      ()=>selectRibbon('Home')),
+                    const SizedBox(width:7),
+                    tool(Icons.image_outlined,'Media',
+                      ()=>selectRibbon('Insert')),
+                    const SizedBox(width:7),
+                    tool(Icons.visibility_outlined,'Preview',
+                      ()=>setState(()=>preview=true)),
+                    const SizedBox(width:7),
+                    FilledButton.icon(onPressed:widget.saving?null:widget.onSave,
+                      icon:const Icon(Icons.send_outlined,size:17),
+                      label:const Text('Update')),
+                  ])))),
+          ]),
+        );
+      }),
+    );
   }
 }

@@ -159,19 +159,24 @@ test('shared Flutter Plate editor offers bounded undo and redo without losing se
 });
 
 
-test('responsive Flutter lesson studio keeps canonical section IDs and focuses selected pages',()=>{
+test('Flutter lesson studio mirrors the production Legacy document editor',()=>{
   const form=read('native_android/lib/screens/workspace_records_screen.dart');
   const studio=read('native_android/lib/widgets/lesson_section_studio.dart');
+  const plate=read('native_android/lib/widgets/plate_document_editor.dart');
   assert.match(form,/LessonSectionStudio\(/);
+  assert.match(form,/guideTitle:widget\.guideTitle/);
   assert.match(form,/onAdvanced:\(\)=>setState\(\(\)=>lessonTab='advanced'\)/);
   assert.match(form,/onSave:\(\)=>save\(\)/);
-  assert.match(studio,/MediaQuery\.sizeOf\(context\)\.width>=1050/);
-  assert.match(studio,/focusSection\(int index\)/);
+  assert.match(studio,/Text\('LEARNER PAGES'/);
+  assert.match(studio,/for\(final tab in \['Home','Insert','Scripture & Layout'\]\)/);
+  assert.match(studio,/focusSection\(String id\)/);
   assert.match(studio,/Scrollable\.ensureVisible/);
-  assert.match(studio,/ReorderableListView\.builder/);
-  assert.match(studio,/updateDocument\(nodes\)/);
+  assert.match(studio,/GlobalKey<PlateDocumentEditorState>/);
+  assert.match(studio,/setDocument\(sid,next\)/);
   assert.match(studio,/widget\.value\['chapters'\]=source/);
-  assert.match(studio,/PlatePageView\(page:selected\)/);
+  assert.match(studio,/PlatePageView\(page:row\)/);
   assert.match(studio,/widget\.onAdvanced/);
-  assert.match(form,/if\(!wide\)SafeArea/);
+  assert.match(plate,/void insertBlock\(String type\)/);
+  assert.match(plate,/void styleActiveBlock\(String type\)/);
+  assert.match(plate,/void markActiveBlock\(String mark\)/);
 });

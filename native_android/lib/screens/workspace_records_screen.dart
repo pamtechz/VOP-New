@@ -105,11 +105,12 @@ Map<String,dynamic> writableRecord(Map<String,dynamic> source)=>Map<String,dynam
   ['id','canEdit','scope','inherited','createdAt','updatedAt','lessons','lessonCount','languages','questionCount','canManage'].contains(key));
 
 class RecordEditor extends StatefulWidget{
-  const RecordEditor({required this.api,required this.title,required this.fields,required this.options,required this.initial,required this.onSave,this.submitLabel='Save changes',this.lessonMode=false,super.key});
+  const RecordEditor({required this.api,required this.title,required this.fields,required this.options,required this.initial,required this.onSave,this.submitLabel='Save changes',this.lessonMode=false,this.guideTitle='',super.key});
   final VopApi api;
   final String title;
   final String submitLabel;
   final bool lessonMode;
+  final String guideTitle;
   final List<Map<String,dynamic>> fields;
   final Map<String,dynamic> options,initial;
   final Future<void> Function(Map<String,dynamic>) onSave;
@@ -208,9 +209,33 @@ class _RecordEditorState extends State<RecordEditor>{
         actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('Keep editing')),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('Discard'))]));
       if(discard==true&&mounted){setState(()=>dirty=false);WidgetsBinding.instance.addPostFrameCallback((_){if(mounted)Navigator.pop(context);});}
     },child:Scaffold(appBar:AppBar(title:Text(widget.title),actions:[
+      if(widget.lessonMode&&lessonTab!='chapters')
+        TextButton(onPressed:()=>setState(()=>lessonTab='chapters'),
+          child:const Text('Lesson editor')),
       TextButton(onPressed:saving?null:save,child:Text(saving?'Saving…':widget.submitLabel))]),
       body:Form(key:form,child:LayoutBuilder(builder:(context,constraints){
         final wide=constraints.maxWidth>=960;
+        if(widget.lessonMode&&lessonTab=='chapters'){
+          return Column(children:[
+            if(saving)const LinearProgressIndicator(),
+            if(error!=null)Padding(
+              padding:const EdgeInsets.symmetric(horizontal:12,vertical:6),
+              child:Text(error!,style:TextStyle(color:Theme.of(context).colorScheme.error))),
+            Expanded(child:LessonSectionStudio(
+              value:value,
+              guideTitle:widget.guideTitle,
+              dirty:dirty,
+              saving:saving,
+              onChanged:()=>setState(()=>dirty=true),
+              onSave:()=>save(),
+              onAdvanced:()=>setState(()=>lessonTab='advanced'),
+              onQuiz:()=>Navigator.push(context,MaterialPageRoute<void>(
+                builder:(_)=>WorkspaceRecordsScreen(
+                  api:widget.api,collection:'quizzes',
+                  organizationId:widget.initial['organizationId']?.toString()))),
+            )),
+          ]);
+        }
         return Column(children:[
           if(widget.lessonMode)SingleChildScrollView(scrollDirection:Axis.horizontal,
             child:Padding(padding:const EdgeInsets.symmetric(horizontal:12,vertical:8),

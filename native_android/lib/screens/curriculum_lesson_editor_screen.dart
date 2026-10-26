@@ -169,6 +169,7 @@ class _CurriculumLessonEditorState extends State<CurriculumLessonEditorScreen>{
     await Navigator.push(context,MaterialPageRoute<void>(builder:(_)=>RecordEditor(api:widget.api,
       title:lesson==null?'New lesson':'Edit ${recordTitle(lesson)}',fields:fields,options:recordMap(widget.workspace['options']),initial:initial,
       lessonMode:true,
+      guideTitle:recordTitle(widget.guide),
       onSave:(data)async{
         await widget.api.adminContent('curriculum',action:'upsertLesson',payload:{
           ...payload,'id':stableLessonId,

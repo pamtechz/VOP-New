@@ -6,9 +6,10 @@ class PlateDocumentEditor extends StatefulWidget {
   const PlateDocumentEditor({required this.document,required this.onChanged,super.key});
   final List<Map<String,dynamic>> document;
   final ValueChanged<List<Map<String,dynamic>>> onChanged;
-  @override State<PlateDocumentEditor> createState()=>_PlateDocumentEditorState();
+  @override State<PlateDocumentEditor> createState()=>PlateDocumentEditorState();
 }
-class _PlateDocumentEditorState extends State<PlateDocumentEditor>{
+class PlateDocumentEditorState extends State<PlateDocumentEditor>{
+  int activeBlockIndex=0;
   late List<Map<String,dynamic>> nodes;
   bool preview=false;
   int revision=0;
@@ -69,11 +70,50 @@ class _PlateDocumentEditorState extends State<PlateDocumentEditor>{
     if(type=='ul'||type=='ol')return {'type':type,'id':id(),'children':[{'type':'li','children':[{'type':'lic','children':[{'text':''}]}]}]};
     return {'type':type,'id':id(),'children':[{'text':''}]};
   }
+  void insertBlock(String type){
+    if(nodes.length>=50)return;
+    nodes.add(block(type));
+    revision++;
+    changed();
+  }
+  void styleActiveBlock(String type){
+    if(nodes.isEmpty)return;
+    final index=activeBlockIndex.clamp(0,nodes.length-1).toInt();
+    final node=nodes[index];
+    if(!['p','h1','h2','h3','blockquote'].contains(node['type']))return;
+    node['type']=type;
+    changed();
+  }
+  void markActiveBlock(String mark){
+    if(nodes.isEmpty)return;
+    final index=activeBlockIndex.clamp(0,nodes.length-1).toInt();
+    final node=nodes[index];
+    if(!['p','h1','h2','h3','blockquote'].contains(node['type']))return;
+    void toggle(dynamic item,bool state){
+      if(item is! Map)return;
+      if(item['text'] is String){
+        if(state)item.remove(mark);else item[mark]=true;
+      }
+      if(item['children'] is List){
+        for(final child in item['children'])toggle(child,state);
+      }
+    }
+    bool marked(dynamic item){
+      if(item is! Map)return false;
+      if(item['text'] is String)return item[mark]==true;
+      if(item['children'] is List){
+        return (item['children'] as List).any(marked);
+      }
+      return false;
+    }
+    toggle(node,marked(node));
+    changed();
+  }
   Future<void> add()async{
     final type=await showModalBottomSheet<String>(context:context,builder:(ctx)=>SafeArea(child:ListView(shrinkWrap:true,children:[
       for(final entry in {'p':'Paragraph','h1':'Heading 1','h2':'Heading 2','h3':'Heading 3','blockquote':'Quotation','callout':'Callout','ul':'Bullet list','ol':'Numbered list','table':'Table','img':'Image','video':'Video','audio':'Audio','code_block':'Code block','link':'Link'}.entries)
         ListTile(title:Text(entry.value),onTap:()=>Navigator.pop(ctx,entry.key))])));
-    if(type!=null){nodes.add(block(type));changed();}
+    if(type!=null)insertBlock(type);
   }
   @override Widget build(BuildContext context)=>Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
     Row(children:[const Expanded(child:Text('Section content',style:TextStyle(fontWeight:FontWeight.w700))),
@@ -84,13 +124,17 @@ class _PlateDocumentEditorState extends State<PlateDocumentEditor>{
       IconButton(tooltip:preview?'Edit':'Preview',
         onPressed:()=>setState(()=>preview=!preview),
         icon:Icon(preview?Icons.edit_outlined:Icons.visibility_outlined))]),
-    if(preview)PlatePageView(page:{'document':nodes})else ...nodes.asMap().entries.map((entry)=>Card(key:ValueKey('${entry.value['id']??entry.key}.$revision'),child:Padding(padding:const EdgeInsets.all(12),child:Column(children:[
+    if(preview)PlatePageView(page:{'document':nodes})else ...nodes.asMap().entries.map((entry)=>GestureDetector(
+      onTap:()=>setState(()=>activeBlockIndex=entry.key),
+      child:Card(
+      color:activeBlockIndex==entry.key?const Color(0xFFF0F6FF):null,
+      key:ValueKey('${entry.value['id']??entry.key}.$revision'),child:Padding(padding:const EdgeInsets.all(12),child:Column(children:[
       Row(children:[Expanded(child:Text(_label('${entry.value['type']}'))),
         IconButton(tooltip:'Move up',onPressed:entry.key==0?null:(){final value=nodes.removeAt(entry.key);nodes.insert(entry.key-1,value);revision++;changed();},icon:const Icon(Icons.arrow_upward)),
         IconButton(tooltip:'Move down',onPressed:entry.key==nodes.length-1?null:(){final value=nodes.removeAt(entry.key);nodes.insert(entry.key+1,value);revision++;changed();},icon:const Icon(Icons.arrow_downward)),
         IconButton(tooltip:'Remove block',onPressed:nodes.length<=1?null:(){nodes.removeAt(entry.key);revision++;changed();},icon:const Icon(Icons.delete_outline))]),
       _node(entry.value,'${entry.key}'),
-    ])))),
+    ]))))),
     if(!preview)OutlinedButton.icon(onPressed:add,icon:const Icon(Icons.add),label:const Text('Add content block')),
   ]);
   String _label(String type)=>{'p':'Paragraph','h1':'Heading 1','h2':'Heading 2','h3':'Heading 3','blockquote':'Quotation','callout':'Callout','ul':'Bullet list','ol':'Numbered list','table':'Table','img':'Image','video':'Video','audio':'Audio','code_block':'Code block','a':'Link'}[type]??type;
