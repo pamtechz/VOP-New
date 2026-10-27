@@ -86,6 +86,14 @@ test('legacy lesson authoring remains operable across desktop, tablet and small 
             markers:[...document.querySelectorAll('[data-vop-section-id]')]
               .map(marker=>({id:marker.getAttribute('data-vop-section-id'),focused:marker.getAttribute('data-vop-focused')})),
             editorPresent:!!document.querySelector('.vop-plate-page-editor'),
+            sectionComponents:document.querySelectorAll('.vop-plate-section-marker').length,
+            slateElements:[...document.querySelectorAll('.vop-plate-editable [data-slate-node="element"]')]
+              .slice(0,8).map(node=>({type:node.getAttribute('data-slate-node'),
+                className:node.className,id:node.getAttribute('data-vop-section-id'),
+                text:node.textContent?.slice(0,100)})),
+            editorHtml:document.querySelector('.vop-plate-editable')?.innerHTML.slice(0,1600),
+            visibleErrors:[...document.querySelectorAll('[role="alert"]')]
+              .map(node=>node.textContent?.slice(0,180)),
           }));
           throw new Error('Section focus did not propagate: '+JSON.stringify(diagnostic),{cause:error});
         }
