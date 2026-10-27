@@ -11,6 +11,9 @@ const entry="import React from 'react';\nimport {createRoot} from 'react-dom/cli
 test('legacy lesson authoring remains operable across desktop, tablet and small phones',
   {timeout:120000},async t=>{
   const server=await createServer({root,configFile:join(root,'vite.config.ts'),
+    // Browser acceptance suites execute concurrently on Windows. Distinct
+    // optimizer caches prevent competing renames of node_modules/.vite/deps.
+    cacheDir:join(root,'node_modules','.vite-vop-legacy-responsive-test'),
     server:{host:'127.0.0.1',port:0},plugins:[{
       name:'legacy-responsive-acceptance-fixture',
       resolveId(id){if(id==='virtual:vop-lesson-responsive')return '\0vop-lesson-responsive';},

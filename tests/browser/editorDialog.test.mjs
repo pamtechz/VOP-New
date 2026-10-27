@@ -25,6 +25,9 @@ createRoot(document.getElementById('root')).render(React.createElement('main',{s
 
 test('real editor and long dialogs work at desktop, tablet and phone widths', {timeout:90000},async t=>{
   const server=await createServer({root,configFile:join(root,'vite.config.ts'),
+    // Browser acceptance suites execute concurrently on Windows. Distinct
+    // optimizer caches prevent competing renames of node_modules/.vite/deps.
+    cacheDir:join(root,'node_modules','.vite-vop-editor-dialog-test'),
     server:{host:'127.0.0.1',port:0},plugins:[{
       name:'vop-browser-acceptance-fixture',
       resolveId(id){if(id==='virtual:vop-editor-acceptance')return '\0vop-editor-acceptance';},

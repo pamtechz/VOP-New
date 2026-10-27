@@ -83,8 +83,13 @@ const StudyAudioPlugin=createPlatePlugin({
   key:'studyAudio',node:{isElement:true,isVoid:true,type:'audio'},
 }).withComponent(MediaElement);
 
+// The selected page is part of React state. The Plate renderer can replace
+// a marker after scrolling, so render the active highlight declaratively.
+const SectionFocusContext=React.createContext('');
+
 function SectionPageElement({element,children,...props}:PlateElementProps){
   const marker=element as unknown as StudyPlateSectionMarker;
+  const focusedSectionId=React.useContext(SectionFocusContext);
   const editor=useEditorRef();
   const [title,setTitle]=useState(marker.title);
 
@@ -107,7 +112,8 @@ function SectionPageElement({element,children,...props}:PlateElementProps){
   };
 
   return <PlateElement as="div" element={element} {...props}
-    className="vop-plate-section-marker" data-vop-section-id={marker.id}>
+    className="vop-plate-section-marker" data-vop-section-id={marker.id}
+    data-vop-focused={focusedSectionId===marker.id?'true':undefined}>
     <span contentEditable={false} className="vop-plate-section-marker-copy">
       <span className="vop-plate-section-marker-tag"><Layers3 size={13}/>{uiT('admin.study_plate_editor.section_learner_page',"SECTION / LEARNER PAGE")}</span>
       <div className="vop-plate-section-marker-title-row">
@@ -1084,7 +1090,8 @@ export function StudyPlatePageEditor({
     wordCount=studyPlatePlainText(contentNodes).trim().split(/\s+/).filter(Boolean).length;
   }catch{wordCount=0;}
 
-  return <div className="vop-plate-page-editor vop-plate-continuous-editor" data-chapter={chapterId}>
+  return <SectionFocusContext.Provider value={focusSectionId||''}>
+    <div className="vop-plate-page-editor vop-plate-continuous-editor" data-chapter={chapterId}>
     <div className="vop-plate-workspace-fixed-top">
       {/* Authentic MS Word-Style Tabbed Authoring Ribbon & Toolbar */}
       <div className="vop-plate-toolbar vop-plate-toolbar-unified vop-ms-word-ribbon" role="toolbar" aria-label={uiT('admin.study_plate_editor.study_document_formatting',"Study document formatting")}>
@@ -1790,5 +1797,6 @@ export function StudyPlatePageEditor({
       <span>{sectionCount} learner {sectionCount===1?'page':'pages'} · boundaries are not stored as learner content</span>
     </div>
     {invalid&&<div role="alert" className="vop-plate-error"><AlertCircle size={15}/>{invalid}</div>}
-  </div>;
+  </div>
+  </SectionFocusContext.Provider>;
 }
