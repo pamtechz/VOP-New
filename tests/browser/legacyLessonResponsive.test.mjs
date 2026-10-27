@@ -74,10 +74,21 @@ test('legacy lesson authoring remains operable across desktop, tablet and small 
         const target=page.locator('.vop-plate-outline-main').filter({hasText:'Evidence and faith'});
         await target.waitFor();
         await target.click();
-        await page.waitForFunction(()=>{
-          const marker=document.querySelector('[data-vop-section-id="responsive-evidence"]');
-          return marker?.getAttribute('data-vop-focused')==='true';
-        });
+        try{
+          await page.waitForFunction(()=>{
+            const marker=document.querySelector('[data-vop-section-id="responsive-evidence"]');
+            return marker?.getAttribute('data-vop-focused')==='true';
+          });
+        }catch(error){
+          const diagnostic=await page.evaluate(()=>({
+            selected:[...document.querySelectorAll('.vop-plate-outline-row.active')]
+              .map(row=>row.textContent?.trim()),
+            markers:[...document.querySelectorAll('[data-vop-section-id]')]
+              .map(marker=>({id:marker.getAttribute('data-vop-section-id'),focused:marker.getAttribute('data-vop-focused')})),
+            editorPresent:!!document.querySelector('.vop-plate-page-editor'),
+          }));
+          throw new Error('Section focus did not propagate: '+JSON.stringify(diagnostic),{cause:error});
+        }
         assert.equal(await page.locator('[data-vop-section-id="responsive-evidence"]')
           .getAttribute('data-vop-focused'),'true');
         assert.ok(await page.locator('.vop-plate-outline-row.active')
