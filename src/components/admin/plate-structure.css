@@ -537,7 +537,7 @@
 
 /* Visual focus follows the selected Learner Pages item without changing
    the production Legacy editor layout or ribbon. */
-.vop-plate-section-marker[data-vop-focused="true"]{
+.vop-plate-section-marker.vop-plate-section-marker-focused{
   outline:2px solid #3b82f6;outline-offset:2px;
   scroll-margin-top:18px;
 }

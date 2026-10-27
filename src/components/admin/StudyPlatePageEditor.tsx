@@ -111,10 +111,13 @@ function SectionPageElement({element,children,...props}:PlateElementProps){
     }
   };
 
+  // PlateElement forwards its managed Slate attributes but not arbitrary data-* props.
+  // Place the stable section identity on a native DOM child for outline navigation.
   return <PlateElement as="div" element={element} {...props}
-    className="vop-plate-section-marker" data-vop-section-id={marker.id}
-    data-vop-focused={focusedSectionId===marker.id?'true':undefined}>
-    <span contentEditable={false} className="vop-plate-section-marker-copy">
+    className={'vop-plate-section-marker'+(focusedSectionId===marker.id?' vop-plate-section-marker-focused':'')}>
+    <span contentEditable={false} className="vop-plate-section-marker-copy"
+      data-vop-section-id={marker.id}
+      data-vop-focused={focusedSectionId===marker.id?'true':undefined}>
       <span className="vop-plate-section-marker-tag"><Layers3 size={13}/>{uiT('admin.study_plate_editor.section_learner_page',"SECTION / LEARNER PAGE")}</span>
       <div className="vop-plate-section-marker-title-row">
         <input
