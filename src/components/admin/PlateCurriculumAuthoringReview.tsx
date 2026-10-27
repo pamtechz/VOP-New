@@ -163,10 +163,16 @@ export function PlateCurriculumAuthoringReview({
   const jumpToSection=(sectionId:string)=>{
     setFocusSectionId(sectionId);
     window.requestAnimationFrame(()=>{
-      const target=window.document.querySelector('[data-vop-section-id="'+sectionId+'"]') as HTMLElement|null;
-      if(target){
-        target.scrollIntoView({block:'start',behavior:'smooth'});
-      }
+      // Apply the visible focus immediately, even if the editor's effect has
+      // already run for this section. Keep navigation scoped to this chapter.
+      const pane=window.document.querySelector<HTMLElement>(
+        '.vop-plate-page-editor[data-chapter="'+chapter?.id+'"]');
+      const markers=Array.from(pane?.querySelectorAll<HTMLElement>('[data-vop-section-id]')||[]);
+      const target=markers.find(marker=>marker.dataset.vopSectionId===sectionId);
+      if(!target)return;
+      for(const marker of markers)marker.removeAttribute('data-vop-focused');
+      target.setAttribute('data-vop-focused','true');
+      target.scrollIntoView({block:'start',behavior:'smooth',inline:'nearest'});
     });
   };
 
