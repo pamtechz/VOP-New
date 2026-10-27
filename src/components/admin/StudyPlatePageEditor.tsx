@@ -274,7 +274,7 @@ export function StudyPlatePageEditor({
     plugins,
     value:initialValue as Value,
     maxLength:120000,
-    nodeId:{initialValueIds:'always',filter:([,path])=>path.length===1},
+    // Section boundary IDs are canonical curriculum identifiers, not generated\n    // Plate block IDs. Never rewrite them during editor initialization/insert.\n    nodeId:{initialValueIds:'always',filter:([node,path])=>\n      path.length===1 && (node as {type?:string}).type!=='section_page'},
   });
   const savedSelection=useRef<typeof editor.selection>(editor.selection);
   const moreRef=useRef<HTMLDetailsElement>(null);
