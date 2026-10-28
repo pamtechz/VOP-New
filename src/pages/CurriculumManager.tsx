@@ -1064,6 +1064,14 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
       // A second request could fail after a successful first write and make
       // retrying look like a new/duplicate lesson.
       await adminContent('upsertLesson', 'curriculum', id, payload, targetOrganizationId);
+      // A newly created Classic lesson must refresh as this same saved record,
+      // never as another blank lesson (or a second document on retry).
+      if(classicLessonLink?.create){
+        const url=new URL(window.location.href);
+        url.searchParams.delete('vopNewLesson');
+        url.searchParams.set('vopLessonId',id);
+        window.history.replaceState(window.history.state,'',url.toString());
+      }
       await load();
       const savedEditor={ ...editor, id, originalGuideId:editor.guideId, title: resolvedTitle, guideTitle: valueText(guide.title) || editor.guideTitle, published: publish || editor.published };
       savedEditorSignature.current=JSON.stringify(savedEditor);
