@@ -3,9 +3,10 @@ import 'package:flutter/material.dart';
 import 'plate_page.dart';
 
 class PlateDocumentEditor extends StatefulWidget {
-  const PlateDocumentEditor({required this.document,required this.onChanged,super.key});
+  const PlateDocumentEditor({required this.document,required this.onChanged,this.inlineMode=false,super.key});
   final List<Map<String,dynamic>> document;
   final ValueChanged<List<Map<String,dynamic>>> onChanged;
+  final bool inlineMode;
   @override State<PlateDocumentEditor> createState()=>PlateDocumentEditorState();
 }
 class PlateDocumentEditorState extends State<PlateDocumentEditor>{
@@ -109,13 +110,155 @@ class PlateDocumentEditorState extends State<PlateDocumentEditor>{
     toggle(node,marked(node));
     changed();
   }
+
+  /// Ribbon commands target the focused paragraph. Mark commands preserve the
+  /// existing Plate leaf structure rather than flattening it into plain text.
+  void forActiveLeaf(void Function(Map<String,dynamic>) patch) {
+    if(nodes.isEmpty)return;
+    final node=nodes[activeBlockIndex.clamp(0,nodes.length-1).toInt()];
+    void visit(dynamic value){
+      if(value is! Map)return;
+      if(value['text'] is String)patch(value.cast<String,dynamic>());
+      if(value['children'] is List)for(final child in value['children']){visit(child);}
+    }
+    visit(node);
+    changed();
+  }
+  void setActiveFontSize(double size)=>forActiveLeaf((leaf)=>
+    leaf['fontSize']=size.toInt().toString()+'px');
+  void setActiveFontFamily(String family)=>forActiveLeaf((leaf)=>
+    leaf['fontFamily']=family);
+  void setActiveColor(String color)=>forActiveLeaf((leaf)=>leaf['color']=color);
+  void setActiveAlignment(String align){
+    if(!['left','right','center','justify'].contains(align)||nodes.isEmpty)return;
+    nodes[activeBlockIndex.clamp(0,nodes.length-1).toInt()]['align']=align;
+    changed();
+  }
+  void setActiveIndent(int direction){
+    if(nodes.isEmpty)return;
+    final node=nodes[activeBlockIndex.clamp(0,nodes.length-1).toInt()];
+    final old=(node['indent'] is num?(node['indent'] as num).toInt():0);
+    node['indent']=(old+direction).clamp(0,8);
+    changed();
+  }
+  void duplicateActiveBlock(){
+    if(nodes.length>=50||nodes.isEmpty)return;
+    final i=activeBlockIndex.clamp(0,nodes.length-1).toInt();
+    final copy=jsonDecode(jsonEncode(nodes[i])) as Map<String,dynamic>;
+    copy['id']=id();
+    nodes.insert(i+1,copy);
+    activeBlockIndex=i+1;
+    revision++;
+    changed();
+  }
+  void removeActiveBlock(){
+    if(nodes.length<2)return;
+    nodes.removeAt(activeBlockIndex.clamp(0,nodes.length-1).toInt());
+    activeBlockIndex=activeBlockIndex.clamp(0,nodes.length-1).toInt();
+    revision++;
+    changed();
+  }
+
+  // Preserve unedited text runs and their bold/italic/underline/scripture
+  // metadata while applying an insertion, deletion, or replacement.
+  List<Map<String,dynamic>> rebaseLeaves(List<Map<String,dynamic>> original,String next){
+    final old=original.map((item)=>(item['text']??'').toString()).join();
+    if(old==next)return original;
+    var prefix=0;
+    while(prefix<old.length&&prefix<next.length&&old[prefix]==next[prefix]){prefix++;}
+    var suffix=0;
+    while(suffix<old.length-prefix&&suffix<next.length-prefix&&
+      old[old.length-1-suffix]==next[next.length-1-suffix]){suffix++;}
+    final left=<Map<String,dynamic>>[],right=<Map<String,dynamic>>[];
+    var cursor=0;
+    for(final leaf in original){
+      final text=(leaf['text']??'').toString();
+      final start=cursor,end=start+text.length;
+      final keptLeft=(prefix-start).clamp(0,text.length).toInt();
+      final suffixStart=old.length-suffix;
+      final keptRight=(end-suffixStart).clamp(0,text.length).toInt();
+      if(keptLeft>0)left.add({...leaf,'text':text.substring(0,keptLeft)});
+      if(keptRight>0)right.add({...leaf,'text':text.substring(text.length-keptRight)});
+      cursor=end;
+    }
+    final added=next.substring(prefix,next.length-suffix);
+    final fallback=left.isNotEmpty?left.last:(right.isNotEmpty?right.first:
+      (original.isNotEmpty?original.first:<String,dynamic>{'text':''}));
+    final attributes={...fallback}..remove('text');
+    final output=<Map<String,dynamic>>[...left,
+      if(added.isNotEmpty){...attributes,'text':added},...right];
+    return output.isEmpty?<Map<String,dynamic>>[{'text':''}]:output;
+  }
+
+  Widget inlineDocument()=>Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+    for(final entry in nodes.asMap().entries)
+      _inlineNode(entry.key,entry.value),
+  ]);
+  Widget _inlineNode(int index,Map<String,dynamic> node){
+    final type=(node['type']??'p').toString();
+    final children=plateRows(node['children']);
+    final pureText=children.every((item)=>item['text'] is String);
+    if(!['p','h1','h2','h3','blockquote'].contains(type)||!pureText){
+      return Container(margin:const EdgeInsets.symmetric(vertical:7),
+        decoration:BoxDecoration(border:Border.all(color:const Color(0xFFDDE7F2)),
+          borderRadius:BorderRadius.circular(8)),
+        child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+          PlatePageView(page:{'document':[node]}),
+          Align(alignment:Alignment.centerRight,child:TextButton.icon(
+            onPressed:()=>_editComplexBlock(index),
+            icon:const Icon(Icons.edit_outlined,size:16),
+            label:const Text('Edit '+ 'block'))),
+        ]));
+    }
+    final primary=children.isEmpty?<String,dynamic>{'text':''}:children.first;
+    final typeSize=type=='h1'?26.0:type=='h2'?22.0:type=='h3'?19.0:16.0;
+    final fontSize=double.tryParse((primary['fontSize']??'').toString().replaceAll('px',''))??typeSize;
+    final color=plateColor(primary['color'])??const Color(0xFF183B65);
+    final align=switch(node['align']){
+      'center'=>TextAlign.center,'right'=>TextAlign.right,
+      'justify'=>TextAlign.justify,_=>TextAlign.left
+    };
+    return Padding(padding:EdgeInsets.only(left:((node['indent'] is num)?(node['indent'] as num).toDouble():0)*20,
+      bottom:type=='p'?12:18),child:TextFormField(
+        key:ValueKey('inline.'+(node['id']??index).toString()+'.'+revision.toString()),
+        initialValue:children.map((child)=>(child['text']??'').toString()).join(),
+        minLines:1,maxLines:null,
+        style:TextStyle(color:color,fontSize:fontSize,
+          fontWeight:primary['bold']==true||type.startsWith('h')?FontWeight.bold:null,
+          fontStyle:primary['italic']==true||type=='blockquote'?FontStyle.italic:null,
+          decoration:primary['underline']==true?TextDecoration.underline:null,
+          height:1.55),
+        textAlign:align,
+        decoration:const InputDecoration(isDense:true,filled:false,
+          hintText:'Type lesson content…',border:InputBorder.none,
+          focusedBorder:InputBorder.none,
+          contentPadding:EdgeInsets.symmetric(horizontal:0,vertical:2)),
+        onTap:()=>activeBlockIndex=index,
+        onChanged:(next){
+          activeBlockIndex=index;
+          node['children']=rebaseLeaves(plateRows(node['children']),next);
+          emit();
+        },
+      ));
+  }
+  Future<void> _editComplexBlock(int index)async{
+    if(index<0||index>=nodes.length)return;
+    activeBlockIndex=index;
+    await showDialog<void>(context:context,builder:(ctx)=>AlertDialog(
+      title:Text('Edit '+_label((nodes[index]['type']??'').toString())),
+      content:SizedBox(width:650,height:420,child:SingleChildScrollView(
+        child:_node(nodes[index],'inline-complex-'+index.toString()))),
+      actions:[TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('Done'))],
+    ));
+  }
+
   Future<void> add()async{
     final type=await showModalBottomSheet<String>(context:context,builder:(ctx)=>SafeArea(child:ListView(shrinkWrap:true,children:[
       for(final entry in {'p':'Paragraph','h1':'Heading 1','h2':'Heading 2','h3':'Heading 3','blockquote':'Quotation','callout':'Callout','ul':'Bullet list','ol':'Numbered list','table':'Table','img':'Image','video':'Video','audio':'Audio','code_block':'Code block','link':'Link'}.entries)
         ListTile(title:Text(entry.value),onTap:()=>Navigator.pop(ctx,entry.key))])));
     if(type!=null)insertBlock(type);
   }
-  @override Widget build(BuildContext context)=>Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+  @override Widget build(BuildContext context)=>widget.inlineMode?inlineDocument():Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
     Row(children:[const Expanded(child:Text('Section content',style:TextStyle(fontWeight:FontWeight.w700))),
       IconButton(tooltip:'Undo',onPressed:undoHistory.isEmpty?null:undo,
         icon:const Icon(Icons.undo)),
