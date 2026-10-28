@@ -365,7 +365,8 @@ class _ClassicWebLessonStudioState extends State<ClassicWebLessonStudio> {
                     DropdownButton<String>(value: fontFamily, underline: const SizedBox.shrink(),
                       items: ['Arial', 'Georgia', 'Roboto'].map((v) =>
                         DropdownMenuItem(value: v, child: Text(v, style: const TextStyle(fontSize: 12)))).toList(),
-                      onChanged: (v) {if (v != null) setState(() => fontFamily = v);}),
+                      onChanged: (v) {if (v != null) setState(() => fontFamily = v);
+                        run((e) => e.setActiveFontFamily(v));}),
                     const SizedBox(width: 13),
                     DropdownButton<double>(value: fontSize, underline: const SizedBox.shrink(),
                       items: [9.0, 10.0, 11.0, 12.0, 14.0, 16.0, 18.0, 24.0]
@@ -378,11 +379,11 @@ class _ClassicWebLessonStudioState extends State<ClassicWebLessonStudio> {
                         run((e) => e.setActiveFontSize(v));
                       }),
                     ribbonIcon(Icons.text_increase, 'Increase font size', () {
-                      setState(() => fontSize = (fontSize + 1).clamp(9, 40));
+                      setState(() => fontSize = (fontSize + 1).clamp(9.0, 40.0).toDouble());
                       run((e) => e.setActiveFontSize(fontSize));
                     }),
                     ribbonIcon(Icons.text_decrease, 'Decrease font size', () {
-                      setState(() => fontSize = (fontSize - 1).clamp(9, 40));
+                      setState(() => fontSize = (fontSize - 1).clamp(9.0, 40.0).toDouble());
                       run((e) => e.setActiveFontSize(fontSize));
                     }),
                   ]),
