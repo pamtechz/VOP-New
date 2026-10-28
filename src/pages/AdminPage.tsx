@@ -128,9 +128,12 @@ function validAdminTab(value:unknown):value is AdminTab {
   return typeof value==='string'&&ADMIN_TAB_IDS.has(value as AdminTab);
 }
 function readInitialAdminTab(uid:string,notificationTarget:string|null):AdminTab {
-  if(validAdminTab(notificationTarget))return notificationTarget;
-  if(typeof window==='undefined')return 'dashboard';
+  if(typeof window==='undefined')return validAdminTab(notificationTarget)?notificationTarget:'dashboard';
   const params=new URL(window.location.href).searchParams;
+  // Explicit Classic lesson editor navigation takes precedence over a stale
+  // notification target; the actual lesson still requires API permissions.
+  if(params.get('vopClassicEditor')==='1' && params.get('admin')==='curriculum')return 'curriculum';
+  if(validAdminTab(notificationTarget))return notificationTarget;
   if(params.get('organization'))return 'organizations';
   const fromUrl=params.get('admin');
   if(validAdminTab(fromUrl))return fromUrl;
