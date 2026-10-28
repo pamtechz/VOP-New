@@ -219,7 +219,7 @@ class PlateDocumentEditorState extends State<PlateDocumentEditor>{
     changed();
   }
   void setActiveFontSize(double size)=>forActiveLeaf((leaf)=>
-    leaf['fontSize']=size.toInt().toString()+'px');
+    leaf['fontSize']=(size*4/3).round().toString()+'px');
   void setActiveFontFamily(String family)=>forActiveLeaf((leaf)=>
     leaf['fontFamily']=family);
   void setActiveColor(String color)=>forActiveLeaf((leaf)=>leaf['color']=color);
