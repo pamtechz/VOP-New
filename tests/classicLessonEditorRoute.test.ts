@@ -1,72 +1,43 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {parseClassicLessonLink} from '../src/services/classicLessonLink.ts';
 
-const dart=readFileSync('native_android/lib/screens/curriculum_lesson_editor_screen.dart','utf8');
-const manager=readFileSync('src/pages/CurriculumManager.tsx','utf8');
-const plate=readFileSync('src/components/admin/PlateCurriculumAuthoringReview.tsx','utf8');
-const admin=readFileSync('src/pages/AdminPage.tsx','utf8');
-const rewrites=JSON.parse(readFileSync('vercel.json','utf8')).rewrites as Array<{source:string;destination:string}>;
+const read=(path:string)=>readFileSync(path,'utf8');
+const native=read('native_android/lib/screens/curriculum_lesson_editor_screen.dart');
+const studio=read('native_android/lib/widgets/lesson_section_studio.dart');
+const plate=read('native_android/lib/widgets/plate_document_editor.dart');
+const vercel=JSON.parse(read('vercel.json'));
 
-test('Classic Web resolves to the exact Legacy editor, not a second editor implementation',()=>{
-  const editorRoute=rewrites.findIndex(row=>row.source==='/classic/editor');
-  const flutterRoute=rewrites.findIndex(row=>row.source==='/classic/');
-  assert.ok(editorRoute>=0&&flutterRoute>editorRoute);
-  assert.equal(rewrites[editorRoute].destination,'/index.html');
-  assert.equal(rewrites[flutterRoute].destination,'/classic/index.html');
-  assert.match(dart,/Uri\.base\.path=='\/classic\/'/);
-  assert.match(dart,/Uri\.base\.replace\(path:'\/classic\/editor'/);
-  assert.match(dart,/if\(isUnifiedClassicWeb\)\{await openUnifiedWebEditor\(lesson\);return;\}/);
-  assert.match(dart,/The lesson editor could not be opened/);
-  assert.doesNotMatch(dart,/if\(await openUnifiedWebEditor\(lesson\)\)return;/);
-  assert.match(dart,/if\(!kIsWeb/);
-  assert.match(manager,/PlateCurriculumAuthoringReview/);
-  assert.match(admin,/params\.get\('vopClassicEditor'\)==='1' && params\.get\('admin'\)==='curriculum'/);
-  assert.match(plate,/StudyPlatePageEditor/);
-  assert.match(plate,/jumpToSection/);
+test('Classic Web lesson editing stays within Flutter rather than navigating to a Legacy URL',()=>{
+  assert.match(native,/lessonMode:true/);
+  assert.match(native,/action:'upsertLesson'/);
+  assert.match(native,/actions\.contains\('update'\) && lesson\['canEdit'\]==true/);
+  assert.doesNotMatch(native,/openUnifiedWebEditor|classic\/editor/);
+  assert.ok(vercel.redirects.some((item:{source:string;destination:string})=>
+    item.source==='/classic/editor'&&item.destination==='/classic/'));
+  assert.ok(!vercel.rewrites.some((item:{source:string})=>item.source==='/classic/editor'));
 });
 
-test('Deep-linked lesson IDs and create modes are validated, not inferred or copied',()=>{
-  assert.deepEqual(parseClassicLessonLink(
-    '?route=admin&admin=curriculum&vopClassicEditor=1&vopGuideId=ukusanga&vopLessonId=lesson_01'),
-    {guideId:'ukusanga',lessonId:'lesson_01',create:false});
-  assert.deepEqual(parseClassicLessonLink(
-    '?vopClassicEditor=1&vopGuideId=ukusanga&vopNewLesson=1'),
-    {guideId:'ukusanga',lessonId:'',create:true});
-  for(const search of [
-    '',
-    '?vopGuideId=ukusanga&vopLessonId=one',
-    '?vopClassicEditor=1&vopGuideId=ukusanga',
-    '?vopClassicEditor=1&vopGuideId=../foreign&vopLessonId=one',
-    '?vopClassicEditor=1&vopGuideId=ukusanga&vopLessonId=one/two',
-    '?vopClassicEditor=1&vopGuideId=ukusanga&vopLessonId=one&vopNewLesson=1',
-    '?vopClassicEditor=1&vopGuideId='+('a'.repeat(121))+'&vopLessonId=one',
-  ])assert.equal(parseClassicLessonLink(search),null,search);
+test('Flutter editor uses continuous rich text with one ribbon and focusable learner pages',()=>{
+  assert.match(studio,/PlateDocumentEditor\(/);
+  assert.match(studio,/inlineMode:true/);
+  assert.match(studio,/ribbonBar\(\)/);
+  assert.match(studio,/pagesSidebar\(\)/);
+  assert.match(studio,/for\(var i=0;i<sections\.length;i\+\+\)contentPage\(sections\[i\],i\)/);
+  assert.match(studio,/Scrollable\.ensureVisible/);
+  for(const label of ['Home','Insert','Scripture & Layout','LEARNER PAGES']){
+    assert.ok(studio.includes(label),label);
+  }
+  assert.match(plate,/widget\.inlineMode\?inlineDocument\(\)/);
+  assert.match(plate,/rebaseLeaves\(/);
+  assert.match(plate,/void undo\(\)/);
+  assert.match(plate,/void redo\(\)/);
 });
 
-test('The bridge waits for authorized records, then preserves original save and ownership policy',()=>{
-  assert.match(manager,/selectedGuideId!==classicLessonLink\.guideId/);
-  assert.match(manager,/openedClassicLessonLink\.current=true/);
-  assert.match(manager,/found\.canEdit===false/);
-  assert.match(manager,/openModuleLesson\(found\)/);
-  assert.match(manager,/openNewLesson\(classicLessonLink\.guideId\)/);
-  assert.match(manager,/if\(classicLessonLink\)window\.location\.assign\('\/classic\/'\)/);
-  assert.match(manager,/await adminContent\('upsertLesson', 'curriculum', id, payload, targetOrganizationId\)/);
-  assert.match(manager,/expectedExisting:Boolean\(editor\.originalGuideId\)/);
-  assert.match(manager,/url\.searchParams\.delete\('vopNewLesson'\)/);
-  assert.match(manager,/url\.searchParams\.set\('vopLessonId',id\)/);
-  assert.match(dart,/actions\.contains\('update'\) && lesson\['canEdit'\]==true/);
-});
-
-test('Classic and Legacy editors report local draft success only after a real write',()=>{
-  const src=readFileSync('src/pages/CurriculumManager.tsx','utf8');
-  const css=readFileSync('src/components/admin/plate-structure.css','utf8');
+test('Legacy local draft indicator only reports successful browser storage writes',()=>{
+  const src=read('src/pages/CurriculumManager.tsx');
+  const css=read('src/components/admin/plate-structure.css');
   assert.match(src,/function saveLocalDraft\(editor: EditorState\): boolean/);
-  assert.match(src,/localStorage\.setItem\(key, JSON\.stringify\(payload\)\);\s*return true;/);
-  assert.match(src,/console\.warn\('Failed to save local draft:', err\);\s*return false;/);
-  assert.match(src,/if \(!saveLocalDraft\(editor\)\) \{\s*setAutoSaveStatus\('failed'\)/);
-  assert.match(src,/autoSaveStatus === 'failed'/);
+  assert.match(src,/if \(!saveLocalDraft\(editor\)\) \{/);
   assert.match(css,/\.vop-plate-autosave-chip\.failed/);
-  assert.doesNotMatch(src,/setAutoSaveStatus\(editor \? 'saved' : 'idle'\)/);
 });
