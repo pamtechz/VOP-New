@@ -45,21 +45,31 @@ class _CurriculumLessonEditorState extends State<CurriculumLessonEditorScreen>{
   void reload(){future=widget.api.adminContent('curriculum',action:'listGuideLessons',payload:payload);}
   // Classic Web uses the actual Legacy Plate editor on the unified domain.
   // Android and standalone Flutter development retain the native editor.
-  Future<bool> openUnifiedWebEditor(Map<String,dynamic>? lesson) async {
-    if(!kIsWeb || !(Uri.base.path=='/classic/' ||
-        Uri.base.path.startsWith('/classic/')))return false;
+  bool get isUnifiedClassicWeb => kIsWeb &&
+      (Uri.base.path=='/classic/' || Uri.base.path.startsWith('/classic/'));
+  Future<void> openUnifiedWebEditor(Map<String,dynamic>? lesson) async {
     final guideId=(widget.guide['id']??'').toString();
     final lessonId=(lesson?['id']??'').toString();
     final safe=RegExp(r'^[a-zA-Z0-9_-]{1,120}$');
-    if(!safe.hasMatch(guideId) || (lesson!=null&&!safe.hasMatch(lessonId)))
-      return false;
+    if(!safe.hasMatch(guideId) || (lesson!=null&&!safe.hasMatch(lessonId))){
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content:Text('Cannot open this lesson editor: invalid guide or lesson ID.')));
+      return;
+    }
     final url=Uri.base.replace(path:'/classic/editor',fragment:'',queryParameters:{
       'route':'admin','admin':'curriculum','vopClassicEditor':'1',
       'vopGuideId':guideId,
       if(lesson!=null)'vopLessonId':lessonId,
       if(lesson==null)'vopNewLesson':'1',
     });
-    return launchUrl(url,webOnlyWindowName:'_self');
+    try{
+      final opened=await launchUrl(url,webOnlyWindowName:'_self');
+      if(!opened&&mounted)ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content:Text('The lesson editor could not be opened. Please try again.')));
+    }catch(_){
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content:Text('The lesson editor could not be opened. Please try again.')));
+    }
   }
   List<Map<String,dynamic>> legacyDocument(dynamic blocks)=>recordRows(blocks).map((block){
     final type={'heading':'h2','quote':'blockquote','image':'img','video':'video','audio':'audio'}[block['type']]??'p';
@@ -72,7 +82,8 @@ class _CurriculumLessonEditorState extends State<CurriculumLessonEditorScreen>{
     if(lesson?['type']=='Test'){
       await Navigator.push(context,MaterialPageRoute<void>(builder:(_)=>WorkspaceRecordsScreen(api:widget.api,collection:'quizzes',organizationId:widget.guide['organizationId']?.toString())));return;
     }
-    if(await openUnifiedWebEditor(lesson))return;
+    // Never fall back to the different native block-card editor on Classic Web.
+    if(isUnifiedClassicWeb){await openUnifiedWebEditor(lesson);return;}
     final initial={...?lesson,'guideId':widget.guide['id'],'language':widget.guide['language'],'type':'Lesson'};
     if(initial['chapters'] is List){
       initial['chapters']=recordRows(initial['chapters']).map((chapter)=>{...chapter,'sections':recordRows(chapter['sections']).map((section)=>{
