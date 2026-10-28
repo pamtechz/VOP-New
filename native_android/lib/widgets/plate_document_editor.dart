@@ -140,11 +140,49 @@ class PlateDocumentEditorState extends State<PlateDocumentEditor>{
     node['type']=type;
     changed();
   }
+  bool patchSelectedLeaves(void Function(Map<String,dynamic>) patch) {
+    if(!widget.inlineMode||nodes.isEmpty)return false;
+    final index=activeBlockIndex.clamp(0,nodes.length-1).toInt();
+    final node=nodes[index];
+    final leaves=plateRows(node['children']);
+    if(leaves.isEmpty||leaves.any((leaf)=>leaf['text'] is! String))return false;
+    final key=(node['id']??index).toString();
+    final selection=inlineControllers[key]?.selection;
+    if(selection==null||!selection.isValid||selection.isCollapsed)return false;
+    final start=selection.start,end=selection.end;
+    final total=leaves.map((leaf)=>(leaf['text'] as String).length)
+      .fold<int>(0,(sum,length)=>sum+length);
+    if(start<0||end>total)return false;
+    final output=<Map<String,dynamic>>[];
+    var offset=0;
+    for(final leaf in leaves){
+      final raw=leaf['text'] as String;
+      final begin=offset,finish=offset+raw.length;
+      final a=(start-begin).clamp(0,raw.length).toInt();
+      final b=(end-begin).clamp(0,raw.length).toInt();
+      if(a>=b){
+        output.add({...leaf});
+      }else{
+        if(a>0)output.add({...leaf,'text':raw.substring(0,a)});
+        final selected={...leaf,'text':raw.substring(a,b)};
+        patch(selected);
+        output.add(selected);
+        if(b<raw.length)output.add({...leaf,'text':raw.substring(b)});
+      }
+      offset=finish;
+    }
+    node['children']=output;
+    changed();
+    return true;
+  }
   void markActiveBlock(String mark){
     if(nodes.isEmpty)return;
     final index=activeBlockIndex.clamp(0,nodes.length-1).toInt();
     final node=nodes[index];
     if(!['p','h1','h2','h3','blockquote'].contains(node['type']))return;
+    if(patchSelectedLeaves((leaf){
+      if(leaf[mark]==true)leaf.remove(mark);else leaf[mark]=true;
+    }))return;
     void toggle(dynamic item,bool state){
       if(item is! Map)return;
       if(item['text'] is String){
@@ -170,6 +208,7 @@ class PlateDocumentEditorState extends State<PlateDocumentEditor>{
   /// existing Plate leaf structure rather than flattening it into plain text.
   void forActiveLeaf(void Function(Map<String,dynamic>) patch) {
     if(nodes.isEmpty)return;
+    if(patchSelectedLeaves(patch))return;
     final node=nodes[activeBlockIndex.clamp(0,nodes.length-1).toInt()];
     void visit(dynamic value){
       if(value is! Map)return;
