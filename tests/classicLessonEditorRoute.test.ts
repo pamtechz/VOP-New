@@ -40,6 +40,13 @@ test('Classic Web renders native Flutter layout with one ribbon and focusable le
   assert.match(plate,/rebaseLeaves\(/);
   assert.match(plate,/setActiveFontSize/);
   assert.match(plate,/setActiveAlignment/);
+  assert.match(plate,/patchSelectedLeaves/);
+  assert.match(plate,/class PlateMarkedTextController/);
+  assert.match(plate,/copySelection\(\)/);
+  assert.match(plate,/pasteClipboard\(\)/);
+  assert.match(plate,/cutSelection\(\)/);
+  assert.match(classic,/ribbonIcon\(Icons.content_paste, 'Paste'/);
+
   assert.match(plate,/void undo\(\)/);
   assert.match(plate,/void redo\(\)/);
   assert.doesNotMatch(classic,/launchUrl|webOnlyWindowName/);
