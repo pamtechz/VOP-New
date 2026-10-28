@@ -58,3 +58,15 @@ test('The bridge waits for authorized records, then preserves original save and 
   assert.match(manager,/url\.searchParams\.set\('vopLessonId',id\)/);
   assert.match(dart,/actions\.contains\('update'\) && lesson\['canEdit'\]==true/);
 });
+
+test('Classic and Legacy editors report local draft success only after a real write',()=>{
+  const src=readFileSync('src/pages/CurriculumManager.tsx','utf8');
+  const css=readFileSync('src/components/admin/plate-structure.css','utf8');
+  assert.match(src,/function saveLocalDraft\(editor: EditorState\): boolean/);
+  assert.match(src,/localStorage\.setItem\(key, JSON\.stringify\(payload\)\);\s*return true;/);
+  assert.match(src,/console\.warn\('Failed to save local draft:', err\);\s*return false;/);
+  assert.match(src,/if \(!saveLocalDraft\(editor\)\) \{\s*setAutoSaveStatus\('failed'\)/);
+  assert.match(src,/autoSaveStatus === 'failed'/);
+  assert.match(css,/\.vop-plate-autosave-chip\.failed/);
+  assert.doesNotMatch(src,/setAutoSaveStatus\(editor \? 'saved' : 'idle'\)/);
+});
