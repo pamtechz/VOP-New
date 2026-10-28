@@ -29,6 +29,10 @@
       "destination": "/api/payments?__vopPaymentRoute=:route*"
     },
     {
+      "source": "/classic/editor",
+      "destination": "/index.html"
+    },
+    {
       "source": "/classic/",
       "destination": "/classic/index.html"
     },
