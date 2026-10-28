@@ -53,7 +53,7 @@ class _CurriculumLessonEditorState extends State<CurriculumLessonEditorScreen>{
     final safe=RegExp(r'^[a-zA-Z0-9_-]{1,120}$');
     if(!safe.hasMatch(guideId) || (lesson!=null&&!safe.hasMatch(lessonId)))
       return false;
-    final url=Uri.base.replace(path:'/',fragment:'',queryParameters:{
+    final url=Uri.base.replace(path:'/classic/editor',fragment:'',queryParameters:{
       'route':'admin','admin':'curriculum','vopClassicEditor':'1',
       'vopGuideId':guideId,
       if(lesson!=null)'vopLessonId':lessonId,
