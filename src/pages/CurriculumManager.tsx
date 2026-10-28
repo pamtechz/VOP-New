@@ -14,7 +14,6 @@ import ProgramManager from './ProgramManager';
 import QuizLibrary from './QuizLibrary';
 import SharedCurriculumPanel from '../components/admin/SharedCurriculumPanel';
 import { getTranslation } from '../services/i18n';
-import {parseClassicLessonLink, type ClassicLessonLink} from '../services/classicLessonLink';
 import { MediaPlayer } from '../components/media/MediaPlayer';
 import { resolveMediaSource } from '../../shared/mediaSources';
 import { normalizeCurriculumStructure, curriculumPages, type CurriculumChapter } from '../../shared/curriculumStructure';
@@ -39,12 +38,6 @@ type Props = {
 };
 
 const tx = (key: string, fallback: string) => getTranslation(key, fallback);
-
-// Classic Web reuses the canonical production editor; authenticated permission
-// checks in the portal and curriculum API still govern access to the lesson.
-function readClassicLessonLink(): ClassicLessonLink|null {
-  return typeof window==='undefined'?null:parseClassicLessonLink(window.location.search);
-}
 
 const COLLECTIONS: Record<'paths' | 'topics' | 'seasons', string> = {
   paths: 'learningPaths',
@@ -459,11 +452,9 @@ function LearnerPreview({ editor, guideTitle, onClose }: { editor: EditorState; 
 }
 
 export default function CurriculumManager({ languages, currentUser, initialTab = 'lessons', onTabChange, onOpenSettings }: Props) {
-  const classicLessonLink=useMemo(readClassicLessonLink,[]);
-  const openedClassicLessonLink=useRef(false);
-  const [tab, setTab] = useState<CurriculumStudioTab>(classicLessonLink?'lessons':initialTab);
+  const [tab, setTab] = useState<CurriculumStudioTab>(initialTab);
   const [guides, setGuides] = useState<DiscoverGuide[]>([]);
-  const [selectedGuideId, setSelectedGuideId] = useState(classicLessonLink?.guideId||'');
+  const [selectedGuideId, setSelectedGuideId] = useState('');
   const [moduleLessons, setModuleLessons] = useState<RecordItem[]>([]);
   const [quizPlacement, setQuizPlacement] = useState<{guideId:string;lessonId?:string;anchorType?:'chapter'|'section'|'block';anchorId?:string;kind?:'final_exam'|'practice'}|null>(null);
   const [guideRecords, setGuideRecords] = useState<RecordItem[]>([]);
@@ -547,7 +538,6 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
     setRecoverableDraft(null);
     setAutoSaveStatus('idle');
     savedEditorSignature.current='';setEditorDirty(false);setEditor(null);setRequestedSectionId('');
-    if(classicLessonLink)window.location.assign('/classic/');
   };
 
   const restoreLocalDraft = () => {
@@ -817,10 +807,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
   };
 
   useEffect(() => { void load(); }, [tab, scopeOrganizationId, selectedGuideId]);
-  useEffect(() => {
-    setSelectedGuideId(classicLessonLink?.guideId||'');
-    setModuleLessons([]);setProgramContext(null);setRequestedSectionId('');
-  }, [scopeOrganizationId]);
+  useEffect(() => { setSelectedGuideId(''); setModuleLessons([]); setProgramContext(null); setRequestedSectionId(''); }, [scopeOrganizationId]);
 
   const guideCount = new Set(guideRecords.map(item => String(item.discoverNumber ?? '') + '|' + valueText(item.title).trim().toLowerCase())).size;
   const lessonCount = lessonRows.length;
@@ -904,32 +891,6 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
     };
     openLesson(row,sectionId);
   };
-
-  // Wait for the authorized guide/lesson catalogue to finish loading before
-  // selecting the requested editor. The same open/save logic is used by the
-  // Legacy Curriculum Studio, so no copied lesson or second permission model.
-  useEffect(()=>{
-    if(!classicLessonLink || openedClassicLessonLink.current || loading ||
-      selectedGuideId!==classicLessonLink.guideId)return;
-    openedClassicLessonLink.current=true;
-    if(classicLessonLink.create){
-      const guide=editableGuides.find(item=>String(item.id)===classicLessonLink.guideId);
-      if(!guide || guide.canEdit===false){
-        setError('You cannot create a lesson in this guide.');return;
-      }
-      openNewLesson(classicLessonLink.guideId);
-      return;
-    }
-    const found=moduleLessons.find(item=>
-      String(item.id||item.lessonId)===classicLessonLink.lessonId &&
-      item.type!=='Test');
-    if(!found){setError('The requested lesson is not available in this guide.');return;}
-    if(found.canEdit===false){
-      setError('Only the owning organization or VOP Super Admin can edit this lesson.');
-      return;
-    }
-    openModuleLesson(found);
-  },[classicLessonLink,loading,selectedGuideId,moduleLessons,editableGuides]);
 
   const moveBlock = (index: number, direction: -1 | 1) => {
     if (!editor) return;
@@ -1070,14 +1031,6 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
       // A second request could fail after a successful first write and make
       // retrying look like a new/duplicate lesson.
       await adminContent('upsertLesson', 'curriculum', id, payload, targetOrganizationId);
-      // A newly created Classic lesson must refresh as this same saved record,
-      // never as another blank lesson (or a second document on retry).
-      if(classicLessonLink?.create){
-        const url=new URL(window.location.href);
-        url.searchParams.delete('vopNewLesson');
-        url.searchParams.set('vopLessonId',id);
-        window.history.replaceState(window.history.state,'',url.toString());
-      }
       await load();
       const savedEditor={ ...editor, id, originalGuideId:editor.guideId, title: resolvedTitle, guideTitle: valueText(guide.title) || editor.guideTitle, published: publish || editor.published };
       savedEditorSignature.current=JSON.stringify(savedEditor);
