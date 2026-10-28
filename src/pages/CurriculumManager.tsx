@@ -117,7 +117,7 @@ type LocalLessonDraft = {
 const getLocalDraftKey = (guideId: string, lessonId: string) =>
   `vop_local_lesson_draft_${lessonId || 'new'}_${guideId || 'default'}`;
 
-function saveLocalDraft(editor: EditorState) {
+function saveLocalDraft(editor: EditorState): boolean {
   try {
     const key = getLocalDraftKey(editor.guideId, editor.id);
     const payload: LocalLessonDraft = {
@@ -128,8 +128,12 @@ function saveLocalDraft(editor: EditorState) {
       editor,
     };
     localStorage.setItem(key, JSON.stringify(payload));
+    return true;
   } catch (err) {
+    // A large lesson can exceed browser storage limits. Never report success
+    // when the browser rejected the write; the author must save to the server.
     console.warn('Failed to save local draft:', err);
+    return false;
   }
 }
 
@@ -498,7 +502,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
   const [scopeOrganizationId, setScopeOrganizationId] = useState(currentUser?.role === 'super_admin' ? '' : String(currentUser?.organizationId || ''));
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deletingLessonId, setDeletingLessonId] = useState<string | null>(null);
-  const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'dirty'>('idle');
+  const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'dirty' | 'failed'>('idle');
   const [lastAutoSavedAt, setLastAutoSavedAt] = useState<Date | null>(null);
   const [recoverableDraft, setRecoverableDraft] = useState<LocalLessonDraft | null>(null);
 
@@ -515,11 +519,12 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
     setAutoSaveStatus('dirty');
     const timer = setTimeout(() => {
       setAutoSaveStatus('saving');
-      saveLocalDraft(editor);
+      if (!saveLocalDraft(editor)) {
+        setAutoSaveStatus('failed');
+        return;
+      }
       setLastAutoSavedAt(new Date());
-      setTimeout(() => {
-        setAutoSaveStatus('saved');
-      }, 400);
+      setAutoSaveStatus('saved');
     }, 1500);
     return () => clearTimeout(timer);
   }, [editor, editorDirty]);
@@ -1387,7 +1392,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
               setEditor(null);setTab('quizzes');onTabChange?.('quizzes');
             }}
             autoSaveChip={
-              <span className={`vop-plate-autosave-chip ${autoSaveStatus}`} title={lastAutoSavedAt ? `Last auto-saved locally at ${lastAutoSavedAt.toLocaleTimeString()}` : 'Auto-save draft active'}>
+              <span className={`vop-plate-autosave-chip ${autoSaveStatus}`} title={autoSaveStatus === 'failed' ? 'Browser storage is full or unavailable. Save your lesson to the server to protect it.' : lastAutoSavedAt ? `Last auto-saved locally at ${lastAutoSavedAt.toLocaleTimeString()}` : 'Auto-save draft active'}>
                 {autoSaveStatus === 'saving' && (
                   <>
                     <LoaderCircle className="spin" size={13} />
@@ -1404,6 +1409,12 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
                   <>
                     <Save size={13} />
                     <span>{tx('admin.curriculum.unsaved_changes',"Unsaved changes")}</span>
+                  </>
+                )}
+                {autoSaveStatus === 'failed' && (
+                  <>
+                    <Save size={13} />
+                    <span>Local draft not saved — use Save draft</span>
                   </>
                 )}
                 {autoSaveStatus === 'idle' && (
