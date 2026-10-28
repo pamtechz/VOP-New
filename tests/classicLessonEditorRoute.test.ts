@@ -17,7 +17,9 @@ test('Classic Web resolves to the exact Legacy editor, not a second editor imple
   assert.equal(rewrites[flutterRoute].destination,'/classic/index.html');
   assert.match(dart,/Uri\.base\.path=='\/classic\/'/);
   assert.match(dart,/Uri\.base\.replace\(path:'\/classic\/editor'/);
-  assert.match(dart,/if\(await openUnifiedWebEditor\(lesson\)\)return;/);
+  assert.match(dart,/if\(isUnifiedClassicWeb\)\{await openUnifiedWebEditor\(lesson\);return;\}/);
+  assert.match(dart,/The lesson editor could not be opened/);
+  assert.doesNotMatch(dart,/if\(await openUnifiedWebEditor\(lesson\)\)return;/);
   assert.match(dart,/if\(!kIsWeb/);
   assert.match(manager,/PlateCurriculumAuthoringReview/);
   assert.match(admin,/params\.get\('vopClassicEditor'\)==='1' && params\.get\('admin'\)==='curriculum'/);
