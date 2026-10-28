@@ -14,6 +14,7 @@ import ProgramManager from './ProgramManager';
 import QuizLibrary from './QuizLibrary';
 import SharedCurriculumPanel from '../components/admin/SharedCurriculumPanel';
 import { getTranslation } from '../services/i18n';
+import {parseClassicLessonLink, type ClassicLessonLink} from '../services/classicLessonLink';
 import { MediaPlayer } from '../components/media/MediaPlayer';
 import { resolveMediaSource } from '../../shared/mediaSources';
 import { normalizeCurriculumStructure, curriculumPages, type CurriculumChapter } from '../../shared/curriculumStructure';
@@ -39,21 +40,10 @@ type Props = {
 
 const tx = (key: string, fallback: string) => getTranslation(key, fallback);
 
-// Classic Web opens this very same production Plate authoring screen on the
-// unified origin. Never duplicate the editor or accept an arbitrary redirect.
-// The IDs only select records; authenticated Firestore/API permissions apply.
-type ClassicLessonLink = {guideId:string; lessonId:string; create:boolean};
+// Classic Web reuses the canonical production editor; authenticated permission
+// checks in the portal and curriculum API still govern access to the lesson.
 function readClassicLessonLink(): ClassicLessonLink|null {
-  if(typeof window==='undefined')return null;
-  const params=new URLSearchParams(window.location.search);
-  if(params.get('vopClassicEditor')!=='1')return null;
-  const guideId=params.get('vopGuideId')||'';
-  const lessonId=params.get('vopLessonId')||'';
-  const create=params.get('vopNewLesson')==='1';
-  const safe=/^[A-Za-z0-9_-]{1,120}$/;
-  if(!safe.test(guideId)||(!create&&!safe.test(lessonId))||
-      (create&&lessonId.length>0))return null;
-  return {guideId,lessonId,create};
+  return typeof window==='undefined'?null:parseClassicLessonLink(window.location.search);
 }
 
 const COLLECTIONS: Record<'paths' | 'topics' | 'seasons', string> = {
