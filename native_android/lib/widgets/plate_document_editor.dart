@@ -2,6 +2,44 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'plate_page.dart';
 
+/// Flutter text controller that displays each canonical Plate text run with
+/// its own marks. Editing uses rebaseLeaves, so adjacent styled runs survive.
+class PlateMarkedTextController extends TextEditingController {
+  PlateMarkedTextController(List<Map<String,dynamic>> leaves)
+      : marks=leaves, super(text:leaves.map((v)=>(v['text']??'').toString()).join());
+  List<Map<String,dynamic>> marks;
+  void syncRuns(List<Map<String,dynamic>> updated) {
+    final next=updated.map((v)=>(v['text']??'').toString()).join();
+    marks=updated;
+    if(text!=next){
+      value=TextEditingValue(text:next,
+        selection:TextSelection.collapsed(offset:next.length));
+    }else{
+      notifyListeners();
+    }
+  }
+  @override TextSpan buildTextSpan({
+    required BuildContext context, TextStyle? style, required bool withComposing,
+  }) {
+    return TextSpan(style:style,children:[
+      for(final leaf in marks) TextSpan(
+        text:(leaf['text']??'').toString(),
+        style:TextStyle(
+          fontWeight:leaf['bold']==true?FontWeight.bold:FontWeight.normal,
+          fontStyle:leaf['italic']==true?FontStyle.italic:FontStyle.normal,
+          decoration:TextDecoration.combine([
+            if(leaf['underline']==true)TextDecoration.underline,
+            if(leaf['strikethrough']==true)TextDecoration.lineThrough,
+          ]),
+          color:plateColor(leaf['color']),
+          fontFamily:leaf['fontFamily'] is String?leaf['fontFamily'] as String:null,
+          fontSize:double.tryParse((leaf['fontSize']??'').toString().replaceAll('px','')),
+        ),
+      ),
+    ]);
+  }
+}
+
 class PlateDocumentEditor extends StatefulWidget {
   const PlateDocumentEditor({required this.document,required this.onChanged,this.inlineMode=false,super.key});
   final List<Map<String,dynamic>> document;
@@ -11,6 +49,19 @@ class PlateDocumentEditor extends StatefulWidget {
 }
 class PlateDocumentEditorState extends State<PlateDocumentEditor>{
   int activeBlockIndex=0;
+  final Map<String,PlateMarkedTextController> inlineControllers={};
+  @override void dispose(){
+    for(final controller in inlineControllers.values)controller.dispose();
+    super.dispose();
+  }
+  PlateMarkedTextController controllerFor(Map<String,dynamic> node,int index,
+      List<Map<String,dynamic>> children) {
+    final key=(node['id']??index).toString();
+    final controller=inlineControllers.putIfAbsent(key,
+      ()=>PlateMarkedTextController(children));
+    controller.syncRuns(children);
+    return controller;
+  }
   late List<Map<String,dynamic>> nodes;
   bool preview=false;
   int revision=0;
@@ -211,6 +262,7 @@ class PlateDocumentEditorState extends State<PlateDocumentEditor>{
         ]));
     }
     final primary=children.isEmpty?<String,dynamic>{'text':''}:children.first;
+    final controller=controllerFor(node,index,children);
     final typeSize=type=='h1'?26.0:type=='h2'?22.0:type=='h3'?19.0:16.0;
     final fontSize=double.tryParse((primary['fontSize']??'').toString().replaceAll('px',''))??typeSize;
     final color=plateColor(primary['color'])??const Color(0xFF183B65);
@@ -221,7 +273,7 @@ class PlateDocumentEditorState extends State<PlateDocumentEditor>{
     return Padding(padding:EdgeInsets.only(left:((node['indent'] is num)?(node['indent'] as num).toDouble():0)*20,
       bottom:type=='p'?12:18),child:TextFormField(
         key:ValueKey('inline.'+(node['id']??index).toString()+'.'+revision.toString()),
-        initialValue:children.map((child)=>(child['text']??'').toString()).join(),
+        controller:controller,
         minLines:1,maxLines:null,
         style:TextStyle(color:color,fontSize:fontSize,
           fontWeight:primary['bold']==true||type.startsWith('h')?FontWeight.bold:null,
@@ -236,7 +288,9 @@ class PlateDocumentEditorState extends State<PlateDocumentEditor>{
         onTap:()=>activeBlockIndex=index,
         onChanged:(next){
           activeBlockIndex=index;
-          node['children']=rebaseLeaves(plateRows(node['children']),next);
+          final updated=rebaseLeaves(plateRows(node['children']),next);
+          node['children']=updated;
+          controller.syncRuns(updated);
           emit();
         },
       ));
