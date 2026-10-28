@@ -6,6 +6,7 @@ import {parseClassicLessonLink} from '../src/services/classicLessonLink.ts';
 const dart=readFileSync('native_android/lib/screens/curriculum_lesson_editor_screen.dart','utf8');
 const manager=readFileSync('src/pages/CurriculumManager.tsx','utf8');
 const plate=readFileSync('src/components/admin/PlateCurriculumAuthoringReview.tsx','utf8');
+const admin=readFileSync('src/pages/AdminPage.tsx','utf8');
 const rewrites=JSON.parse(readFileSync('vercel.json','utf8')).rewrites as Array<{source:string;destination:string}>;
 
 test('Classic Web resolves to the exact Legacy editor, not a second editor implementation',()=>{
@@ -19,6 +20,7 @@ test('Classic Web resolves to the exact Legacy editor, not a second editor imple
   assert.match(dart,/if\(await openUnifiedWebEditor\(lesson\)\)return;/);
   assert.match(dart,/if\(!kIsWeb/);
   assert.match(manager,/PlateCurriculumAuthoringReview/);
+  assert.match(admin,/params\.get\('vopClassicEditor'\)==='1' && params\.get\('admin'\)==='curriculum'/);
   assert.match(plate,/StudyPlatePageEditor/);
   assert.match(plate,/jumpToSection/);
 });
