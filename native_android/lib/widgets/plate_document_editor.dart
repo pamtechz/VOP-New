@@ -59,7 +59,11 @@ class PlateDocumentEditorState extends State<PlateDocumentEditor>{
     final key=(node['id']??index).toString();
     final controller=inlineControllers.putIfAbsent(key,
       ()=>PlateMarkedTextController(children));
-    controller.syncRuns(children);
+    if(jsonEncode(controller.marks)!=jsonEncode(children)){
+      WidgetsBinding.instance.addPostFrameCallback((_){
+        if(mounted)controller.syncRuns(children);
+      });
+    }
     return controller;
   }
   late List<Map<String,dynamic>> nodes;
