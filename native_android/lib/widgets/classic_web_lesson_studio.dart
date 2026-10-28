@@ -584,7 +584,7 @@ class _ClassicWebLessonStudioState extends State<ClassicWebLessonStudio> {
       final width = limits.maxWidth >= 1500 ? 385.0 : 225.0;
       return Container(color: pale, padding: EdgeInsets.all(veryCompact ? 8 : 15),
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          header(compact),
+          header(limits.maxWidth < 1450),
           const SizedBox(height: 12),
           if (veryCompact) mobilePageList(),
           if (veryCompact) const SizedBox(height: 8),
