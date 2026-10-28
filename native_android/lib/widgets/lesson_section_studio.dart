@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'classic_web_lesson_studio.dart';
 import 'plate_document_editor.dart';
 import 'plate_page.dart';
 
@@ -465,6 +467,14 @@ class _LessonSectionStudioState extends State<LessonSectionStudio>{
     );
   }
   @override Widget build(BuildContext context){
+    if(kIsWeb) {
+      return ClassicWebLessonStudio(
+        value:widget.value, onChanged:widget.onChanged,
+        onSave:widget.onSave, onQuiz:widget.onQuiz,
+        onAdvanced:widget.onAdvanced, saving:widget.saving,
+        dirty:widget.dirty, guideTitle:widget.guideTitle,
+      );
+    }
     final currentChapters=chapters;
     return Theme(data:ThemeData.light(useMaterial3:true).copyWith(
       colorScheme:ColorScheme.fromSeed(seedColor:blue),
