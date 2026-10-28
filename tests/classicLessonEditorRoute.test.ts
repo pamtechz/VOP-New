@@ -50,5 +50,7 @@ test('The bridge waits for authorized records, then preserves original save and 
   assert.match(manager,/if\(classicLessonLink\)window\.location\.assign\('\/classic\/'\)/);
   assert.match(manager,/await adminContent\('upsertLesson', 'curriculum', id, payload, targetOrganizationId\)/);
   assert.match(manager,/expectedExisting:Boolean\(editor\.originalGuideId\)/);
+  assert.match(manager,/url\.searchParams\.delete\('vopNewLesson'\)/);
+  assert.match(manager,/url\.searchParams\.set\('vopLessonId',id\)/);
   assert.match(dart,/actions\.contains\('update'\) && lesson\['canEdit'\]==true/);
 });
