@@ -331,7 +331,7 @@ class _LessonSectionStudioState extends State<LessonSectionStudio>{
               borderRadius:BorderRadius.circular(6)),
             child:Text('${index+1}',style:const TextStyle(color:Colors.white,fontWeight:FontWeight.bold))),
           const SizedBox(width:8),
-          Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+          Expanded(child:Column(mainAxisSize:MainAxisSize.min,crossAxisAlignment:CrossAxisAlignment.start,children:[
             Text(page['title']?.toString()??'Section',
               maxLines:1,overflow:TextOverflow.ellipsis,
               style:const TextStyle(fontWeight:FontWeight.bold,fontSize:12,color:navy)),
@@ -394,18 +394,22 @@ class _LessonSectionStudioState extends State<LessonSectionStudio>{
         child:Row(children:[
           const Icon(Icons.menu_book_outlined,size:18,color:navy),
           const SizedBox(width:8),
-          const Text('Lesson Pages',style:TextStyle(fontWeight:FontWeight.bold,color:navy)),
-          Text(' (${sections.length} sections)',
-            style:const TextStyle(color:Color(0xFF6982A1))),
-          const Spacer(),Icon(pagesExpanded?Icons.expand_less:Icons.expand_more),
+          Expanded(child:Wrap(spacing:4,children:[
+            const Text('Lesson Pages',style:TextStyle(fontWeight:FontWeight.bold,color:navy)),
+            Text('(${sections.length} sections)',
+              style:const TextStyle(color:Color(0xFF6982A1))),
+          ])),
+          Icon(pagesExpanded?Icons.expand_less:Icons.expand_more),
         ])),
       if(pagesExpanded)...[
         const SizedBox(height:8),
-        SizedBox(height:66,child:ListView.separated(
-          scrollDirection:Axis.horizontal,
-          itemCount:sections.length,
-          separatorBuilder:(_,__)=>const SizedBox(width:7),
-          itemBuilder:(_,index)=>pageButton(sections[index],index,compact:true))),
+        SingleChildScrollView(scrollDirection:Axis.horizontal,
+          child:Row(children:[
+            for(var index=0;index<sections.length;index++)...[
+              if(index>0)const SizedBox(width:7),
+              pageButton(sections[index],index,compact:true),
+            ],
+          ])),
       ],
     ]),padding:const EdgeInsets.all(10));
   }

@@ -41,15 +41,14 @@ void main() {
       // Verify both header and dismiss control remain within the viewport.
       expect(tester.getTopRight(dismiss).dx, lessThanOrEqualTo(width));
       expect(tester.getTopLeft(dismiss).dx, greaterThanOrEqualTo(0));
-      await Scrollable.ensureVisible(
-        tester.element(find.text('Back to Study')),
-        alignment: 0.5,
-        duration: const Duration(milliseconds: 160),
-      );
+      // Widget tests use a fake clock. Reveal synchronously before pumping;
+      // awaiting an animated scroll here prevents its frames from advancing.
+      await tester.ensureVisible(find.text('Back to Study'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Back to Study'));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
+      expect(find.byTooltip('Close Scripture details'), findsNothing);
     });
   }
 
@@ -79,14 +78,11 @@ void main() {
     await tester.drag(find.byType(SingleChildScrollView).last, const Offset(0, -2000));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
-    await Scrollable.ensureVisible(
-      tester.element(close),
-      alignment: 0.45,
-      duration: const Duration(milliseconds: 160),
-    );
+    await tester.ensureVisible(close);
     await tester.pumpAndSettle();
     await tester.tap(close);
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
+    expect(find.byTooltip('Close Scripture details'), findsNothing);
   });
 }
