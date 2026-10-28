@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import '../core/vop_api.dart';
 import '../widgets/vop_ui.dart';
 import '../widgets/vop_desktop_layout.dart';
@@ -208,7 +209,8 @@ class _RecordEditorState extends State<RecordEditor>{
       final discard=await showDialog<bool>(context:context,builder:(ctx)=>AlertDialog(title:const Text('Discard changes?'),
         actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('Keep editing')),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('Discard'))]));
       if(discard==true&&mounted){setState(()=>dirty=false);WidgetsBinding.instance.addPostFrameCallback((_){if(mounted)Navigator.pop(context);});}
-    },child:Scaffold(appBar:AppBar(title:Text(widget.title),actions:[
+    },child:Scaffold(appBar:widget.lessonMode&&kIsWeb&&lessonTab=='chapters'
+      ?null:AppBar(title:Text(widget.title),actions:[
       if(widget.lessonMode&&lessonTab!='chapters')
         TextButton(onPressed:()=>setState(()=>lessonTab='chapters'),
           child:const Text('Lesson editor')),
