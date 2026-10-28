@@ -513,7 +513,8 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
 
   useEffect(() => {
     if (!editor || !editorDirty) {
-      setAutoSaveStatus(editor ? 'saved' : 'idle');
+      // A database-loaded lesson is not necessarily stored in localStorage.
+      setAutoSaveStatus('idle');
       return;
     }
     setAutoSaveStatus('dirty');
