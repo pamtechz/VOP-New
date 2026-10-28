@@ -147,7 +147,13 @@ class _RecordEditorState extends State<RecordEditor>{
     saveInFlight=true;
     setState((){saving=true;error=null;});
     try{await widget.onSave(value);if(mounted){setState(()=>dirty=false);
-      WidgetsBinding.instance.addPostFrameCallback((_){if(mounted)Navigator.pop(context);});}}
+      if(kIsWeb&&widget.lessonMode){
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content:Text('Lesson saved successfully.')));
+      }else{
+        WidgetsBinding.instance.addPostFrameCallback((_){if(mounted)Navigator.pop(context);});
+      }
+    }}
     catch(e){if(mounted)setState(()=>error='$e');}
     finally{saveInFlight=false;if(mounted)setState(()=>saving=false);}
   }
