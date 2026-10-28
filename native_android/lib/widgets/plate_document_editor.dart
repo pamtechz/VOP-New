@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'plate_page.dart';
 
 /// Flutter text controller that displays each canonical Plate text run with
@@ -234,6 +235,62 @@ class PlateDocumentEditorState extends State<PlateDocumentEditor>{
     final old=(node['indent'] is num?(node['indent'] as num).toInt():0);
     node['indent']=(old+direction).clamp(0,8);
     changed();
+  }
+  Map<String,dynamic>? get activeNode =>nodes.isEmpty?null:
+    nodes[activeBlockIndex.clamp(0,nodes.length-1).toInt()];
+  String get currentBlockText{
+    final node=activeNode;
+    return node==null?'':plainNode(node);
+  }
+  Future<void> copySelection()async{
+    final node=activeNode;
+    if(node==null)return;
+    final index=activeBlockIndex.clamp(0,nodes.length-1).toInt();
+    final controller=inlineControllers[(node['id']??index).toString()];
+    final selection=controller?.selection;
+    final content=currentBlockText;
+    final text=selection!=null&&selection.isValid&&!selection.isCollapsed
+      ?content.substring(selection.start,selection.end):content;
+    await Clipboard.setData(ClipboardData(text:text));
+  }
+  void replaceSelection(String replacement){
+    final node=activeNode;
+    if(node==null)return;
+    final leaves=plateRows(node['children']);
+    if(leaves.any((leaf)=>leaf['text'] is! String))return;
+    final index=activeBlockIndex.clamp(0,nodes.length-1).toInt();
+    final controller=inlineControllers[(node['id']??index).toString()];
+    final content=leaves.map((leaf)=>(leaf['text']??'').toString()).join();
+    final selection=controller?.selection;
+    final start=selection!=null&&selection.isValid?selection.start:content.length;
+    final end=selection!=null&&selection.isValid?selection.end:content.length;
+    final next=content.replaceRange(start,end,replacement);
+    final updated=rebaseLeaves(leaves,next);
+    node['children']=updated;
+    final caret=start+replacement.length;
+    if(controller!=null){
+      controller.syncRuns(updated);
+      controller.selection=TextSelection.collapsed(offset:caret);
+    }
+    emit();
+  }
+  Future<void> pasteClipboard()async{
+    try{
+      final value=await Clipboard.getData(Clipboard.kTextPlain);
+      if(value?.text!=null)replaceSelection(value!.text!);
+    }catch(_){
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content:Text('Browser clipboard access is unavailable.')));
+    }
+  }
+  Future<void> cutSelection()async{
+    final node=activeNode;
+    if(node==null)return;
+    final index=activeBlockIndex.clamp(0,nodes.length-1).toInt();
+    final selection=inlineControllers[(node['id']??index).toString()]?.selection;
+    if(selection==null||!selection.isValid||selection.isCollapsed)return;
+    await copySelection();
+    replaceSelection('');
   }
   void duplicateActiveBlock(){
     if(nodes.length>=50||nodes.isEmpty)return;
