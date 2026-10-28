@@ -39,6 +39,23 @@ type Props = {
 
 const tx = (key: string, fallback: string) => getTranslation(key, fallback);
 
+// Classic Web opens this very same production Plate authoring screen on the
+// unified origin. Never duplicate the editor or accept an arbitrary redirect.
+// The IDs only select records; authenticated Firestore/API permissions apply.
+type ClassicLessonLink = {guideId:string; lessonId:string; create:boolean};
+function readClassicLessonLink(): ClassicLessonLink|null {
+  if(typeof window==='undefined')return null;
+  const params=new URLSearchParams(window.location.search);
+  if(params.get('vopClassicEditor')!=='1')return null;
+  const guideId=params.get('vopGuideId')||'';
+  const lessonId=params.get('vopLessonId')||'';
+  const create=params.get('vopNewLesson')==='1';
+  const safe=/^[A-Za-z0-9_-]{1,120}$/;
+  if(!safe.test(guideId)||(!create&&!safe.test(lessonId))||
+      (create&&lessonId.length>0))return null;
+  return {guideId,lessonId,create};
+}
+
 const COLLECTIONS: Record<'paths' | 'topics' | 'seasons', string> = {
   paths: 'learningPaths',
   topics: 'bibleTopics',
@@ -448,9 +465,11 @@ function LearnerPreview({ editor, guideTitle, onClose }: { editor: EditorState; 
 }
 
 export default function CurriculumManager({ languages, currentUser, initialTab = 'lessons', onTabChange, onOpenSettings }: Props) {
-  const [tab, setTab] = useState<CurriculumStudioTab>(initialTab);
+  const classicLessonLink=useMemo(readClassicLessonLink,[]);
+  const openedClassicLessonLink=useRef(false);
+  const [tab, setTab] = useState<CurriculumStudioTab>(classicLessonLink?'lessons':initialTab);
   const [guides, setGuides] = useState<DiscoverGuide[]>([]);
-  const [selectedGuideId, setSelectedGuideId] = useState('');
+  const [selectedGuideId, setSelectedGuideId] = useState(classicLessonLink?.guideId||'');
   const [moduleLessons, setModuleLessons] = useState<RecordItem[]>([]);
   const [quizPlacement, setQuizPlacement] = useState<{guideId:string;lessonId?:string;anchorType?:'chapter'|'section'|'block';anchorId?:string;kind?:'final_exam'|'practice'}|null>(null);
   const [guideRecords, setGuideRecords] = useState<RecordItem[]>([]);
@@ -532,6 +551,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
     setRecoverableDraft(null);
     setAutoSaveStatus('idle');
     savedEditorSignature.current='';setEditorDirty(false);setEditor(null);setRequestedSectionId('');
+    if(classicLessonLink)window.location.assign('/classic/');
   };
 
   const restoreLocalDraft = () => {
@@ -801,7 +821,10 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
   };
 
   useEffect(() => { void load(); }, [tab, scopeOrganizationId, selectedGuideId]);
-  useEffect(() => { setSelectedGuideId(''); setModuleLessons([]); setProgramContext(null); setRequestedSectionId(''); }, [scopeOrganizationId]);
+  useEffect(() => {
+    setSelectedGuideId(classicLessonLink?.guideId||'');
+    setModuleLessons([]);setProgramContext(null);setRequestedSectionId('');
+  }, [scopeOrganizationId]);
 
   const guideCount = new Set(guideRecords.map(item => String(item.discoverNumber ?? '') + '|' + valueText(item.title).trim().toLowerCase())).size;
   const lessonCount = lessonRows.length;
@@ -885,6 +908,32 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
     };
     openLesson(row,sectionId);
   };
+
+  // Wait for the authorized guide/lesson catalogue to finish loading before
+  // selecting the requested editor. The same open/save logic is used by the
+  // Legacy Curriculum Studio, so no copied lesson or second permission model.
+  useEffect(()=>{
+    if(!classicLessonLink || openedClassicLessonLink.current || loading ||
+      selectedGuideId!==classicLessonLink.guideId)return;
+    openedClassicLessonLink.current=true;
+    if(classicLessonLink.create){
+      const guide=editableGuides.find(item=>String(item.id)===classicLessonLink.guideId);
+      if(!guide || guide.canEdit===false){
+        setError('You cannot create a lesson in this guide.');return;
+      }
+      openNewLesson(classicLessonLink.guideId);
+      return;
+    }
+    const found=moduleLessons.find(item=>
+      String(item.id||item.lessonId)===classicLessonLink.lessonId &&
+      item.type!=='Test');
+    if(!found){setError('The requested lesson is not available in this guide.');return;}
+    if(found.canEdit===false){
+      setError('Only the owning organization or VOP Super Admin can edit this lesson.');
+      return;
+    }
+    openModuleLesson(found);
+  },[classicLessonLink,loading,selectedGuideId,moduleLessons,editableGuides]);
 
   const moveBlock = (index: number, direction: -1 | 1) => {
     if (!editor) return;
