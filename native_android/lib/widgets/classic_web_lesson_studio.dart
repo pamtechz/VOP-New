@@ -345,8 +345,9 @@ class _ClassicWebLessonStudioState extends State<ClassicWebLessonStudio> {
                   Row(children: [
                     ribbonIcon(Icons.undo, 'Undo', () => run((e) => e.undo())),
                     ribbonIcon(Icons.redo, 'Redo', () => run((e) => e.redo())),
-                    ribbonIcon(Icons.content_copy, 'Copy block', () => run((e) => e.duplicateActiveBlock())),
-                    ribbonIcon(Icons.content_paste, 'Insert paragraph', () => run((e) => e.insertBlock('p'))),
+                    ribbonIcon(Icons.content_cut, 'Cut', () => run((e) => e.cutSelection())),
+                    ribbonIcon(Icons.content_copy, 'Copy', () => run((e) => e.copySelection())),
+                    ribbonIcon(Icons.content_paste, 'Paste', () => run((e) => e.pasteClipboard())),
                   ]),
                   const Text('Clipboard', style: TextStyle(color: Color(0xFF8190A3), fontSize: 10)),
                 ]),
