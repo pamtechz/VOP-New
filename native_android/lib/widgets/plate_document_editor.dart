@@ -26,8 +26,8 @@ class PlateMarkedTextController extends TextEditingController {
       for(final leaf in marks) TextSpan(
         text:(leaf['text']??'').toString(),
         style:TextStyle(
-          fontWeight:leaf['bold']==true?FontWeight.bold:FontWeight.normal,
-          fontStyle:leaf['italic']==true?FontStyle.italic:FontStyle.normal,
+          fontWeight:leaf['bold']==true?FontWeight.bold:null,
+          fontStyle:leaf['italic']==true?FontStyle.italic:null,
           decoration:TextDecoration.combine([
             if(leaf['underline']==true)TextDecoration.underline,
             if(leaf['strikethrough']==true)TextDecoration.lineThrough,
