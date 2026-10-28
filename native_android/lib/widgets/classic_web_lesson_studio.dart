@@ -369,7 +369,7 @@ class _ClassicWebLessonStudioState extends State<ClassicWebLessonStudio> {
                         run((e) => e.setActiveFontFamily(v));}),
                     const SizedBox(width: 13),
                     DropdownButton<double>(value: fontSize, underline: const SizedBox.shrink(),
-                      items: [9.0, 10.0, 11.0, 12.0, 14.0, 16.0, 18.0, 24.0]
+                      items: (<double>{9.0, 10.0, 11.0, 12.0, 14.0, 16.0, 18.0, 24.0, fontSize}.toList()..sort())
                         .map((v) => DropdownMenuItem(value: v,
                           child: Text(v.toInt().toString() + ' pt',
                             style: const TextStyle(fontSize: 12)))).toList(),
