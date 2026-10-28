@@ -380,8 +380,12 @@ class _LessonSectionStudioState extends State<LessonSectionStudio>{
       const Text('LEARNER PAGES',style:TextStyle(fontSize:12,fontWeight:FontWeight.bold,color:Color(0xFF627D9B))),
       Text('${sections.length} sections',style:const TextStyle(color:navy,fontWeight:FontWeight.bold)),
       const SizedBox(height:9),
-      OutlinedButton.icon(onPressed:addSection,
-        icon:const Icon(Icons.add,size:17),label:const Text('Add section')),
+      Row(children:[
+        Expanded(child:Text('Sections are page boundaries inside the document—not separate block forms.',
+          style:TextStyle(fontSize:11,height:1.3,color:Color(0xFF6C85A3)))),
+        IconButton(tooltip:'Add learner page',onPressed:addSection,
+          icon:const Icon(Icons.add_box_outlined,color:blue,size:20)),
+      ]),
       const SizedBox(height:8),
       Expanded(child:ListView.separated(
         itemCount:sections.length,
@@ -447,7 +451,7 @@ class _LessonSectionStudioState extends State<LessonSectionStudio>{
               style:const TextStyle(color:Color(0xFF486D97),fontSize:12))),
         Padding(padding:const EdgeInsets.all(12),
           child:preview?PlatePageView(page:row):PlateDocumentEditor(
-            key:editorKey(sid),document:doc,
+            key:editorKey(sid),document:doc,inlineMode:true,
             onChanged:(next)=>setDocument(sid,next))),
       ]),
     );
@@ -487,17 +491,18 @@ class _LessonSectionStudioState extends State<LessonSectionStudio>{
             const SizedBox(height:8),
             if(mobile)mobilePages(),
             if(mobile)const SizedBox(height:7),
-            if(currentChapters.isNotEmpty)ribbonBar(),
-            if(currentChapters.isNotEmpty)const SizedBox(height:8),
             if(currentChapters.isEmpty)
               Expanded(child:Center(child:FilledButton.icon(
                 onPressed:addChapter,icon:const Icon(Icons.add),
                 label:const Text('Add first chapter'))))
-            else Expanded(child:mobile?canvas():Row(
-              crossAxisAlignment:CrossAxisAlignment.stretch,children:[
-                SizedBox(width:box.maxWidth<950?195:240,child:pagesSidebar()),
+            else Expanded(child:mobile?Column(children:[
+              ribbonBar(),const SizedBox(height:7),Expanded(child:canvas()),
+            ]):Row(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+                SizedBox(width:box.maxWidth<950?230:300,child:pagesSidebar()),
                 const SizedBox(width:10),
-                Expanded(child:canvas()),
+                Expanded(child:Column(children:[
+                  ribbonBar(),const SizedBox(height:6),Expanded(child:canvas()),
+                ])),
               ])),
             if(mobile&&currentChapters.isNotEmpty&&!preview)SafeArea(top:false,
               child:Padding(padding:const EdgeInsets.only(top:7),
