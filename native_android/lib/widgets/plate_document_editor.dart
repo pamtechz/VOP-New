@@ -240,7 +240,12 @@ class PlateDocumentEditorState extends State<PlateDocumentEditor>{
     nodes[activeBlockIndex.clamp(0,nodes.length-1).toInt()];
   String get currentBlockText{
     final node=activeNode;
-    return node==null?'':plainNode(node);
+    if(node==null)return '';
+    final leaves=plateRows(node['children']);
+    if(leaves.every((leaf)=>leaf['text'] is String)){
+      return leaves.map((leaf)=>(leaf['text']??'').toString()).join();
+    }
+    return plainNode(node);
   }
   Future<void> copySelection()async{
     final node=activeNode;
