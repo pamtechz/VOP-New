@@ -1,6 +1,7 @@
 import {randomUUID} from 'node:crypto';
 import {FieldValue} from 'firebase-admin/firestore';
 import {normalizeProgramDraft} from '../shared/programModel.js';
+import {loadSharedCurriculumVisibility} from './curriculumCollaboration.js';
 import {assertMutableTenantResource,platformStewardedResource} from '../shared/platformStewardship.js';
 import {canEditCanonicalContent,canManageOrganizationContent,
   accessibleOrganizationIds,billingTenantFromContext,enforceBillingTenantQuota,enforceOrganizationQuota,organizationInHierarchyScope,tenantOwnerKey,writeTenantAudit,
@@ -42,13 +43,15 @@ export async function handleCurriculumPrograms(ctx:TenantContext,
           ctx.db.collection('programs').where('sharingScope','==','shared')
             .where('published','==',true).get(),
         ]);
+    const hidden=await loadSharedCurriculumVisibility(ctx);
     const known=new Map<string,Record<string,unknown>>();
     for(const snapshot of snapshots)for(const document of snapshot.docs){
       const data=document.data();
       const orgId=String(data.organizationId||'').trim();
       const owned=ctx.isSuperAdmin||ids.includes(orgId);
       const shared=data.sharingScope==='shared';
-      if(data.archived===true||data.published!==true||(!owned&&!shared))continue;
+      if(data.archived===true||data.published!==true||(!owned&&!shared)||
+        (!owned&&hidden.programs.has(document.id)))continue;
       const title=String(data.title||'').trim();
       if(!title)continue;
       known.set(document.id,{
@@ -58,7 +61,8 @@ export async function handleCurriculumPrograms(ctx:TenantContext,
         coverImageUrl:String(data.coverImageUrl||''),
         guideIds:Array.isArray(data.guideIds)
           ?data.guideIds.filter((value:unknown):value is string=>
-              typeof value==='string'&&value.length>0).slice(0,100)
+              typeof value==='string'&&value.length>0&&
+                (owned||!hidden.guides.has(value))).slice(0,100)
           :[],
         organizationId:orgId,
         entryMode:data.entryMode==='sections'?'sections':'lessons',
@@ -86,6 +90,7 @@ export async function handleCurriculumPrograms(ctx:TenantContext,
           ctx.db.collection('programs').where('sharingScope','==','shared')
             .where('published','==',true).get(),
         ]);
+    const hidden=await loadSharedCurriculumVisibility(ctx);
     const known=new Map<string,Record<string,unknown>>();
     for(const snapshot of collections)for(const document of snapshot.docs){
       const data=document.data();
@@ -94,6 +99,7 @@ export async function handleCurriculumPrograms(ctx:TenantContext,
         && data.archived!==true;
       if(data.archived===true&&!owned)continue;
       if(!owned&&!shared)continue;
+      if(!owned&&hidden.programs.has(document.id))continue;
       known.set(document.id,{
         id:document.id,...data,
         canEdit:await mayEdit(ctx,data),
@@ -140,6 +146,11 @@ export async function handleCurriculumPrograms(ctx:TenantContext,
       if(ids.length>=100)throw new Error('A programme cannot contain more than 100 guides.');
       const guideIds=[...ids,guideId];
       transaction.update(programRef,{guideIds,updatedAt:FieldValue.serverTimestamp(),updatedBy:ctx.auth.uid});
+      // Attaching a guide to a platform-adopted programme also transfers
+      // stewardship of that guide. Keep both writes in one transaction.
+      if(program.adoptedByPlatform===true || (program.published===true && program.sharingScope==='shared')){
+        transaction.update(guideRef,{adoptedByPlatform:true,updatedAt:FieldValue.serverTimestamp(),updatedBy:ctx.auth.uid});
+      }
       return {id,guideIds,alreadyLinked:false};
     });
     if(!result.alreadyLinked)await writeTenantAudit(ctx,'program.guide.attach',programRef.path,
@@ -150,11 +161,15 @@ export async function handleCurriculumPrograms(ctx:TenantContext,
     throw new Error('Unsupported program action.');
   const raw=body.data&&typeof body.data==='object'&&!Array.isArray(body.data)
     ?body.data as Record<string,unknown>:{};
+  if(body.id&&raw.id&&String(body.id)!==String(raw.id))
+    throw new Error('Programme identity changed during editing. Reload the original programme.');
   const id=action==='upsert'&&!body.id&&!raw.id
     ?'program-'+randomUUID().replace(/-/g,'')
     :validId(body.id||raw.id);
   const ref=ctx.db.doc('programs/'+id);
   const previous=await ref.get();
+  if(action==='upsert' && raw.expectedExisting===true && !previous.exists)
+    throw new Error('This programme was changed or removed. Reload before editing; no new record was created.');
   const current=previous.data()||{};
   // Existing programme ownership is immutable. A Super Admin editing a
   // programme after changing the UI tenant filter must retain its source.
@@ -265,7 +280,21 @@ export async function handleCurriculumPrograms(ctx:TenantContext,
     createdAt:current.createdAt||new Date().toISOString(),
     updatedAt:FieldValue.serverTimestamp(),updatedBy:ctx.auth.uid,
   };
-  await ref.set(next,{merge:false});
+  if(next.adoptedByPlatform===true && input.guideIds.length){
+    // Platform adoption is permanent for every referenced guide, including
+    // its child lessons. Mark the programme and guides atomically so a
+    // contributor cannot keep mutating adopted content after approval.
+    const batch=ctx.db.batch();
+    for(const guideId of input.guideIds){
+      batch.update(ctx.db.doc('guides/'+guideId),{
+        adoptedByPlatform:true,updatedAt:FieldValue.serverTimestamp(),updatedBy:ctx.auth.uid,
+      });
+    }
+    if(previous.exists)batch.update(ref,next,{lastUpdateTime:previous.updateTime!});
+    else batch.create(ref,next);
+    await batch.commit();
+  }else if(previous.exists)await ref.update(next,{lastUpdateTime:previous.updateTime!});
+  else await ref.create(next);
   await writeTenantAudit(ctx,previous.exists?'program.update':'program.create',
     ref.path,previous.exists?current:undefined,next);
   return res.status(200).json({ok:true,item:{...input,id,

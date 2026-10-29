@@ -114,7 +114,10 @@ class PlatePageView extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 14),
-                Row(
+                LayoutBuilder(builder:(context,limits)=>Wrap(
+                  spacing: 10,
+                  runSpacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     InkWell(
                       borderRadius: BorderRadius.circular(8),
@@ -125,11 +128,14 @@ class PlatePageView extends StatelessWidget {
                           color: const Color(0xFFD97706).withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
+                        // A Wrap avoids RenderFlex overflow when accessibility
+                        // text scaling or compact widths exceed the chip space.
+                        child: const Wrap(
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          spacing: 5,
+                          runSpacing: 2,
                           children: [
                             Icon(Icons.menu_book_rounded, size: 14, color: Color(0xFFB45309)),
-                            SizedBox(width: 5),
                             Text(
                               'Explore Passage Details',
                               style: TextStyle(
@@ -142,25 +148,26 @@ class PlatePageView extends StatelessWidget {
                         ),
                       ),
                     ),
-                    const Spacer(),
                     if (scriptureRef.isNotEmpty)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFD97706).withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          '— $scriptureRef',
-                          style: const TextStyle(
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w800,
-                            color: Color(0xFF92400E),
+                      ConstrainedBox(
+                        constraints:BoxConstraints(maxWidth:limits.maxWidth),
+                        child:Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFD97706).withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child:Text('— $scriptureRef',
+                            softWrap:true,
+                            overflow:TextOverflow.visible,
+                            style:const TextStyle(
+                              fontSize:12.5,fontWeight:FontWeight.w800,
+                              color:Color(0xFF92400E)),
                           ),
                         ),
                       ),
                   ],
-                ),
+                )),
               ],
             ),
           ),
@@ -447,7 +454,11 @@ class PlatePageView extends StatelessWidget {
       backgroundColor: Colors.transparent,
       builder: (sheetContext) {
         final isDark = Theme.of(sheetContext).brightness == Brightness.dark;
+        final compactSheet = MediaQuery.sizeOf(sheetContext).width < 360;
         return Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.85,
+          ),
           decoration: BoxDecoration(
             color: isDark ? const Color(0xFF1E293B) : Colors.white,
             borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
@@ -459,11 +470,13 @@ class PlatePageView extends StatelessWidget {
               ),
             ],
           ),
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+          padding: EdgeInsets.fromLTRB(compactSheet ? 12 : 20, 12,
+            compactSheet ? 12 : 20, 28),
           child: SafeArea(
             top: false,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Center(
@@ -477,24 +490,27 @@ class PlatePageView extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 16),
-                Row(
+                // Use independently constrained header regions. A narrow
+                // bottom sheet must never let its title compete with the
+                // close control in a horizontal RenderFlex.
+                Stack(
                   children: [
-                    Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFD97706).withValues(alpha: 0.15),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(Icons.auto_stories_rounded, color: Color(0xFFD97706), size: 22),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
+                    Padding(
+                      padding: const EdgeInsets.only(right: 48),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          if (!compactSheet) ...[
+                            const Icon(
+                              Icons.auto_stories_rounded,
+                              color: Color(0xFFD97706),
+                              size: 22,
+                            ),
+                            const SizedBox(height: 8),
+                          ],
                           const Text(
                             'HOLY SCRIPTURE FOCUS',
+                            softWrap: true,
                             style: TextStyle(
                               fontSize: 10.5,
                               fontWeight: FontWeight.w900,
@@ -504,6 +520,8 @@ class PlatePageView extends StatelessWidget {
                           ),
                           Text(
                             reference.isNotEmpty ? reference : 'Scripture Passage',
+                            softWrap: true,
+                            overflow: TextOverflow.visible,
                             style: const TextStyle(
                               fontSize: 17,
                               fontWeight: FontWeight.w800,
@@ -512,9 +530,14 @@ class PlatePageView extends StatelessWidget {
                         ],
                       ),
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.close_rounded),
-                      onPressed: () => Navigator.of(sheetContext).pop(),
+                    Positioned(
+                      top: 0,
+                      right: 0,
+                      child: IconButton(
+                        tooltip: 'Close Scripture details',
+                        icon: const Icon(Icons.close_rounded),
+                        onPressed: () => Navigator.of(sheetContext).pop(),
+                      ),
                     ),
                   ],
                 ),
@@ -549,6 +572,7 @@ class PlatePageView extends StatelessWidget {
                   label: const Text('Back to Study', style: TextStyle(fontWeight: FontWeight.w700)),
                 ),
               ],
+              ),
             ),
           ),
         );

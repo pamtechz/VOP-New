@@ -12,6 +12,7 @@ import { loadFirestoreGuides } from '../services/firestoreData';
 import GuideManager from './GuideManager';
 import ProgramManager from './ProgramManager';
 import QuizLibrary from './QuizLibrary';
+import SharedCurriculumPanel from '../components/admin/SharedCurriculumPanel';
 import { getTranslation } from '../services/i18n';
 import { MediaPlayer } from '../components/media/MediaPlayer';
 import { resolveMediaSource } from '../../shared/mediaSources';
@@ -75,6 +76,7 @@ type LessonBlock = {
 
 type EditorState = {
   id: string;
+  originalGuideId?: string;
   title: string;
   description: string;
   lessonNumber: string;
@@ -108,7 +110,7 @@ type LocalLessonDraft = {
 const getLocalDraftKey = (guideId: string, lessonId: string) =>
   `vop_local_lesson_draft_${lessonId || 'new'}_${guideId || 'default'}`;
 
-function saveLocalDraft(editor: EditorState) {
+function saveLocalDraft(editor: EditorState): boolean {
   try {
     const key = getLocalDraftKey(editor.guideId, editor.id);
     const payload: LocalLessonDraft = {
@@ -119,8 +121,12 @@ function saveLocalDraft(editor: EditorState) {
       editor,
     };
     localStorage.setItem(key, JSON.stringify(payload));
+    return true;
   } catch (err) {
+    // A large lesson can exceed browser storage limits. Never report success
+    // when the browser rejected the write; the author must save to the server.
     console.warn('Failed to save local draft:', err);
+    return false;
   }
 }
 
@@ -343,6 +349,7 @@ function editorFromLesson(row: LessonRow): EditorState {
     lessonNumber: row.lesson.lessonNumber,
     language: row.language,
     guideId: valueText(raw.guideId) || row.guide?.id || '',
+    originalGuideId: valueText(raw.guideId) || row.guide?.id || '',
     guideTitle: valueText(raw.guideTitle) || row.guideTitle,
     season: valueText(raw.season) || row.season,
     content: Array.isArray(contentPages)
@@ -486,7 +493,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
   const [scopeOrganizationId, setScopeOrganizationId] = useState(currentUser?.role === 'super_admin' ? '' : String(currentUser?.organizationId || ''));
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deletingLessonId, setDeletingLessonId] = useState<string | null>(null);
-  const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'dirty'>('idle');
+  const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'dirty' | 'failed'>('idle');
   const [lastAutoSavedAt, setLastAutoSavedAt] = useState<Date | null>(null);
   const [recoverableDraft, setRecoverableDraft] = useState<LocalLessonDraft | null>(null);
 
@@ -497,17 +504,19 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
 
   useEffect(() => {
     if (!editor || !editorDirty) {
-      setAutoSaveStatus(editor ? 'saved' : 'idle');
+      // A database-loaded lesson is not necessarily stored in localStorage.
+      setAutoSaveStatus('idle');
       return;
     }
     setAutoSaveStatus('dirty');
     const timer = setTimeout(() => {
       setAutoSaveStatus('saving');
-      saveLocalDraft(editor);
+      if (!saveLocalDraft(editor)) {
+        setAutoSaveStatus('failed');
+        return;
+      }
       setLastAutoSavedAt(new Date());
-      setTimeout(() => {
-        setAutoSaveStatus('saved');
-      }, 400);
+      setAutoSaveStatus('saved');
     }, 1500);
     return () => clearTimeout(timer);
   }, [editor, editorDirty]);
@@ -977,6 +986,8 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
       const pageBlocks = splitLessonBlocks(sourceBlocks);
       const payload: Record<string, unknown> = {
         lessonId: id,
+        expectedExisting:Boolean(editor.originalGuideId),
+        originalGuideId:editor.originalGuideId || '',
         lessonNumber: editor.lessonNumber.trim(),
         title: resolvedTitle,
         description: editor.description.trim(),
@@ -1021,7 +1032,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
       // retrying look like a new/duplicate lesson.
       await adminContent('upsertLesson', 'curriculum', id, payload, targetOrganizationId);
       await load();
-      const savedEditor={ ...editor, id, title: resolvedTitle, guideTitle: valueText(guide.title) || editor.guideTitle, published: publish || editor.published };
+      const savedEditor={ ...editor, id, originalGuideId:editor.guideId, title: resolvedTitle, guideTitle: valueText(guide.title) || editor.guideTitle, published: publish || editor.published };
       savedEditorSignature.current=JSON.stringify(savedEditor);
       clearLocalDraft(editor.guideId, editor.id);
       if (editor.id !== id) clearLocalDraft(editor.guideId, '');
@@ -1335,7 +1346,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
               setEditor(null);setTab('quizzes');onTabChange?.('quizzes');
             }}
             autoSaveChip={
-              <span className={`vop-plate-autosave-chip ${autoSaveStatus}`} title={lastAutoSavedAt ? `Last auto-saved locally at ${lastAutoSavedAt.toLocaleTimeString()}` : 'Auto-save draft active'}>
+              <span className={`vop-plate-autosave-chip ${autoSaveStatus}`} title={autoSaveStatus === 'failed' ? 'Browser storage is full or unavailable. Save your lesson to the server to protect it.' : lastAutoSavedAt ? `Last auto-saved locally at ${lastAutoSavedAt.toLocaleTimeString()}` : 'Auto-save draft active'}>
                 {autoSaveStatus === 'saving' && (
                   <>
                     <LoaderCircle className="spin" size={13} />
@@ -1352,6 +1363,12 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
                   <>
                     <Save size={13} />
                     <span>{tx('admin.curriculum.unsaved_changes',"Unsaved changes")}</span>
+                  </>
+                )}
+                {autoSaveStatus === 'failed' && (
+                  <>
+                    <Save size={13} />
+                    <span>Local draft not saved — use Save draft</span>
                   </>
                 )}
                 {autoSaveStatus === 'idle' && (
@@ -1631,6 +1648,8 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
         </select></label>
       </div>}
       
+      <SharedCurriculumPanel platformMode={isSuperAdmin} onUpdated={()=>void load()} />
+
       <div className="vop-reference-tabs">
         {tabs.map(item => {
           const Icon = item.icon;

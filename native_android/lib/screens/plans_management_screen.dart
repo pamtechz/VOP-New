@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../core/vop_api.dart';
 import '../widgets/vop_ui.dart';
+import '../widgets/vop_desktop_layout.dart';
 import 'workspace_records_screen.dart';
 import 'workspace_operations_screen.dart';
 
@@ -71,7 +72,7 @@ class _PlansState extends State<PlansManagementScreen>{
     String limit(dynamic value)=>value==null||(num.tryParse('$value')??-1)<0?'No package limit':'$value';
     return Scaffold(appBar:AppBar(title:const Text('Subscriptions & usage'),actions:[if(superAdmin)IconButton(tooltip:'Billing settings',onPressed:()=>billingSettings(workspace),icon:const Icon(Icons.settings_outlined)),IconButton(tooltip:'Refresh',onPressed:()=>setState(reload),icon:const Icon(Icons.refresh))]),
       floatingActionButton:superAdmin?FloatingActionButton.extended(onPressed:()=>editPlan(workspace),icon:const Icon(Icons.add),label:const Text('New package')):null,
-      body:s.connectionState!=ConnectionState.done?const VopSkeleton():s.hasError?VopEmpty(icon:Icons.error_outline,message:'${s.error}',onRetry:()=>setState(reload)):
+      body:VopDesktopWorkspaceFrame(api:widget.api,child:s.connectionState!=ConnectionState.done?const VopSkeleton():s.hasError?VopEmpty(icon:Icons.error_outline,message:'${s.error}',onRetry:()=>setState(reload)):
         ListView(padding:const EdgeInsets.fromLTRB(16,8,16,96),children:[
           VopCard(child:Padding(padding:const EdgeInsets.all(18),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
             Text(data['scope']=='platform'?'Platform administration':'${data['tenantName']??data['organizationName']??'Current subscription'}',style:Theme.of(context).textTheme.titleLarge),
@@ -97,6 +98,6 @@ class _PlansState extends State<PlansManagementScreen>{
               if(data['scope']!='platform'&&(num.tryParse('${item['priceUsd']??item['price']}')??0)>0)TextButton(onPressed:()=>Navigator.push(context,MaterialPageRoute<void>(builder:(_)=>WorkspaceOperationsScreen(api:widget.api,kind:'payments',workspace:{...workspace,...scope}))),child:const Text('Payment options')),
             ]),
           ]))))
-        ]));
+        ])));
   });
 }

@@ -16,6 +16,7 @@ import { configuredPassThreshold } from '../../shared/studyValidation.js';
 import { normalizeCurriculumStructure, curriculumPages, containsPublicQuizAnswer } from '../../shared/curriculumStructure.js';
 import { transferCurriculumNode } from '../../shared/curriculumTransfer.js';
 import { handleCurriculumPrograms } from '../../server/programManager.js';
+import { handleCurriculumCollaboration, loadSharedCurriculumVisibility } from '../../server/curriculumCollaboration.js';
 import { adoptOrganizationLanguage } from '../../server/tenantLanguageAdoption.js';
 import { translationKey } from '../../server/localization.js';
 
@@ -48,7 +49,8 @@ const SUBSCRIPTION_FEATURE_BY_COLLECTION:Partial<Record<string,SubscriptionFeatu
   certificates:'certification',
   graduationRequests:'certification',
 };
-const NON_EXPANSIVE_CONTENT_ACTIONS=new Set(['list','learnerList','listGuides','listGuideLessons','delete','archiveGuide']);
+const NON_EXPANSIVE_CONTENT_ACTIONS=new Set(['list','learnerList','listGuides','listGuideLessons','delete','archiveGuide',
+  'getSharedVisibility','setSharedVisibility','proposeEdit','listSuggestedEdits','reviewSuggestedEdit']);
 function quotaKeyForCollection(collection:string){
   return collection==='announcements'?'maxAnnouncements'
     :collection==='events'?'maxEvents'
@@ -154,7 +156,7 @@ export default async function handler(req: Request, res: Response) {
     const editorRoles = curriculum || GLOBAL_COLLECTIONS.has(collection)
       ? ['owner','admin','editor','union_admin','conference_admin','district_admin','church_admin']
       : ['owner','admin'];
-    if (action !== 'list' && action !== 'learnerList' && action !== 'listGuides' && action !== 'listGuideLessons' && !HIERARCHY_COLLECTIONS.has(collection) && !(ctx.tenantType === 'hierarchy' && ORG_COLLECTIONS.has(collection))) requireOrgRole(ctx, editorRoles);
+    if (action !== 'list' && action !== 'learnerList' && action !== 'listGuides' && action !== 'listGuideLessons' && action !== 'getSharedVisibility' && !HIERARCHY_COLLECTIONS.has(collection) && !(ctx.tenantType === 'hierarchy' && ORG_COLLECTIONS.has(collection))) requireOrgRole(ctx, editorRoles);
     if ((collection === 'settings' || collection === 'certificationConfig') && !ctx.isSuperAdmin) {
       if (collection === 'certificationConfig') {
         if (ctx.tenantType === 'hierarchy') {
@@ -173,6 +175,9 @@ export default async function handler(req: Request, res: Response) {
         throw new Error('Only the VOP Super Admin can manage platform configuration.');
       }
     }
+
+    if(collection==='curriculum' &&
+        await handleCurriculumCollaboration(ctx,action,body,res))return;
 
     if(collection==='programs'){
       return await handleCurriculumPrograms(ctx,action,body,effectiveOrganizationId,res);
@@ -200,8 +205,12 @@ export default async function handler(req: Request, res: Response) {
         Boolean(ownerOrganizationId && (ctx.tenantType==='hierarchy'
           ?await organizationInHierarchyScope(ctx,ownerOrganizationId)
           :ownerOrganizationId===ctx.organizationId));
+      const hidden=await loadSharedCurriculumVisibility(ctx);
+      if (!canReadDrafts && hidden.guides.has(selectedGuideId))
+        return res.status(200).json({ok:true,items:[]});
       const snap = await guide.ref.collection('lessons').get();
       const visibleLessons=snap.docs.filter(doc=>{
+        if (!canReadDrafts && hidden.lessons.has(selectedGuideId+'/'+doc.id))return false;
         if(canReadDrafts)return true;
         const lesson=doc.data();
         return lesson.published===true && lesson.archived!==true
@@ -210,7 +219,9 @@ export default async function handler(req: Request, res: Response) {
       });
       const items = await Promise.all(visibleLessons.map(async doc => {
         const row = doc.data();
-        const canEdit = ctx.isSuperAdmin || (String(row.ownerUid || '') === ctx.auth.uid && !platformStewardedResource(row));
+        const canEdit = ctx.isSuperAdmin ||
+          (!platformStewardedResource(row) &&
+            (canEditCanonicalContent(ctx,row) || await canManageOrganizationContent(ctx,row)));
         if (!canEdit) return {
           id:doc.id, guideId:selectedGuideId, title:String(row.title || ''),
           lessonNumber:String(row.lessonNumber || ''), type:row.type === 'Test' ? 'Test' : 'Lesson',
@@ -248,12 +259,15 @@ export default async function handler(req: Request, res: Response) {
             ...organizationIds.map(orgId => ctx.db.collection('guides').where('organizationId','==',orgId).get()),
             ctx.db.collection('guides').where('sharingScope','==','shared').where('published','==',true).get(),
           ]);
+      const hidden=await loadSharedCurriculumVisibility(ctx);
       const visibleGuides = new Map<string,FirebaseFirestore.QueryDocumentSnapshot>();
       for (const snapshot of snapshots) for (const document of snapshot.docs) {
         const data=document.data();
         const owned=organizationIds.includes(String(data.organizationId||''));
         const shared=data.sharingScope==='shared'&&data.published===true&&data.archived!==true;
-        if(ctx.isSuperAdmin||owned||shared)visibleGuides.set(document.id,document);
+        if((ctx.isSuperAdmin||owned||shared) &&
+          (owned||ctx.isSuperAdmin||!hidden.guides.has(document.id)))
+          visibleGuides.set(document.id,document);
       }
       const items = await Promise.all([...visibleGuides.values()].map(async d => {
         const guideData=d.data();
@@ -264,7 +278,8 @@ export default async function handler(req: Request, res: Response) {
           Boolean(guideOrganizationId&&organizationIds.includes(guideOrganizationId));
         const studyLessons=lessons.docs.filter(lesson => {
           const data=lesson.data();
-          return data.archived!==true
+          return (canReadAllChildren||!hidden.lessons.has(d.id+'/'+lesson.id))
+            && data.archived!==true
             && String(data.type||'Lesson')!=='Test'
             && (canReadAllChildren || (data.published===true &&
               (platformGuide || (guideData.sharingScope==='shared' && data.sharingScope==='shared'))));
@@ -281,7 +296,9 @@ export default async function handler(req: Request, res: Response) {
             published:lesson.data().published === true, guideId:d.id,
           })),
           languages: [String(d.data().language || '')].filter(Boolean),
-          canEdit: ctx.isSuperAdmin || (!platformStewardedResource(d.data()) && (ctx.tenantType === 'hierarchy' || String(d.data().ownerUid || '') === ctx.auth.uid)),
+          canEdit: ctx.isSuperAdmin || (!platformStewardedResource(d.data()) &&
+            (canEditCanonicalContent(ctx,d.data()) ||
+              await canManageOrganizationContent(ctx,d.data()))),
         };
       }));
       return res.status(200).json({ ok: true, items });
@@ -295,9 +312,19 @@ export default async function handler(req: Request, res: Response) {
       if (!isLanguageCode(lang)) throw new Error('A valid language code is required for a guide.');
       const title = String(data.title || '').trim();
       if (!title) throw new Error('Guide title is required.');
-      const id = data.id ? safeId(data.id) : safeId(`guide-${randomUUID().replace(/-/g, '').slice(0,24)}`);
+      // The request's canonical ID must win over nested editor data. Some
+      // Flutter/Legacy editors send an existing record ID at the top level
+      // while their form values omit the hidden "id" field.
+      const requestId = body.id ? safeId(body.id) : '';
+      const dataId = data.id ? safeId(data.id) : '';
+      if (requestId && dataId && requestId !== dataId) {
+        throw new Error('The guide identity changed during editing. Reload the original guide.');
+      }
+      const id = requestId || dataId || safeId(`guide-${randomUUID().replace(/-/g, '').slice(0,24)}`);
       const ref = ctx.db.doc(`guides/${id}`);
       const existing = await ref.get();
+      if(data.expectedExisting===true && !existing.exists)
+        throw new Error('This guide no longer exists. Reload before editing; no duplicate has been created.');
       const current = existing.exists ? existing.data() || {} : {};
       const ownerOrganizationId = String(current.scope === 'platform'
         ? '' : current.organizationId || current.ownerOrganizationId || '').trim();
@@ -395,6 +422,9 @@ export default async function handler(req: Request, res: Response) {
         // Publication and adoption commit together or not at all.
         await ctx.db.runTransaction(async transaction=>{
           const currentSnapshot=await transaction.get(ref);
+          if(existing.exists!==currentSnapshot.exists || (existing.exists &&
+             !existing.updateTime?.isEqual(currentSnapshot.updateTime!)))
+            throw new Error('The guide changed while saving. Reload before editing.');
           if(currentSnapshot.exists){
             const now=currentSnapshot.data()||{};
             if(String(now.organizationId||now.ownerOrganizationId||'')!==guideOrganizationId ||
@@ -420,7 +450,8 @@ export default async function handler(req: Request, res: Response) {
         }
         await writeTenantAudit(ctx,'guide.language.adoption',`guides/${id}`,undefined,{language:lang});
       } else {
-        await ref.set(nextGuide,{merge:true});
+        if(existing.exists)await ref.update(nextGuide,{lastUpdateTime:existing.updateTime!});
+        else await ref.create(nextGuide);
       }
       const saved = await ref.get();
       await writeTenantAudit(ctx, existing.exists ? 'guide.update' : 'guide.create', `guides/${id}`, current, saved.data());
@@ -608,7 +639,11 @@ export default async function handler(req: Request, res: Response) {
       const data = body.data && typeof body.data === 'object' ? body.data as Record<string, unknown> : {};
       const language = String(data.language || '').trim();
       const guideId = safeId(data.guideId);
-      const lessonId = safeId(body.id || data.lessonId);
+      const requestedLessonId = body.id ? safeId(body.id) : '';
+      const nestedLessonId = data.lessonId ? safeId(data.lessonId) : '';
+      if (requestedLessonId && nestedLessonId && requestedLessonId !== nestedLessonId)
+        throw new Error('Lesson identity changed during editing. Reload the original lesson.');
+      const lessonId = safeId(requestedLessonId || nestedLessonId);
       if (!language || !guideId) throw new Error('A guide and language are required for a lesson.');
       const guideRef = ctx.db.doc(`guides/${guideId}`);
       const guide = await guideRef.get();
@@ -629,6 +664,10 @@ export default async function handler(req: Request, res: Response) {
         || !guideOrgId.trim();
       const ref = guideRef.collection('lessons').doc(lessonId);
       const existing = await ref.get();
+      if(data.expectedExisting===true && !existing.exists)
+        throw new Error('The original lesson is missing from this guide. Reload before editing; no duplicate has been created.');
+      if(data.originalGuideId && String(data.originalGuideId)!==guideId)
+        throw new Error('Moving a lesson by editing is not allowed. Use the explicit transfer workflow.');
       if (existing.data()?.sourceQuizId) throw new Error('This assessment is linked to a quiz. Edit it through Quiz Library.');
       // Answer keys live exclusively in the private Quiz Library. Lesson and
       // chapter bodies are readable by learners; never persist inline keys.
@@ -669,7 +708,8 @@ export default async function handler(req: Request, res: Response) {
       if(data.published===true)await requirePermission(ctx,'curriculum','publish');
       if (existing.exists && !(ctx.tenantType === 'hierarchy' ? await canManageOrganizationContent(ctx, existing.data()) : canEditCanonicalContent(ctx, existing.data()))) throw new Error('Only an authorized tenant administrator or VOP Super Admin can edit this lesson.');
       if (existing.exists) assertMutableTenantResource(ctx.isSuperAdmin, existing.data(), 'edit');
-      const { teacherNotes: _incomingNotes, ...publicData }=data;
+      const { teacherNotes: _incomingNotes, expectedExisting: _expectedExisting,
+        originalGuideId: _originalGuideId, ...publicData }=data;
       const notesIncluded=Object.prototype.hasOwnProperty.call(data,'teacherNotes');
       if(notesIncluded && typeof _incomingNotes!=='string') {
         throw new Error('Instructor notes must be text.');
@@ -681,11 +721,11 @@ export default async function handler(req: Request, res: Response) {
       const savedNotes=notesIncluded?String(_incomingNotes):historicalNotes;
       const privateNotesRef=ref.collection('private').doc('instructorNotes');
       const batch=ctx.db.batch();
-      batch.set(ref,{
+      const nextLesson={
         ...publicData,
         // Learner-readable Firestore records must never contain instructor-only
         // notes. A delete sentinel also cleans up an old public notes field.
-        teacherNotes:FieldValue.delete(),
+        ...(existing.exists?{teacherNotes:FieldValue.delete()}:{}),
         // Derive learner pages on the server, not from potentially forged
         // client-side page or block payloads.
         ...(structured ? {
@@ -712,7 +752,9 @@ export default async function handler(req: Request, res: Response) {
         createdAt: existing.data()?.createdAt || new Date().toISOString(),
         updatedAt: FieldValue.serverTimestamp(),
         updatedBy: ctx.auth.uid,
-      }, { merge:true });
+      };
+      if(existing.exists)batch.update(ref,nextLesson,{lastUpdateTime:existing.updateTime!});
+      else batch.create(ref,nextLesson);
       if(notesIncluded||historicalNotes){
         batch.set(privateNotesRef,{
           text:savedNotes,guideId,lessonId,

@@ -61,7 +61,7 @@ test('management portals have persistent role-authorized desktop navigation',()=
   const admin=readFileSync('native_android/lib/screens/admin_dashboard_screen.dart','utf8');
   const organization=readFileSync('native_android/lib/screens/organization_dashboard_screen.dart','utf8');
   assert.match(shell,/width >= 1180/);
-  assert.match(shell,/WorkspaceNavigation\(api: api\)/);
+  assert.match(shell,/WorkspaceNavigation\(api: api, compact: true\)/);
   assert.match(navigation,/permissions/);
   assert.match(navigation,/bool can\(String resource,String action\)/);
   assert.match(admin,/body: WorkspaceDesktopShell\(api: widget\.api/);

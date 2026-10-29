@@ -1,4 +1,4 @@
-import { isSafeHttpsMediaUrl } from './mediaSources.js';
+import { isSafeHttpsMediaUrl, resolveMediaSource } from './mediaSources.js';
 import { normalizeStudyPlateDocument, studyPlateLegacyBlocks, studyPlatePlainText, type StudyPlateDocument } from './studyPlateDocument.js';
 
 /**
@@ -9,12 +9,17 @@ import { normalizeStudyPlateDocument, studyPlateLegacyBlocks, studyPlatePlainTex
  */
 export type CurriculumBlockType = 'paragraph' | 'heading' | 'quote' | 'image' | 'video' | 'audio';
 export type CurriculumBlock = { id:string; type:CurriculumBlockType; text?:string; src?:string };
-export type CurriculumSection = { id:string; title:string; blocks:CurriculumBlock[]; document?:StudyPlateDocument };
+export type CurriculumSection = {
+  id:string; title:string; blocks:CurriculumBlock[]; document?:StudyPlateDocument;
+  scriptureQuote?:{reference:string;text:string}; keyTakeaway?:string;
+  imageUrl?:string; audioUrl?:string; videoUrl?:string;
+};
 export type CurriculumChapter = { id:string; title:string; sections:CurriculumSection[] };
 export type CurriculumPage = {
   pageNumber:number; title:string; chapterId:string; chapterTitle:string;
   sectionId:string; sectionTitle:string; content:string; imageUrl?:string;
-  blocks:CurriculumBlock[];document?:StudyPlateDocument;
+  audioUrl?:string; videoUrl?:string; scriptureQuote?:{reference:string;text:string};
+  keyTakeaway?:string; blocks:CurriculumBlock[];document?:StudyPlateDocument;
 };
 
 const allowed=new Set<CurriculumBlockType>(['paragraph','heading','quote','image','video','audio']);
@@ -41,6 +46,20 @@ function validSrc(value:unknown, kind:'image'|'video'|'audio') {
     throw new Error('Media blocks require safe public HTTPS URLs without credentials or local network destinations.');
   }
   return text;
+}
+
+function optionalSectionMedia(value:unknown,kind:'image'|'audio'|'video'):string|undefined {
+  const url=String(value??'').trim();
+  if(!url)return undefined;
+  if(url.length>2048 || !isSafeHttpsMediaUrl(url))
+    throw new Error('Section media requires a safe public HTTPS URL.');
+  if(kind==='image')return url;
+  const source=resolveMediaSource(url);
+  if(!source || source.kind==='external' ||
+    (kind==='audio'&&source.kind==='direct-video') ||
+    (kind==='video'&&source.kind==='direct-audio'))
+    throw new Error('Section media must be an approved public HTTPS embed or direct media file.');
+  return source.originalUrl;
 }
 
 /** Enforce strict bounds and whitelist fields. No arbitrary HTML, answer keys,
@@ -74,7 +93,25 @@ export function normalizeCurriculumStructure(value:unknown):CurriculumChapter[] 
         if(text.length>8000)throw new Error('Text blocks may contain at most 8000 characters.');
         return {id,type,text};
       });
-      return {id,title,blocks,...(document?{document}:{})};
+      const rawScripture=section.scriptureQuote===undefined?undefined:record(section.scriptureQuote);
+      if(section.scriptureQuote!==undefined&&!rawScripture)
+        throw new Error('Scripture focus must contain a reference and passage text.');
+      const reference=String(rawScripture?.reference??'').trim();
+      const passage=String(rawScripture?.text??'').trim();
+      if(reference.length>160||passage.length>4000||
+          (reference.length>0&&passage.length===0))
+        throw new Error('Scripture focus requires valid passage text and a short reference.');
+      const keyTakeaway=String(section.keyTakeaway??'').trim();
+      if(keyTakeaway.length>2000)throw new Error('Section takeaway exceeds 2000 characters.');
+      const imageUrl=optionalSectionMedia(section.imageUrl,'image');
+      const audioUrl=optionalSectionMedia(section.audioUrl,'audio');
+      const videoUrl=optionalSectionMedia(section.videoUrl,'video');
+      return {id,title,blocks,...(document?{document}:{}),
+        ...(passage?{scriptureQuote:{reference,text:passage}}:{}),
+        ...(keyTakeaway?{keyTakeaway}:{}),
+        ...(imageUrl?{imageUrl}:{}),
+        ...(audioUrl?{audioUrl}:{}),
+        ...(videoUrl?{videoUrl}:{})};
     });
     return {id,title,sections};
   });
@@ -94,7 +131,11 @@ export function curriculumPages(chapters:CurriculumChapter[]):CurriculumPage[] {
       pageNumber:pages.length+1,
       title:section.title,chapterId:chapter.id,chapterTitle:chapter.title,
       sectionId:section.id,sectionTitle:section.title,content,
-      imageUrl:section.blocks.find(block=>block.type==='image')?.src||'',
+      imageUrl:section.imageUrl||section.blocks.find(block=>block.type==='image')?.src||'',
+      ...(section.audioUrl?{audioUrl:section.audioUrl}:{}),
+      ...(section.videoUrl?{videoUrl:section.videoUrl}:{}),
+      ...(section.scriptureQuote?{scriptureQuote:section.scriptureQuote}:{}),
+      ...(section.keyTakeaway?{keyTakeaway:section.keyTakeaway}:{}),
       blocks:section.blocks,...(section.document?{document:section.document}:{}),
     });
   }));

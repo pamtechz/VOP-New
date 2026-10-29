@@ -126,6 +126,11 @@
   "outputDirectory": "dist",
   "redirects": [
     {
+      "source": "/classic/editor",
+      "destination": "/classic/",
+      "permanent": false
+    },
+    {
       "source": "/classic",
       "destination": "/classic/",
       "permanent": true

@@ -32,12 +32,38 @@ function scopedStorageKey(key: string): string {
   return `vop:${uid}:${key}`;
 }
 
+// Indexed lesson downloads are stored by the offline study subsystem.
+// localStorage is a small best-effort cache, not the source of truth.
+const volatileCache = new Map<string, string>();
+const MAX_LOCAL_CACHE_CHARS = 250_000;
+
 function readStorage(key: string): string | null {
-  return localStorage.getItem(scopedStorageKey(key));
+  const scoped = scopedStorageKey(key);
+  if (volatileCache.has(scoped)) return volatileCache.get(scoped) ?? null;
+  try {
+    return typeof localStorage === 'undefined' ? null : localStorage.getItem(scoped);
+  } catch {
+    return null;
+  }
 }
 
 function writeStorage(key: string, value: string): void {
-  localStorage.setItem(scopedStorageKey(key), value);
+  const scoped = scopedStorageKey(key);
+  // Retain the complete just-fetched guide content for this page session,
+  // but do not fill the browser's ~5 MB localStorage with lesson bodies.
+  volatileCache.set(scoped, value);
+  if (typeof localStorage === 'undefined') return;
+  if (value.length > MAX_LOCAL_CACHE_CHARS) {
+    try { localStorage.removeItem(scoped); } catch { /* storage disabled */ }
+    return;
+  }
+  try {
+    localStorage.setItem(scoped, value);
+  } catch {
+    // Cache failures, including quota and privacy restrictions, must not
+    // abort a successful API fetch. Remove stale persistent data if possible.
+    try { localStorage.removeItem(scoped); } catch { /* storage disabled */ }
+  }
 }
 
 const STORAGE_KEYS = {
@@ -86,6 +112,11 @@ export const isSuperAdminAllowedOnPlatform = (): boolean => {
   return !isNativePlatform();
 };
 
+// Reuse the same update event across all legacy storage mutations.
+function notifyStorageUpdated(): void {
+  window.dispatchEvent(new Event('vop_data_updated'));
+}
+
 // ---------------- Settings ---------------- //
 
 export const getStoredSettings = (): AppSettings => {
@@ -101,7 +132,7 @@ export const getStoredSettings = (): AppSettings => {
 
 export const saveSettings = (settings: AppSettings) => {
   writeStorage(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
-  window.dispatchEvent(new Event('vop_data_updated'));
+  notifyStorageUpdated();
 };
 
 // ---------------- Language ---------------- //
@@ -116,7 +147,7 @@ export const getActiveLanguage = (): LanguageCode => {
 
 export const setActiveLanguage = (lang: LanguageCode) => {
   writeStorage(STORAGE_KEYS.ACTIVE_LANGUAGE, lang);
-  window.dispatchEvent(new Event('vop_data_updated'));
+  notifyStorageUpdated();
 };
 
 // ---------------- Languages (CRUD) ---------------- //
@@ -134,7 +165,7 @@ export const getStoredLanguages = (): CustomLanguage[] => {
 
 export const saveLanguages = (languages: CustomLanguage[]) => {
   writeStorage(STORAGE_KEYS.LANGUAGES, JSON.stringify(languages));
-  window.dispatchEvent(new Event('vop_data_updated'));
+  notifyStorageUpdated();
 };
 
 // ---------------- Unions (CRUD) ---------------- //
@@ -153,7 +184,7 @@ export const getStoredUnions = (): Union[] => {
 
 export const saveUnions = (unions: Union[]) => {
   writeStorage(STORAGE_KEYS.UNIONS, JSON.stringify(unions));
-  window.dispatchEvent(new Event('vop_data_updated'));
+  notifyStorageUpdated();
 };
 
 export const addUnion = (union: Omit<Union, 'id'>): Union => {
@@ -192,7 +223,7 @@ export const getStoredConferences = (): Conference[] => {
 
 export const saveConferences = (conferences: Conference[]) => {
   writeStorage(STORAGE_KEYS.CONFERENCES, JSON.stringify(conferences));
-  window.dispatchEvent(new Event('vop_data_updated'));
+  notifyStorageUpdated();
 };
 
 export const addConference = (conference: Omit<Conference, 'id'>): Conference => {
@@ -231,7 +262,7 @@ export const getStoredDistricts = (): District[] => {
 
 export const saveDistricts = (districts: District[]) => {
   writeStorage(STORAGE_KEYS.DISTRICTS, JSON.stringify(districts));
-  window.dispatchEvent(new Event('vop_data_updated'));
+  notifyStorageUpdated();
 };
 
 export const addDistrict = (district: Omit<District, 'id'>): District => {
@@ -270,7 +301,7 @@ export const getStoredChurches = (): ChurchOrganization[] => {
 
 export const saveChurches = (churches: ChurchOrganization[]) => {
   writeStorage(STORAGE_KEYS.CHURCHES, JSON.stringify(churches));
-  window.dispatchEvent(new Event('vop_data_updated'));
+  notifyStorageUpdated();
 };
 
 export const addChurch = (church: Omit<ChurchOrganization, 'id'>): ChurchOrganization => {
@@ -303,7 +334,7 @@ export const getStoredHierarchyConfig = (): HierarchyConfig => {
 
 export const saveHierarchyConfig = (config: HierarchyConfig) => {
   writeStorage(STORAGE_KEYS.HIERARCHY_CONFIG, JSON.stringify(config));
-  window.dispatchEvent(new Event('vop_data_updated'));
+  notifyStorageUpdated();
 };
 
 // ---------------- Prayer Requests ---------------- //
@@ -322,7 +353,7 @@ export const getStoredPrayerRequests = (): PrayerRequest[] => {
 
 export const savePrayerRequests = (prayers: PrayerRequest[]) => {
   writeStorage(STORAGE_KEYS.PRAYER_REQUESTS, JSON.stringify(prayers));
-  window.dispatchEvent(new Event('vop_data_updated'));
+  notifyStorageUpdated();
 };
 
 export const addPrayerRequest = (prayer: Omit<PrayerRequest, 'id' | 'createdAt'>): PrayerRequest => {
@@ -357,7 +388,7 @@ export const getStoredRadioBroadcasts = (): RadioBroadcast[] => {
 
 export const saveRadioBroadcasts = (broadcasts: RadioBroadcast[]) => {
   writeStorage(STORAGE_KEYS.RADIO_BROADCASTS, JSON.stringify(broadcasts));
-  window.dispatchEvent(new Event('vop_data_updated'));
+  notifyStorageUpdated();
 };
 
 export const addRadioBroadcast = (broadcast: Omit<RadioBroadcast, 'id'>): RadioBroadcast => {
@@ -389,7 +420,7 @@ const registeredKeyCache = new Set<string>();
 export const saveAutoLocalization = (entries: AutoLocalizationEntry[], notify = true) => {
   writeStorage(STORAGE_KEYS.AUTO_LOCALIZATION, JSON.stringify(entries));
   if (notify) {
-    window.dispatchEvent(new Event('vop_data_updated'));
+    notifyStorageUpdated();
   }
 };
 
@@ -472,7 +503,7 @@ export const getStoredGuides = (): DiscoverGuide[] => {
 
 export const saveGuides = (guides: DiscoverGuide[]) => {
   writeStorage(STORAGE_KEYS.GUIDES, JSON.stringify(guides));
-  window.dispatchEvent(new Event('vop_data_updated'));
+  notifyStorageUpdated();
 };
 
 export const addDiscoverGuide = (guide: Omit<DiscoverGuide, 'id'>): DiscoverGuide => {
@@ -563,7 +594,7 @@ export const getStoredUsers = (): User[] => {
 
 export const saveUsers = (users: User[]) => {
   writeStorage(STORAGE_KEYS.USERS, JSON.stringify(users));
-  window.dispatchEvent(new Event('vop_data_updated'));
+  notifyStorageUpdated();
 };
 
 export const getCurrentUserId = (): string => {
@@ -578,7 +609,7 @@ export const getCurrentUserId = (): string => {
 
 export const setCurrentUserId = (uid: string) => {
   writeStorage(STORAGE_KEYS.CURRENT_USER_ID, uid);
-  window.dispatchEvent(new Event('vop_data_updated'));
+  notifyStorageUpdated();
 };
 
 export const getCurrentUser = (): User => {
@@ -690,7 +721,7 @@ export const getStoredAnnouncements = (): Announcement[] => {
 
 export const saveAnnouncements = (announcements: Announcement[]) => {
   writeStorage(STORAGE_KEYS.ANNOUNCEMENTS, JSON.stringify(announcements));
-  window.dispatchEvent(new Event('vop_data_updated'));
+  notifyStorageUpdated();
 };
 
 export const getStoredBooks = (): BookResource[] => {
@@ -707,7 +738,7 @@ export const getStoredBooks = (): BookResource[] => {
 
 export const saveBooks = (books: BookResource[]) => {
   writeStorage(STORAGE_KEYS.BOOKS, JSON.stringify(books));
-  window.dispatchEvent(new Event('vop_data_updated'));
+  notifyStorageUpdated();
 };
 
 // ---------------- Backup & Restore (Zero Hardcoding) ---------------- //
@@ -752,7 +783,7 @@ export const importDatabaseBackup = (jsonString: string): boolean => {
     if (data.radioBroadcasts) writeStorage(STORAGE_KEYS.RADIO_BROADCASTS, JSON.stringify(data.radioBroadcasts));
     if (data.autoLocalizationEntries) writeStorage(STORAGE_KEYS.AUTO_LOCALIZATION, JSON.stringify(data.autoLocalizationEntries));
 
-    window.dispatchEvent(new Event('vop_data_updated'));
+    notifyStorageUpdated();
     return true;
   } catch (e) {
     console.error('Import backup failed:', e);

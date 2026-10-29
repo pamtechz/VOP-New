@@ -28,10 +28,19 @@ const record = {
 test('quiz bank author and Super Admin retain full management access', () => {
   for (const [uid, elevated] of [['author',false],['admin',true]] as const) {
     const result = quizManagementItem('quiz-1',record,uid,elevated);
-    assert.equal(result.canEdit,elevated);
+    assert.equal(result.canEdit,true);
     assert.equal(result.questions[0].correctOptionIndex,1);
     assert.equal(result.privateTeacherNote,'Never disclose');
   }
+});
+
+test('platform-stewarded quizzes remain read-only to their author while Super Admin retains management', () => {
+  const protectedRecord = {...record, platformOwned:true};
+  const author = quizManagementItem('quiz-1',protectedRecord,'author',false);
+  const admin = quizManagementItem('quiz-1',protectedRecord,'admin',true);
+  assert.equal(author.canEdit,false);
+  assert.equal(admin.canEdit,true);
+  assert.equal(author.questions[0].correctOptionIndex,1);
 });
 
 test('other contributors receive only public quiz fields and no answers', () => {

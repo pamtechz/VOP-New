@@ -94,6 +94,7 @@ await db.doc('organizations/'+a).set({id:a,status:'active'});
 await db.doc('organizations/'+b).set({id:b,status:'active'});
 const author=await identity('program-test-author',a);
 const coAdmin=await identity('program-test-peer',a);
+const coEditor=await identity('program-test-editor',a,'editor');
 const learner=await identity('program-test-learner',a,'learner');
 const outsider=await identity('program-test-outside',b);
 const outsideLearner=await identity('program-test-outside-learner',b,'learner');
@@ -316,11 +317,24 @@ await test('program ownership, tenant scope, and read permissions',async t=>{
     assert.notEqual(bad.status,200);
     assert.match(String(bad.value.error),/another organization|missing|belongs|shared guides/);
   });
-  await t.test('co-admin cannot edit the other author program',async()=>{
-    const bad=await call(coAdmin,{collection:'programs',action:'upsert',
-      id:programId,organizationId:a,data:{...base,title:'Account takeover'}});
-    assert.notEqual(bad.status,200);
-    assert.equal((await db.doc('programs/'+programId).get()).data()?.title,base.title);
+  await t.test('owning co-admin updates the canonical program while nonauthor editors and foreign admins cannot',async()=>{
+    const before=(await db.collection('programs').get()).size;
+    const saved=await call(coAdmin,{collection:'programs',action:'upsert',
+      id:programId,organizationId:a,data:{...base,title:'Organization update'}});
+    assert.equal(saved.status,200,JSON.stringify(saved.value));
+    const record=(await db.doc('programs/'+programId).get()).data();
+    assert.equal(record.title,'Organization update');
+    assert.equal(record.ownerUid,author.uid,'editing does not transfer authorship');
+    assert.equal(record.ownerOrganizationId,a);
+    assert.equal((await db.collection('programs').get()).size,before,'editing does not clone the program');
+    for(const actor of [coEditor,outsider]){
+      const denied=await call(actor,{collection:'programs',action:'upsert',
+        id:programId,organizationId:actor===outsider?b:a,data:{...base,title:'Unauthorized update'}});
+      assert.notEqual(denied.status,200);
+      assert.equal((await db.doc('programs/'+programId).get()).data()?.title,'Organization update');
+    }
+    const restored=await call(author,{collection:'programs',action:'upsert',id:programId,organizationId:a,data:base});
+    assert.equal(restored.status,200);
   });
   await t.test('cross-tenant private programs are invisible to other org admins',async()=>{
     const outside=await call(outsider,{collection:'programs',action:'list',organizationId:b});
@@ -331,7 +345,10 @@ await test('program ownership, tenant scope, and read permissions',async t=>{
     assert.equal(inside.value.items.find(item=>item.id===programId).canEdit,true);
     const peer=await call(coAdmin,{collection:'programs',action:'list',organizationId:a});
     assert.equal(peer.status,200);
-    assert.equal(peer.value.items.find(item=>item.id===programId).canEdit,false);
+    assert.equal(peer.value.items.find(item=>item.id===programId).canEdit,true);
+    const editor=await call(coEditor,{collection:'programs',action:'list',organizationId:a});
+    assert.equal(editor.status,200);
+    assert.equal(editor.value.items.find(item=>item.id===programId).canEdit,false);
   });
   await t.test('a tenant cannot unilaterally make a program system-wide',async()=>{
     const attempt=await call(author,{collection:'programs',action:'upsert',
@@ -357,6 +374,8 @@ await test('program ownership, tenant scope, and read permissions',async t=>{
     const approved=await call(superAdmin,{collection:'programs',action:'upsert',
       id:programId,organizationId:a,data:{...base,sharingScope:'shared'}});
     assert.equal(approved.status,200,JSON.stringify(approved.value));
+    assert.equal((await db.doc('guides/'+guideA).get()).data()?.adoptedByPlatform,true,
+      'approving a shared program must atomically adopt its referenced guides');
     const outside=await call(outsider,{collection:'programs',action:'list',organizationId:b});
     assert.equal(outside.value.items.find(item=>item.id===programId).canEdit,false);
     const learnerCatalogue=await call(outsideLearner,{collection:'programs',action:'learnerList'});
@@ -382,6 +401,8 @@ await test('program ownership, tenant scope, and read permissions',async t=>{
     assert.equal(record.data()?.archived,true);
     assert.equal(record.data()?.published,false);
     assert.equal(record.data()?.adoptedByPlatform,true);
+    assert.equal((await db.doc('guides/'+guideA).get()).data()?.adoptedByPlatform,true,
+      'archiving a shared program must not return its guides to tenant control');
     const foreign=await call(outsider,{collection:'programs',action:'list',organizationId:b});
     assert.equal(foreign.value.items.some(item=>item.id===programId),false);
     const ownList=await call(author,{collection:'programs',action:'list',organizationId:a});
@@ -605,6 +626,65 @@ await db.doc('guides/'+notesGuide).set({
   language:'en',title:'Private notes guide',published:true,
   archived:false,sharingScope:'organization',canonical:true,
 });
+await test('stale curriculum edits cannot recreate deleted originals or move lessons',async t=>{
+  await t.test('a deleted programme stays deleted after an editor retry',async()=>{
+    const id='program-test-deleted-program';
+    const result=await call(author,{collection:'programs',action:'upsert',id,
+      organizationId:a,data:{expectedExisting:true,title:'Stale programme'}});
+    assert.notEqual(result.status,200);
+    assert.match(result.value.error,/removed|Reload/);
+    assert.equal((await db.doc('programs/'+id).get()).exists,false);
+  });
+  await t.test('a deleted guide stays deleted after an editor retry',async()=>{
+    const id='program-test-deleted-guide';
+    const result=await call(author,{collection:'guides',action:'upsertGuide',id,
+      organizationId:a,data:{expectedExisting:true,language:'en',title:'Stale guide'}});
+    assert.notEqual(result.status,200);
+    assert.match(result.value.error,/no longer exists/);
+    assert.equal((await db.doc('guides/'+id).get()).exists,false);
+  });
+  await t.test('a deleted lesson stays deleted and cannot acquire new private notes',async()=>{
+    const id='program-test-deleted-lesson';
+    const ref=db.doc('guides/'+notesGuide+'/lessons/'+id);
+    const result=await call(author,{collection:'curriculum',action:'upsertLesson',id,
+      organizationId:a,data:{expectedExisting:true,originalGuideId:notesGuide,
+        guideId:notesGuide,language:'en',title:'Stale lesson',teacherNotes:'Stale notes'}});
+    assert.notEqual(result.status,200);
+    assert.match(result.value.error,/original lesson is missing/);
+    assert.equal((await ref.get()).exists,false);
+    assert.equal((await ref.collection('private').doc('instructorNotes').get()).exists,false);
+  });
+  await t.test('changing the guide field cannot create a copy under another guide',async()=>{
+    const id='program-test-moved-lesson';
+    const result=await call(author,{collection:'curriculum',action:'upsertLesson',id,
+      organizationId:a,data:{originalGuideId:guideA,guideId:notesGuide,
+        language:'en',title:'Moved lesson'}});
+    assert.notEqual(result.status,200);
+    assert.match(result.value.error,/Moving a lesson by editing is not allowed/);
+    assert.equal((await db.doc('guides/'+notesGuide+'/lessons/'+id).get()).exists,false);
+  });
+  await t.test('deletion after authorization aborts the entire lesson and private-note batch',async()=>{
+    const id='program-test-delete-during-save';
+    const ref=db.doc('guides/'+notesGuide+'/lessons/'+id);
+    await ref.set({id,lessonId:id,title:'Original',organizationId:a,
+      ownerOrganizationId:a,ownerTenantId:a,ownerUid:author.uid});
+    const originalBatch=db.batch;
+    db.batch=function(){
+      const batch=originalBatch.call(this);
+      const commit=batch.commit.bind(batch);
+      batch.commit=async()=>{await ref.delete();return commit();};
+      return batch;
+    };
+    try{
+      const result=await call(author,{collection:'curriculum',action:'upsertLesson',id,
+        organizationId:a,data:{expectedExisting:true,originalGuideId:notesGuide,
+          guideId:notesGuide,language:'en',title:'Stale replacement',teacherNotes:'Private text'}});
+      assert.notEqual(result.status,200);
+      assert.equal((await ref.get()).exists,false);
+      assert.equal((await ref.collection('private').doc('instructorNotes').get()).exists,false);
+    }finally{db.batch=originalBatch;}
+  });
+});
 await test('teacher notes are private and transferred atomically from legacy lessons',async t=>{
   const lessonId='program-test-study-lesson';
   const privatePath='guides/'+notesGuide+'/lessons/'+lessonId+'/private/instructorNotes';
@@ -621,12 +701,16 @@ await test('teacher notes are private and transferred atomically from legacy les
       .data()?.teacherNotes,undefined);
     assert.equal((await db.doc(privatePath).get()).data()?.text,notes);
   });
-  await t.test('authorized author receives notes, co-editor only metadata, outsider nothing',async()=>{
+  await t.test('author and owning admin receive instructor notes, nonauthor editor receives metadata and outsider nothing',async()=>{
     const own=await call(author,{collection:'curriculum',action:'listGuideLessons',id:notesGuide,
       organizationId:a});
     assert.equal(own.status,200,JSON.stringify(own.value));
     assert.equal(own.value.items.find(item=>item.id===lessonId).teacherNotes,notes);
-    const peer=await call(coAdmin,{collection:'curriculum',action:'listGuideLessons',id:notesGuide,
+    const admin=await call(coAdmin,{collection:'curriculum',action:'listGuideLessons',id:notesGuide,
+      organizationId:a});
+    assert.equal(admin.status,200,JSON.stringify(admin.value));
+    assert.equal(admin.value.items.find(item=>item.id===lessonId).teacherNotes,notes);
+    const peer=await call(coEditor,{collection:'curriculum',action:'listGuideLessons',id:notesGuide,
       organizationId:a});
     assert.equal(peer.status,200,JSON.stringify(peer.value));
     assert.equal(peer.value.items.find(item=>item.id===lessonId).teacherNotes,undefined);

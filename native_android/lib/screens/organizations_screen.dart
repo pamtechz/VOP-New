@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../core/vop_api.dart';
 import '../widgets/vop_ui.dart';
+import '../widgets/vop_desktop_layout.dart';
+import '../widgets/vop_management_list.dart';
 import 'workspace_operations_screen.dart';
 import 'workspace_records_screen.dart';
 import 'plans_management_screen.dart';
@@ -73,10 +75,21 @@ class _OrganizationsState extends State<OrganizationsScreen>{
     final items=recordRows(s.data?.last['items']).where((v)=>search.isEmpty||['name','slug','organizationType','city','billingCountry'].any((key)=>'${v[key]??''}'.toLowerCase().contains(search))).toList();
     return Scaffold(appBar:AppBar(title:const Text('Organizations & hierarchy'),actions:[IconButton(tooltip:'Refresh',onPressed:()=>setState(reload),icon:const Icon(Icons.refresh))]),
       floatingActionButton:workspace['isSuperAdmin']==true&&can(workspace,'create')?FloatingActionButton.extended(onPressed:()=>edit(workspace),icon:const Icon(Icons.add_business_outlined),label:const Text('New organization')):null,
-      body:s.connectionState!=ConnectionState.done?const VopSkeleton():s.hasError?VopEmpty(icon:Icons.error_outline,message:'${s.error}',onRetry:()=>setState(reload)):
+      body:VopDesktopWorkspaceFrame(api:widget.api,child:s.connectionState!=ConnectionState.done?const VopSkeleton():s.hasError?VopEmpty(icon:Icons.error_outline,message:'${s.error}',onRetry:()=>setState(reload)):
         Column(children:[Padding(padding:const EdgeInsets.all(16),child:TextField(decoration:const InputDecoration(labelText:'Search name, type, or location',prefixIcon:Icon(Icons.search)),onChanged:(v)=>setState(()=>search=v.trim().toLowerCase()))),
           Expanded(child:items.isEmpty?const VopEmpty(icon:Icons.corporate_fare,message:'No organizations found.'):
-            ListView.separated(padding:const EdgeInsets.fromLTRB(16,0,16,96),itemCount:items.length,separatorBuilder:(_,__)=>const Divider(),itemBuilder:(_,i){final item=items[i];return ListTile(
-              leading:Icon(item['isPublicMinistry']==true?Icons.public:Icons.corporate_fare),title:Text(recordTitle(item)),subtitle:Text(['${item['organizationType']??''}','${item['city']??''}','${item['billingCountry']??''}','${item['status']??''}'].where((v)=>v.isNotEmpty).join(' · ')),trailing:const Icon(Icons.chevron_right),onTap:()=>details(workspace,item));}))]));
+            VopAdaptiveManagementList(
+              items:items,
+              title:recordTitle,
+              description:(item)=>['${item['organizationType']??''}',
+                '${item['city']??''}','${item['billingCountry']??''}']
+                .where((v)=>v.isNotEmpty).join(' · '),
+              status:(item)=>'${item['status']??'Unknown'}',
+              icon:(item)=>item['isPublicMinistry']==true
+                ?Icons.public:Icons.corporate_fare,
+              onOpen:(item)=>()=>details(workspace,item),
+              actions:(item)=>IconButton(
+                tooltip:'View organisation',icon:const Icon(Icons.chevron_right),
+                onPressed:()=>details(workspace,item))))])));
   });
 }

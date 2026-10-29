@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../core/vop_api.dart';
 import '../widgets/vop_ui.dart';
+import '../widgets/vop_desktop_layout.dart';
+import '../widgets/vop_management_list.dart';
 import 'workspace_records_screen.dart';
 
 class UserManagementScreen extends StatefulWidget {
@@ -67,10 +69,20 @@ class _UserManagementState extends State<UserManagementScreen> {
     final items=recordRows(s.data?.last['items']).where((v)=>search.isEmpty||[recordTitle(v),'${v['email']??''}'].any((text)=>text.toLowerCase().contains(search))).toList();
     return Scaffold(appBar:AppBar(title:const Text('User & role management'),actions:[IconButton(tooltip:'Refresh',onPressed:()=>setState(reload),icon:const Icon(Icons.refresh))]),
       floatingActionButton:actions.contains('create')?FloatingActionButton.extended(onPressed:()=>edit(workspace),icon:const Icon(Icons.person_add_outlined),label:const Text('Create account')):null,
-      body:s.connectionState!=ConnectionState.done?const VopSkeleton():s.hasError?VopEmpty(icon:Icons.error_outline,message:'${s.error}',onRetry:()=>setState(reload)):
+      body:VopDesktopWorkspaceFrame(api:widget.api,child:s.connectionState!=ConnectionState.done?const VopSkeleton():s.hasError?VopEmpty(icon:Icons.error_outline,message:'${s.error}',onRetry:()=>setState(reload)):
         Column(children:[Padding(padding:const EdgeInsets.all(16),child:TextField(decoration:const InputDecoration(labelText:'Find account',prefixIcon:Icon(Icons.search)),onChanged:(v)=>setState(()=>search=v.trim().toLowerCase()))),
-          Expanded(child:items.isEmpty?const VopEmpty(icon:Icons.people_outline,message:'No accounts found.'):ListView.separated(padding:const EdgeInsets.fromLTRB(16,0,16,96),itemCount:items.length,separatorBuilder:(_,__)=>const Divider(),itemBuilder:(_,i){final user=items[i];return ListTile(
-            title:Text(recordTitle(user)),subtitle:Text('${user['email']??''}\n${user['roleLabel']??user['role']??''} · ${user['status']??''}'),isThreeLine:true,
-            trailing:Wrap(children:[if(actions.contains('update'))IconButton(tooltip:'Edit account',onPressed:()=>edit(workspace,user),icon:const Icon(Icons.edit_outlined)),if(actions.contains('delete'))IconButton(tooltip:'Delete account',onPressed:()=>delete(user),icon:const Icon(Icons.delete_outline))]));}))]));
+          Expanded(child:items.isEmpty?const VopEmpty(icon:Icons.people_outline,message:'No accounts found.'):VopAdaptiveManagementList(
+              items:items,title:recordTitle,
+              description:(user)=>'${user['email']??''} · ${user['roleLabel']??user['role']??''}',
+              status:(user)=>'${user['status']??(user['disabled']==true?'Disabled':'Active')}',
+              icon:(_)=>Icons.person_outline,
+              onOpen:(user)=>actions.contains('update')
+                ?()=>edit(workspace,user):null,
+              actions:(user)=>Wrap(children:[
+                if(actions.contains('update'))IconButton(tooltip:'Edit account',
+                  onPressed:()=>edit(workspace,user),icon:const Icon(Icons.edit_outlined)),
+                if(actions.contains('delete'))IconButton(tooltip:'Delete account',
+                  onPressed:()=>delete(user),icon:const Icon(Icons.delete_outline)),
+              ])))])));
   });
 }

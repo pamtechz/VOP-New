@@ -16,7 +16,18 @@ function merge(target, input) {
   return target;
 }
 const db = {
-  doc(path) { return { path, get: async () => snapshot(path), set: async value => records.set(path, merge({ ...records.get(path) }, value)) }; },
+  doc(path) { return {
+    path, get: async () => snapshot(path),
+    set: async value => records.set(path, merge({ ...records.get(path) }, value)),
+    create: async value => {
+      assert.equal(records.has(path),false,'create cannot overwrite an existing record');
+      records.set(path,merge({},value));
+    },
+    update: async value => {
+      assert.equal(records.has(path),true,'update cannot recreate a missing record');
+      records.set(path,merge({...records.get(path)},value));
+    },
+  }; },
   collection(path) { return { get: async () => ({ docs: [...records.keys()].filter(key => key.startsWith(path + '/') && key.split('/').length === path.split('/').length + 1).map(snapshot) }) }; },
   async runTransaction(callback) {
     const writes = [];

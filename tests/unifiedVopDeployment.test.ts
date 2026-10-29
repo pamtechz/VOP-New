@@ -11,11 +11,17 @@ test('Legacy and Classic share one Vercel project without altering existing API 
     r.source==='/classic'&&r.destination==='/classic/'));
   assert.ok(config.rewrites.some((r:{source:string;destination:string})=>
     r.source==='/classic/'&&r.destination==='/classic/index.html'));
-  const catchall=config.rewrites.find((r:{destination:string})=>r.destination==='/index.html');
-  assert.ok(catchall);
+  const catchall=config.rewrites.find((r:{source:string;destination:string})=>
+    r.source.startsWith('/((?!api')&&r.destination==='/index.html');
+  assert.ok(catchall,'The legacy SPA catch-all must remain configured');
   const classic=config.rewrites.find((r:{source:string;destination:string})=>
     r.source.startsWith('/classic/((')&&r.destination==='/classic/index.html');
   assert.ok(classic);
+  assert.ok(config.redirects.some((r:{source:string;destination:string})=>
+    r.source==='/classic/editor'&&r.destination==='/classic/'),
+    'Old Classic editor URLs must redirect back into the Flutter application');
+  assert.ok(!config.rewrites.some((r:{source:string})=>r.source==='/classic/editor'),
+    'The Flutter lesson editor must not load the separate Legacy SPA');
   assert.ok(config.rewrites.indexOf(classic)<config.rewrites.indexOf(catchall),
     'Classic routing must precede the legacy catch-all');
   for(const target of ['/api/admin?__vopRoute=public-catalog','/api/admin?__vopRoute=mobile']){

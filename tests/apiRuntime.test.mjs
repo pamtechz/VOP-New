@@ -39,6 +39,32 @@ test('local API mirrors consolidated Vercel payment rewrites', async () => {
   assert.equal(received[1].query.__vopPaymentRoute,'catalog');
 });
 
+test('local API mirrors consolidated health, catalogue, mobile and account rewrites', async () => {
+  const loaded=[];
+  const received=[];
+  const middleware=createLocalApiMiddleware({ssrLoadModule:async path=>{
+    loaded.push(path);
+    return {default(req,res){received.push(req);res.status(200).json({ok:true});}};
+  }});
+  for(const route of ['health','public-catalog','mobile','account','account-lifecycle-cron']){
+    const res={headersSent:false,writableEnded:false,setHeader(){},end(){this.writableEnded=true;}};
+    await middleware({method:'GET',url:'/api/'+route,headers:{}},res,()=>assert.fail('Route fell through'));
+  }
+  assert.deepEqual(loaded,Array(5).fill('/api/admin.ts'));
+  assert.deepEqual(received.map(req=>req.query.__vopRoute),['health','public-catalog','mobile','account','account']);
+  assert.equal(received[4].query.__vopAccountRoute,'lifecycle-cron');
+});
+
+test('local API rejects malformed JSON with a client error before invoking the handler', async () => {
+  let invoked=false;
+  const middleware=createLocalApiMiddleware({ssrLoadModule:async()=>({default(){invoked=true;}})});
+  const res={headersSent:false,writableEnded:false,statusCode:200,setHeader(){},end(){this.writableEnded=true;}};
+  const req={method:'POST',url:'/api/study/progress',headers:{},async *[Symbol.asyncIterator](){yield Buffer.from('{broken');}};
+  await middleware(req,res,()=>assert.fail('Route fell through'));
+  assert.equal(res.statusCode,400);
+  assert.equal(invoked,false);
+});
+
 test('certificate mine query reaches authentication instead of public verification', async () => {
   const { default: handler } = await server.ssrLoadModule('/api/certificates.ts');
   const res = response();
@@ -95,6 +121,23 @@ test('loading fallback translations preserves the selected locale and resolves e
   }
 });
 
+
+test('UI language stays usable when storage access or quota fails', async () => {
+  const original={localStorage:globalThis.localStorage,fetch:globalThis.fetch,document:globalThis.document};
+  globalThis.document={documentElement:{}};
+  globalThis.fetch=async()=>({ok:true,json:async()=>({items:[{code:'bem'},{code:'eng',aliases:['en']}],translations:{}})});
+  globalThis.localStorage={getItem(){throw new DOMException('Blocked','SecurityError');},setItem(){throw new DOMException('Full','QuotaExceededError');}};
+  try{
+    const i18n=await server.ssrLoadModule('/src/services/i18n.ts');
+    assert.doesNotThrow(()=>i18n.getUiLocale());
+    // A stale persisted value must not undo a session change when its write fails.
+    globalThis.localStorage.getItem=()=> 'eng';
+    assert.doesNotThrow(()=>i18n.setUiLocale('bem'));
+    await i18n.loadUiLocale('bem');
+    assert.equal(i18n.getUiLocale(),'bem');
+    assert.equal(document.documentElement.lang,'bem');
+  }finally{Object.assign(globalThis,original);}
+});
 
 test('package lock matches supported runtime, Vite, and gRPC dependencies', () => {
   const root=join(dirname(fileURLToPath(import.meta.url)),'..');

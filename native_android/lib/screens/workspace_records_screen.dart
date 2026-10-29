@@ -1,15 +1,20 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import '../core/vop_api.dart';
 import '../widgets/vop_ui.dart';
+import '../widgets/vop_desktop_layout.dart';
 import '../widgets/plate_document_editor.dart';
+import '../widgets/plate_page.dart';
+import '../widgets/lesson_section_studio.dart';
 import '../widgets/certificate_layout_editor.dart';
 import 'curriculum_lesson_editor_screen.dart';
 
 Map<String,dynamic> recordMap(dynamic value)=>value is Map?Map<String,dynamic>.from(value):{};
 List<Map<String,dynamic>> recordRows(dynamic value)=>value is List?value.whereType<Map>().map((v)=>Map<String,dynamic>.from(v)).toList():[];
 String recordTitle(Map<String,dynamic> value)=>(value['title']??value['name']??value['displayName']??value['id']??'Record').toString();
-String newRecordId()=>DateTime.now().microsecondsSinceEpoch.toRadixString(36);
+int _recordIdSequence=0;
+String newRecordId()=>DateTime.now().microsecondsSinceEpoch.toRadixString(36)+'-'+(++_recordIdSequence).toRadixString(36);
 
 class WorkspaceRecordsScreen extends StatefulWidget {
   const WorkspaceRecordsScreen({required this.api,required this.collection,this.organizationId,super.key});
@@ -21,7 +26,7 @@ class WorkspaceRecordsScreen extends StatefulWidget {
 class _WorkspaceRecordsState extends State<WorkspaceRecordsScreen>{
   late Future<List<Map<String,dynamic>>> future;
   String search='';
-  bool table=false;
+  bool? tableOverride;
   Map<String,dynamic> get scope=>{if(widget.organizationId?.isNotEmpty==true)'organizationId':widget.organizationId};
   @override void initState(){super.initState();reload();}
   void reload(){future=Future.wait([widget.api.workspace(),widget.api.recordList(widget.collection,payload:scope)]);}
@@ -36,7 +41,11 @@ class _WorkspaceRecordsState extends State<WorkspaceRecordsScreen>{
       onSave:(value)async{
         final id=(original['id']??(widget.collection=='languages'?value['code']:null)??
           (schema['singleton']==true?widget.collection:draftId)).toString();
-        await widget.api.saveRecord(widget.collection,id,value,payload:scope);
+        await widget.api.saveRecord(widget.collection,id,{
+          ...value,
+          if(record!=null && ['programs','guides'].contains(widget.collection))
+            'expectedExisting':true,
+        },payload:scope);
       })));
     if(mounted)setState(reload);
   }
@@ -56,27 +65,28 @@ class _WorkspaceRecordsState extends State<WorkspaceRecordsScreen>{
     final title=(schema['title']??'Workspace').toString();
     final records=recordRows(s.data?.last['items']);
     final filtered=records.where((v)=>search.isEmpty||recordTitle(v).toLowerCase().contains(search)).toList();
+    final useTable=tableOverride ?? VopDesktopWorkspaceFrame.isDesktop(context);
     return Scaffold(appBar:AppBar(title:Text(title),actions:[
-      IconButton(tooltip:table?'Show cards':'Show table',onPressed:()=>setState(()=>table=!table),icon:Icon(table?Icons.view_agenda_outlined:Icons.table_rows_outlined)),
+      IconButton(tooltip:useTable?'Show cards':'Show table',onPressed:()=>setState(()=>tableOverride=!useTable),icon:Icon(useTable?Icons.view_agenda_outlined:Icons.table_rows_outlined)),
       IconButton(tooltip:'Refresh',onPressed:()=>setState(reload),icon:const Icon(Icons.refresh))]),
       floatingActionButton:schema.isNotEmpty&&(actions.contains('create')||(schema['singleton']==true&&actions.contains('update')))
         ?FloatingActionButton.extended(onPressed:()=>edit(schema,workspace,schema['singleton']==true&&records.isNotEmpty?records.first:null),
           icon:Icon(schema['singleton']==true?Icons.edit:Icons.add),label:Text(schema['singleton']==true?'Edit settings':'Add')):null,
-      body:s.connectionState!=ConnectionState.done?const VopSkeleton():s.hasError?
+      body:VopDesktopWorkspaceFrame(api:widget.api,child:s.connectionState!=ConnectionState.done?const VopSkeleton():s.hasError?
         VopEmpty(icon:Icons.error_outline,message:'${s.error}',onRetry:()=>setState(reload)):
         schema.isEmpty?const VopEmpty(icon:Icons.lock_outline,message:'This workspace is not available to your account.'):
         Column(children:[Padding(padding:const EdgeInsets.all(16),child:TextField(
           decoration:const InputDecoration(labelText:'Search',prefixIcon:Icon(Icons.search)),onChanged:(v)=>setState(()=>search=v.trim().toLowerCase()))),
           Expanded(child:filtered.isEmpty?const VopEmpty(icon:Icons.inbox_outlined,message:'No records found.'):
-            table?SingleChildScrollView(scrollDirection:Axis.horizontal,child:SingleChildScrollView(child:DataTable(columns:const[
+            useTable?SingleChildScrollView(scrollDirection:Axis.horizontal,child:SingleChildScrollView(child:DataTable(columns:const[
               DataColumn(label:Text('Name')),DataColumn(label:Text('Status')),DataColumn(label:Text('Actions'))],
-              rows:filtered.map((item)=>DataRow(cells:[DataCell(SizedBox(width:260,child:Text(recordTitle(item)))),
+              rows:filtered.map((item)=>DataRow(cells:[DataCell(SizedBox(width:260,child:Text(recordTitle(item))),onTap:()=>_details(item,schema,workspace,actions)),
                 DataCell(Text(item['published']==true?'Published':item['published']==false?'Draft':'${item['status']??''}')),
                 DataCell(_actions(item,schema,workspace,actions))])).toList()))):
             ListView.separated(padding:const EdgeInsets.fromLTRB(16,0,16,96),itemCount:filtered.length,
               separatorBuilder:(_,__)=>const Divider(),itemBuilder:(_,i){final item=filtered[i];return ListTile(
                 title:Text(recordTitle(item)),subtitle:Text('${item['description']??item['subtitle']??item['language']??''}',maxLines:2,overflow:TextOverflow.ellipsis),
-                trailing:_actions(item,schema,workspace,actions),onTap:()=>_details(item,schema,workspace,actions));}))]));
+                trailing:_actions(item,schema,workspace,actions),onTap:()=>_details(item,schema,workspace,actions));}))])));
   });
   Widget _actions(Map<String,dynamic> item,Map<String,dynamic> schema,Map<String,dynamic> workspace,Set<String> actions)=>Wrap(children:[
     if(widget.collection=='guides')IconButton(tooltip:'Manage lessons',icon:const Icon(Icons.menu_book_outlined),onPressed:()=>Navigator.push(context,MaterialPageRoute<void>(builder:(_)=>CurriculumLessonEditorScreen(api:widget.api,guide:item,workspace:workspace)))),
@@ -96,10 +106,12 @@ Map<String,dynamic> writableRecord(Map<String,dynamic> source)=>Map<String,dynam
   ['id','canEdit','scope','inherited','createdAt','updatedAt','lessons','lessonCount','languages','questionCount','canManage'].contains(key));
 
 class RecordEditor extends StatefulWidget{
-  const RecordEditor({required this.api,required this.title,required this.fields,required this.options,required this.initial,required this.onSave,this.submitLabel='Save changes',super.key});
+  const RecordEditor({required this.api,required this.title,required this.fields,required this.options,required this.initial,required this.onSave,this.submitLabel='Save changes',this.lessonMode=false,this.guideTitle='',super.key});
   final VopApi api;
   final String title;
   final String submitLabel;
+  final bool lessonMode;
+  final String guideTitle;
   final List<Map<String,dynamic>> fields;
   final Map<String,dynamic> options,initial;
   final Future<void> Function(Map<String,dynamic>) onSave;
@@ -109,7 +121,8 @@ class _RecordEditorState extends State<RecordEditor>{
   final form=GlobalKey<FormState>();
   late Map<String,dynamic> value;
   late Map<String,dynamic> options;
-  bool saving=false,dirty=false;
+  bool saving=false,dirty=false,saveInFlight=false;
+  String lessonTab='chapters';
   String? error;
   @override void initState(){super.initState();value=recordMap(jsonDecode(jsonEncode(writableRecord(widget.initial))));options={...widget.options};loadOptions();}
   Future<void> loadOptions()async{
@@ -120,11 +133,81 @@ class _RecordEditorState extends State<RecordEditor>{
     catch(e){if(mounted)setState(()=>error='Could not load choices: $e');}
   }
   Future<void> save()async{
+    if(saveInFlight)return;
+    if(widget.lessonMode&&(['title','lessonNumber'].any(
+      (key)=>(value[key]??'').toString().trim().isEmpty))){
+      setState((){lessonTab='details';error='Enter the lesson title and number.';});
+      return;
+    }
+    if(widget.lessonMode){
+      final problem=lessonStructureError();
+      if(problem!=null){setState((){lessonTab='chapters';error=problem;});return;}
+    }
     if(!form.currentState!.validate())return;
+    saveInFlight=true;
     setState((){saving=true;error=null;});
-    try{await widget.onSave(value);if(mounted){setState(()=>dirty=false);WidgetsBinding.instance.addPostFrameCallback((_){if(mounted)Navigator.pop(context);});}}
+    try{await widget.onSave(value);if(mounted){setState(()=>dirty=false);
+      if(kIsWeb&&widget.lessonMode){
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content:Text('Lesson saved successfully.')));
+      }else{
+        WidgetsBinding.instance.addPostFrameCallback((_){if(mounted)Navigator.pop(context);});
+      }
+    }}
     catch(e){if(mounted)setState(()=>error='$e');}
-    finally{if(mounted)setState(()=>saving=false);}
+    finally{saveInFlight=false;if(mounted)setState(()=>saving=false);}
+  }
+  String? lessonStructureError(){
+    final chapters=recordRows(value['chapters']);
+    if(chapters.isEmpty)return 'Add at least one chapter and section.';
+    if(chapters.length>40)return 'A lesson supports at most 40 chapters.';
+    for(final chapter in chapters){
+      if((chapter['title']??'').toString().trim().isEmpty){
+        return 'Give every chapter a title.';
+      }
+      final sections=recordRows(chapter['sections']);
+      if(sections.isEmpty)return 'Each chapter needs at least one section.';
+      if(sections.length>40)return 'Each chapter supports at most 40 sections.';
+      for(final section in sections){
+        if((section['title']??'').toString().trim().isEmpty){
+          return 'Give every section a title.';
+        }
+        if(recordRows(section['document']).isEmpty &&
+           recordRows(section['blocks']).isEmpty){
+          return 'Add at least one content block to every section.';
+        }
+      }
+    }
+    return null;
+  }
+  bool showLessonField(Map<String,dynamic> field){
+    final key=(field['key']??'').toString();
+    switch(lessonTab){
+      case 'chapters':
+      case 'advanced':return ['chapters','contentPages','pages','content'].contains(key);
+      case 'media':return ['media','imageUrl','audioUrl','videoUrl'].contains(key);
+      case 'references':return ['bibleReferences','teacherNotes'].contains(key);
+      case 'settings':return ['sharingScope','tags','published'].contains(key);
+      default:return ['title','description','lessonNumber','estimatedMinutes'].contains(key);
+    }
+  }
+  Widget lessonPreview(){
+    final chapters=recordRows(value['chapters']);
+    final pages=recordRows(value['contentPages']);
+    return Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+      if(chapters.isEmpty&&pages.isEmpty)
+        const Text('Add chapter content to preview the learner experience.'),
+      for(final chapter in chapters)...[
+        Padding(padding:const EdgeInsets.symmetric(vertical:12),
+          child:Text(recordTitle(chapter),style:Theme.of(context).textTheme.titleLarge)),
+        for(final section in recordRows(chapter['sections']))
+          Card(child:Padding(padding:const EdgeInsets.all(16),
+            child:PlatePageView(page:section))),
+      ],
+      if(chapters.isEmpty)for(final page in pages)
+        Card(child:Padding(padding:const EdgeInsets.all(16),
+          child:PlatePageView(page:page))),
+    ]);
   }
   @override Widget build(BuildContext context)=>PopScope(canPop:!saving&&!dirty,
     onPopInvokedWithResult:(didPop,result)async{
@@ -132,11 +215,87 @@ class _RecordEditorState extends State<RecordEditor>{
       final discard=await showDialog<bool>(context:context,builder:(ctx)=>AlertDialog(title:const Text('Discard changes?'),
         actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('Keep editing')),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('Discard'))]));
       if(discard==true&&mounted){setState(()=>dirty=false);WidgetsBinding.instance.addPostFrameCallback((_){if(mounted)Navigator.pop(context);});}
-    },child:Scaffold(appBar:AppBar(title:Text(widget.title),actions:[TextButton(onPressed:saving?null:save,child:Text(saving?'Saving…':widget.submitLabel))]),
-      body:Form(key:form,child:ListView(padding:const EdgeInsets.fromLTRB(20,12,20,60),children:[
-        if(error!=null)Padding(padding:const EdgeInsets.only(bottom:16),child:Text(error!,style:TextStyle(color:Theme.of(context).colorScheme.error))),
-        SchemaFields(fields:widget.fields,value:value,options:options,onChanged:()=>setState(()=>dirty=true)),
-        const SizedBox(height:24),FilledButton(onPressed:saving?null:save,child:Text(saving?'Saving…':widget.submitLabel))]))));
+    },child:Scaffold(appBar:widget.lessonMode&&kIsWeb&&lessonTab=='chapters'
+      ?null:AppBar(title:Text(widget.title),actions:[
+      if(widget.lessonMode&&lessonTab!='chapters')
+        TextButton(onPressed:()=>setState(()=>lessonTab='chapters'),
+          child:const Text('Lesson editor')),
+      TextButton(onPressed:saving?null:save,child:Text(saving?'Saving…':widget.submitLabel))]),
+      body:Form(key:form,child:LayoutBuilder(builder:(context,constraints){
+        final wide=constraints.maxWidth>=960;
+        if(widget.lessonMode&&lessonTab=='chapters'){
+          return Column(children:[
+            if(saving)const LinearProgressIndicator(),
+            if(error!=null)Padding(
+              padding:const EdgeInsets.symmetric(horizontal:12,vertical:6),
+              child:Text(error!,style:TextStyle(color:Theme.of(context).colorScheme.error))),
+            Expanded(child:LessonSectionStudio(
+              value:value,
+              guideTitle:widget.guideTitle,
+              dirty:dirty,
+              saving:saving,
+              onChanged:()=>setState(()=>dirty=true),
+              onSave:()=>save(),
+              onAdvanced:()=>setState(()=>lessonTab='advanced'),
+              onQuiz:()=>Navigator.push(context,MaterialPageRoute<void>(
+                builder:(_)=>WorkspaceRecordsScreen(
+                  api:widget.api,collection:'quizzes',
+                  organizationId:widget.initial['organizationId']?.toString()))),
+            )),
+          ]);
+        }
+        return Column(children:[
+          if(widget.lessonMode)SingleChildScrollView(scrollDirection:Axis.horizontal,
+            child:Padding(padding:const EdgeInsets.symmetric(horizontal:12,vertical:8),
+              child:Row(children:[
+                for(final item in const [
+                  ('details','Details',Icons.info_outline),
+                  ('chapters','Lesson studio',Icons.edit_note_outlined),
+                  ('advanced','Advanced structure',Icons.account_tree_outlined),
+                  ('preview','Learner preview',Icons.visibility_outlined),
+                  ('media','Media',Icons.perm_media_outlined),
+                  ('references','Bible & notes',Icons.menu_book_outlined),
+                  ('settings','Settings',Icons.settings_outlined),
+                ])Padding(padding:const EdgeInsets.only(right:6),child:ChoiceChip(
+                  selected:lessonTab==item.$1,avatar:Icon(item.$3,size:16),
+                  label:Text(item.$2),onSelected:(_)=>setState(()=>lessonTab=item.$1))),
+              ]))),
+          if(saving)const LinearProgressIndicator(),
+          Expanded(child:Center(child:ConstrainedBox(
+            constraints:BoxConstraints(maxWidth:wide?1160:820),
+            child:ListView(
+              keyboardDismissBehavior:ScrollViewKeyboardDismissBehavior.onDrag,
+              padding:const EdgeInsets.fromLTRB(20,12,20,50),children:[
+                if(error!=null)Padding(padding:const EdgeInsets.only(bottom:16),
+                  child:Text(error!,style:TextStyle(color:Theme.of(context).colorScheme.error))),
+                if(widget.lessonMode&&lessonTab=='preview')lessonPreview()
+                else if(widget.lessonMode&&lessonTab=='chapters')
+                  LessonSectionStudio(
+                    value:value,
+                    saving:saving,
+                    onChanged:()=>setState(()=>dirty=true),
+                    onSave:()=>save(),
+                    onAdvanced:()=>setState(()=>lessonTab='advanced'),
+                    onQuiz:()=>Navigator.push(context,MaterialPageRoute<void>(
+                      builder:(_)=>WorkspaceRecordsScreen(
+                        api:widget.api,collection:'quizzes',
+                        organizationId:widget.initial['organizationId']?.toString()))),
+                  )
+                else SchemaFields(
+                  fields:widget.lessonMode
+                    ?widget.fields.where(showLessonField).toList():widget.fields,
+                  value:value,options:options,
+                  onChanged:()=>setState(()=>dirty=true)),
+                if(wide)const SizedBox(height:32),
+              ])))),
+          if(!wide)SafeArea(top:false,child:Padding(
+            padding:const EdgeInsets.fromLTRB(16,8,16,12),
+            child:SizedBox(width:double.infinity,child:FilledButton.icon(
+              onPressed:saving?null:save,
+              icon:const Icon(Icons.save_outlined),
+              label:Text(saving?'Saving…':widget.submitLabel))))),
+        ]);
+      }))));
 }
 
 class SchemaFields extends StatelessWidget{
@@ -167,7 +326,7 @@ class SchemaFields extends StatelessWidget{
         trailing:quote.isNotEmpty&&quote['currency']!=quote['baseCurrency']?Text('Rate: ${quote['exchangeRate']}'):null);
     }
     if(type=='boolean')return SwitchListTile.adaptive(contentPadding:EdgeInsets.zero,title:Text(label),value:current==true,onChanged:(v)=>update(key,v));
-    if(type=='plate')return PlateDocumentEditor(document:recordRows(current),onChanged:(v)=>update(key,v));
+    if(type=='plate')return PlateDocumentEditor(key:ValueKey('plate.'+path+'.'+key),document:recordRows(current),onChanged:(v)=>update(key,v));
     if(type=='certificateLayout')return CertificateLayoutEditor(value:recordMap(current),background:'${value['backgroundUrl']??''}',onChanged:(v)=>update(key,v));
     if(type=='object'){
       final nested=recordMap(current);
@@ -185,12 +344,63 @@ class SchemaFields extends StatelessWidget{
     }
     if(type=='list'){
       final rows=recordRows(current);
-      return Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[Text(label,style:Theme.of(context).textTheme.titleMedium),
-        ...rows.asMap().entries.map((entry)=>Card(child:Padding(padding:const EdgeInsets.all(12),child:Column(children:[Row(children:[Expanded(child:Text('$label ${entry.key+1}')),
-          IconButton(tooltip:'Move up',onPressed:entry.key==0?null:(){final item=rows.removeAt(entry.key);rows.insert(entry.key-1,item);update(key,rows);},icon:const Icon(Icons.arrow_upward)),
-          IconButton(tooltip:'Remove',onPressed:(){rows.removeAt(entry.key);update(key,rows);},icon:const Icon(Icons.delete_outline))]),
-          SchemaFields(fields:children,value:entry.value,options:options,path:'$path.$key.${entry.key}',onChanged:()=>update(key,rows))])))),
-        OutlinedButton.icon(onPressed:()=>update(key,[...rows,if(children.any((f)=>f['key']=='id')){'id':newRecordId()}else <String,dynamic>{}]),icon:const Icon(Icons.add),label:Text('Add $label'))]);
+      final isStructure=key=='chapters'||key=='sections';
+      return Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+        Text(label,style:Theme.of(context).textTheme.titleMedium),
+        // Keep the insertion action above expanded nested editors so it remains
+        // reachable on narrow phones without scrolling past entire chapters.
+        OutlinedButton.icon(
+          onPressed:(){
+            final nextId=newRecordId();
+            final blankContent={'id':newRecordId(),'type':'p',
+              'children':[{'text':''}]};
+            final blankSection={'id':newRecordId(),'title':'New section',
+              'document':[blankContent]};
+            final newItem=key=='chapters'
+              ?<String,dynamic>{'id':nextId,'title':'New chapter',
+                  'sections':[blankSection]}
+              :key=='sections'
+                ?<String,dynamic>{'id':nextId,'title':'New section',
+                    'document':[blankContent]}
+                :children.any((f)=>f['key']=='id')
+                  ?<String,dynamic>{'id':nextId}
+                  :<String,dynamic>{};
+            update(key,[...rows,newItem]);
+          },
+          icon:const Icon(Icons.add),label:Text('Add '+label)),
+        const SizedBox(height:8),
+        for(final entry in rows.asMap().entries)
+          Card(child:ExpansionTile(
+            key:PageStorageKey('node.'+path+'.'+key+'.'+(entry.value['id']??entry.key).toString()),
+            initiallyExpanded:entry.key==0,
+            title:Text((entry.value['title']??'').toString().trim().isNotEmpty
+              ?(entry.value['title']).toString():label+' '+(entry.key+1).toString(),
+              maxLines:2,overflow:TextOverflow.ellipsis),
+            trailing:PopupMenuButton<String>(tooltip:label+' actions',
+              onSelected:(action){
+                if(action=='up'&&entry.key>0){
+                  final node=rows.removeAt(entry.key);rows.insert(entry.key-1,node);
+                }else if(action=='down'&&entry.key<rows.length-1){
+                  final node=rows.removeAt(entry.key);rows.insert(entry.key+1,node);
+                }else if(action=='remove'&&(!isStructure||rows.length>1)){
+                  rows.removeAt(entry.key);
+                }else{return;}
+                update(key,rows);
+              },
+              itemBuilder:(_)=>[
+                if(entry.key>0)const PopupMenuItem(value:'up',child:Text('Move up')),
+                if(entry.key<rows.length-1)
+                  const PopupMenuItem(value:'down',child:Text('Move down')),
+                if(!isStructure||rows.length>1)
+                  const PopupMenuItem(value:'remove',child:Text('Remove')),
+              ]),
+            children:[Padding(padding:const EdgeInsets.fromLTRB(14,0,14,16),
+              child:SchemaFields(fields:children,value:entry.value,options:options,
+                path:path+'.'+key+'.'+(entry.value['id']??entry.key).toString(),
+                onChanged:()=>update(key,rows)))],
+          )),
+        const SizedBox(height:8),
+      ]);
     }
     if(type=='choice'){
       final choices=field['source']!=null?recordRows(options[field['source']]):(field['choices'] as List? ?? []).map((v)=>{'value':v.toString(),'label':humanLabel(v.toString())}).toList();

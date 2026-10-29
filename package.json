@@ -19,7 +19,9 @@
     "payments:mtn:provision-sandbox": "node scripts/mtn-momo-sandbox-provision.mjs",
     "verify:ui-localization": "node scripts/inventory-ui-localization.mjs --check",
     "verify:bundle-budget": "node scripts/verify-bundle-budget.mjs",
-    "ops:firestore-restore": "node scripts/firestore-restore.mjs"
+    "ops:firestore-restore": "node scripts/firestore-restore.mjs",
+    "test:browser": "node --test tests/browser/*.test.mjs",
+    "verify:restore": "node scripts/verify-emulator-restore.mjs"
   },
   "dependencies": {
     "@platejs/basic-nodes": "53.0.0",
@@ -36,6 +38,7 @@
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "5.0.2",
+    "@playwright/test": "1.62.1",
     "@types/canvas-confetti": "^1.9.0",
     "@types/node": "^24.13.3",
     "@types/react": "^19.2.18",
@@ -57,7 +60,8 @@
     },
     "jwks-rsa": {
       "jose": "4.15.9"
-    }
+    },
+    "re2js": "2.8.7"
   },
   "engines": {
     "node": ">=22.12 <23",

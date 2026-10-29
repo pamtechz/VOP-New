@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../core/vop_api.dart';
 import '../theme/vop_theme.dart';
 import '../widgets/vop_ui.dart';
+import '../widgets/vop_desktop_layout.dart';
 
 class VopNotifications extends StatefulWidget {
   const VopNotifications({required this.api,super.key});
@@ -39,14 +40,23 @@ class _VopNotificationsState extends State<VopNotifications>{
           message:'${s.error}',onRetry:()=>setState(reload));
       }
       final notifications=rows(s.data?['items']);
-      return RefreshIndicator(onRefresh:()async{setState(reload);await inbox;},
-        child:ListView(padding:const EdgeInsets.all(16),children:[
-          VopSectionTitle('Updates and messages',
-            subtitle:'${s.data?['unread']??0} unread'),
-          if(notifications.isEmpty)const SizedBox(height:250,
-            child:VopEmpty(icon:Icons.notifications_none_rounded,
-              message:'You are all caught up.')),
-          ...notifications.map((item)=>Card(
+      return VopDesktopContent(maxWidth:1000,child:RefreshIndicator(onRefresh:()async{setState(reload);await inbox;},
+        child:ListView.builder(
+          padding:const EdgeInsets.all(16),
+          itemCount:notifications.length+1,
+          itemBuilder:(context,index){
+            if(index==0) return Column(
+              crossAxisAlignment:CrossAxisAlignment.stretch,
+              children:[
+                VopSectionTitle('Updates and messages',
+                  subtitle:'${s.data?['unread']??0} unread'),
+                if(notifications.isEmpty)const SizedBox(height:250,
+                  child:VopEmpty(icon:Icons.notifications_none_rounded,
+                    message:'You are all caught up.')),
+              ],
+            );
+            final item=notifications[index-1];
+            return Card(
             margin:const EdgeInsets.only(bottom:10),
             clipBehavior:Clip.antiAlias,
             child:InkWell(
@@ -91,8 +101,9 @@ class _VopNotificationsState extends State<VopNotifications>{
                       PopupMenuItem(value:'delete',child:Text('Delete')),
                     ]),
                 ]))),
-          )),
-        ]));
+          );
+          },
+        )));
     }),
   );
 }

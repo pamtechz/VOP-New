@@ -4,6 +4,7 @@ import { registerLocalizationString } from './storage';
 import { auth } from '../lib/firebase';
 
 const UI_LOCALE_KEY = 'vop_ui_locale';
+let sessionUiLocale = '';
 const dictionaryCache: Record<string, Record<string,string>> = {};
 const localeFallbacks: Record<string, string> = {};
 const localeState = { value: '', version: 0 };
@@ -115,7 +116,10 @@ export async function loadUiLocaleRegistry(): Promise<CustomLanguage[]> {
 }
 
 export const getUiLocale = (settings?: AppSettings): LanguageCode => {
-  const stored = resolveRegisteredLocale(localStorage.getItem(UI_LOCALE_KEY));
+  if (sessionUiLocale) return resolveRegisteredLocale(sessionUiLocale);
+  let stored = '';
+  try { stored = resolveRegisteredLocale(localStorage.getItem(UI_LOCALE_KEY)); }
+  catch { /* Browser storage may be disabled; the session choice remains usable. */ }
   if (stored) return stored;
   const configured = resolveRegisteredLocale(settings?.defaultLanguage);
   return resolveRegisteredLocale(localeState.value) || configured || 'en';
@@ -123,7 +127,9 @@ export const getUiLocale = (settings?: AppSettings): LanguageCode => {
 
 export const setUiLocale = (locale: LanguageCode) => {
   const normalized = resolveRegisteredLocale(locale) || 'en';
-  localStorage.setItem(UI_LOCALE_KEY, normalized);
+  sessionUiLocale = normalized;
+  try { localStorage.setItem(UI_LOCALE_KEY, normalized); }
+  catch { /* Quota or privacy settings must not block a language change. */ }
   localeState.value = normalized;
   localeState.version += 1;
   notify();
@@ -180,6 +186,13 @@ export function useLocalization(settings?: AppSettings) {
     locale: current,
     t: (key: string, defaultFallback?: string, vars?: Record<string,string|number>) => getTranslation(key, current, settings?.customTranslations, defaultFallback, undefined, vars),
   };
+}
+
+/** Bind a component's stable key namespace while resolving the current locale
+ * on each call, so existing translations and runtime discovery keep full keys. */
+export function createUiTranslator(namespace: string, componentName?: string) {
+  return (key: string, fallback: string) =>
+    getTranslation(namespace + '.' + key, getUiLocale(), undefined, fallback, componentName);
 }
 
 function translatedValue(dictionary: Record<string, string> | undefined, key: string): string | undefined {

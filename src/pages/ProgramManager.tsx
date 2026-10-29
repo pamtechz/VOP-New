@@ -95,7 +95,9 @@ export default function ProgramManager({
       // acknowledgement must not turn the next click into a new programme.
       const id=editing.id||'program-'+crypto.randomUUID().replace(/-/g,'');
       if(!editing.id)setEditing(previous=>previous?{...previous,id}:previous);
-      const result=await programApi('upsert',organizationId,id,{...editing,id});
+      const result=await programApi('upsert',organizationId,id,{
+        ...editing,id,expectedExisting:programs.some(item=>item.id===id),
+      });
       if(result.item?.id!==id)throw new Error('Programme identity mismatch. Reload before making another change.');
       await load();
       if(id)setSelectedId(id);

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../core/vop_api.dart';
 import '../widgets/vop_ui.dart';
+import '../widgets/vop_desktop_layout.dart';
 import 'workspace_records_screen.dart';
 import 'mentor_screen.dart';
 import 'learner_support_screen.dart';
@@ -171,7 +172,7 @@ class _WorkspaceOperationsState extends State<WorkspaceOperationsScreen>{
     ]),FilledButton(onPressed:busy?null:()=>run(()async{await admin('permissions',{'action':'save','matrix':values});}),child:const Text('Save permissions'))]);
   }
   @override Widget build(BuildContext context)=>Scaffold(appBar:AppBar(title:Text({'mentoring':'Mentoring & insights','payments':'Payments & receipts','translations':'Translation Studio','permissions':'Permissions','organization':'Organization management','prayer':'Prayer ministry inbox','portfolio':'Portfolio reviews'}[widget.kind]??'Audit history'),actions:[IconButton(tooltip:'Refresh',onPressed:busy?null:()=>setState(reload),icon:const Icon(Icons.refresh))]),
-    body:Column(children:[
+    body:VopDesktopWorkspaceFrame(api:widget.api,child:Column(children:[
       if(error!=null)Padding(padding:const EdgeInsets.all(12),child:Text(error!,style:TextStyle(color:Theme.of(context).colorScheme.error))),
       if(busy)const LinearProgressIndicator(),
       if(superAdmin&&['mentoring','organization','audit'].contains(widget.kind))Padding(padding:const EdgeInsets.all(12),child:DropdownButtonFormField<String>(initialValue:organization.isEmpty?null:organization,decoration:const InputDecoration(labelText:'Organization'),isExpanded:true,
@@ -226,5 +227,5 @@ class _WorkspaceOperationsState extends State<WorkspaceOperationsScreen>{
                 else if(widget.kind=='mentoring'&&tab==4){Navigator.push(context,MaterialPageRoute<void>(builder:(_)=>MentorConversation(api:widget.api,data:item)));}else{details(item);}});})),
         ]);
       })),
-    ]));
+    ])));
 }

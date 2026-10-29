@@ -9,7 +9,35 @@
   <meta name="application-name" content="Voice of Prophecy">
   <link rel="icon" type="image/png" href="favicon.png">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
-  <link rel="manifest" href="manifest.json">
+  <script>
+    // A protected Vercel preview may redirect manifest.json to SSO. Manifest
+    // fetches omit auth cookies by default, so probe with credentials before
+    // adding the installability link. Do not follow an SSO redirect.
+    (function () {
+      function addManifest() {
+        var link = document.createElement('link');
+        link.rel = 'manifest';
+        link.href = 'manifest.json';
+        link.crossOrigin = 'use-credentials';
+        document.head.appendChild(link);
+      }
+      if (!location.hostname.endsWith('.vercel.app')) {
+        addManifest();
+        return;
+      }
+      fetch(new URL('manifest.json', document.baseURI), {
+        credentials: 'include', redirect: 'manual', cache: 'no-store'
+      }).then(function (response) {
+        if (response.type === 'basic' && response.ok &&
+            /(?:application\/json|application\/manifest\+json)/i.test(
+              response.headers.get('content-type') || '')) {
+          addManifest();
+        }
+      }).catch(function () {
+        // No PWA manifest in an unauthenticated/offline preview.
+      });
+    })();
+  </script>
   <title>Voice of Prophecy</title>
   <style>
     html,body{margin:0;min-height:100%;background:#071a33}body{overflow:hidden}

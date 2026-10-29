@@ -198,10 +198,15 @@ export function contentOwnedByOrg(data: DocumentData | undefined, organizationId
 
 export async function canManageOrganizationContent(ctx: TenantContext, data: DocumentData | undefined) {
   if (ctx.isSuperAdmin) return true;
-  const organizationId = String(data?.organizationId || data?.ownerOrganizationId || '').trim();
+  const organizationId = String(data?.ownerOrganizationId || data?.organizationId || '').trim();
   if (!organizationId) return false;
   if (ctx.tenantType === 'hierarchy') return organizationInHierarchyScope(ctx, organizationId);
-  return organizationId === ctx.organizationId && ['owner', 'admin'].includes(String(ctx.membership.role || '')) && String(data?.ownerUid || '') === ctx.auth.uid;
+  if (data?.ownerTenantId && String(data.ownerTenantId) !== tenantOwnerKey(ctx)) return false;
+  // The organisation owns its curriculum. Its active owner/admin can maintain
+  // contributions by staff in that same organisation, but never content merely
+  // shared to it by a different owning organisation.
+  return organizationId === ctx.organizationId &&
+    ['owner','admin'].includes(String(ctx.membership.role || ''));
 }
 
 export function canEditCanonicalContent(ctx: TenantContext, data: DocumentData | undefined) {
@@ -216,11 +221,14 @@ export function canEditCanonicalContent(ctx: TenantContext, data: DocumentData |
     || membershipRole === 'editor' || membershipRole === 'teacher'
     || role === 'editor' || role === 'teacher';
   if (!canContribute) return false;
-  // Tenant equality is necessary but never sufficient to edit somebody
-  // else's contribution. Neither a shared record nor a later organization
-  // switch transfers authorship. Only Super Admin may override the owner.
-  return Boolean(ownerKey && currentTenant && ownerKey === currentTenant)
-    && Boolean(data?.ownerUid) && String(data?.ownerUid) === ctx.auth.uid;
+  // Shared records retain their original owner. An organisation admin may
+  // manage its own organisation's records, including those authored by staff,
+  // but neither adopting shared content nor switching tenant grants ownership.
+  if(!ownerKey || !currentTenant || ownerKey!==currentTenant)return false;
+  if(ctx.tenantType==='organization'&&isOrgAdminOrOwner &&
+      String(data?.ownerOrganizationId||data?.organizationId||'')===ctx.organizationId)
+    return true;
+  return Boolean(data?.ownerUid) && String(data.ownerUid)===ctx.auth.uid;
 }
 
 const CANDIDATE_MEMBERSHIP_ROLES=new Set(['learner','student','candidate']);
