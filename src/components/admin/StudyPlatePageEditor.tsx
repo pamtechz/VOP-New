@@ -1072,6 +1072,17 @@ export function StudyPlatePageEditor({
     onNotify?.('Scripture verse mark removed.');
   };
 
+  // Share rendering for equivalent ribbon controls to keep the production bundle lean.
+  const popoverItems=<T extends string|null>(
+    items:ReadonlyArray<readonly [T,React.ReactNode]>,
+    select:(value:T)=>void,
+  )=>items.map(([value,label],index)=><button key={String(value??index)} type="button"
+    className="vop-ribbon-popover-item-light" onClick={()=>select(value)}>{label}</button>);
+  const ribbonAction=(title:string,icon:React.ReactNode,action:()=>void)=>
+    <button type="button" title={title}
+      onMouseDown={event=>{event.preventDefault();rememberSelection();}}
+      onClick={action}>{icon}</button>;
+
   const toolbarButton=(label:string,icon:React.ReactNode,handler:()=>void,disabled=false)=>{
     const marks:Record<string,string>={
       Bold:'bold',Italic:'italic',Underline:'underline',
@@ -1233,10 +1244,12 @@ export function StudyPlatePageEditor({
                     </button>
                     {activeDropdown==='case' && (
                       <div className="vop-ribbon-popover-light" onMouseDown={e=>e.preventDefault()}>
-                        <button type="button" className="vop-ribbon-popover-item-light" onClick={()=>changeCase('sentence')}>{uiT('admin.study_plate_editor.sentence_case',"Sentence case.")}</button>
-                        <button type="button" className="vop-ribbon-popover-item-light" onClick={()=>changeCase('lower')}>{uiT('admin.study_plate_editor.lowercase',"lowercase")}</button>
-                        <button type="button" className="vop-ribbon-popover-item-light" onClick={()=>changeCase('upper')}>{uiT('admin.study_plate_editor.uppercase',"UPPERCASE")}</button>
-                        <button type="button" className="vop-ribbon-popover-item-light" onClick={()=>changeCase('title')}>{uiT('admin.study_plate_editor.capitalize_each_word',"Capitalize Each Word")}</button>
+                        {popoverItems([
+                          ["sentence", uiT('admin.study_plate_editor.sentence_case',"Sentence case.")],
+                          ["lower", uiT('admin.study_plate_editor.lowercase',"lowercase")],
+                          ["upper", uiT('admin.study_plate_editor.uppercase',"UPPERCASE")],
+                          ["title", uiT('admin.study_plate_editor.capitalize_each_word',"Capitalize Each Word")],
+                        ] as const, changeCase)}
                       </div>
                     )}
                   </div>
@@ -1265,10 +1278,12 @@ export function StudyPlatePageEditor({
                     </button>
                     {activeDropdown==='effects' && (
                       <div className="vop-ribbon-popover-light" onMouseDown={e=>e.preventDefault()}>
-                        <button type="button" className="vop-ribbon-popover-item-light" onClick={()=>applyTextEffect(null)}>{uiT('admin.study_plate_editor.none_standard',"None (Standard)")}</button>
-                        <button type="button" className="vop-ribbon-popover-item-light" onClick={()=>applyTextEffect('1px 1px 3px rgba(0,0,0,0.4)')}>{uiT('admin.study_plate_editor.subtle_shadow',"Subtle Shadow")}</button>
-                        <button type="button" className="vop-ribbon-popover-item-light" onClick={()=>applyTextEffect('0 0 6px rgba(59,130,246,0.6)')}>{uiT('admin.study_plate_editor.blue_glow',"Blue Glow")}</button>
-                        <button type="button" className="vop-ribbon-popover-item-light" onClick={()=>applyTextEffect('0 0 8px rgba(245,158,11,0.6)')}>{uiT('admin.study_plate_editor.gold_glow',"Gold Glow")}</button>
+                        {popoverItems([
+                          [null, uiT('admin.study_plate_editor.none_standard',"None (Standard)")],
+                          ["1px 1px 3px rgba(0,0,0,0.4)", uiT('admin.study_plate_editor.subtle_shadow',"Subtle Shadow")],
+                          ["0 0 6px rgba(59,130,246,0.6)", uiT('admin.study_plate_editor.blue_glow',"Blue Glow")],
+                          ["0 0 8px rgba(245,158,11,0.6)", uiT('admin.study_plate_editor.gold_glow',"Gold Glow")],
+                        ] as const, applyTextEffect)}
                       </div>
                     )}
                   </div>
@@ -1333,24 +1348,12 @@ export function StudyPlatePageEditor({
                 <div className="vop-word-group-content">
                   {toolbarButton('Bullet list',<List size={17}/>,()=>editor.tf.ul.toggle())}
                   {toolbarButton('Numbered list',<ListOrdered size={17}/>,()=>editor.tf.ol.toggle())}
-                  <button type="button" title={uiT('admin.study_plate_editor.decrease_indent',"Decrease Indent")} onMouseDown={event=>{event.preventDefault();rememberSelection();}} onClick={()=>adjustIndent(-1)}>
-                    <Outdent size={16}/>
-                  </button>
-                  <button type="button" title={uiT('admin.study_plate_editor.increase_indent',"Increase Indent")} onMouseDown={event=>{event.preventDefault();rememberSelection();}} onClick={()=>adjustIndent(1)}>
-                    <Indent size={16}/>
-                  </button>
-                  <button type="button" title={uiT('admin.study_plate_editor.align_left',"Align Left")} onMouseDown={event=>{event.preventDefault();rememberSelection();}} onClick={()=>setAlign('left')}>
-                    <AlignLeft size={16}/>
-                  </button>
-                  <button type="button" title={uiT('admin.study_plate_editor.align_center',"Align Center")} onMouseDown={event=>{event.preventDefault();rememberSelection();}} onClick={()=>setAlign('center')}>
-                    <AlignCenter size={16}/>
-                  </button>
-                  <button type="button" title={uiT('admin.study_plate_editor.align_right',"Align Right")} onMouseDown={event=>{event.preventDefault();rememberSelection();}} onClick={()=>setAlign('right')}>
-                    <AlignRight size={16}/>
-                  </button>
-                  <button type="button" title={uiT('admin.study_plate_editor.justify',"Justify")} onMouseDown={event=>{event.preventDefault();rememberSelection();}} onClick={()=>setAlign('justify')}>
-                    <AlignJustify size={16}/>
-                  </button>
+                  {ribbonAction(uiT('admin.study_plate_editor.decrease_indent',"Decrease Indent"),<Outdent size={16}/>,()=>adjustIndent(-1))}
+                  {ribbonAction(uiT('admin.study_plate_editor.increase_indent',"Increase Indent"),<Indent size={16}/>,()=>adjustIndent(1))}
+                  {ribbonAction(uiT('admin.study_plate_editor.align_left',"Align Left"),<AlignLeft size={16}/>,()=>setAlign('left'))}
+                  {ribbonAction(uiT('admin.study_plate_editor.align_center',"Align Center"),<AlignCenter size={16}/>,()=>setAlign('center'))}
+                  {ribbonAction(uiT('admin.study_plate_editor.align_right',"Align Right"),<AlignRight size={16}/>,()=>setAlign('right'))}
+                  {ribbonAction(uiT('admin.study_plate_editor.justify',"Justify"),<AlignJustify size={16}/>,()=>setAlign('justify'))}
 
                   {/* Line Spacing */}
                   <div className="vop-ribbon-menu-wrapper" onClickCapture={placeRibbonMenu}>
@@ -1360,10 +1363,12 @@ export function StudyPlatePageEditor({
                     </button>
                     {activeDropdown==='spacing' && (
                       <div className="vop-ribbon-popover-light" onMouseDown={e=>e.preventDefault()}>
-                        <button type="button" className="vop-ribbon-popover-item-light" onClick={()=>setLineSpacing('1.0')}>1.0 (Single)</button>
-                        <button type="button" className="vop-ribbon-popover-item-light" onClick={()=>setLineSpacing('1.15')}>1.15 (Standard)</button>
-                        <button type="button" className="vop-ribbon-popover-item-light" onClick={()=>setLineSpacing('1.5')}>1.5 (Relaxed)</button>
-                        <button type="button" className="vop-ribbon-popover-item-light" onClick={()=>setLineSpacing('2.0')}>2.0 (Double)</button>
+                        {popoverItems([
+                          ["1.0", "1.0 (Single)"],
+                          ["1.15", "1.15 (Standard)"],
+                          ["1.5", "1.5 (Relaxed)"],
+                          ["2.0", "2.0 (Double)"],
+                        ] as const, setLineSpacing)}
                       </div>
                     )}
                   </div>
@@ -1376,11 +1381,13 @@ export function StudyPlatePageEditor({
                     </button>
                     {activeDropdown==='shading' && (
                       <div className="vop-ribbon-popover-light" onMouseDown={e=>e.preventDefault()}>
-                        <button type="button" className="vop-ribbon-popover-item-light" onClick={()=>setBlockShading('')}>{uiT('admin.study_plate_editor.none',"None")}</button>
-                        <button type="button" className="vop-ribbon-popover-item-light" onClick={()=>setBlockShading('#eff6ff')}>{uiT('admin.study_plate_editor.soft_blue_tint',"Soft Blue Tint")}</button>
-                        <button type="button" className="vop-ribbon-popover-item-light" onClick={()=>setBlockShading('#fffbeb')}>{uiT('admin.study_plate_editor.soft_amber_tint',"Soft Amber Tint")}</button>
-                        <button type="button" className="vop-ribbon-popover-item-light" onClick={()=>setBlockShading('#f0fdf4')}>{uiT('admin.study_plate_editor.soft_green_tint',"Soft Green Tint")}</button>
-                        <button type="button" className="vop-ribbon-popover-item-light" onClick={()=>setBlockShading('#f8fafc')}>{uiT('admin.study_plate_editor.soft_gray_box',"Soft Gray Box")}</button>
+                        {popoverItems([
+                          ["", uiT('admin.study_plate_editor.none',"None")],
+                          ["#eff6ff", uiT('admin.study_plate_editor.soft_blue_tint',"Soft Blue Tint")],
+                          ["#fffbeb", uiT('admin.study_plate_editor.soft_amber_tint',"Soft Amber Tint")],
+                          ["#f0fdf4", uiT('admin.study_plate_editor.soft_green_tint',"Soft Green Tint")],
+                          ["#f8fafc", uiT('admin.study_plate_editor.soft_gray_box',"Soft Gray Box")],
+                        ] as const, setBlockShading)}
                       </div>
                     )}
                   </div>
@@ -1393,10 +1400,12 @@ export function StudyPlatePageEditor({
                     </button>
                     {activeDropdown==='borders' && (
                       <div className="vop-ribbon-popover-light" onMouseDown={e=>e.preventDefault()}>
-                        <button type="button" className="vop-ribbon-popover-item-light" onClick={()=>setBlockBorder('')}>{uiT('admin.study_plate_editor.none',"None")}</button>
-                        <button type="button" className="vop-ribbon-popover-item-light" onClick={()=>setBlockBorder('#2563eb')}>{uiT('admin.study_plate_editor.blue_accent_border',"Blue Accent Border")}</button>
-                        <button type="button" className="vop-ribbon-popover-item-light" onClick={()=>setBlockBorder('#f59e0b')}>{uiT('admin.study_plate_editor.gold_accent_border',"Gold Accent Border")}</button>
-                        <button type="button" className="vop-ribbon-popover-item-light" onClick={()=>setBlockBorder('#cbd5e1')}>{uiT('admin.study_plate_editor.light_box_border',"Light Box Border")}</button>
+                        {popoverItems([
+                          ["", uiT('admin.study_plate_editor.none',"None")],
+                          ["#2563eb", uiT('admin.study_plate_editor.blue_accent_border',"Blue Accent Border")],
+                          ["#f59e0b", uiT('admin.study_plate_editor.gold_accent_border',"Gold Accent Border")],
+                          ["#cbd5e1", uiT('admin.study_plate_editor.light_box_border',"Light Box Border")],
+                        ] as const, setBlockBorder)}
                       </div>
                     )}
                   </div>
@@ -1464,10 +1473,12 @@ export function StudyPlatePageEditor({
                     </button>
                     {activeDropdown === 'callout' && (
                       <div className="vop-ribbon-popover-light" onMouseDown={e => e.preventDefault()}>
-                        <button type="button" className="vop-ribbon-popover-item-light" onClick={() => insertCallout('info')}>📌 Key Takeaway / Note</button>
-                        <button type="button" className="vop-ribbon-popover-item-light" onClick={() => insertCallout('tip')}>💡 Helpful Study Tip</button>
-                        <button type="button" className="vop-ribbon-popover-item-light" onClick={() => insertCallout('warning')}>⚠️ Important Warning</button>
-                        <button type="button" className="vop-ribbon-popover-item-light" onClick={() => insertCallout('reflection')}>🙏 Reflection & Prayer Point</button>
+                        {popoverItems([
+                          ["info", '📌 Key Takeaway / Note'],
+                          ["tip", '💡 Helpful Study Tip'],
+                          ["warning", '⚠️ Important Warning'],
+                          ["reflection", '🙏 Reflection & Prayer Point'],
+                        ] as const, insertCallout)}
                       </div>
                     )}
                   </div>
