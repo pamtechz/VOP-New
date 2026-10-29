@@ -366,8 +366,11 @@ class _ClassicWebLessonStudioState extends State<ClassicWebLessonStudio> {
                     DropdownButton<String>(value: fontFamily, underline: const SizedBox.shrink(),
                       items: ['Arial', 'Georgia', 'Roboto'].map((v) =>
                         DropdownMenuItem(value: v, child: Text(v, style: const TextStyle(fontSize: 12)))).toList(),
-                      onChanged: (v) {if (v != null) setState(() => fontFamily = v);
-                        run((e) => e.setActiveFontFamily(v));}),
+                      onChanged: (v) {
+                        if (v == null) return;
+                        setState(() => fontFamily = v);
+                        run((e) => e.setActiveFontFamily(v));
+                      }),
                     const SizedBox(width: 13),
                     DropdownButton<double>(value: fontSize, underline: const SizedBox.shrink(),
                       items: (<double>{9.0, 10.0, 11.0, 12.0, 14.0, 16.0, 18.0, 24.0, fontSize}.toList()..sort())
@@ -580,7 +583,6 @@ class _ClassicWebLessonStudioState extends State<ClassicWebLessonStudio> {
     return Theme(data: ThemeData.light(useMaterial3: true).copyWith(
       colorScheme: ColorScheme.fromSeed(seedColor: blue),
       scaffoldBackgroundColor: pale), child: LayoutBuilder(builder: (ctx, limits) {
-      final compact = limits.maxWidth < 950;
       final veryCompact = limits.maxWidth < 700;
       final width = limits.maxWidth >= 1500 ? 385.0 : 225.0;
       return Container(color: pale, padding: EdgeInsets.all(veryCompact ? 8 : 15),
