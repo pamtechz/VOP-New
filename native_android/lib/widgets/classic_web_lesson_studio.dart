@@ -80,6 +80,7 @@ class _ClassicWebLessonStudioState extends State<ClassicWebLessonStudio> {
       final target = sidebarKeys[sid]?.currentContext;
       if (target != null) {
         Scrollable.ensureVisible(target, alignment: .12,
+          alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
           duration: const Duration(milliseconds: 180),
           curve: Curves.easeInOut);
       }
