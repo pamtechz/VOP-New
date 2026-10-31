@@ -76,11 +76,22 @@ class _ClassicWebLessonStudioState extends State<ClassicWebLessonStudio> {
   void revealSidebarPage(String sid) {
     if (!outlineScroll.hasClients) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
+      if (!mounted || !outlineScroll.hasClients) return;
       final target = sidebarKeys[sid]?.currentContext;
       if (target != null) {
         Scrollable.ensureVisible(target, alignment: .12,
           alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeInOut);
+      } else {
+        // ListView.builder virtualizes distant pages. Use its fixed row extent
+        // so the active page can still be brought into view reliably.
+        final index = pages.indexWhere((page) => page['id'].toString() == sid);
+        if (index < 0) return;
+        final position = outlineScroll.position;
+        final destination = (index * 78.0 - position.viewportDimension * .25)
+            .clamp(position.minScrollExtent, position.maxScrollExtent).toDouble();
+        outlineScroll.animateTo(destination,
           duration: const Duration(milliseconds: 180),
           curve: Curves.easeInOut);
       }
@@ -581,6 +592,7 @@ class _ClassicWebLessonStudioState extends State<ClassicWebLessonStudio> {
         thumbVisibility: true, child: ListView.builder(
           key: const PageStorageKey('classic-outline-scroll'),
           controller: outlineScroll, primary: false,
+          itemExtent: 78,
           itemCount: pages.length,
           itemBuilder: (_, i) => sidebarCard(pages[i], i, compact)))),
     ]), padding: const EdgeInsets.all(9));
