@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vop/widgets/classic_web_lesson_studio.dart';
 
-Map<String, dynamic> longLesson() => {
+Map<String, dynamic> longLesson({int sectionCount = 6, int blocksPerPage = 12}) => {
   'id': 'lesson-one',
   'title': 'KUTI TWA SUMINA MULI LESA',
   'lessonNumber': '01',
@@ -13,12 +13,12 @@ Map<String, dynamic> longLesson() => {
       'id': 'chapter-one',
       'title': 'Ukusanga',
       'sections': [
-        for (var page = 0; page < 6; page++)
+        for (var page = 0; page < sectionCount; page++)
           {
             'id': 'section-$page',
             'title': 'LEARNER PAGE ${page + 1}',
             'document': [
-              for (var block = 0; block < 12; block++)
+              for (var block = 0; block < blocksPerPage; block++)
                 {
                   'id': 'block-$page-$block',
                   'type': 'p',
@@ -67,7 +67,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.getTopLeft(ribbon).dy, closeTo(firstTop, .1));
     expect(document.offset, closeTo(500, 1));
-    expect(outline.offset, 0);
+    expect(outline.hasClients, isTrue);
     expect(tester.takeException(), isNull);
   });
 
@@ -98,6 +98,32 @@ void main() {
     await tester.pumpAndSettle();
     expect(document.offset, greaterThan(500));
     expect(tester.getTopLeft(ribbon).dy, closeTo(firstTop, .1));
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('scrolling to virtualized pages updates the pinned sidebar', (tester) async {
+    tester.view.physicalSize = const Size(1280, 700);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body:
+      ClassicWebLessonStudio(
+        value: longLesson(sectionCount: 20, blocksPerPage: 1),
+        saving: false, onChanged: () {}, onSave: () {},
+        onQuiz: () {}, onAdvanced: () {},
+      ),
+    )));
+    await tester.pumpAndSettle();
+    final document = tester.widget<SingleChildScrollView>(
+      find.byKey(const PageStorageKey('classic-document-scroll'))).controller!;
+    final outline = tester.widget<ListView>(
+      find.byKey(const PageStorageKey('classic-outline-scroll'))).controller!;
+    final top = tester.getTopLeft(
+      find.byKey(const ValueKey('classic-sticky-ribbon'))).dy;
+    document.jumpTo(document.position.maxScrollExtent);
+    await tester.pumpAndSettle();
+    expect(outline.offset, greaterThan(0));
+    expect(tester.getTopLeft(
+      find.byKey(const ValueKey('classic-sticky-ribbon'))).dy, closeTo(top, .1));
     expect(tester.takeException(), isNull);
   });
 }
