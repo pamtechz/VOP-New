@@ -592,7 +592,7 @@ class _ClassicWebLessonStudioState extends State<ClassicWebLessonStudio> {
         thumbVisibility: true, child: ListView.builder(
           key: const PageStorageKey('classic-outline-scroll'),
           controller: outlineScroll, primary: false,
-          itemExtent: 78,
+          itemExtent: 126,
           itemCount: pages.length,
           itemBuilder: (_, i) => sidebarCard(pages[i], i, compact)))),
     ]), padding: const EdgeInsets.all(9));
