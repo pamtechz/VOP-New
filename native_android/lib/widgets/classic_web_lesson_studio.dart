@@ -388,7 +388,8 @@ class _ClassicWebLessonStudioState extends State<ClassicWebLessonStudio> {
       child: Text(label, overflow: TextOverflow.ellipsis,
         style: const TextStyle(fontSize: 12, color: ink))));
   Widget ribbon() {
-    return Container(decoration: BoxDecoration(
+    return Container(key: const ValueKey('classic-sticky-ribbon'),
+      decoration: BoxDecoration(
       color: Colors.white, borderRadius: BorderRadius.circular(11),
       border: Border.all(color: border)), child: Column(children: [
         Row(children: [
@@ -519,7 +520,8 @@ class _ClassicWebLessonStudioState extends State<ClassicWebLessonStudio> {
         border: Border.all(color: active ? const Color(0xFF79A7FF) : border),
         color: active ? const Color(0xFFF1F6FF) : Colors.white,
         borderRadius: BorderRadius.circular(9)),
-      child: InkWell(onTap: () => focus(sid), child: Padding(
+      child: InkWell(key: ValueKey('classic-page-button-$sid'),
+        onTap: () => focus(sid), child: Padding(
         padding: EdgeInsets.symmetric(horizontal: compact ? 7 : 11, vertical: 10),
         child: Row(children: [
           const Icon(Icons.drag_indicator, size: 13, color: Color(0xFF9FB5D1)),
@@ -626,6 +628,10 @@ class _ClassicWebLessonStudioState extends State<ClassicWebLessonStudio> {
         key: editorKey(sid),
         document: document,
         inlineMode: true,
+        onFocused: () {
+          if (activeId != sid) setState(() => activeId = sid);
+          revealSidebarPage(sid);
+        },
         onChanged: (next) => editPage(sid, {'document': next}),
       ),
       const SizedBox(height: 15),
