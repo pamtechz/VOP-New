@@ -89,7 +89,7 @@ class _ClassicWebLessonStudioState extends State<ClassicWebLessonStudio> {
         final index = pages.indexWhere((page) => page['id'].toString() == sid);
         if (index < 0) return;
         final position = outlineScroll.position;
-        final destination = (index * 78.0 - position.viewportDimension * .25)
+        final destination = (index * 126.0 - position.viewportDimension * .25)
             .clamp(position.minScrollExtent, position.maxScrollExtent).toDouble();
         outlineScroll.animateTo(destination,
           duration: const Duration(milliseconds: 180),
