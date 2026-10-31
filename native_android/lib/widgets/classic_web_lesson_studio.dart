@@ -30,7 +30,73 @@ class _ClassicWebLessonStudioState extends State<ClassicWebLessonStudio> {
   String fontFamily = 'Arial';
   double fontSize = 11;
   final Map<String, GlobalKey> anchors = {};
+  final Map<String, GlobalKey> sidebarKeys = {};
   final Map<String, GlobalKey<PlateDocumentEditorState>> documentKeys = {};
+  final ScrollController documentScroll = ScrollController();
+  final ScrollController outlineScroll = ScrollController();
+  final GlobalKey documentViewport = GlobalKey();
+  bool jumpingToPage = false, trackingScroll = false;
+
+  @override void initState() {
+    super.initState();
+    documentScroll.addListener(trackVisiblePage);
+  }
+  @override void dispose() {
+    documentScroll.removeListener(trackVisiblePage);
+    documentScroll.dispose();
+    outlineScroll.dispose();
+    super.dispose();
+  }
+
+  // Scroll detection is scheduled after layout: changing a selected page
+  // directly from a ScrollPosition listener can rebuild during layout.
+  void trackVisiblePage() {
+    if (!mounted || jumpingToPage || trackingScroll) return;
+    trackingScroll = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      trackingScroll = false;
+      if (!mounted || jumpingToPage || pages.isEmpty) return;
+      final viewport = documentViewport.currentContext?.findRenderObject();
+      if (viewport is! RenderBox || !viewport.attached) return;
+      var next = pages.first['id'].toString();
+      for (final page in pages) {
+        final sid = page['id'].toString();
+        final render = anchors[sid]?.currentContext?.findRenderObject();
+        if (render is! RenderBox || !render.attached) continue;
+        final dy = render.localToGlobal(Offset.zero, ancestor: viewport).dy;
+        if (dy <= 90) next = sid;
+        else break;
+      }
+      if (next != activeId) {
+        setState(() => activeId = next);
+        revealSidebarPage(next);
+      }
+    });
+  }
+  void revealSidebarPage(String sid) {
+    if (!outlineScroll.hasClients) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !outlineScroll.hasClients) return;
+      final target = sidebarKeys[sid]?.currentContext;
+      if (target != null) {
+        Scrollable.ensureVisible(target, alignment: .12,
+          alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeInOut);
+      } else {
+        // ListView.builder virtualizes distant pages. Use its fixed row extent
+        // so the active page can still be brought into view reliably.
+        final index = pages.indexWhere((page) => page['id'].toString() == sid);
+        if (index < 0) return;
+        final position = outlineScroll.position;
+        final destination = (index * 78.0 - position.viewportDimension * .25)
+            .clamp(position.minScrollExtent, position.maxScrollExtent).toDouble();
+        outlineScroll.animateTo(destination,
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeInOut);
+      }
+    });
+  }
 
   Map<String, dynamic> map(dynamic raw) => raw is Map
       ? Map<String, dynamic>.from(raw) : <String, dynamic>{};
@@ -50,6 +116,8 @@ class _ClassicWebLessonStudioState extends State<ClassicWebLessonStudio> {
   }
   GlobalKey sectionAnchor(String id) =>
       anchors.putIfAbsent(id, () => GlobalKey());
+  GlobalKey outlineAnchor(String id) =>
+      sidebarKeys.putIfAbsent(id, () => GlobalKey());
   GlobalKey<PlateDocumentEditorState> editorKey(String id) =>
       documentKeys.putIfAbsent(id, () => GlobalKey<PlateDocumentEditorState>());
   PlateDocumentEditorState? get editor => documentKeys[selectedId]?.currentState;
@@ -73,15 +141,34 @@ class _ClassicWebLessonStudioState extends State<ClassicWebLessonStudio> {
   }
   void focus(String sid) {
     if (!pages.any((p) => p['id'].toString() == sid)) return;
+    jumpingToPage = true;
     setState(() => activeId = sid);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      final target = anchors[sid]?.currentContext;
-      if (target != null) {
-        Scrollable.ensureVisible(target, alignment: .06,
-          duration: const Duration(milliseconds: 230),
-          curve: Curves.easeInOut);
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted || !documentScroll.hasClients) {
+        jumpingToPage = false;
+        return;
       }
+      final render = anchors[sid]?.currentContext?.findRenderObject();
+      final viewport = documentViewport.currentContext?.findRenderObject();
+      if (render is! RenderBox || viewport is! RenderBox ||
+          !render.attached || !viewport.attached) {
+        jumpingToPage = false;
+        return;
+      }
+      // Move only the document's vertical ScrollPosition. ensureVisible on a
+      // nested widget also scrolls ancestors, taking the pinned ribbon away.
+      final localY = render.localToGlobal(Offset.zero, ancestor: viewport).dy;
+      final position = documentScroll.position;
+      final destination = (position.pixels + localY - 26)
+          .clamp(position.minScrollExtent, position.maxScrollExtent).toDouble();
+      try {
+        await documentScroll.animateTo(destination,
+          duration: const Duration(milliseconds: 260),
+          curve: Curves.easeInOut);
+      } finally {
+        jumpingToPage = false;
+      }
+      revealSidebarPage(sid);
     });
   }
   void addSection() {
@@ -313,7 +400,8 @@ class _ClassicWebLessonStudioState extends State<ClassicWebLessonStudio> {
       child: Text(label, overflow: TextOverflow.ellipsis,
         style: const TextStyle(fontSize: 12, color: ink))));
   Widget ribbon() {
-    return Container(decoration: BoxDecoration(
+    return Container(key: const ValueKey('classic-sticky-ribbon'),
+      decoration: BoxDecoration(
       color: Colors.white, borderRadius: BorderRadius.circular(11),
       border: Border.all(color: border)), child: Column(children: [
         Row(children: [
@@ -438,12 +526,14 @@ class _ClassicWebLessonStudioState extends State<ClassicWebLessonStudio> {
   Widget sidebarCard(Map<String, dynamic> page, int index, bool compact) {
     final sid = page['id'].toString();
     final active = sid == selectedId;
-    return Container(margin: const EdgeInsets.only(bottom: 6),
+    return Container(key: outlineAnchor(sid),
+      margin: const EdgeInsets.only(bottom: 6),
       decoration: BoxDecoration(
         border: Border.all(color: active ? const Color(0xFF79A7FF) : border),
         color: active ? const Color(0xFFF1F6FF) : Colors.white,
         borderRadius: BorderRadius.circular(9)),
-      child: InkWell(onTap: () => focus(sid), child: Padding(
+      child: InkWell(key: ValueKey('classic-page-button-$sid'),
+        onTap: () => focus(sid), child: Padding(
         padding: EdgeInsets.symmetric(horizontal: compact ? 7 : 11, vertical: 10),
         child: Row(children: [
           const Icon(Icons.drag_indicator, size: 13, color: Color(0xFF9FB5D1)),
@@ -498,8 +588,13 @@ class _ClassicWebLessonStudioState extends State<ClassicWebLessonStudio> {
         child: const Text('Sections are page boundaries inside the document—not separate block forms.',
           style: TextStyle(color: Color(0xFF6C84A2), fontSize: 11, height: 1.5))),
       const SizedBox(height: 7),
-      Expanded(child: ListView.builder(itemCount: pages.length,
-        itemBuilder: (_, i) => sidebarCard(pages[i], i, compact))),
+      Expanded(child: Scrollbar(controller: outlineScroll,
+        thumbVisibility: true, child: ListView.builder(
+          key: const PageStorageKey('classic-outline-scroll'),
+          controller: outlineScroll, primary: false,
+          itemExtent: 78,
+          itemCount: pages.length,
+          itemBuilder: (_, i) => sidebarCard(pages[i], i, compact)))),
     ]), padding: const EdgeInsets.all(9));
   }
   Widget sectionContent(Map<String, dynamic> page, int i) {
@@ -546,22 +641,35 @@ class _ClassicWebLessonStudioState extends State<ClassicWebLessonStudio> {
         key: editorKey(sid),
         document: document,
         inlineMode: true,
+        onFocused: () {
+          if (activeId != sid) setState(() => activeId = sid);
+          revealSidebarPage(sid);
+        },
         onChanged: (next) => editPage(sid, {'document': next}),
       ),
       const SizedBox(height: 15),
     ]);
   }
   Widget documentCanvas() {
-    return Container(color: Colors.white, child: SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(52, 36, 52, 70),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        for (var i = 0; i < pages.length; i++) sectionContent(pages[i], i),
-        if (!preview) Padding(padding: const EdgeInsets.only(top: 10),
-          child: Align(alignment: Alignment.centerLeft,
-            child: TextButton.icon(onPressed: addSection,
-              icon: const Icon(Icons.add), label: const Text('Start another section')))),
-      ]),
-    ));
+    return Container(key: documentViewport, color: Colors.white,
+      child: Scrollbar(controller: documentScroll, thumbVisibility: true,
+        child: SingleChildScrollView(
+          key: const PageStorageKey('classic-document-scroll'),
+          controller: documentScroll,
+          primary: false,
+          physics: const ClampingScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(52, 36, 52, 70),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            for (var i = 0; i < pages.length; i++) sectionContent(pages[i], i),
+            if (!preview) Padding(padding: const EdgeInsets.only(top: 10),
+              child: Align(alignment: Alignment.centerLeft,
+                child: TextButton.icon(onPressed: addSection,
+                  icon: const Icon(Icons.add),
+                  label: const Text('Start another section')))),
+          ]),
+        ),
+      ),
+    );
   }
   Widget mobilePageList() {
     return shell(Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
