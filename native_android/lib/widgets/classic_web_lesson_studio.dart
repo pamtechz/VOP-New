@@ -425,7 +425,7 @@ class _ClassicWebLessonStudioState extends State<ClassicWebLessonStudio> {
             ]),
         ]),
         const Divider(height: 1, color: border),
-        SizedBox(height: 87, child: SingleChildScrollView(scrollDirection: Axis.horizontal,
+        SizedBox(height: 118, child: SingleChildScrollView(scrollDirection: Axis.horizontal,
           child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
             child: Row(children: [
               if (tab == 'Home') ...[
