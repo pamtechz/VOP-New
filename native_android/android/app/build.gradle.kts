@@ -67,6 +67,9 @@ android {
 
     buildTypes {
         getByName("release") {
+            // Shrink unused Java/Kotlin code and Android resources.
+            isMinifyEnabled = true
+            isShrinkResources = true
             if (releaseKeyPropertiesFile.isFile) {
                 signingConfig = signingConfigs.getByName("release")
             }

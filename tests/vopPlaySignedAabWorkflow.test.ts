@@ -31,11 +31,13 @@ test('a real release AAB needs a Play-approved upload certificate and no private
   assert.match(release,/git restore --source=HEAD -- native_android\/android\/app\/build\.gradle\.kts/);
   assert.match(gradle,/requestedRelease && !releaseKeyPropertiesFile\.isFile/);
   assert.match(gradle,/getByName\("release"\)/);
+  assert.match(gradle,/isMinifyEnabled = true/);
+  assert.match(gradle,/isShrinkResources = true/);
   assert.match(release,/flutter build appbundle --release/);
   assert.match(release,/--obfuscate --split-debug-info=\$symbols --tree-shake-icons/);
   assert.match(release,/VOP_RELEASE_SYMBOLS_DIR/);
   assert.match(release,/Get-ChildItem -Path \$symbols -File/);
-  assert.match(release,/\$limitBytes = 8 \* 1024 \* 1024/);
+  assert.match(release,/\$limitBytes = 8 \* 1000 \* 1000/);
   assert.match(release,/if \(\$bytes -gt \$limitBytes\)/);
   assert.doesNotMatch(release,/path:.*(?:\.symbols|vop-obfuscation)/);
   assert.match(release,/jarsigner -verify \$aab/);
