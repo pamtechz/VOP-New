@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Check, CreditCard, Gauge, RefreshCw, RotateCcw, ShieldCheck, Sparkles, XCircle, Zap } from 'lucide-react';
 import type { User } from '../../types';
 import { auth } from '../../lib/firebase';
@@ -128,6 +128,7 @@ export default function SubscriptionWorkspace({
   const [loading, setLoading] = useState(false);
   const [working, setWorking] = useState(false);
   const [error, setError] = useState('');
+  const latestRequest = useRef(0);
   const [message, setMessage] = useState('');
 
   useEffect(() => {
@@ -144,22 +145,31 @@ export default function SubscriptionWorkspace({
   ]);
 
   const refresh = async () => {
-    if (!selectedTarget) { setOverview(null); setAvailablePlans([]); return; }
+    const request = ++latestRequest.current;
+    if (!selectedTarget) {
+      setOverview(null); setAvailablePlans([]); setLoading(false); return;
+    }
     setLoading(true); setError('');
     try {
       const [current, catalog] = await Promise.all([
         planApi({ action: 'getSubscription', billingTenantType:selectedTarget.type, billingTenantId: selectedTarget.id }),
         planApi({ action: 'listAvailablePlans', billingTenantType:selectedTarget.type, billingTenantId: selectedTarget.id }),
+      if (request !== latestRequest.current) return;
       ]);
       setOverview(current as unknown as Overview);
       setAvailablePlans((catalog.items || []) as SubscriptionPackageView[]);
+      if (request !== latestRequest.current) return;
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Subscription details could not be loaded.');
-      setOverview(null);
-    } finally { setLoading(false); }
+      setOverview(null); setAvailablePlans([]);
+    } finally { if (request === latestRequest.current) setLoading(false); }
   };
 
-  useEffect(() => { void refresh(); }, [billingTargetKey]);
+  useEffect(() => {
+    setOverview(null); setAvailablePlans([]);
+    void refresh();
+    return () => { latestRequest.current++; };
+  }, [billingTargetKey]);
 
   const usage = overview?.usage || {};
   const subscription = overview?.subscription || {};
@@ -175,7 +185,7 @@ export default function SubscriptionWorkspace({
   const currentPlanName = formatPlanName(subscription.planName || currentPlan?.name);
   const currentPlanFree = Boolean(currentPlan) && Number(currentPlan?.priceUsd ?? currentPlan?.price ?? 0) === 0;
   const status = String(subscription.status || '');
-  const active = status === 'active';
+  const active = status === 'active' || status === 'trialing';
   const cancelAtPeriodEnd = subscription.cancelAtPeriodEnd === true;
 
   const planOptions = useMemo(() => {
@@ -267,7 +277,7 @@ export default function SubscriptionWorkspace({
   };
 
   const openCheckout = (planId?: string) => {
-    if (onOpenCheckout) onOpenCheckout(planId);
+    if (!working && !busy && onOpenCheckout) onOpenCheckout(planId);
   };
 
   if (!isSuperAdmin && !selfService) {
@@ -320,16 +330,23 @@ export default function SubscriptionWorkspace({
           )}
         </div>
       </section>
+      {!isSuperAdmin && selectedTarget && (
+        <nav className="vop-subscription-journey" aria-label="Subscription steps">
+          <span><strong>1</strong> Compare plans</span>
+          <span><strong>2</strong> Choose secure payment</span>
+          <span><strong>3</strong> Await verified activation</span>
+        </nav>
+      )}
 
       {error && (
-        <div className="vop-payment-alert danger">
+        <div className="vop-payment-alert danger" role="alert">
           <XCircle size={18} />
           <span>{error}</span>
           <button onClick={() => setError('')}>×</button>
         </div>
       )}
       {message && (
-        <div className="vop-payment-alert success">
+        <div className="vop-payment-alert success" role="status">
           <Check size={18} />
           <span>{message}</span>
           <button onClick={() => setMessage('')}>×</button>
@@ -356,6 +373,14 @@ export default function SubscriptionWorkspace({
                       {isFreePlatformMode ? 'Free Platform Tier' : subscriptionStatusLabel(status)}
                     </span>
                   </div>
+                  {!isFreePlatformMode && !active && currentPlanId && (
+                    <div className="vop-subscription-warning danger" role="status">
+                      <AlertTriangle size={18}/><div>
+                        <strong>{status === 'past_due' ? 'Payment requires attention' : status === 'expired' ? 'Subscription expired' : 'Access is not active'}</strong>
+                        <span>Choose a plan to restore access. Entitlements change only after verified payment or an authorized administrator action.</span>
+                      </div>
+                    </div>
+                  )}
                   <p className="vop-subscription-desc">{displayDescription}</p>
 
                   <dl className="vop-subscription-meta-list">
@@ -425,7 +450,7 @@ export default function SubscriptionWorkspace({
                     ) : (
                       <>
                         {!isSuperAdmin && (
-                          <button className="btn btn-primary" type="button" onClick={() => openCheckout(currentPlanId || undefined)}>
+                          <button className="btn btn-primary" type="button" disabled={working || busy || !onOpenCheckout} onClick={() => openCheckout(currentPlanId || undefined)}>
                             <CreditCard size={15} />
                             {active ? 'Renew / Change Plan' : 'Choose a Plan'}
                           </button>
