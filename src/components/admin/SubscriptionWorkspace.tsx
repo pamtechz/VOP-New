@@ -155,10 +155,11 @@ export default function SubscriptionWorkspace({
         planApi({ action: 'getSubscription', billingTenantType:selectedTarget.type, billingTenantId: selectedTarget.id }),
         planApi({ action: 'listAvailablePlans', billingTenantType:selectedTarget.type, billingTenantId: selectedTarget.id }),
       ]);
+      if (request !== latestRequest.current) return;
       setOverview(current as unknown as Overview);
       setAvailablePlans((catalog.items || []) as SubscriptionPackageView[]);
-      if (request !== latestRequest.current) return;
     } catch (reason) {
+      if (request !== latestRequest.current) return;
       setError(reason instanceof Error ? reason.message : 'Subscription details could not be loaded.');
       setOverview(null); setAvailablePlans([]);
     } finally { if (request === latestRequest.current) setLoading(false); }
