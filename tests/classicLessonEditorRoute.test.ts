@@ -27,10 +27,15 @@ test('Classic Web renders native Flutter layout with one ribbon and focusable le
   assert.match(classic,/Widget header\(bool compact\)/);
   assert.match(classic,/Widget sidebar\(\{required bool compact\}\)/);
   assert.match(classic,/Widget ribbon\(\)/);
-  assert.match(classic,/Widget documentCanvas\(\)/);
+  assert.match(classic,/Widget documentCanvas\(ScrollController innerScroll\)/);
+  assert.match(classic,/NestedScrollView\(/);
+  assert.match(classic,/classic-scroll-away-metadata/);
+  assert.match(classic,/PrimaryScrollController\.of\(innerContext\)/);
   assert.match(classic,/PlateDocumentEditor\(/);
   assert.match(classic,/inlineMode: true/);
-  assert.match(classic,/Scrollable.ensureVisible/);
+  assert.match(classic,/void revealSidebarPage\(String sid\)/);
+  assert.match(classic,/outlineScroll\.animateTo\(destination/);
+  assert.doesNotMatch(classic,/Scrollable\.ensureVisible/);
   assert.match(record,/widget.lessonMode&&kIsWeb&&lessonTab=='chapters'/);
   for(const label of ['Home','Insert','Scripture & Layout','LEARNER PAGES',
     'SECTION / LEARNER PAGE','Save draft','Update']){

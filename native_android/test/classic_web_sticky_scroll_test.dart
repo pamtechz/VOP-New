@@ -34,6 +34,7 @@ Map<String, dynamic> longLesson({int sectionCount = 6, int blocksPerPage = 12}) 
   ],
 };
 
+void main() {
   testWidgets('Legacy parity: metadata scrolls away but ribbon and pages stay pinned',
       (tester) async {
     tester.view.physicalSize = const Size(1280, 800);
@@ -91,7 +92,6 @@ Map<String, dynamic> longLesson({int sectionCount = 6, int blocksPerPage = 12}) 
     expect(tester.takeException(), isNull);
   });
 
-void main() {
   testWidgets('sticky ribbon remains pinned when document is scrolled',
       (tester) async {
     tester.view.physicalSize = const Size(1440, 820);
