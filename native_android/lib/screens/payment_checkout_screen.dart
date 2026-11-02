@@ -23,7 +23,11 @@ class _PaymentCheckoutState extends State<PaymentCheckoutScreen>{
     try{
       final result=await widget.api.action('/api/payments/verify',{'reference':widget.payment['reference']});
       final payment=recordMap(result['payment']);
-      if(mounted)setState(()=>message=payment['status']=='paid'?'Payment confirmed.':'Payment status: ${payment['status']??'unavailable'}.');
+      if(mounted)setState(()=>message=payment['status']=='paid'
+        ?(payment['fulfilmentStatus']=='fulfilled'
+          ?'Payment confirmed and subscription access activated.'
+          :'Payment confirmed; subscription access is being activated. Check again shortly.')
+        :'Payment status: ${payment['status']??'unavailable'}. Only verified payments activate access.');
     }catch(e){if(mounted)setState(()=>message='$e');}
     finally{if(mounted)setState(()=>busy=false);}
   }
