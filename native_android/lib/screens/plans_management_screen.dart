@@ -80,13 +80,13 @@ class _PlansState extends State<PlansManagementScreen>{
     return Scaffold(appBar:AppBar(title:const Text('Subscriptions & usage'),actions:[if(superAdmin)IconButton(tooltip:'Billing settings',onPressed:()=>billingSettings(workspace),icon:const Icon(Icons.settings_outlined)),IconButton(tooltip:'Refresh',onPressed:()=>setState(reload),icon:const Icon(Icons.refresh))]),
       floatingActionButton:superAdmin?FloatingActionButton.extended(onPressed:()=>editPlan(workspace),icon:const Icon(Icons.add),label:const Text('New package')):null,
       body:VopDesktopWorkspaceFrame(api:widget.api,child:s.connectionState!=ConnectionState.done?const VopSkeleton():s.hasError?VopEmpty(icon:Icons.error_outline,message:'${s.error}',onRetry:()=>setState(reload)):
+        ListView(padding:const EdgeInsets.fromLTRB(16,8,16,96),children:[
           if(!superAdmin&&data['scope']!='platform')
             const Padding(padding:EdgeInsets.only(bottom:12),child:Wrap(spacing:8,runSpacing:6,children:[
               Chip(label:Text('1 · Compare packages')),
               Chip(label:Text('2 · Secure payment')),
               Chip(label:Text('3 · Verified activation')),
             ])),
-        ListView(padding:const EdgeInsets.fromLTRB(16,8,16,96),children:[
           VopCard(child:Padding(padding:const EdgeInsets.all(18),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
             Text(data['scope']=='platform'?'Platform administration':'${data['tenantName']??data['organizationName']??'Current subscription'}',style:Theme.of(context).textTheme.titleLarge),
             Chip(avatar:Icon(['active','trialing'].contains('${subscription['status']}')?Icons.verified_outlined:Icons.info_outline,size:16),
