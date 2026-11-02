@@ -91,9 +91,15 @@ void main() {
     final scrollFinder = find.byKey(const PageStorageKey('classic-document-scroll'));
     final document = tester.widget<SingleChildScrollView>(scrollFinder).controller!;
     expect(document.offset, 0);
-    final target = find.byKey(const ValueKey('classic-page-button-section-4'));
-    await tester.ensureVisible(target);
+    // ListView.builder does not build offscreen cards. Scroll the outline
+    // itself first; ensureVisible cannot target an unmounted section card.
+    final outline = tester.widget<ListView>(
+      find.byKey(const PageStorageKey('classic-outline-scroll'))).controller!;
+    outline.jumpTo((4 * 126.0).clamp(
+      outline.position.minScrollExtent, outline.position.maxScrollExtent));
     await tester.pumpAndSettle();
+    final target = find.byKey(const ValueKey('classic-page-button-section-4'));
+    expect(target, findsOneWidget);
     await tester.tap(target);
     await tester.pumpAndSettle();
     expect(document.offset, greaterThan(500));
