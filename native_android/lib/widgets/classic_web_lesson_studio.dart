@@ -31,6 +31,79 @@ class _ClassicWebLessonStudioState extends State<ClassicWebLessonStudio> {
   double fontSize = 11;
   final Map<String, GlobalKey> anchors = {};
   final Map<String, GlobalKey<PlateDocumentEditorState>> documentKeys = {};
+  // The NestedScrollView owns the document's inner scroll controller.
+  // Its outer controller collapses lesson metadata while the editing
+  // ribbon and the page rail remain fixed, just like the Legacy editor.
+  final ScrollController headerScroll = ScrollController();
+  ScrollController? documentScroll;
+  final ScrollController outlineScroll = ScrollController();
+  final GlobalKey documentViewport = GlobalKey();
+  bool jumpingToPage = false, trackingScroll = false;
+
+  void attachDocumentScroll(ScrollController inner) {
+    if (identical(documentScroll, inner)) return;
+    documentScroll?.removeListener(trackVisiblePage);
+    documentScroll = inner;
+    inner.addListener(trackVisiblePage);
+
+  }
+  @override void dispose() {
+    documentScroll?.removeListener(trackVisiblePage);
+    headerScroll.dispose();
+    outlineScroll.dispose();
+    super.dispose();
+  }
+
+  // Scroll detection is scheduled after layout: changing a selected page
+  // directly from a ScrollPosition listener can rebuild during layout.
+  void trackVisiblePage() {
+    if (!mounted || jumpingToPage || trackingScroll) return;
+    trackingScroll = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      trackingScroll = false;
+      if (!mounted || jumpingToPage || pages.isEmpty) return;
+      final viewport = documentViewport.currentContext?.findRenderObject();
+      if (viewport is! RenderBox || !viewport.attached) return;
+      var next = pages.first['id'].toString();
+      for (final page in pages) {
+        final sid = page['id'].toString();
+        final render = anchors[sid]?.currentContext?.findRenderObject();
+        if (render is! RenderBox || !render.attached) continue;
+        final dy = render.localToGlobal(Offset.zero, ancestor: viewport).dy;
+        if (dy <= 90) next = sid;
+        else break;
+      }
+      if (next != activeId) {
+        setState(() => activeId = next);
+        revealSidebarPage(next);
+      }
+    });
+  }
+    // Never call Scrollable.ensureVisible on nested outline cards: it also
+    // scrolls the outer metadata header and breaks the Legacy sticky model.
+    // The fixed 94px row extent works for virtualized, unmounted pages too.
+  void revealSidebarPage(String sid) {
+    if (!outlineScroll.hasClients) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !outlineScroll.hasClients) return;
+      final index = pages.indexWhere((page) => page['id'].toString() == sid);
+      if (index < 0) return;
+      final position = outlineScroll.position;
+      final start = index * 94.0;
+      final end = start + 94.0;
+      var destination = position.pixels;
+      if (start < position.pixels) destination = start;
+      if (end > position.pixels + position.viewportDimension) {
+        destination = end - position.viewportDimension;
+      destination = destination.clamp(
+        position.minScrollExtent, position.maxScrollExtent).toDouble();
+      if ((destination - position.pixels).abs() < 1) return;
+      outlineScroll.animateTo(destination,
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeInOut);
+      }
+    });
+  }
 
   Map<String, dynamic> map(dynamic raw) => raw is Map
       ? Map<String, dynamic>.from(raw) : <String, dynamic>{};
@@ -73,15 +146,45 @@ class _ClassicWebLessonStudioState extends State<ClassicWebLessonStudio> {
   }
   void focus(String sid) {
     if (!pages.any((p) => p['id'].toString() == sid)) return;
+    jumpingToPage = true;
     setState(() => activeId = sid);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      final target = anchors[sid]?.currentContext;
-      if (target != null) {
-        Scrollable.ensureVisible(target, alignment: .06,
-          duration: const Duration(milliseconds: 230),
-          curve: Curves.easeInOut);
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final scroll = documentScroll;
+      if (!mounted || scroll == null || !scroll.hasClients) {
+        jumpingToPage = false;
+        return;
       }
+      // A learner-page selection should also hide the metadata when present.
+      // Collapsing the parent first keeps ribbon positioning deterministic.
+      if (headerScroll.hasClients && headerScroll.position.maxScrollExtent > 0) {
+        await headerScroll.animateTo(headerScroll.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 180), curve: Curves.easeInOut);
+      }
+      if (!mounted || !scroll.hasClients) {
+        jumpingToPage = false;
+        return;
+      }
+      final render = anchors[sid]?.currentContext?.findRenderObject();
+      final viewport = documentViewport.currentContext?.findRenderObject();
+      if (render is! RenderBox || viewport is! RenderBox ||
+          !render.attached || !viewport.attached) {
+        jumpingToPage = false;
+        return;
+      }
+      // Move only the document's vertical ScrollPosition. ensureVisible on a
+      // nested widget also scrolls ancestors, taking the pinned ribbon away.
+      final localY = render.localToGlobal(Offset.zero, ancestor: viewport).dy;
+      final position = scroll.position;
+      final destination = (position.pixels + localY - 26)
+          .clamp(position.minScrollExtent, position.maxScrollExtent).toDouble();
+      try {
+        await scroll.animateTo(destination,
+          duration: const Duration(milliseconds: 260),
+          curve: Curves.easeInOut);
+      } finally {
+        jumpingToPage = false;
+      }
+      revealSidebarPage(sid);
     });
   }
   void addSection() {
@@ -313,7 +416,8 @@ class _ClassicWebLessonStudioState extends State<ClassicWebLessonStudio> {
       child: Text(label, overflow: TextOverflow.ellipsis,
         style: const TextStyle(fontSize: 12, color: ink))));
   Widget ribbon() {
-    return Container(decoration: BoxDecoration(
+    return Container(key: const ValueKey('classic-sticky-ribbon'),
+      decoration: BoxDecoration(
       color: Colors.white, borderRadius: BorderRadius.circular(11),
       border: Border.all(color: border)), child: Column(children: [
         Row(children: [
@@ -337,7 +441,7 @@ class _ClassicWebLessonStudioState extends State<ClassicWebLessonStudio> {
             ]),
         ]),
         const Divider(height: 1, color: border),
-        SizedBox(height: 87, child: SingleChildScrollView(scrollDirection: Axis.horizontal,
+        SizedBox(height: 108, child: SingleChildScrollView(scrollDirection: Axis.horizontal,
           child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
             child: Row(children: [
               if (tab == 'Home') ...[
@@ -438,12 +542,14 @@ class _ClassicWebLessonStudioState extends State<ClassicWebLessonStudio> {
   Widget sidebarCard(Map<String, dynamic> page, int index, bool compact) {
     final sid = page['id'].toString();
     final active = sid == selectedId;
-    return Container(margin: const EdgeInsets.only(bottom: 6),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
       decoration: BoxDecoration(
         border: Border.all(color: active ? const Color(0xFF79A7FF) : border),
         color: active ? const Color(0xFFF1F6FF) : Colors.white,
         borderRadius: BorderRadius.circular(9)),
-      child: InkWell(onTap: () => focus(sid), child: Padding(
+      child: InkWell(key: ValueKey('classic-page-button-$sid'),
+        onTap: () => focus(sid), child: Padding(
         padding: EdgeInsets.symmetric(horizontal: compact ? 7 : 11, vertical: 10),
         child: Row(children: [
           const Icon(Icons.drag_indicator, size: 13, color: Color(0xFF9FB5D1)),
@@ -456,10 +562,11 @@ class _ClassicWebLessonStudioState extends State<ClassicWebLessonStudio> {
           const SizedBox(width: 9),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text((page['title'] ?? 'Section').toString().toUpperCase(),
-              maxLines: 2, overflow: TextOverflow.ellipsis,
+              maxLines: compact ? 1 : 2, overflow: TextOverflow.ellipsis,
               style: const TextStyle(color: ink, fontSize: 12, fontWeight: FontWeight.w800)),
             const SizedBox(height: 2),
             Text(rows(page['document']).length.toString() + ' content blocks',
+              maxLines: 2, overflow: TextOverflow.ellipsis,
               style: const TextStyle(color: Color(0xFF6F86A6), fontSize: 11)),
           ])),
           if (!compact) IconButton(onPressed: () => renamePage(sid),
@@ -498,8 +605,13 @@ class _ClassicWebLessonStudioState extends State<ClassicWebLessonStudio> {
         child: const Text('Sections are page boundaries inside the document—not separate block forms.',
           style: TextStyle(color: Color(0xFF6C84A2), fontSize: 11, height: 1.5))),
       const SizedBox(height: 7),
-      Expanded(child: ListView.builder(itemCount: pages.length,
-        itemBuilder: (_, i) => sidebarCard(pages[i], i, compact))),
+      Expanded(child: Scrollbar(controller: outlineScroll,
+        thumbVisibility: true, child: ListView.builder(
+          key: const PageStorageKey('classic-outline-scroll'),
+          controller: outlineScroll, primary: false,
+          itemExtent: 94,
+          itemCount: pages.length,
+          itemBuilder: (_, i) => sidebarCard(pages[i], i, compact)))),
     ]), padding: const EdgeInsets.all(9));
   }
   Widget sectionContent(Map<String, dynamic> page, int i) {
@@ -546,22 +658,35 @@ class _ClassicWebLessonStudioState extends State<ClassicWebLessonStudio> {
         key: editorKey(sid),
         document: document,
         inlineMode: true,
+        onFocused: () {
+          if (activeId != sid) setState(() => activeId = sid);
+          revealSidebarPage(sid);
+        },
         onChanged: (next) => editPage(sid, {'document': next}),
       ),
       const SizedBox(height: 15),
     ]);
   }
-  Widget documentCanvas() {
-    return Container(color: Colors.white, child: SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(52, 36, 52, 70),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        for (var i = 0; i < pages.length; i++) sectionContent(pages[i], i),
-        if (!preview) Padding(padding: const EdgeInsets.only(top: 10),
-          child: Align(alignment: Alignment.centerLeft,
-            child: TextButton.icon(onPressed: addSection,
-              icon: const Icon(Icons.add), label: const Text('Start another section')))),
-      ]),
-    ));
+  Widget documentCanvas(ScrollController innerScroll) {
+    return Container(key: documentViewport, color: Colors.white,
+      child: Scrollbar(controller: innerScroll, thumbVisibility: true,
+        child: SingleChildScrollView(
+          key: const PageStorageKey('classic-document-scroll'),
+          controller: innerScroll,
+          primary: false,
+          physics: const ClampingScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(52, 36, 52, 70),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            for (var i = 0; i < pages.length; i++) sectionContent(pages[i], i),
+            if (!preview) Padding(padding: const EdgeInsets.only(top: 10),
+              child: Align(alignment: Alignment.centerLeft,
+                child: TextButton.icon(onPressed: addSection,
+                  icon: const Icon(Icons.add),
+                  label: const Text('Start another section')))),
+          ]),
+        ),
+      ),
+    );
   }
   Widget mobilePageList() {
     return shell(Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -585,29 +710,50 @@ class _ClassicWebLessonStudioState extends State<ClassicWebLessonStudio> {
       scaffoldBackgroundColor: pale), child: LayoutBuilder(builder: (ctx, limits) {
       final veryCompact = limits.maxWidth < 700;
       final width = limits.maxWidth >= 1500 ? 385.0 : 225.0;
-      return Container(color: pale, padding: EdgeInsets.all(veryCompact ? 8 : 15),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          header(limits.maxWidth < 1450),
-          const SizedBox(height: 12),
-          if (veryCompact) mobilePageList(),
-          if (veryCompact) const SizedBox(height: 8),
-          Expanded(child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            if (!veryCompact && !sidebarCollapsed) ...[
-              SizedBox(width: width, child: sidebar(compact: limits.maxWidth < 1500)),
-              const SizedBox(width: 12),
-            ],
-            Expanded(child: Container(decoration: BoxDecoration(color: Colors.white,
-              border: Border.all(color: border),
-              borderRadius: BorderRadius.circular(11)), clipBehavior: Clip.antiAlias,
-              child: Column(children: [
-                ribbon(),
-                Expanded(child: pages.isEmpty
-                  ? Center(child: OutlinedButton.icon(onPressed: addChapter,
-                    icon: const Icon(Icons.add), label: const Text('Create first section')))
-                  : documentCanvas()),
-              ]))),
-          ])),
-        ]));
+      final inset = veryCompact ? 8.0 : 15.0;
+      return ColoredBox(color: pale, child: NestedScrollView(
+        key: const ValueKey('classic-nested-sticky-editor'),
+        controller: headerScroll,
+        physics: const ClampingScrollPhysics(),
+        headerSliverBuilder: (context, _) => [
+          SliverToBoxAdapter(child: Padding(
+            key: const ValueKey('classic-scroll-away-metadata'),
+            padding: EdgeInsets.fromLTRB(inset, inset, inset, 12),
+            child: header(limits.maxWidth < 1450),
+          )),
+        ],
+        // The inner controller provided by NestedScrollView is essential:
+        // document drags first dismiss the outer lesson-details header.
+        // A separate document controller would leave metadata permanently
+        // fixed (unlike the Legacy editor screenshots).
+        body: Builder(builder: (innerContext) {
+          final inner = PrimaryScrollController.of(innerContext);
+          attachDocumentScroll(inner);
+          return Padding(padding: EdgeInsets.fromLTRB(inset, 0, inset, inset),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              if (veryCompact) mobilePageList(),
+              if (veryCompact) const SizedBox(height: 8),
+              Expanded(child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                if (!veryCompact && !sidebarCollapsed) ...[
+                  SizedBox(width: width, child: sidebar(compact: limits.maxWidth < 1500)),
+                  const SizedBox(width: 12),
+                ],
+                Expanded(child: Container(decoration: BoxDecoration(color: Colors.white,
+                  border: Border.all(color: border),
+                  borderRadius: BorderRadius.circular(11)), clipBehavior: Clip.antiAlias,
+                  child: Column(children: [
+                    // This is fixed inside the editor workspace as the
+                    // metadata sliver scrolls completely out of sight.
+                    ribbon(),
+                    Expanded(child: pages.isEmpty
+                      ? Center(child: OutlinedButton.icon(onPressed: addChapter,
+                        icon: const Icon(Icons.add), label: const Text('Create first section')))
+                      : documentCanvas(inner)),
+                  ]))),
+              ])),
+            ]));
+        }),
+      ));
     }));
   }
 }

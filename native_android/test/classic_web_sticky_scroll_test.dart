@@ -1,0 +1,195 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:vop/widgets/classic_web_lesson_studio.dart';
+
+Map<String, dynamic> longLesson({int sectionCount = 6, int blocksPerPage = 12}) => {
+  'id': 'lesson-one',
+  'title': 'KUTI TWA SUMINA MULI LESA',
+  'lessonNumber': '01',
+  'guideId': 'ukusanga',
+  'language': 'BEM',
+  'chapters': [
+    {
+      'id': 'chapter-one',
+      'title': 'Ukusanga',
+      'sections': [
+        for (var page = 0; page < sectionCount; page++)
+          {
+            'id': 'section-$page',
+            'title': 'LEARNER PAGE ${page + 1}',
+            'document': [
+              for (var block = 0; block < blocksPerPage; block++)
+                {
+                  'id': 'block-$page-$block',
+                  'type': 'p',
+                  'children': [
+                    {'text': 'Long form lesson text with scripture and explanation. '
+                      'Keep the lesson header and editing toolbar visible. '}
+                  ],
+                },
+            ],
+          },
+      ],
+    },
+  ],
+};
+
+void main() {
+  testWidgets('Legacy parity: metadata scrolls away but ribbon and pages stay pinned',
+      (tester) async {
+    tester.view.physicalSize = const Size(1280, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body:
+      ClassicWebLessonStudio(
+        value: longLesson(sectionCount: 6, blocksPerPage: 12),
+        guideTitle: 'UKUSANGA', saving: false,
+        onChanged: () {}, onSave: () {}, onQuiz: () {},
+        onAdvanced: () {},
+      ),
+    )));
+    await tester.pumpAndSettle();
+    final metadata = find.byKey(const ValueKey('classic-scroll-away-metadata'));
+    final ribbon = find.byKey(const ValueKey('classic-sticky-ribbon'));
+    final outline = find.byKey(const PageStorageKey('classic-outline-scroll'));
+    expect(metadata, findsOneWidget);
+    expect(ribbon, findsOneWidget);
+    final beforeRibbon = tester.getTopLeft(ribbon).dy;
+    final beforeOutline = tester.getTopLeft(outline).dy;
+    // User scrolls WITHIN the lesson document. It must move the
+    // outer lesson-details header away, not drag the ribbon offscreen.
+    await tester.drag(find.byKey(
+      const PageStorageKey('classic-document-scroll')),
+      const Offset(0, -520));
+    await tester.pumpAndSettle();
+    final afterRibbon = tester.getTopLeft(ribbon).dy;
+    final afterOutline = tester.getTopLeft(outline).dy;
+    expect(afterRibbon, lessThan(beforeRibbon - 50));
+    expect(afterRibbon, greaterThanOrEqualTo(0));
+    expect(afterOutline, lessThan(beforeOutline - 50));
+    // SliverToBoxAdapter may fully unmount after it has scrolled away.
+    expect(metadata, findsNothing);
+    // Continuing to scroll affects the document, not the pinned controls.
+    await tester.drag(find.byKey(
+      const PageStorageKey('classic-document-scroll')),
+      const Offset(0, -480));
+    await tester.pumpAndSettle();
+    expect(tester.getTopLeft(ribbon).dy, closeTo(afterRibbon, .1));
+    expect(tester.getTopLeft(outline).dy, closeTo(afterOutline, .1));
+    // Reverse the gesture: the lesson metadata should return above the ribbon.
+    await tester.drag(find.byKey(
+      const PageStorageKey('classic-document-scroll')),
+      const Offset(0, 1100));
+    await tester.pumpAndSettle();
+    await tester.drag(find.byKey(
+      const PageStorageKey('classic-document-scroll')),
+      const Offset(0, 1100));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('classic-scroll-away-metadata')),
+      findsOneWidget);
+    expect(tester.getTopLeft(ribbon).dy, greaterThan(afterRibbon + 50));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('sticky ribbon remains pinned when document is scrolled',
+      (tester) async {
+    tester.view.physicalSize = const Size(1440, 820);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final lesson = longLesson();
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body:
+      ClassicWebLessonStudio(
+        value: lesson, guideTitle: 'UKUSANGA', saving: false,
+        onChanged: () {}, onSave: () {}, onQuiz: () {},
+        onAdvanced: () {},
+      ),
+    )));
+    await tester.pumpAndSettle();
+    final ribbon = find.byKey(const ValueKey('classic-sticky-ribbon'));
+    final scrollFinder = find.byKey(const PageStorageKey('classic-document-scroll'));
+    final outlineFinder = find.byKey(const PageStorageKey('classic-outline-scroll'));
+    expect(ribbon, findsOneWidget);
+    expect(scrollFinder, findsOneWidget);
+    expect(outlineFinder, findsOneWidget);
+
+    final firstTop = tester.getTopLeft(ribbon).dy;
+    final document = tester.widget<SingleChildScrollView>(scrollFinder).controller!;
+    final outline = tester.widget<ListView>(outlineFinder).controller!;
+    expect(identical(document, outline), isFalse);
+    expect(document.hasClients, isTrue);
+    expect(document.position.maxScrollExtent, greaterThan(500));
+    document.jumpTo(500);
+    await tester.pumpAndSettle();
+    expect(tester.getTopLeft(ribbon).dy, lessThan(firstTop - 50));
+    expect(tester.getTopLeft(ribbon).dy, greaterThanOrEqualTo(0));
+    expect(document.offset, closeTo(500, 1));
+    expect(outline.hasClients, isTrue);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('clicking page outline scrolls only the document and keeps ribbon pinned',
+      (tester) async {
+    tester.view.physicalSize = const Size(1280, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final lesson = longLesson();
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body:
+      ClassicWebLessonStudio(
+        value: lesson, guideTitle: 'UKUSANGA', saving: false,
+        onChanged: () {}, onSave: () {}, onQuiz: () {},
+        onAdvanced: () {},
+      ),
+    )));
+    await tester.pumpAndSettle();
+    final ribbon = find.byKey(const ValueKey('classic-sticky-ribbon'));
+    final firstTop = tester.getTopLeft(ribbon).dy;
+    final scrollFinder = find.byKey(const PageStorageKey('classic-document-scroll'));
+    final document = tester.widget<SingleChildScrollView>(scrollFinder).controller!;
+    expect(document.offset, 0);
+    // ListView.builder does not build offscreen cards. Scroll the outline
+    // itself first; ensureVisible cannot target an unmounted section card.
+    final outline = tester.widget<ListView>(
+      find.byKey(const PageStorageKey('classic-outline-scroll'))).controller!;
+    outline.jumpTo((4 * 94.0).clamp(
+      outline.position.minScrollExtent, outline.position.maxScrollExtent));
+    await tester.pumpAndSettle();
+    final target = find.byKey(const ValueKey('classic-page-button-section-4'));
+    expect(target, findsOneWidget);
+    await tester.tap(target);
+    await tester.pumpAndSettle();
+    expect(document.offset, greaterThan(500));
+    expect(tester.getTopLeft(ribbon).dy, lessThan(firstTop - 50));
+    expect(tester.getTopLeft(ribbon).dy, greaterThanOrEqualTo(0));
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('scrolling to virtualized pages updates the pinned sidebar', (tester) async {
+    tester.view.physicalSize = const Size(1280, 700);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body:
+      ClassicWebLessonStudio(
+        value: longLesson(sectionCount: 20, blocksPerPage: 1),
+        saving: false, onChanged: () {}, onSave: () {},
+        onQuiz: () {}, onAdvanced: () {},
+      ),
+    )));
+    await tester.pumpAndSettle();
+    final document = tester.widget<SingleChildScrollView>(
+      find.byKey(const PageStorageKey('classic-document-scroll'))).controller!;
+    final outline = tester.widget<ListView>(
+      find.byKey(const PageStorageKey('classic-outline-scroll'))).controller!;
+    final top = tester.getTopLeft(
+      find.byKey(const ValueKey('classic-sticky-ribbon'))).dy;
+    document.jumpTo(document.position.maxScrollExtent);
+    await tester.pumpAndSettle();
+    expect(outline.offset, greaterThan(0));
+    expect(tester.getTopLeft(
+      find.byKey(const ValueKey('classic-sticky-ribbon'))).dy,
+      lessThan(top - 50));
+    expect(tester.takeException(), isNull);
+  });
+}

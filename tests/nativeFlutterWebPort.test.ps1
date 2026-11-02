@@ -46,9 +46,20 @@ try {
     }
     if (!$allBusyFailed) { throw "All occupied candidate ports were not reported." }
 
-    # The original listener must remain intact: launcher never kills foreign apps.
-    if (!(Get-NetTCPConnection -LocalPort $occupiedPort -State Listen -ErrorAction SilentlyContinue)) {
+    # Verify the actual listener instead of relying on Get-NetTCPConnection,
+    # which can return no result for loopback sockets on Windows runner hosts.
+    # The port probe must not close or terminate a listener owned by another app.
+    if (!$busy.Server.IsBound) {
         throw "The launcher changed a listening process instead of only probing."
+    }
+    $client = [Net.Sockets.TcpClient]::new()
+    try {
+        $client.Connect($ip, $occupiedPort)
+        if (!$client.Connected) {
+            throw "The port's original listener is no longer accepting connections."
+        }
+    } finally {
+        $client.Dispose()
     }
     Write-Host "Flutter VOP busy-port detection, approved fallback, explicit-port refusal and no process termination passed."
 } finally {

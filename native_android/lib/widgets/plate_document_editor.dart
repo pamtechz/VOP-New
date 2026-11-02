@@ -42,10 +42,11 @@ class PlateMarkedTextController extends TextEditingController {
 }
 
 class PlateDocumentEditor extends StatefulWidget {
-  const PlateDocumentEditor({required this.document,required this.onChanged,this.inlineMode=false,super.key});
+  const PlateDocumentEditor({required this.document,required this.onChanged,this.inlineMode=false,this.onFocused,super.key});
   final List<Map<String,dynamic>> document;
   final ValueChanged<List<Map<String,dynamic>>> onChanged;
   final bool inlineMode;
+  final VoidCallback? onFocused;
   @override State<PlateDocumentEditor> createState()=>PlateDocumentEditorState();
 }
 class PlateDocumentEditorState extends State<PlateDocumentEditor>{
@@ -390,7 +391,7 @@ class PlateDocumentEditorState extends State<PlateDocumentEditor>{
           hintText:'Type lesson content…',border:InputBorder.none,
           focusedBorder:InputBorder.none,
           contentPadding:EdgeInsets.symmetric(horizontal:0,vertical:2)),
-        onTap:()=>activeBlockIndex=index,
+        onTap:(){activeBlockIndex=index;widget.onFocused?.call();},
         onChanged:(next){
           activeBlockIndex=index;
           final updated=rebaseLeaves(plateRows(node['children']),next);
@@ -403,6 +404,7 @@ class PlateDocumentEditorState extends State<PlateDocumentEditor>{
   Future<void> _editComplexBlock(int index)async{
     if(index<0||index>=nodes.length)return;
     activeBlockIndex=index;
+    widget.onFocused?.call();
     await showDialog<void>(context:context,builder:(ctx)=>AlertDialog(
       title:Text('Edit '+_label((nodes[index]['type']??'').toString())),
       content:SizedBox(width:650,height:420,child:SingleChildScrollView(
