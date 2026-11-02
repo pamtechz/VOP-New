@@ -53,13 +53,13 @@ class _PlansState extends State<PlansManagementScreen>{
       {'key':'activationSource','label':'Activation reason type','type':'choice','choices':['complimentary','manual_override','migration'],'required':true},
       {'key':'overrideReason','label':'Reason for activation without payment','type':'multiline','required':true},
     ],{},recordMap(workspace['options']),(value)async{await request('assignPlan',{'planId':item['id'],...value});});
+  }
   Future<void> openPaymentPlan(Map<String,dynamic> workspace,Map<String,dynamic> plan)async{
     await Navigator.push<void>(context,MaterialPageRoute(builder:(_)=>WorkspaceOperationsScreen(
       api:widget.api,kind:'payments',workspace:{...workspace,...scope},
       focusPayableItemId:'subscription_${plan['id']}',
     )));
     if(mounted)setState(reload);
-  }
   }
   Future<void> subscriptionAction(Map<String,dynamic> workspace,bool cancel)async{
     await editor(cancel?'Cancel subscription':'Reactivate subscription',[
