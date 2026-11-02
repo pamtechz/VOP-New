@@ -133,8 +133,8 @@ class _PlansState extends State<PlansManagementScreen>{
             for(final feature in recordMap(item['features']).entries)if(feature.value==true)Text(humanLabel(feature.key)),
             Wrap(children:[
               if(superAdmin)...[TextButton(onPressed:()=>editPlan(workspace,item),child:const Text('Edit')),TextButton(onPressed:()=>remove(item),child:const Text('Delete')),TextButton(onPressed:()=>assign(workspace,item),child:const Text('Assign with reason'))],
-              if(data['scope']!='platform'&&(num.tryParse('${item['priceUsd']??item['price']}')??-1)==0)TextButton(onPressed:()=>activateFree(item),child:const Text('Activate free package')),
-              if(data['scope']!='platform'&&(num.tryParse('${item['priceUsd']??item['price']}')??0)>0)
+              if(!superAdmin&&data['scope']!='platform'&&(num.tryParse('${item['priceUsd']??item['price']}')??-1)==0)TextButton(onPressed:()=>activateFree(item),child:const Text('Activate free package')),
+              if(!superAdmin&&data['scope']!='platform'&&(num.tryParse('${item['priceUsd']??item['price']}')??0)>0)
                 FilledButton.icon(onPressed:()=>openPaymentPlan(workspace,item),
                   icon:const Icon(Icons.lock_outline),label:const Text('Choose & pay securely')),
             ]),
