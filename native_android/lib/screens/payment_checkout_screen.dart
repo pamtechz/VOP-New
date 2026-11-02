@@ -34,6 +34,15 @@ class _PaymentCheckoutState extends State<PaymentCheckoutScreen>{
     }catch(_){/* Ignore unrelated provider messages. */}
   }
   @override Widget build(BuildContext context)=>Scaffold(appBar:AppBar(title:const Text('Payment'),actions:[TextButton(onPressed:busy?null:verify,child:const Text('Check status'))]),
-    body:Column(children:[if(busy)const LinearProgressIndicator(),if(message.isNotEmpty)Padding(padding:const EdgeInsets.all(16),child:Text(message)),
+    body:Column(children:[
+      if(busy)const LinearProgressIndicator(),
+      const Padding(padding:EdgeInsets.symmetric(horizontal:12,vertical:8),
+        child:Wrap(spacing:6,runSpacing:6,children:[
+          Chip(label:Text('1 · Authorize payment')),
+          Chip(label:Text('2 · Verify with provider')),
+          Chip(label:Text('3 · Activate access')),
+        ])),
+      if(message.isNotEmpty)Padding(padding:const EdgeInsets.all(12),child:Semantics(liveRegion:true,child:Text(message))),
+
       Expanded(child:PaymentProviderView(html:document,origin:VopConfig.apiUrl,onEvent:event))]));
 }
