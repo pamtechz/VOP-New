@@ -154,7 +154,6 @@ export default function SubscriptionWorkspace({
       const [current, catalog] = await Promise.all([
         planApi({ action: 'getSubscription', billingTenantType:selectedTarget.type, billingTenantId: selectedTarget.id }),
         planApi({ action: 'listAvailablePlans', billingTenantType:selectedTarget.type, billingTenantId: selectedTarget.id }),
-      if (request !== latestRequest.current) return;
       ]);
       setOverview(current as unknown as Overview);
       setAvailablePlans((catalog.items || []) as SubscriptionPackageView[]);
