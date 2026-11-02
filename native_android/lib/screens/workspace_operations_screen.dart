@@ -217,6 +217,7 @@ class _WorkspaceOperationsState extends State<WorkspaceOperationsScreen>{
             )),
           ]);
         }
+        final items=recordRows(data['items']);
         final focused=widget.kind=='payments'&&tab==0?widget.focusPayableItemId:null;
         if(focused!=null&&focused.isNotEmpty){
           items.sort((a,b){
@@ -225,7 +226,6 @@ class _WorkspaceOperationsState extends State<WorkspaceOperationsScreen>{
             return am==bm?0:am?-1:1;
           });
         }
-        final items=recordRows(data['items']);
         final canAdd=(widget.kind=='mentoring'&&[2,5].contains(tab))||(widget.kind=='translations'&&[0,2].contains(tab))||(widget.kind=='organization'&&tab==1)||(widget.kind=='payments'&&tab==4);
         return Column(children:[
           if(focused!=null&&focused.isNotEmpty)Padding(
