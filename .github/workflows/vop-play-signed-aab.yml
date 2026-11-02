@@ -119,17 +119,38 @@ jobs:
           }
           Write-Host 'Upload keystore certificate fingerprint verified.'
 
-      - name: Build and verify release-signed Android App Bundle
+      - name: Build obfuscated release-signed Android App Bundle and check 8 MiB limit
         working-directory: native_android
         shell: powershell
+        env:
+          VOP_RELEASE_SYMBOLS_DIR: ${{ secrets.VOP_RELEASE_SYMBOLS_DIR }}
         run: |
-          flutter build appbundle --release --no-pub --dart-define-from-file=android-public-config.json
-          if ($LASTEXITCODE -ne 0) { throw 'Signed release AAB build failed.' }
+          if ([string]::IsNullOrWhiteSpace($env:VOP_RELEASE_SYMBOLS_DIR)) {
+            throw 'A private VOP_RELEASE_SYMBOLS_DIR backup path is required before Dart obfuscation.'
+          }
+          # Keep every supported architecture. AAB format and the Play Store
+          # provide device-specific optimized downloads; never exclude devices
+          # just to pass a size limit.
+          $symbols = 'build/app/outputs/vop-obfuscation'
+          flutter build appbundle --release --no-pub --obfuscate --split-debug-info=$symbols --tree-shake-icons --dart-define-from-file=android-public-config.json
+          if ($LASTEXITCODE -ne 0) { throw 'Obfuscated release AAB build failed.' }
           $aab = 'build/app/outputs/bundle/release/app-release.aab'
           if (!(Test-Path $aab -PathType Leaf)) { throw 'Missing release AAB.' }
           & jarsigner -verify $aab
-          if ($LASTEXITCODE -ne 0) { throw 'AAB signing verification failed.' }
-          Write-Host 'Release AAB is signed and locally verified. Google Play is unchanged.'
+          if ($LASTEXITCODE -ne 0) { throw 'AAB signature verification failed.' }
+          $directory = Join-Path $env:VOP_RELEASE_SYMBOLS_DIR $env:GITHUB_SHA
+          New-Item -ItemType Directory -Force -Path $directory | Out-Null
+          $maps = @(Get-ChildItem -Path $symbols -File -Filter 'app.*.symbols' -ErrorAction SilentlyContinue)
+          if ($maps.Count -eq 0) { throw 'Obfuscation symbol maps were not generated.' }
+          foreach ($map in $maps) { Copy-Item -LiteralPath $map.FullName -Destination $directory -Force }
+          Write-Host "Private obfuscation maps backed up to the configured runner directory for commit $env:GITHUB_SHA."
+          $bytes = (Get-Item -LiteralPath $aab).Length
+          $limitBytes = 8 * 1024 * 1024
+          Write-Host ("Release AAB size: {0:N2} MiB ({1} bytes); requested limit: 8 MiB." -f ($bytes / 1MB), $bytes)
+          if ($bytes -gt $limitBytes) {
+            throw 'Bundle exceeds 8 MiB target. DO NOT publish. Review assets/native dependencies and confirm supported-architecture trade-offs before proceeding.'
+          }
+          Write-Host 'Obfuscated release AAB meets 8 MiB gate; Google Play remains unchanged.'
 
       - name: Upload signed AAB for separate Play approval
         uses: actions/upload-artifact@v4
