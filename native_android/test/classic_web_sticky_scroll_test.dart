@@ -165,7 +165,7 @@ void main() {
     expect(tester.getTopLeft(ribbon).dy, greaterThanOrEqualTo(0));
     expect(tester.takeException(), isNull);
   });
-  testWidgets('scrolling to virtualized pages updates the pinned sidebar', (tester) async {
+  testWidgets('scrolling down and back up reveals the active page in the pinned sidebar', (tester) async {
     tester.view.physicalSize = const Size(1280, 700);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -190,6 +190,13 @@ void main() {
     expect(tester.getTopLeft(
       find.byKey(const ValueKey('classic-sticky-ribbon'))).dy,
       lessThan(top - 50));
+    // Returning to an earlier page must reveal its virtualized outline card
+    // as well. A down-only implementation leaves the active page offscreen.
+    document.jumpTo(0);
+    await tester.pumpAndSettle();
+    expect(outline.offset, closeTo(0, 1));
+    expect(find.byKey(const ValueKey('classic-page-button-section-0'))
+      .hitTestable(), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }
