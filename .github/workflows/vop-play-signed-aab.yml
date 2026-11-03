@@ -139,85 +139,16 @@ jobs:
           if (!(Test-Path $aab -PathType Leaf)) { throw 'Missing release AAB.' }
           & jarsigner -verify $aab
           if ($LASTEXITCODE -ne 0) { throw 'AAB signature verification failed.' }
-          # Validate the signer ON THE FINAL AAB, not just the input keystore.
-          # A JAR-signed AAB should have one upload signer certificate.
+          # Verify the signer on the final bundle, not only on the input keystore.
           $certificateOutput = @(& keytool -printcert -jarfile $aab 2>&1)
           if ($LASTEXITCODE -ne 0) { throw 'Cannot read the final AAB signing certificate.' }
-          $fingerprintLines = @($certificateOutput | Select-String -Pattern '^\\s*SHA256:\\s*([0-9A-Fa-f:]+)\\s*
-          New-Item -ItemType Directory -Force -Path $directory | Out-Null
-          $maps = @(Get-ChildItem -Path $symbols -File -Filter 'app.*.symbols' -ErrorAction SilentlyContinue)
-          if ($maps.Count -eq 0) { throw 'Obfuscation symbol maps were not generated.' }
-          foreach ($map in $maps) { Copy-Item -LiteralPath $map.FullName -Destination $directory -Force }
-          Write-Host "Private obfuscation maps backed up to the configured runner directory for commit $env:GITHUB_SHA."
-          $bytes = (Get-Item -LiteralPath $aab).Length
-          $limitBytes = 8 * 1000 * 1000
-          Write-Host ("Release AAB size: {0:N2} MiB ({1} bytes); requested limit: 8 MB." -f ($bytes / 1MB), $bytes)
-          if ($bytes -gt $limitBytes) {
-            throw 'Bundle exceeds 8 MB target. DO NOT publish. Review assets/native dependencies and confirm supported-architecture trade-offs before proceeding.'
-          }
-          Write-Host 'Obfuscated release AAB meets 8 MB gate; Google Play remains unchanged.'
-
-      - name: Upload signed AAB for separate Play approval
-        uses: actions/upload-artifact@v4
-        with:
-          name: vop-google-play-signed-aab
-          path: native_android/build/app/outputs/bundle/release/app-release.aab
-          if-no-files-found: error
-          retention-days: 3
-
-      - name: Delete temporary release keystore from self-hosted runner
-        if: always()
-        shell: powershell
-        run: |
-          foreach ($path in @(
-            'native_android\android\vop-upload-key.jks',
-            'native_android\android\key.properties',
-            'native_android\android\upload-certificate.der'
-          )) {
-            Remove-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue
-          }
-          Write-Host 'Temporary signing files removed.'
-)
+          $fingerprintLines = @($certificateOutput | Select-String -Pattern '^\s*SHA256:\s*([0-9A-Fa-f:]+)\s*$')
           if ($fingerprintLines.Count -ne 1) {
             throw 'Final AAB must contain exactly one verifiable upload signing certificate.'
           }
           $bundleSigner = ($fingerprintLines[0].Matches[0].Groups[1].Value -replace '[^A-Fa-f0-9]', '').ToUpperInvariant()
           $approvedSigner = ($env:VOP_RELEASE_UPLOAD_CERT_SHA256 -replace '[^A-Fa-f0-9]', '').ToUpperInvariant()
-          if ($approvedSigner -notmatch '^[A-F0-9]{64}
-          New-Item -ItemType Directory -Force -Path $directory | Out-Null
-          $maps = @(Get-ChildItem -Path $symbols -File -Filter 'app.*.symbols' -ErrorAction SilentlyContinue)
-          if ($maps.Count -eq 0) { throw 'Obfuscation symbol maps were not generated.' }
-          foreach ($map in $maps) { Copy-Item -LiteralPath $map.FullName -Destination $directory -Force }
-          Write-Host "Private obfuscation maps backed up to the configured runner directory for commit $env:GITHUB_SHA."
-          $bytes = (Get-Item -LiteralPath $aab).Length
-          $limitBytes = 8 * 1000 * 1000
-          Write-Host ("Release AAB size: {0:N2} MiB ({1} bytes); requested limit: 8 MB." -f ($bytes / 1MB), $bytes)
-          if ($bytes -gt $limitBytes) {
-            throw 'Bundle exceeds 8 MB target. DO NOT publish. Review assets/native dependencies and confirm supported-architecture trade-offs before proceeding.'
-          }
-          Write-Host 'Obfuscated release AAB meets 8 MB gate; Google Play remains unchanged.'
-
-      - name: Upload signed AAB for separate Play approval
-        uses: actions/upload-artifact@v4
-        with:
-          name: vop-google-play-signed-aab
-          path: native_android/build/app/outputs/bundle/release/app-release.aab
-          if-no-files-found: error
-          retention-days: 3
-
-      - name: Delete temporary release keystore from self-hosted runner
-        if: always()
-        shell: powershell
-        run: |
-          foreach ($path in @(
-            'native_android\android\vop-upload-key.jks',
-            'native_android\android\key.properties',
-            'native_android\android\upload-certificate.der'
-          )) {
-            Remove-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue
-          }
-          Write-Host 'Temporary signing files removed.'
- -or $bundleSigner -ne $approvedSigner) {
+          if ($approvedSigner -notmatch '^[A-F0-9]{64}$' -or $bundleSigner -ne $approvedSigner) {
             throw 'Final AAB signer does not match the CURRENT approved Google Play upload certificate.'
           }
           Write-Host 'Final AAB signer verified against the approved Play upload certificate.'
