@@ -129,6 +129,10 @@ jobs:
           if ([string]::IsNullOrWhiteSpace($env:VOP_RELEASE_SYMBOLS_DIR)) {
             throw 'A private VOP_RELEASE_SYMBOLS_DIR backup path is required before Dart obfuscation.'
           }
+          $backupRoot = [Environment]::ExpandEnvironmentVariables($env:VOP_RELEASE_SYMBOLS_DIR)
+          if ($backupRoot -match '%[^%]+%' -or ![IO.Path]::IsPathRooted($backupRoot)) {
+            throw 'The private symbols backup must resolve to an absolute Windows path.'
+          }
           # Keep every supported architecture. AAB format and the Play Store
           # provide device-specific optimized downloads; never exclude devices
           # just to pass a size limit.
@@ -152,7 +156,7 @@ jobs:
             throw 'Final AAB signer does not match the CURRENT approved Google Play upload certificate.'
           }
           Write-Host 'Final AAB signer verified against the approved Play upload certificate.'
-          $directory = Join-Path (Join-Path $env:VOP_RELEASE_SYMBOLS_DIR $env:GITHUB_SHA) 'aab'
+          $directory = Join-Path (Join-Path $backupRoot $env:GITHUB_SHA) 'aab'
           New-Item -ItemType Directory -Force -Path $directory | Out-Null
           $maps = @(Get-ChildItem -Path $symbols -File -Filter 'app.*.symbols' -ErrorAction SilentlyContinue)
           if ($maps.Count -eq 0) { throw 'Obfuscation symbol maps were not generated.' }
@@ -177,6 +181,13 @@ jobs:
           VOP_RELEASE_UPLOAD_CERT_SHA256: ${{ secrets.VOP_RELEASE_UPLOAD_CERT_SHA256 }}
         run: |
           $ErrorActionPreference = 'Stop'
+          if ([string]::IsNullOrWhiteSpace($env:VOP_RELEASE_SYMBOLS_DIR)) {
+            throw 'A private VOP_RELEASE_SYMBOLS_DIR backup path is required before Dart obfuscation.'
+          }
+          $backupRoot = [Environment]::ExpandEnvironmentVariables($env:VOP_RELEASE_SYMBOLS_DIR)
+          if ($backupRoot -match '%[^%]+%' -or ![IO.Path]::IsPathRooted($backupRoot)) {
+            throw 'The private symbols backup must resolve to an absolute Windows path.'
+          }
           $symbols = 'build/app/outputs/vop-obfuscation/apk'
           flutter build apk --release --no-pub --obfuscate --split-debug-info=$symbols --tree-shake-icons --dart-define-from-file=android-public-config.json
           if ($LASTEXITCODE -ne 0) { throw 'Obfuscated release APK build failed.' }
@@ -209,7 +220,7 @@ jobs:
           }
           if ($badging -notcontains "targetSdkVersion:'36'") { throw 'APK must target API 36.' }
           # Separate maps for each build: never overwrite AAB crash symbols.
-          $directory = Join-Path (Join-Path $env:VOP_RELEASE_SYMBOLS_DIR $env:GITHUB_SHA) 'apk'
+          $directory = Join-Path (Join-Path $backupRoot $env:GITHUB_SHA) 'apk'
           New-Item -ItemType Directory -Force -Path $directory | Out-Null
           $maps = @(Get-ChildItem -Path $symbols -File -Filter 'app.*.symbols' -ErrorAction SilentlyContinue)
           if ($maps.Count -eq 0) { throw 'APK obfuscation symbol maps were not generated.' }
