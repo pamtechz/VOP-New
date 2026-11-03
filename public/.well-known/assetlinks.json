@@ -8,6 +8,8 @@
       "namespace": "android_app",
       "package_name": "com.sda.vop",
       "sha256_cert_fingerprints": [
+        "9A:FA:A7:61:67:8F:12:83:67:7D:C9:59:71:32:10:79:C2:7A:90:0D:DB:2A:53:07:DA:12:D5:97:0C:3F:4C:0D",
+        "AA:4A:48:BC:09:91:7D:CC:8C:52:C5:D1:D7:17:CF:AB:9C:A2:EA:F6:EF:EC:05:1E:51:C8:3F:42:FE:81:1F:66",
         "DB:19:E8:14:D4:74:BE:1B:5F:15:4B:18:35:01:C8:EE:40:52:DA:B3:10:00:70:56:4E:AF:8B:4C:39:7C:1A:27"
       ]
     }

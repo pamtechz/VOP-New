@@ -49,4 +49,23 @@ test('next VOP Play versionCode is newer than every verified existing track',()=
   const match=pubspec.match(/^version: ([\w.]+)\+(\d+)$/m);
   assert.ok(match,'Flutter pubspec must declare release name and version code');
   assert.ok(Number(match![2])>2,'new versionCode must exceed existing production 1 and beta 2');
+  assert.equal(match![1], '2.2.0', 'release must use the requested 2.2 version');
+});
+
+test('both release formats are verified and retain separate private crash maps',()=>{
+  assert.match(release,/flutter build apk --release --no-pub --obfuscate/);
+  assert.match(release,/apksigner verify --verbose --print-certs \$apk/);
+  assert.match(release,/if \(\$actual -ne \$expected\) \{ throw 'APK signer differs/);
+  assert.match(release,/\$signers\.Count -ne 1/);
+  assert.match(release,/\$aapt dump badging \$apk/);
+  assert.match(release,/APK package or version differs/);
+  assert.match(release,/targetSdkVersion:'36'/);
+  for (const kind of ['aab','apk']) {
+    assert.ok(release.includes("build/app/outputs/vop-obfuscation/"+kind));
+    assert.ok(release.includes("$env:GITHUB_SHA) '"+kind+"'"));
+  }
+  assert.equal((release.match(/R8 mapping file was not generated/g)??[]).length, 2);
+  assert.match(release,/name: vop-signed-release-apk/);
+  assert.match(release,/native_android\/build\/app\/outputs\/SHA256SUMS\.txt/);
+  assert.match(release,/Get-FileHash -LiteralPath \$path -Algorithm SHA256/);
 });

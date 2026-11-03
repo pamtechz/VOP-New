@@ -1,7 +1,7 @@
 name: vop
 description: Native Voice of Prophecy Android learner application.
 publish_to: none
-version: 1.1.0+3
+version: 2.2.0+3
 
 environment:
   sdk: ">=3.10.0 <4.0.0"
