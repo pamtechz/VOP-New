@@ -95,13 +95,13 @@ class _ClassicWebLessonStudioState extends State<ClassicWebLessonStudio> {
       if (start < position.pixels) destination = start;
       if (end > position.pixels + position.viewportDimension) {
         destination = end - position.viewportDimension;
+      }
       destination = destination.clamp(
         position.minScrollExtent, position.maxScrollExtent).toDouble();
       if ((destination - position.pixels).abs() < 1) return;
       outlineScroll.animateTo(destination,
         duration: const Duration(milliseconds: 180),
         curve: Curves.easeInOut);
-      }
     });
   }
 
