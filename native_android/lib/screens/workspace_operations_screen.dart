@@ -9,9 +9,10 @@ import 'learner_support_screen.dart';
 import 'payment_checkout_screen.dart';
 
 class WorkspaceOperationsScreen extends StatefulWidget {
-  const WorkspaceOperationsScreen({required this.api,required this.kind,required this.workspace,super.key});
+  const WorkspaceOperationsScreen({required this.api,required this.kind,required this.workspace,this.focusPayableItemId,super.key});
   final VopApi api;
   final String kind;
+  final String? focusPayableItemId;
   final Map<String,dynamic> workspace;
   @override State<WorkspaceOperationsScreen> createState()=>_WorkspaceOperationsState();
 }
@@ -217,8 +218,26 @@ class _WorkspaceOperationsState extends State<WorkspaceOperationsScreen>{
           ]);
         }
         final items=recordRows(data['items']);
+        final focused=widget.kind=='payments'&&tab==0?widget.focusPayableItemId:null;
+        if(focused!=null&&focused.isNotEmpty){
+          items.sort((a,b){
+            final am=a['id']==focused||a['itemId']==focused;
+            final bm=b['id']==focused||b['itemId']==focused;
+            return am==bm?0:am?-1:1;
+          });
+        }
         final canAdd=(widget.kind=='mentoring'&&[2,5].contains(tab))||(widget.kind=='translations'&&[0,2].contains(tab))||(widget.kind=='organization'&&tab==1)||(widget.kind=='payments'&&tab==4);
-        return Column(children:[if(canAdd)Padding(padding:const EdgeInsets.all(12),child:FilledButton.icon(onPressed:busy?null:()=>create(data),icon:const Icon(Icons.add),label:Text(widget.kind=='mentoring'&&tab==5?'Edit automation':'Add'))),
+        return Column(children:[
+          if(focused!=null&&focused.isNotEmpty)Padding(
+            padding:const EdgeInsets.fromLTRB(12,10,12,0),child:Card(
+              child:Padding(padding:const EdgeInsets.all(12),child:Row(children:[
+                const Icon(Icons.lock_outline),
+                const SizedBox(width:10),
+                const Expanded(child:Text('Select the matching subscription below. Only server-verified payment activates the plan.')),
+              ])),
+            ),
+          ),
+          if(canAdd)Padding(padding:const EdgeInsets.all(12),child:FilledButton.icon(onPressed:busy?null:()=>create(data),icon:const Icon(Icons.add),label:Text(widget.kind=='mentoring'&&tab==5?'Edit automation':'Add'))),
           Expanded(child:items.isEmpty?ListView(padding:const EdgeInsets.all(20),children:[if(data['item'] is Map)...recordMap(data['item']).entries.map((e)=>ListTile(title:Text(humanLabel(e.key)),subtitle:Text('${e.value}')))else const Text('No records found.')]):
             ListView.separated(padding:const EdgeInsets.all(12),itemCount:items.length,separatorBuilder:(_,__)=>const Divider(),itemBuilder:(_,i){final item=items[i];return ListTile(
               title:Text('${item['title']??item['name']??item['displayName']??item['candidateName']??item['subject']??item['key']??item['action']??item['email']??item['id']??''}'),
