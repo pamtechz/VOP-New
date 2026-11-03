@@ -331,10 +331,10 @@ export default function SubscriptionWorkspace({
         </div>
       </section>
       {!isSuperAdmin && selectedTarget && (
-        <nav className="vop-subscription-journey" aria-label="Subscription steps">
-          <span><strong>1</strong> Compare plans</span>
-          <span><strong>2</strong> Choose secure payment</span>
-          <span><strong>3</strong> Await verified activation</span>
+        <nav className="vop-subscription-journey" aria-label={uiT('billing.subscription.steps_accessible_label', 'Subscription steps')}>
+          <span><strong>1</strong> {uiT('billing.subscription.step_compare_plans', 'Compare plans')}</span>
+          <span><strong>2</strong> {uiT('billing.subscription.step_secure_payment', 'Choose secure payment')}</span>
+          <span><strong>3</strong> {uiT('billing.subscription.step_verified_activation', 'Await verified activation')}</span>
         </nav>
       )}
 
@@ -377,7 +377,7 @@ export default function SubscriptionWorkspace({
                     <div className="vop-subscription-warning danger" role="status">
                       <AlertTriangle size={18}/><div>
                         <strong>{status === 'past_due' ? 'Payment requires attention' : status === 'expired' ? 'Subscription expired' : 'Access is not active'}</strong>
-                        <span>Choose a plan to restore access. Entitlements change only after verified payment or an authorized administrator action.</span>
+                        <span>{uiT('billing.subscription.restore_access_verified_payment', 'Choose a plan to restore access. Entitlements change only after verified payment or an authorized administrator action.')}</span>
                       </div>
                     </div>
                   )}
