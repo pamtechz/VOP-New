@@ -1,3 +1,4 @@
+import { quizAnswerFeedback } from '../../shared/quizFeedback.js';
 import { applyFlutterPreviewCors } from '../../server/flutterPreviewCors.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { getApps, initializeApp, cert } from 'firebase-admin/app';
@@ -132,7 +133,7 @@ function assessmentPolicy(lesson:Record<string,unknown>,settings:Record<string,u
     retakeCooldownMinutes:positiveOverride(lesson.assessmentRetakeCooldownMinutes,nonNegativeWhole(settings.quizRetakeCooldownMinutes,10080),10080),
     timeLimitMinutes:nonNegativeWhole(lesson.assessmentTimeLimitMinutes,1440),
     feedbackMode:['score_only','after_submit','none'].includes(String(lesson.assessmentFeedbackMode||''))
-      ?String(lesson.assessmentFeedbackMode):'score_only',
+      ?String(lesson.assessmentFeedbackMode):'after_submit',
     instructions:String(lesson.assessmentInstructions||'').trim().slice(0,5000),
   };
 }
@@ -1070,7 +1071,7 @@ export default async function handler(
     const storedResult={
       score,passed,threshold,timeLimitMinutes,feedbackMode:policy.feedbackMode,
       ...(policy.feedbackMode==='after_submit'
-        ?{explanations:questions.map(question=>String((question as Record<string,unknown>).explanation||''))}
+        ?{explanations:questions.map(question=>quizAnswerFeedback(question as QuestionRecord & {explanation?:unknown}))}
         :{}),
       attemptsUsed:Math.max(1,Math.trunc(Number(sessionData.attemptNumber)||1)),
       maxAttempts:maxAttempts||null,remainingAttempts:remainingAttemptsForAttempt,

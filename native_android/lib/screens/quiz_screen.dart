@@ -1,3 +1,4 @@
+import '../widgets/quiz_answer_explanations.dart';
 import 'package:flutter/material.dart';
 
 import '../core/vop_api.dart';
@@ -115,7 +116,7 @@ class _QuizScreenState extends State<QuizScreen> {
       elevation: 0,
     ),
     body: result != null
-        ? resultView()
+        ? SingleChildScrollView(child: resultView())
         : FutureBuilder<Map<String, dynamic>>(
             future: session,
             builder: (context, s) {
@@ -831,6 +832,7 @@ class _QuizScreenState extends State<QuizScreen> {
                   ),
                   const SizedBox(height: 20),
                 ],
+                QuizAnswerExplanations(result: data),
                 if (passed) ...[
                   FilledButton.icon(
                     style: FilledButton.styleFrom(

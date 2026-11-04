@@ -1,3 +1,4 @@
+import { quizAnswerFeedback } from '../../../shared/quizFeedback';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { Lesson, DiscoverGuide, User, Question } from '../../types';
 import { X, Volume2, VolumeX, ChevronLeft, ChevronRight, CheckCircle, Quote, Sparkles, BookOpen, MessageCircle, HeartHandshake, ArrowLeft, Trophy, RotateCcw, CheckCircle2, FileQuestion } from 'lucide-react';
@@ -238,7 +239,7 @@ export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({
           passed,
           threshold: passMark,
           feedbackMode: 'after_submit',
-          explanations: qList.map(q => q.explanation || ''),
+          explanations: qList.map(quizAnswerFeedback),
           retakePolicy: {
             attemptsUsed: 1,
             maxAttempts: null,
