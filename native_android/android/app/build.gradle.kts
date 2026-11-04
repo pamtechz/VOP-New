@@ -67,6 +67,15 @@ android {
         }
     }
 
+    packaging {
+        jniLibs {
+            // Compress native libraries for direct APK downloads when requested.
+            // Play bundles retain their normal packaging for store delivery.
+            useLegacyPackaging = providers.gradleProperty("vopCompressNativeLibraries")
+                .map { it.toBoolean() }.getOrElse(false)
+        }
+    }
+
     buildTypes {
         getByName("release") {
             // Shrink unused Java/Kotlin code and Android resources.
