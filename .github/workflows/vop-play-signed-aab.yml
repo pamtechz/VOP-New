@@ -1,0 +1,292 @@
+name: VOP signed Android AAB and APK (manual)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vop-play-upload-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  signed-play-aab:
+    if: github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 60
+    steps:
+      - name: Verify KASAINSTITUTE runner identity
+        shell: powershell
+        env:
+          VOP_ACTUAL_RUNNER: ${{ runner.name }}
+        run: |
+          if ($env:VOP_ACTUAL_RUNNER -ne 'KASAINSTITUTE') {
+            throw "Only KASAINSTITUTE may execute VOP signing jobs."
+          }
+          if ($env:GITHUB_REF -ne 'refs/heads/main') {
+            throw "Never release from an unreviewed branch."
+          }
+
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Use trusted Windows Flutter SDK
+        shell: powershell
+        run: .\.github\scripts\setup-vop-flutter.ps1
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Generate Android scaffold and restore release signing configuration
+        shell: powershell
+        run: |
+          python native_android/tool/prepare_scaffold.py --platform android
+          if ($LASTEXITCODE -ne 0) { throw "Flutter scaffold generation failed." }
+          git restore --source=HEAD -- native_android/android/app/build.gradle.kts
+          if ($LASTEXITCODE -ne 0) { throw "Could not restore release signing configuration." }
+
+      - name: Install reviewed Flutter dependencies
+        working-directory: native_android
+        shell: powershell
+        run: |
+          flutter pub get --enforce-lockfile
+          if ($LASTEXITCODE -ne 0) { throw "Dependency lockfile check failed." }
+
+      - name: Analyze and test Flutter before using a release key
+        working-directory: native_android
+        shell: powershell
+        run: |
+          flutter analyze --no-pub --no-fatal-infos
+          if ($LASTEXITCODE -ne 0) { throw "Analyzer failed." }
+          flutter test --no-pub --concurrency=1
+          if ($LASTEXITCODE -ne 0) { throw "Widget tests failed." }
+
+      - name: Prepare public Firebase settings
+        working-directory: native_android
+        shell: powershell
+        run: |
+          python tool/prepare_public_config.py
+          if ($LASTEXITCODE -ne 0) { throw "Firebase client configuration is invalid." }
+
+      - name: Prepare ephemeral upload keystore and validate fingerprint
+        shell: powershell
+        env:
+          VOP_RELEASE_KEYSTORE_BASE64: ${{ secrets.VOP_RELEASE_KEYSTORE_BASE64 }}
+          VOP_RELEASE_KEY_ALIAS: ${{ secrets.VOP_RELEASE_KEY_ALIAS }}
+          VOP_RELEASE_STORE_PASSWORD: ${{ secrets.VOP_RELEASE_STORE_PASSWORD }}
+          VOP_RELEASE_KEY_PASSWORD: ${{ secrets.VOP_RELEASE_KEY_PASSWORD }}
+          VOP_RELEASE_UPLOAD_CERT_SHA256: ${{ secrets.VOP_RELEASE_UPLOAD_CERT_SHA256 }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $names = @('VOP_RELEASE_KEYSTORE_BASE64', 'VOP_RELEASE_KEY_ALIAS',
+            'VOP_RELEASE_STORE_PASSWORD', 'VOP_RELEASE_KEY_PASSWORD',
+            'VOP_RELEASE_UPLOAD_CERT_SHA256')
+          foreach ($name in $names) {
+            if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name))) {
+              throw "Missing signing secret: $name. No release bundle was produced."
+            }
+          }
+          $root = Join-Path $env:GITHUB_WORKSPACE 'native_android\android'
+          $keystore = Join-Path $root 'vop-upload-key.jks'
+          $properties = Join-Path $root 'key.properties'
+          $certificate = Join-Path $root 'upload-certificate.der'
+          $expected = ($env:VOP_RELEASE_UPLOAD_CERT_SHA256 -replace '[^a-fA-F0-9]', '').ToUpperInvariant()
+          if ($expected -notmatch '^[A-F0-9]{64}$') {
+            throw 'The approved Play upload-certificate SHA-256 must contain 64 hex digits.'
+          }
+          function Escape-Property([string]$v) {
+            if ($v -match '[^\x20-\x7E]' -or $v -ne $v.Trim()) {
+              throw 'Signing values must be printable ASCII without outer whitespace.'
+            }
+            return $v.Replace('\', '\\').Replace('=', '\=').Replace(':', '\:').Replace('#', '\#').Replace('!', '\!')
+          }
+          [IO.File]::WriteAllBytes($keystore, [Convert]::FromBase64String($env:VOP_RELEASE_KEYSTORE_BASE64))
+          [IO.File]::WriteAllLines($properties, @(
+            'storeFile=vop-upload-key.jks',
+            ('storePassword=' + (Escape-Property $env:VOP_RELEASE_STORE_PASSWORD)),
+            ('keyAlias=' + (Escape-Property $env:VOP_RELEASE_KEY_ALIAS)),
+            ('keyPassword=' + (Escape-Property $env:VOP_RELEASE_KEY_PASSWORD))
+          ), [Text.UTF8Encoding]::new($false))
+          & keytool -exportcert -keystore $keystore -alias $env:VOP_RELEASE_KEY_ALIAS -storepass:env VOP_RELEASE_STORE_PASSWORD -file $certificate
+          if ($LASTEXITCODE -ne 0) { throw 'Upload keystore or alias is invalid.' }
+          $actual = (Get-FileHash $certificate -Algorithm SHA256).Hash.ToUpperInvariant()
+          if ($actual -ne $expected) {
+            throw 'Upload keystore certificate does not match the CURRENT Play Console upload certificate. Obtain reset approval.'
+          }
+          Write-Host 'Upload keystore certificate fingerprint verified.'
+
+      - name: Build obfuscated release-signed Android App Bundle and check 8 MB limit
+        working-directory: native_android
+        shell: powershell
+        env:
+          VOP_RELEASE_SYMBOLS_DIR: ${{ secrets.VOP_RELEASE_SYMBOLS_DIR }}
+          VOP_RELEASE_UPLOAD_CERT_SHA256: ${{ secrets.VOP_RELEASE_UPLOAD_CERT_SHA256 }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:VOP_RELEASE_SYMBOLS_DIR)) {
+            throw 'A private VOP_RELEASE_SYMBOLS_DIR backup path is required before Dart obfuscation.'
+          }
+          $backupRoot = [Environment]::ExpandEnvironmentVariables($env:VOP_RELEASE_SYMBOLS_DIR)
+          if ($backupRoot -match '%[^%]+%' -or ![IO.Path]::IsPathRooted($backupRoot)) {
+            throw 'The private symbols backup must resolve to an absolute Windows path.'
+          }
+          # Keep every supported architecture. AAB format and the Play Store
+          # provide device-specific optimized downloads; never exclude devices
+          # just to pass a size limit.
+          $symbols = 'build/app/outputs/vop-obfuscation/aab'
+          flutter build appbundle --release --no-pub --obfuscate --split-debug-info=$symbols --tree-shake-icons --dart-define-from-file=android-public-config.json
+          if ($LASTEXITCODE -ne 0) { throw 'Obfuscated release AAB build failed.' }
+          $aab = 'build/app/outputs/bundle/release/app-release.aab'
+          if (!(Test-Path $aab -PathType Leaf)) { throw 'Missing release AAB.' }
+          & jarsigner -verify $aab
+          if ($LASTEXITCODE -ne 0) { throw 'AAB signature verification failed.' }
+          # Verify the signer on the final bundle, not only on the input keystore.
+          $certificateOutput = @(& keytool -printcert -jarfile $aab 2>&1)
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot read the final AAB signing certificate.' }
+          $fingerprintLines = @($certificateOutput | Select-String -Pattern '^\s*SHA256:\s*([0-9A-Fa-f:]+)\s*$')
+          if ($fingerprintLines.Count -ne 1) {
+            throw 'Final AAB must contain exactly one verifiable upload signing certificate.'
+          }
+          $bundleSigner = ($fingerprintLines[0].Matches[0].Groups[1].Value -replace '[^A-Fa-f0-9]', '').ToUpperInvariant()
+          $approvedSigner = ($env:VOP_RELEASE_UPLOAD_CERT_SHA256 -replace '[^A-Fa-f0-9]', '').ToUpperInvariant()
+          if ($approvedSigner -notmatch '^[A-F0-9]{64}$' -or $bundleSigner -ne $approvedSigner) {
+            throw 'Final AAB signer does not match the CURRENT approved Google Play upload certificate.'
+          }
+          Write-Host 'Final AAB signer verified against the approved Play upload certificate.'
+          $directory = Join-Path (Join-Path $backupRoot $env:GITHUB_SHA) 'aab'
+          New-Item -ItemType Directory -Force -Path $directory | Out-Null
+          $maps = @(Get-ChildItem -Path $symbols -File -Filter 'app.*.symbols' -ErrorAction SilentlyContinue)
+          if ($maps.Count -eq 0) { throw 'Obfuscation symbol maps were not generated.' }
+          foreach ($map in $maps) { Copy-Item -LiteralPath $map.FullName -Destination $directory -Force }
+          $mapping = 'build/app/outputs/mapping/release/mapping.txt'
+          if (!(Test-Path -LiteralPath $mapping -PathType Leaf)) { throw 'R8 mapping file was not generated.' }
+          Copy-Item -LiteralPath $mapping -Destination (Join-Path $directory 'mapping.txt') -Force
+          Write-Host "Private obfuscation maps backed up to the configured runner directory for commit $env:GITHUB_SHA."
+          $bytes = (Get-Item -LiteralPath $aab).Length
+          $limitBytes = 8 * 1000 * 1000
+          Write-Host ("Release AAB size: {0:N2} MiB ({1} bytes); requested limit: 8 MB." -f ($bytes / 1MB), $bytes)
+          if ($bytes -gt $limitBytes) {
+            throw 'Bundle exceeds 8 MB target. DO NOT publish. Review assets/native dependencies and confirm supported-architecture trade-offs before proceeding.'
+          }
+          Write-Host 'Obfuscated release AAB meets 8 MB gate; Google Play remains unchanged.'
+
+      - name: Build and verify obfuscated release APK
+        working-directory: native_android
+        shell: powershell
+        env:
+          VOP_RELEASE_SYMBOLS_DIR: ${{ secrets.VOP_RELEASE_SYMBOLS_DIR }}
+          VOP_RELEASE_UPLOAD_CERT_SHA256: ${{ secrets.VOP_RELEASE_UPLOAD_CERT_SHA256 }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ([string]::IsNullOrWhiteSpace($env:VOP_RELEASE_SYMBOLS_DIR)) {
+            throw 'A private VOP_RELEASE_SYMBOLS_DIR backup path is required before Dart obfuscation.'
+          }
+          $backupRoot = [Environment]::ExpandEnvironmentVariables($env:VOP_RELEASE_SYMBOLS_DIR)
+          if ($backupRoot -match '%[^%]+%' -or ![IO.Path]::IsPathRooted($backupRoot)) {
+            throw 'The private symbols backup must resolve to an absolute Windows path.'
+          }
+          $env:ORG_GRADLE_PROJECT_vopCompressNativeLibraries = 'true'
+          $symbols = 'build/app/outputs/vop-obfuscation/apk'
+          flutter build apk --release --no-pub --obfuscate --split-debug-info=$symbols --split-per-abi --tree-shake-icons --dart-define-from-file=android-public-config.json
+          if ($LASTEXITCODE -ne 0) { throw 'Obfuscated release APK build failed.' }
+          $apkVersions = @{ 'armeabi-v7a' = 1003; 'arm64-v8a' = 2003; 'x86_64' = 4003 }
+          foreach ($abi in @('armeabi-v7a', 'arm64-v8a', 'x86_64')) {
+          $apk = "build/app/outputs/flutter-apk/app-$abi-release.apk"
+          if (!(Test-Path -LiteralPath $apk -PathType Leaf)) { throw 'Missing release APK.' }
+          $apkBytes = (Get-Item -LiteralPath $apk).Length
+          Write-Host ("Release APK size: {0} bytes; requested limit: 8,000,000 bytes." -f $apkBytes)
+          if ($apkBytes -gt 8000000) {
+            throw 'Release APK exceeds the 8 MB budget. Analyze the release size before distributing it.'
+          }
+          $sdk = $env:ANDROID_HOME
+          if ([string]::IsNullOrWhiteSpace($sdk)) { $sdk = $env:ANDROID_SDK_ROOT }
+          if ([string]::IsNullOrWhiteSpace($sdk)) { throw 'Set ANDROID_HOME or ANDROID_SDK_ROOT on KASAINSTITUTE.' }
+          $tools = @(Get-ChildItem -LiteralPath (Join-Path $sdk 'build-tools') -Directory |
+            Where-Object { $_.Name -match '^\d+\.\d+\.\d+$' } |
+            Sort-Object { [version]$_.Name } -Descending)
+          if ($tools.Count -eq 0) { throw 'Android SDK build-tools are missing.' }
+          $apksigner = Join-Path $tools[0].FullName 'apksigner.bat'
+          if (!(Test-Path -LiteralPath $apksigner -PathType Leaf)) { throw 'Android apksigner is missing.' }
+          $signature = @(& $apksigner verify --verbose --print-certs $apk 2>&1)
+          if ($LASTEXITCODE -ne 0) { throw 'APK signature verification failed.' }
+          $signers = @($signature | Select-String -Pattern '^Signer #\d+ certificate SHA-256 digest:\s*([0-9A-Fa-f:]+)\s*$')
+          $expected = ($env:VOP_RELEASE_UPLOAD_CERT_SHA256 -replace '[^A-Fa-f0-9]', '').ToUpperInvariant()
+          if ($signers.Count -ne 1 -or $expected -notmatch '^[A-F0-9]{64}$') {
+            throw 'APK must contain exactly one verifiable approved signing certificate.'
+          }
+          $actual = ($signers[0].Matches[0].Groups[1].Value -replace '[^A-Fa-f0-9]', '').ToUpperInvariant()
+          if ($actual -ne $expected) { throw 'APK signer differs from the approved Play upload certificate.' }
+          $aapt = Join-Path $tools[0].FullName 'aapt.exe'
+          if (!(Test-Path -LiteralPath $aapt -PathType Leaf)) { throw 'Android aapt is missing.' }
+          $badging = @(& $aapt dump badging $apk 2>&1)
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect release APK metadata.' }
+          if (!($badging | Select-String -Pattern "^package: name='com\.sda\.vop' versionCode='$($apkVersions[$abi])' versionName='2\.2\.0'(?: |$)")) {
+            throw 'APK package or version differs from the reviewed com.sda.vop 2.2.0 (3) release.'
+          }
+          if ($badging -notcontains "targetSdkVersion:'36'") { throw 'APK must target API 36.' }
+          }
+          # Separate maps for each build: never overwrite AAB crash symbols.
+          $directory = Join-Path (Join-Path $backupRoot $env:GITHUB_SHA) 'apk'
+          New-Item -ItemType Directory -Force -Path $directory | Out-Null
+          $maps = @(Get-ChildItem -Path $symbols -File -Filter 'app.*.symbols' -ErrorAction SilentlyContinue)
+          if ($maps.Count -eq 0) { throw 'APK obfuscation symbol maps were not generated.' }
+          foreach ($map in $maps) { Copy-Item -LiteralPath $map.FullName -Destination $directory -Force }
+          $mapping = 'build/app/outputs/mapping/release/mapping.txt'
+          if (!(Test-Path -LiteralPath $mapping -PathType Leaf)) { throw 'APK R8 mapping file was not generated.' }
+          Copy-Item -LiteralPath $mapping -Destination (Join-Path $directory 'mapping.txt') -Force
+          Write-Host 'Release APK signature verified; private Dart and R8 maps backed up.'
+
+      - name: Record verified release artifact checksums
+        working-directory: native_android
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $paths = @('build/app/outputs/bundle/release/app-release.aab',
+            'build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk',
+            'build/app/outputs/flutter-apk/app-arm64-v8a-release.apk',
+            'build/app/outputs/flutter-apk/app-x86_64-release.apk')
+          $lines = foreach ($path in $paths) {
+            $hash = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+            '{0}  {1}' -f $hash, [IO.Path]::GetFileName($path)
+          }
+          [IO.File]::WriteAllLines((Join-Path $PWD 'build/app/outputs/SHA256SUMS.txt'), $lines, [Text.UTF8Encoding]::new($false))
+
+      - name: Upload signed AAB for separate Play approval
+        uses: actions/upload-artifact@v4
+        with:
+          name: vop-google-play-signed-aab
+          path: native_android/build/app/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Upload verified release APK and checksums
+        uses: actions/upload-artifact@v4
+        with:
+          name: vop-signed-release-apk
+          path: |
+            native_android/build/app/outputs/flutter-apk/app-*-release.apk
+            native_android/build/app/outputs/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Delete temporary release keystore from self-hosted runner
+        if: always()
+        shell: powershell
+        run: |
+          foreach ($path in @(
+            'native_android\android\vop-upload-key.jks',
+            'native_android\android\key.properties',
+            'native_android\android\upload-certificate.der'
+          )) {
+            Remove-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue
+          }
+          foreach ($directory in @(
+            'native_android\build\app\outputs\vop-obfuscation',
+            'native_android\build\app\outputs\mapping\release'
+          )) {
+            Remove-Item -LiteralPath $directory -Recurse -Force -ErrorAction SilentlyContinue
+          }
+          Write-Host 'Temporary signing files removed.'

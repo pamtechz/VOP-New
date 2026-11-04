@@ -22,7 +22,8 @@ if (requestedRelease && !releaseKeyPropertiesFile.isFile) {
 
 android {
     namespace = "com.sda.vop"
-    compileSdk = flutter.compileSdkVersion
+    // Google Play requires API 36+ for app updates as of August 2026.
+    compileSdk = maxOf(36, flutter.compileSdkVersion)
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
@@ -36,7 +37,8 @@ android {
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
-        targetSdk = flutter.targetSdkVersion
+        // Fail at build time if the runner lacks the Android 16 SDK.
+        targetSdk = 36
         // Uses the version code from pubspec.yaml. When using split APKs, 1000 * ABI_VERSION
         // is added automatically by Flutter. (https://developer.android.com/studio/build/configure-apk-splits#configure-APK-versions)
         // You can force using the value of versionCode by specifying the `-P force-version-code-ignoring-abi=true`
@@ -65,8 +67,20 @@ android {
         }
     }
 
+    packaging {
+        jniLibs {
+            // Compress native libraries for direct APK downloads when requested.
+            // Play bundles retain their normal packaging for store delivery.
+            useLegacyPackaging = providers.gradleProperty("vopCompressNativeLibraries")
+                .map { it.toBoolean() }.getOrElse(false)
+        }
+    }
+
     buildTypes {
         getByName("release") {
+            // Shrink unused Java/Kotlin code and Android resources.
+            isMinifyEnabled = true
+            isShrinkResources = true
             if (releaseKeyPropertiesFile.isFile) {
                 signingConfig = signingConfigs.getByName("release")
             }

@@ -224,7 +224,23 @@ class VopApi {
       ()=>_execute('/api/localization','GET',null,{'locale':code}));
 
   Future<Map<String,dynamic>> _cachedRead(String kind,String id,
-      Future<Map<String,dynamic>> Function() request)async{
+      Future<Map<String,dynamic>> Function() request, {bool preferSaved=false})async{
+    final owner = _uid;
+    if(preferSaved && owner.isNotEmpty){
+      Map<String,dynamic>? saved;
+      try {
+        saved=await _offline.read(owner,kind,id);
+      } catch (_) { /* Storage failure must not block a live lesson load. */ }
+      if(saved!=null && owner==_uid){
+        unawaited(() async {
+          try {
+            final fresh=await request();
+            if(owner==_uid) _queueSnapshot(owner,kind,id,fresh);
+          } catch (_) { /* Keep valid encrypted downloads available offline. */ }
+        }());
+        return {...saved,'cached':true};
+      }
+    }
     try{
       final response=await request();
       // Persist snapshots after returning the live response. Awaiting a large
@@ -288,23 +304,36 @@ class VopApi {
     ()=>read('guide',{'guideId':id}));
   Future<Map<String,dynamic>> lesson(String guideId,String lessonId)=>
     _cachedRead('lesson','${guideId}_$lessonId',
-      ()=>read('lesson',{'guideId':guideId,'lessonId':lessonId}));
+      ()=>read('lesson',{'guideId':guideId,'lessonId':lessonId}),preferSaved:true);
   Future<int> downloadGuide(String guideId)async{
+    final owner=_uid;
+    if(owner.isEmpty)throw const VopApiException('Sign in before downloading.');
     final result=await read('guide',{'guideId':guideId});
-    final rows=result['lessons'] is List?result['lessons'] as List:[];
-    var downloaded=0;
-    if(_uid.isEmpty)throw const VopApiException('Sign in before downloading.');
-    await _offline.save(_uid,'guide',guideId,result,title:
-      ((result['guide'] as Map?)?['title']??guideId).toString());
-    for(final row in rows){
-      if(row is! Map||row['type']=='Test'||row['locked']==true)continue;
-      final id=(row['id']??'').toString();
-      if(id.isEmpty)continue;
-      final content=await read('lesson',{'guideId':guideId,'lessonId':id});
-      await _offline.save(_uid,'lesson','${guideId}_$id',content,
-        title:(row['title']??id).toString());
-      downloaded++;
+    final rows=(result['lessons'] is List?result['lessons'] as List:[])
+      .whereType<Map>().where((row)=>row['type']!='Test' &&
+        row['locked']!=true && (row['id']??'').toString().isNotEmpty).toList();
+    Future<void> save(String kind,String id,Map<String,dynamic> value,String title) {
+      return _afterSnapshotWrites(() async {
+        if(owner!=_uid)throw const VopApiException('Account changed. Download stopped.');
+        await _offline.save(owner,kind,id,value,title:title);
+      });
     }
+    await save('guide',guideId,result,
+      ((result['guide'] as Map?)?['title']??guideId).toString());
+    // Limit simultaneous requests while serializing encrypted index writes.
+    var next=0;
+    var downloaded=0;
+    Future<void> worker() async {
+      while(next<rows.length){
+        final row=rows[next++];
+        if(owner!=_uid)throw const VopApiException('Account changed. Download stopped.');
+        final id=row['id'].toString();
+        final content=await read('lesson',{'guideId':guideId,'lessonId':id});
+        await save('lesson','${guideId}_$id',content,(row['title']??id).toString());
+        downloaded++;
+      }
+    }
+    await Future.wait(List.generate(rows.length<3?rows.length:3,(_)=>worker()));
     return downloaded;
   }
 

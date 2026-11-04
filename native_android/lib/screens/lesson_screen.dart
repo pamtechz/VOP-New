@@ -1,3 +1,4 @@
+import '../widgets/quiz_answer_explanations.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -1393,6 +1394,7 @@ class _LessonScreenState extends State<LessonScreen> {
                 ),
                 const SizedBox(height: 18),
               ],
+              QuizAnswerExplanations(result: data),
               OutlinedButton.icon(
                 style: OutlinedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
