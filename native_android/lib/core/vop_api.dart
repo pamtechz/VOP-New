@@ -227,7 +227,10 @@ class VopApi {
       Future<Map<String,dynamic>> Function() request, {bool preferSaved=false})async{
     final owner = _uid;
     if(preferSaved && owner.isNotEmpty){
-      final saved=await _offline.read(owner,kind,id);
+      Map<String,dynamic>? saved;
+      try {
+        saved=await _offline.read(owner,kind,id);
+      } catch (_) { /* Storage failure must not block a live lesson load. */ }
       if(saved!=null && owner==_uid){
         unawaited(() async {
           try {
