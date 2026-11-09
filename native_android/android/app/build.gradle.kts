@@ -13,6 +13,11 @@ if (releaseKeyPropertiesFile.isFile) {
 val requestedRelease = gradle.startParameter.taskNames.any {
     it.contains("Release", ignoreCase = true)
 }
+val compressNativeLibraries = providers.gradleProperty("vopCompressNativeLibraries")
+    .map { it.toBooleanStrict() }.getOrElse(false)
+if (requestedRelease) {
+    logger.lifecycle("VOP native library compression requested: $compressNativeLibraries")
+}
 if (requestedRelease && !releaseKeyPropertiesFile.isFile) {
     throw GradleException(
         "Android release signing is not configured. " +
@@ -71,8 +76,7 @@ android {
         jniLibs {
             // Compress native libraries for direct APK downloads when requested.
             // Play bundles retain their normal packaging for store delivery.
-            useLegacyPackaging = providers.gradleProperty("vopCompressNativeLibraries")
-                .map { it.toBoolean() }.getOrElse(false)
+            useLegacyPackaging = compressNativeLibraries
         }
     }
 
@@ -85,6 +89,13 @@ android {
                 signingConfig = signingConfigs.getByName("release")
             }
         }
+    }
+}
+
+// Set the APK variant property consumed by packaging tasks as well as the DSL.
+androidComponents {
+    onVariants(selector().withBuildType("release")) { variant ->
+        variant.packaging.jniLibs.useLegacyPackaging.set(compressNativeLibraries)
     }
 }
 
