@@ -1,8 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {spawnSync} from 'node:child_process';
 const website=readFileSync('.github/workflows/vop-website-release-apk.yml','utf8');
 const play=readFileSync('.github/workflows/vop-play-signed-aab.yml','utf8');
+const nativeCi=readFileSync('.github/workflows/vop-native-android.yml','utf8');
 test('website APK signing is manual, main-only, pinned and independent of Play approval',()=>{
   assert.match(website,/if: github\.ref == 'refs\/heads\/main'/);
   assert.match(website,/^  workflow_dispatch:\s*$/m);
@@ -14,7 +16,14 @@ test('website APK signing is manual, main-only, pinned and independent of Play a
   assert.match(website,/if \(\$actual -ne \$expected\)/);
   assert.match(website,/Get-FileHash \$certificate -Algorithm SHA256/);
   assert.match(website,/--split-per-abi/);
-  assert.match(website,/vopCompressNativeLibraries = 'true'/);
+  assert.match(website,/--android-project-arg=vopCompressNativeLibraries=true/);
+  assert.match(play,/--android-project-arg=vopCompressNativeLibraries=true/);
+  assert.match(website,/apk_size_report\.py build\/app\/outputs\/flutter-apk --require-compressed-native/);
+  assert.match(nativeCi,/git restore --source=HEAD -- native_android\/android\/app\/build\.gradle\.kts/);
+});
+test('final-APK compression gate accepts DEFLATE and rejects stored native libraries',()=>{
+  const result=spawnSync('python',['tests/apk_size_report_test.py'],{encoding:'utf8'});
+  assert.equal(result.status,0,result.stderr || result.stdout);
 });
 test('website rejects oversized downloads but retains size evidence and private crash maps',()=>{
   assert.match(website,/withinBudget=\(\$apkBytes -le 8000000\)/);

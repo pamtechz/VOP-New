@@ -188,9 +188,8 @@ jobs:
           if ($backupRoot -match '%[^%]+%' -or ![IO.Path]::IsPathRooted($backupRoot)) {
             throw 'The private symbols backup must resolve to an absolute Windows path.'
           }
-          $env:ORG_GRADLE_PROJECT_vopCompressNativeLibraries = 'true'
           $symbols = 'build/app/outputs/vop-obfuscation/apk'
-          flutter build apk --release --no-pub --obfuscate --split-debug-info=$symbols --split-per-abi --tree-shake-icons --dart-define-from-file=android-public-config.json
+          flutter build apk --release --no-pub --obfuscate --split-debug-info=$symbols --split-per-abi --tree-shake-icons --android-project-arg=vopCompressNativeLibraries=true --dart-define-from-file=android-public-config.json
           if ($LASTEXITCODE -ne 0) { throw 'Obfuscated release APK build failed.' }
           $apkVersions = @{ 'armeabi-v7a' = 1003; 'arm64-v8a' = 2003; 'x86_64' = 4003 }
           foreach ($abi in @('armeabi-v7a', 'arm64-v8a', 'x86_64')) {

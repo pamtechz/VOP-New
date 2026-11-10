@@ -136,9 +136,8 @@ jobs:
           if ($backupRoot -match '%[^%]+%' -or ![IO.Path]::IsPathRooted($backupRoot)) {
             throw 'The private symbols backup must resolve to an absolute Windows path.'
           }
-          $env:ORG_GRADLE_PROJECT_vopCompressNativeLibraries = 'true'
           $symbols = 'build/app/outputs/vop-obfuscation/apk'
-          flutter build apk --release --no-pub --obfuscate --split-debug-info=$symbols --split-per-abi --tree-shake-icons --dart-define-from-file=android-public-config.json
+          flutter build apk --release --no-pub --obfuscate --split-debug-info=$symbols --split-per-abi --tree-shake-icons --android-project-arg=vopCompressNativeLibraries=true --dart-define-from-file=android-public-config.json
           if ($LASTEXITCODE -ne 0) { throw 'Obfuscated release APK build failed.' }
           $sizeResults = @()
           $apkVersions = @{ 'armeabi-v7a' = 1003; 'arm64-v8a' = 2003; 'x86_64' = 4003 }
@@ -185,7 +184,7 @@ jobs:
           if (!(Test-Path -LiteralPath $mapping -PathType Leaf)) { throw 'APK R8 mapping file was not generated.' }
           Copy-Item -LiteralPath $mapping -Destination (Join-Path $directory 'mapping.txt') -Force
           $sizeResults | Export-Csv -LiteralPath 'build/app/outputs/website-apk-sizes.csv' -NoTypeInformation
-          python tool/apk_size_report.py build/app/outputs/flutter-apk
+          python tool/apk_size_report.py build/app/outputs/flutter-apk --require-compressed-native
           if ($LASTEXITCODE -ne 0) { throw 'APK size inspection failed.' }
           Write-Host 'Website APK signatures verified; private Dart and R8 maps backed up.'
           if (@($sizeResults | Where-Object { !$_.withinBudget }).Count -gt 0) {

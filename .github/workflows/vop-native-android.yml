@@ -125,7 +125,12 @@ jobs:
           distribution: temurin
           java-version: '21'
       - name: Generate native Gradle scaffold
-        run: python native_android/tool/prepare_scaffold.py --platform android
+        shell: powershell
+        run: |
+          python native_android/tool/prepare_scaffold.py --platform android
+          if ($LASTEXITCODE -ne 0) { throw 'Android scaffold generation failed.' }
+          git restore --source=HEAD -- native_android/android/app/build.gradle.kts
+          if ($LASTEXITCODE -ne 0) { throw 'Could not restore reviewed Android Gradle configuration.' }
       - name: Install Dart dependencies
         working-directory: native_android
         run: flutter pub get --enforce-lockfile
