@@ -23,7 +23,11 @@ class _PaymentCheckoutState extends State<PaymentCheckoutScreen>{
     try{
       final result=await widget.api.action('/api/payments/verify',{'reference':widget.payment['reference']});
       final payment=recordMap(result['payment']);
-      if(mounted)setState(()=>message=payment['status']=='paid'?'Payment confirmed.':'Payment status: ${payment['status']??'unavailable'}.');
+      if(mounted)setState(()=>message=payment['status']=='paid'
+        ?(payment['fulfilmentStatus']=='fulfilled'
+          ?'Payment confirmed and subscription access activated.'
+          :'Payment confirmed; subscription access is being activated. Check again shortly.')
+        :'Payment status: ${payment['status']??'unavailable'}. Only verified payments activate access.');
     }catch(e){if(mounted)setState(()=>message='$e');}
     finally{if(mounted)setState(()=>busy=false);}
   }
@@ -34,6 +38,15 @@ class _PaymentCheckoutState extends State<PaymentCheckoutScreen>{
     }catch(_){/* Ignore unrelated provider messages. */}
   }
   @override Widget build(BuildContext context)=>Scaffold(appBar:AppBar(title:const Text('Payment'),actions:[TextButton(onPressed:busy?null:verify,child:const Text('Check status'))]),
-    body:Column(children:[if(busy)const LinearProgressIndicator(),if(message.isNotEmpty)Padding(padding:const EdgeInsets.all(16),child:Text(message)),
+    body:Column(children:[
+      if(busy)const LinearProgressIndicator(),
+      const Padding(padding:EdgeInsets.symmetric(horizontal:12,vertical:8),
+        child:Wrap(spacing:6,runSpacing:6,children:[
+          Chip(label:Text('1 · Authorize payment')),
+          Chip(label:Text('2 · Verify with provider')),
+          Chip(label:Text('3 · Activate access')),
+        ])),
+      if(message.isNotEmpty)Padding(padding:const EdgeInsets.all(12),child:Semantics(liveRegion:true,child:Text(message))),
+
       Expanded(child:PaymentProviderView(html:document,origin:VopConfig.apiUrl,onEvent:event))]));
 }

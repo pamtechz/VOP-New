@@ -104,7 +104,7 @@ const PaymentsPage:React.FC<Props>=({currentUser,onBack,embedded=false})=>{
         const result=await getPaymentStatus(reference);
         if(['paid','failed','cancelled','expired'].includes(result.payment.status)){
           await refresh();
-          setMessage(result.payment.status==='paid'?'Payment verified and access activated.':'Payment ended with status: '+friendlyStatus(result.payment));
+          setMessage(result.payment.status==='paid'?friendlyStatus(result.payment):'Payment ended with status: '+friendlyStatus(result.payment));
           return;
         }
       }catch{/* Server-side payment confirmation remains authoritative if the browser loses connectivity. */}
@@ -128,7 +128,7 @@ const PaymentsPage:React.FC<Props>=({currentUser,onBack,embedded=false})=>{
       setCheckoutReference(payment.reference);
       setCheckoutStatus(friendlyStatus(payment));
       if(payment.status==='paid'){
-        setMessage('This item is already paid. Your access is active.');
+        setMessage(friendlyStatus(payment));
         setSelected(null);await refresh();return;
       }
       if(result.checkout?.mode==='inline'){
@@ -170,9 +170,9 @@ const PaymentsPage:React.FC<Props>=({currentUser,onBack,embedded=false})=>{
                 setThreeDSecureModal(prev=>prev?{
                   ...prev,
                   status:'authenticated',
-                  summary:'3D-Secure 2.0 Strong Customer Authentication verified! Fraud liability shifted to issuing bank and access activated.',
+                  summary:'Provider payment confirmed. VOP will activate access after fulfilment is completed.',
                 }:null);
-                setMessage('Payment verified and access activated via 3D-Secure 2.0.');
+                setMessage(friendlyStatus(verified.payment));
               }else{
                 setMessage('Payment received and is being confirmed.');
                 void poll(payment.reference);
@@ -222,9 +222,9 @@ const PaymentsPage:React.FC<Props>=({currentUser,onBack,embedded=false})=>{
         setThreeDSecureModal(prev=>prev?{
           ...prev,
           status:'authenticated',
-          summary:'3D-Secure 2.0 Strong Customer Authentication verified! Bank liability shift certified and access activated.',
+          summary:'Provider payment confirmed. Subscription access is activated only after server-side fulfilment.',
         }:null);
-        setMessage('3D-Secure payment verified and access activated.');
+        setMessage(friendlyStatus(verified.payment));
       }else{
         setMessage('Bank authorization is still processing. Please allow a few moments.');
       }

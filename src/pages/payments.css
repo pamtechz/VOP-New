@@ -1077,3 +1077,32 @@
 }
 
 
+
+/* Shared Legacy subscription journey: compact, accessible across desktop/tablet/mobile. */
+.vop-subscription-journey {
+  display: grid;
+  grid-template-columns: repeat(3,minmax(0,1fr));
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--theme-border);
+  border-radius: 14px;
+  background: var(--theme-surface);
+}
+.vop-subscription-journey span {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 12px; font-weight: 600; color: var(--theme-text);
+}
+.vop-subscription-journey strong {
+  display: inline-grid; place-items: center; flex: none;
+  width: 28px; height: 28px; border-radius: 50%;
+  background: var(--theme-accent, #2563eb); color: white;
+  font-variant-numeric: tabular-nums;
+}
+.vop-subscription-journey span + span {
+  border-left: 1px solid var(--theme-border); padding-left: 12px;
+}
+@media(max-width:740px) {
+  .vop-subscription-journey {grid-template-columns: 1fr;}
+  .vop-subscription-journey span + span {border-left: 0; padding-left: 0;}
+}
+
